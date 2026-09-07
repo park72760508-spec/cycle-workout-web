@@ -10,7 +10,6 @@ const { onDocumentWritten } = require("firebase-functions/v2/firestore");
 const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
-const zlib = require("zlib");
 
 // Secret Manager에서 STRAVA_CLIENT_SECRET 읽기
 // 임시: Secret 설정 문제로 인해 하드코딩된 값 사용 (보안상 권장하지 않음, 나중에 Secret으로 변경 필요)
@@ -29,25 +28,6 @@ try {
 const aligoApiKeySecret = defineSecret("ALIGO_API_KEY");
 const aligoUserIdSecret = defineSecret("ALIGO_USER_ID");
 const aligoTokenSecret = defineSecret("ALIGO_TOKEN");
-/** 대회 신청 알림톡 — applyForCompetition(VPC 미적용) → competitionApplyAlimtalkHttpsRelay(VPC) 내부 호출 인증용.
- *  meetupInviteAlimtalkHttpsRelay와 동일 이유: 알리고 kakaoapi는 egress IP 화이트리스트가 있어
- *  Direct VPC egress가 적용된 릴레이(onRequest)에서만 알림톡을 직접 호출한다. */
-const competitionAlimRelaySecret = defineSecret("COMPETITION_ALIM_RELAY_SECRET");
-/** 중고랜드 알림톡 — tossPaymentWebhook(VPC 미적용, 결제 웹훅이라 네트워킹 변경 리스크를 피함) →
- *  marketAlimtalkHttpsRelay(VPC) 내부 호출 인증용. 위 경쟁 릴레이와 동일 이유·구조. */
-const marketAlimRelaySecret = defineSecret("MARKET_ALIM_RELAY_SECRET");
-/** Supabase Postgres 트리거(notify_market_order_delivered, market_orders AFTER UPDATE) →
- *  notifyMarketOrderDeliveredWebhook 실시간 호출 인증용 공유 비밀. Supabase Vault의
- *  market_delivery_notify_trigger_secret와 같은 값이어야 한다. */
-const marketDeliveryTriggerSecret = defineSecret("MARKET_DELIVERY_TRIGGER_SECRET");
-
-/** 대회 선착순 신청 — 토스페이먼츠 · Upstash Redis Secret Manager (functions:secrets:set로 등록). */
-const tossSecretKeySecret = defineSecret("TOSS_SECRET_KEY");
-const upstashRedisRestUrlSecret = defineSecret("UPSTASH_REDIS_REST_URL");
-const upstashRedisRestTokenSecret = defineSecret("UPSTASH_REDIS_REST_TOKEN");
-
-/** 라이딩/러닝 모임 출발 지역 날씨 — 기상청 단기예보 조회서비스(공공데이터포털) 서비스키 */
-const kmaServiceKeySecret = defineSecret("KMA_SERVICE_KEY");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -55,59 +35,13 @@ if (!admin.apps.length) {
 
 const stravaConnectionReader = require("./stravaConnectionReader");
 const rankingDayRollup = require("./rankingDayRollup");
-const { sanitizePeakPowerWattsOnRow, capPeakPowerMonotonicInPlace } = require("./peakPowerMonotonic");
-const kmaWeatherService = require("./kmaWeatherService");
-
-/** 5초 ≥ 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분 — 파워와 동일 원칙을 심박에도 적용(2026-08).
- * capPeakPowerMonotonicInPlace는 필드명 배열을 받는 범용 함수라 그대로 재사용한다. */
-const HR_PEAK_FIELDS_ASC_DURATION = [
-  "max_hr_5sec",
-  "max_hr_1min",
-  "max_hr_5min",
-  "max_hr_10min",
-  "max_hr_20min",
-  "max_hr_40min",
-  "max_hr_60min",
-];
-function capHrPeaksMonotonicOnRow(row) {
-  if (!row) return row;
-  capPeakPowerMonotonicInPlace(row, HR_PEAK_FIELDS_ASC_DURATION);
-  return row;
-}
-/** 부분 업데이트(updateData)만으로는 기존 문서(existingRow)에 남아있는 다른 구간 값과
- * 조합했을 때만 단조성이 깨질 수 있다 — existingRow와 합친 뷰로 보정한 뒤, 실제로 바뀐
- * 필드만 updateData에 다시 반영해 Firestore에도 그 값이 저장되게 한다. */
-function capHrPeaksMonotonicOnPartialUpdate(updateData, existingRow) {
-  if (!updateData) return updateData;
-  const merged = Object.assign({}, existingRow || {}, updateData);
-  capHrPeaksMonotonicOnRow(merged);
-  for (const f of HR_PEAK_FIELDS_ASC_DURATION) {
-    if (Object.prototype.hasOwnProperty.call(updateData, f) && updateData[f] !== merged[f]) {
-      updateData[f] = merged[f];
-    }
-  }
-  return updateData;
-}
+const { sanitizePeakPowerWattsOnRow } = require("./peakPowerMonotonic");
 const peakBoardFast = require("./peakBoardFast");
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
-const marketImageSearch = require("./marketImageSearch");
-const appConfigCache = require("./appConfigCache");
-const { getCachedCallerGrade } = require("./callerGradeCache");
 const stravaDualWrite = require("./stravaDualWrite");
-let stravaRouteMerge;
-try {
-  stravaRouteMerge = require("./stravaRouteMerge");
-} catch (e) {
-  console.warn("[functions/index.js] stravaRouteMerge 모듈을 찾을 수 없어 일일 경로 병합 기능을 비활성화합니다:", e.message);
-  stravaRouteMerge = {
-    saveMergedDailyRouteProfile: async () => {
-      throw new Error("stravaRouteMerge module unavailable");
-    },
-  };
-}
+const stravaRouteMerge = require("./stravaRouteMerge");
 const stravaSyncRetry = require("./stravaSyncRetry");
 const stravaGapDetect = require("./stravaGapDetect");
-const dynamicFtpServer = require("./dynamicFtpServer");
 const stravaLogRead = require("./stravaLogRead");
 const rankingReadRouter = require("./rankingReadRouter");
 const rankingReadConfig = require("./rankingReadConfig");
@@ -117,16 +51,11 @@ const rankingReadRoutingAdmin = require("./rankingReadRoutingAdmin");
 const rankingReadRoutingPublic = require("./rankingReadRoutingPublic");
 const groupReadRouter = require("./groupReadRouter");
 const supabaseGroupReader = require("./supabaseGroupReader");
-const gpxCourseLibraryReader = require("./gpxCourseLibraryReader");
-const { withComputeCache } = require("./httpComputeCache");
 const groupReadRoutingPublic = require("./groupReadRoutingPublic");
 const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
-const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
-const tossPaymentsClient = require("./tossPaymentsClient");
-const raceRedisClient = require("./raceRedisClient");
 
 /** Firestore users 문서의 프로필 사진 URL (랭킹·클라이언트 표시용, 없으면 null) */
 function profileImageUrlFromUserData(data) {
@@ -357,8 +286,7 @@ async function hydrateRankingBoardPrivacyFromUsers(db, byCategory, entries) {
 // hydrateRankingBoardPrivacyFromUsers는 보드의 "모든 행"에 대해 users 문서를 읽으므로
 // (피크 보드는 카테고리당 최대 수천 행) 10만 가입자·per-user CDN 캐시 환경에서 읽기 비용이 과도하다.
 // 대신 "현재 비공개(is_private=true)인 사용자 id 집합"만 조회한다.
-//  - Supabase public.users.is_private=true(비공개, 소수)만 조회 — Firestore 샤드 색인(구현) 대신
-//    이미 onUserProfileWritten으로 동기화되는 Supabase 미러를 직접 조회해 Firestore 읽기를 제거했다.
+//  - users.where('is_private','==',true) → 비공개(소수)만 읽으므로 보드 전체 조회보다 훨씬 저렴.
 //  - 인메모리 TTL 캐시로 함수 인스턴스당 조회 횟수를 고정(요청량과 무관하게 상한).
 //  - 집합에 속한 행만 is_private=true로 강제(강등 없음) → 동기화 지연 시에도 비공개가 풀리지 않음.
 let _privateUserIdSetCache = null;
@@ -367,46 +295,110 @@ let _privateUserIdSetCacheAt = 0;
 // (비공개 토글이 보드에 반영되기까지 최대 이 정도 지연 — 수용 가능)
 const PRIVATE_USER_ID_SET_TTL_MS = 300 * 1000;
 
+// 비공개 사용자 id를 트리거로 유지하는 색인 문서(ranking_meta/private_user_ids_{n}).
+// Firestore 문서 1MB 한계 때문에 단일 문서 대신 소수의 고정 샤드로 나눈다(수만 명까지 안전).
+// 갱신당 읽기 = 샤드 수(+메타 1) = 작은 상수. 요청량·전체 사용자 수와 무관하게 고정.
+const PRIVATE_USER_IDS_SHARD_COUNT = 8;
+const PRIVATE_USER_IDS_DOC_PREFIX = "private_user_ids_";
+const PRIVATE_USER_IDS_META_DOC = "private_user_ids_meta";
+
+function privateUserIdsShardIndex(uid) {
+  const s = String(uid == null ? "" : uid);
+  let h = 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % PRIVATE_USER_IDS_SHARD_COUNT;
+}
+
+function privateUserIdsShardRef(db, index) {
+  return db.collection("ranking_meta").doc(PRIVATE_USER_IDS_DOC_PREFIX + index);
+}
+
 /**
- * 비공개 사용자 id(firebase_uid) 집합을 Supabase public.users에서 조회해 캐시.
- * Supabase 조회 실패 시(장애 등) Firestore users(is_private=true) 원천으로 1회 폴백.
+ * 비공개 사용자 id 집합을 색인 문서(샤드)에서 읽어 캐시. 갱신당 읽기 = 샤드+메타(상수).
+ * 색인이 아직 초기화되지 않았으면(배포 직후·리빌드 전) 최초 1회 원천(users where)로 폴백해 정확성 보장.
  */
 async function getPrivateUserIdSetCached(db) {
+  if (!db) return null;
   const now = Date.now();
   if (_privateUserIdSetCache && now - _privateUserIdSetCacheAt < PRIVATE_USER_ID_SET_TTL_MS) {
     return _privateUserIdSetCache;
   }
   try {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("users")
-      .select("firebase_uid")
-      .eq("is_private", true)
-      .not("firebase_uid", "is", null);
-    if (error) throw error;
+    const metaRef = db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC);
+    const shardRefs = [];
+    for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
+      shardRefs.push(privateUserIdsShardRef(db, i));
+    }
+    // getAll: 1회 왕복으로 메타+전 샤드 조회 (읽기 = 샤드+1, 고정)
+    const snaps = await db.getAll(metaRef, ...shardRefs);
+    const metaSnap = snaps[0];
+    const initialized = !!(metaSnap && metaSnap.exists && (metaSnap.data() || {}).initializedAt);
     const set = new Set();
-    for (const row of data || []) {
-      if (row.firebase_uid) set.add(String(row.firebase_uid));
+    for (let i = 1; i < snaps.length; i += 1) {
+      const data = snaps[i] && snaps[i].exists ? snaps[i].data() || {} : {};
+      const ids = Array.isArray(data.ids) ? data.ids : [];
+      for (const id of ids) set.add(String(id));
+    }
+    if (!initialized && set.size === 0) {
+      // 색인 미초기화 → 원천에서 1회 폴백 (이후 스케줄/트리거가 색인을 채움)
+      const q = await db.collection("users").where("is_private", "==", true).select().get();
+      q.forEach((doc) => set.add(String(doc.id)));
     }
     _privateUserIdSetCache = set;
     _privateUserIdSetCacheAt = now;
     return set;
   } catch (e) {
-    console.warn("[getPrivateUserIdSetCached] Supabase 조회 실패, Firestore 폴백:", e && e.message ? e.message : e);
-    if (!db) return _privateUserIdSetCache;
-    try {
-      const q = await db.collection("users").where("is_private", "==", true).select().get();
-      const set = new Set();
-      q.forEach((doc) => set.add(String(doc.id)));
-      _privateUserIdSetCache = set;
-      _privateUserIdSetCacheAt = now;
-      return set;
-    } catch (e2) {
-      console.warn("[getPrivateUserIdSetCached] Firestore 폴백도 실패:", e2 && e2.message ? e2.message : e2);
-      // 두 조회 모두 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
-      return _privateUserIdSetCache;
-    }
+    console.warn("[getPrivateUserIdSetCached]", e && e.message ? e.message : e);
+    // 조회 실패 시 직전 캐시 유지(있으면) — 일시 오류로 비공개가 풀리지 않도록
+    return _privateUserIdSetCache;
   }
+}
+
+/**
+ * 색인(샤드) 전체를 users(is_private=true) 원천에서 재구성. 트리거 누락분·강등까지 자가 치유.
+ * 반환: { total, shardCount }
+ */
+async function rebuildPrivateUserIdShards(db) {
+  const buckets = [];
+  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) buckets.push([]);
+  const q = await db.collection("users").where("is_private", "==", true).select().get();
+  q.forEach((doc) => {
+    buckets[privateUserIdsShardIndex(doc.id)].push(String(doc.id));
+  });
+  const batch = db.batch();
+  for (let i = 0; i < PRIVATE_USER_IDS_SHARD_COUNT; i += 1) {
+    batch.set(privateUserIdsShardRef(db, i), {
+      ids: buckets[i],
+      count: buckets[i].length,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  }
+  batch.set(db.collection("ranking_meta").doc(PRIVATE_USER_IDS_META_DOC), {
+    initializedAt: admin.firestore.FieldValue.serverTimestamp(),
+    total: q.size,
+    shardCount: PRIVATE_USER_IDS_SHARD_COUNT,
+  });
+  await batch.commit();
+  // 인메모리 캐시 무효화(이 인스턴스) — 다른 인스턴스는 TTL 내 자연 반영
+  _privateUserIdSetCache = null;
+  _privateUserIdSetCacheAt = 0;
+  return { total: q.size, shardCount: PRIVATE_USER_IDS_SHARD_COUNT };
+}
+
+/** 비공개 토글 시 색인 샤드 증분 유지 (트리거에서 호출). 실패해도 스케줄 리빌드가 보정. */
+async function updatePrivateUserIdIndexForUser(db, userId, nowPrivate) {
+  const ref = privateUserIdsShardRef(db, privateUserIdsShardIndex(userId));
+  await ref.set(
+    {
+      ids: nowPrivate
+        ? admin.firestore.FieldValue.arrayUnion(userId)
+        : admin.firestore.FieldValue.arrayRemove(userId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 /**
@@ -894,223 +886,14 @@ exports.selfServiceResetPasswordHttp = onRequest(
 );
 
 /**
- * 회원가입 전화번호 문자(SMS) 인증 — 알리고 일반 SMS API(apis.aligo.in/send/) 사용.
- * 카카오 알림톡용 ALIGO_TOKEN은 필요 없다(SMS는 key/user_id만 사용 — aligoapi 패키지의
- * aligo_sms.js 예제 참고). 발신번호는 알리고 콘솔에 SMS용으로 사전등록된 번호를 사용한다.
- *
- * 코드는 Firestore phone_otp_codes/{phoneDigits}에 평문으로 저장한다 — 3분 만료·5회 시도
- * 제한이 걸린 단발성 저가치 비밀번호라 admin 전용 접근(클라이언트 직접 조회 불가)만으로
- * 충분하다고 판단(비밀번호·결제정보 등과는 위협 모델이 다름).
- */
-const ALIGO_SMS_SENDER = "01050149029";
-const PHONE_OTP_COLLECTION = "phone_otp_codes";
-const PHONE_OTP_TTL_MS = 3 * 60 * 1000; // 3분 — 코드베이스에 재사용할 기존 인증 유효시간 값이 없어 신규 도입
-// 재전송 쿨다운은 인증번호 유효시간과 동일하게 맞춘다(기존 코드가 아직 유효한 동안엔
-// 새 코드를 또 받을 필요가 없음 — 버튼에 표시되는 시간도 이 값을 그대로 사용).
-const PHONE_OTP_RESEND_COOLDOWN_MS = PHONE_OTP_TTL_MS;
-const PHONE_OTP_MAX_SENDS_PER_DAY = 5;
-const PHONE_OTP_MAX_ATTEMPTS = 5;
-// SMS 발송 테스트가 끝나 정상 로직(기가입 번호 차단)으로 복원됨.
-const PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK = false;
-
-function phoneOtpDigitsOnly(raw) {
-  return String(raw || "").replace(/\D/g, "");
-}
-
-function isValidKoreanMobileDigits(digits) {
-  return /^01[0-9]\d{7,8}$/.test(digits);
-}
-
-function phoneOtpTodayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** withdrawn(탈퇴) 계정과 동일한 판정 기준(assets/js/userManager.js의 getUserAccountStatus)을
- * 서버에서도 재현 — 탈퇴 계정은 재가입 대상이라 "이미 등록된 번호" 차단에서 제외한다. */
-function phoneOtpIsWithdrawnAccountData(d) {
-  if (!d) return false;
-  if (d.is_active === false) return true;
-  const s = String(d.account_status || d.status || "").trim().toLowerCase();
-  if (s === "withdrawn" || s === "inactive" || s === "deleted" || s === "deactivated") return true;
-  if (d.withdrawn_at && String(d.withdrawn_at).trim() && s !== "active") return true;
-  return false;
-}
-
-/** 이미 가입된(탈퇴하지 않은) 전화번호인지 확인 — selfServiceResetPasswordHttp와 동일한
- * formatted/digits 두 변형 조회 패턴을 재사용한다. */
-async function phoneOtpIsAlreadyRegisteredActive(db, digits) {
-  const formatted = selfResetFormatContactForDb(digits);
-  let snaps = await db.collection("users").where("contact", "==", formatted).limit(5).get();
-  if (snaps.empty && digits !== formatted) {
-    snaps = await db.collection("users").where("contact", "==", digits).limit(5).get();
-  }
-  if (snaps.empty) return false;
-  return snaps.docs.some((doc) => !phoneOtpIsWithdrawnAccountData(doc.data() || {}));
-}
-
-// 알리고 SMS API도 카카오 알림톡 API와 동일하게 발송 IP 화이트리스트를 요구한다
-// (result_code=-101 "인증오류입니다.-IP" 실측 확인) — 카카오 릴레이 함수들과 동일한
-// Cloud NAT 고정 IP(34.64.250.77, asia-northeast3)로 나가도록 동일 VPC 옵션을 적용한다.
-const aligoKakaoNatEgressForSms = require("./lib/aligoKakaoNatEgress");
-const sendPhoneVerificationCodeOptions = {
-  ...aligoKakaoNatEgressForSms.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
-  cors: false,
-  secrets: [aligoApiKeySecret, aligoUserIdSecret],
-};
-exports.sendPhoneVerificationCode = onRequest(sendPhoneVerificationCodeOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const digits = phoneOtpDigitsOnly(body.phone);
-    if (!isValidKoreanMobileDigits(digits)) {
-      res.status(400).json({ success: false, error: "올바른 휴대폰 번호를 입력해 주세요." });
-      return;
-    }
-
-    const db = admin.firestore();
-    // TEMP: SMS 발송 자체(IP 화이트리스트 수정) 테스트를 위해 기가입 번호 차단을 잠시 우회.
-    // 테스트 종료 후 PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK를 false로 되돌려 정상 로직 복원할 것.
-    if (!PHONE_OTP_TEMP_SKIP_DUPLICATE_CHECK && (await phoneOtpIsAlreadyRegisteredActive(db, digits))) {
-      res.status(409).json({ success: false, error: "이미 등록된 번호입니다." });
-      return;
-    }
-    const docRef = db.collection(PHONE_OTP_COLLECTION).doc(digits);
-    const snap = await docRef.get();
-    const existing = snap.exists ? snap.data() : null;
-    const nowMs = Date.now();
-
-    if (existing && existing.lastSentAt && nowMs - existing.lastSentAt.toMillis() < PHONE_OTP_RESEND_COOLDOWN_MS) {
-      const waitSec = Math.ceil((PHONE_OTP_RESEND_COOLDOWN_MS - (nowMs - existing.lastSentAt.toMillis())) / 1000);
-      res.status(429).json({ success: false, error: `잠시 후 다시 시도해 주세요. (${waitSec}초 후 재전송 가능)` });
-      return;
-    }
-    const today = phoneOtpTodayStr();
-    const sentTodayCount = existing && existing.sendCountDate === today ? Number(existing.sendCountToday) || 0 : 0;
-    if (sentTodayCount >= PHONE_OTP_MAX_SENDS_PER_DAY) {
-      res.status(429).json({ success: false, error: "오늘 요청 가능한 인증번호 전송 횟수를 초과했습니다." });
-      return;
-    }
-
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-
-    const { scrubAligoCredential } = require("./lib/aligoCredentials");
-    const apikey = scrubAligoCredential(aligoApiKeySecret.value());
-    const userid = scrubAligoCredential(aligoUserIdSecret.value());
-    if (!apikey || !userid) {
-      console.error("[sendPhoneVerificationCode] ALIGO_API_KEY/ALIGO_USER_ID 미설정");
-      res.status(500).json({ success: false, error: "문자 발송 설정이 올바르지 않습니다. 관리자에게 문의해 주세요." });
-      return;
-    }
-
-    const aligoapi = require("aligoapi");
-    const smsReq = {
-      headers: { "content-type": "application/json" },
-      body: {
-        sender: ALIGO_SMS_SENDER,
-        receiver: digits,
-        msg: `[STELVIO] 인증번호 [${code}]를 입력해 주세요. (3분 이내 유효)`,
-        msg_type: "SMS",
-      },
-    };
-    const smsAuth = { key: apikey, user_id: userid };
-    const raw = await aligoapi.send(smsReq, smsAuth);
-    const resultCode = raw && raw.result_code !== undefined ? String(raw.result_code) : "";
-    if (resultCode !== "1") {
-      console.error("[sendPhoneVerificationCode] Aligo SMS 전송 실패:", JSON.stringify(raw));
-      res.status(502).json({ success: false, error: "문자 전송에 실패했습니다. 잠시 후 다시 시도해 주세요." });
-      return;
-    }
-
-    await docRef.set({
-      code,
-      expiresAt: admin.firestore.Timestamp.fromMillis(nowMs + PHONE_OTP_TTL_MS),
-      attempts: 0,
-      verified: false,
-      verifiedAt: null,
-      lastSentAt: admin.firestore.Timestamp.fromMillis(nowMs),
-      sendCountToday: sentTodayCount + 1,
-      sendCountDate: today,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-
-    res.status(200).json({ success: true, expiresInSeconds: PHONE_OTP_TTL_MS / 1000 });
-  } catch (e) {
-    console.error("[sendPhoneVerificationCode]", e && e.message ? e.message : e);
-    res.status(500).json({ success: false, error: "인증번호 전송 중 오류가 발생했습니다." });
-  }
-});
-
-const verifyPhoneVerificationCodeOptions = { cors: false };
-exports.verifyPhoneVerificationCode = onRequest(verifyPhoneVerificationCodeOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const digits = phoneOtpDigitsOnly(body.phone);
-    const code = String(body.code || "").trim();
-    if (!isValidKoreanMobileDigits(digits) || !/^[0-9]{6}$/.test(code)) {
-      res.status(400).json({ success: false, error: "요청 값이 올바르지 않습니다." });
-      return;
-    }
-
-    const db = admin.firestore();
-    const docRef = db.collection(PHONE_OTP_COLLECTION).doc(digits);
-    const snap = await docRef.get();
-    if (!snap.exists) {
-      res.status(400).json({ success: false, error: "인증번호를 먼저 요청해 주세요." });
-      return;
-    }
-    const data = snap.data();
-    if (data.verified === true) {
-      res.status(200).json({ success: true });
-      return;
-    }
-    if (!data.expiresAt || data.expiresAt.toMillis() < Date.now()) {
-      res.status(400).json({ success: false, error: "인증번호가 만료되었습니다. 다시 요청해 주세요." });
-      return;
-    }
-    if ((Number(data.attempts) || 0) >= PHONE_OTP_MAX_ATTEMPTS) {
-      res.status(400).json({ success: false, error: "시도 횟수를 초과했습니다. 인증번호를 다시 요청해 주세요." });
-      return;
-    }
-    if (String(data.code) !== code) {
-      await docRef.update({ attempts: admin.firestore.FieldValue.increment(1) });
-      res.status(400).json({ success: false, error: "인증번호가 일치하지 않습니다." });
-      return;
-    }
-
-    await docRef.update({ verified: true, verifiedAt: admin.firestore.FieldValue.serverTimestamp() });
-    res.status(200).json({ success: true });
-  } catch (e) {
-    console.error("[verifyPhoneVerificationCode]", e && e.message ? e.message : e);
-    res.status(500).json({ success: false, error: "인증번호 확인 중 오류가 발생했습니다." });
-  }
-});
-
-/**
  * Strava 인증 코드를 액세스/리프레시 토큰으로 교환하고 users/{userId}에 저장.
  * Client Secret은 서버(Secret Manager)에서만 사용. appConfig/strava에서 client_id, redirect_uri 읽음.
  * onRequest로 변경하여 CORS 수동 처리
  */
 // Secret이 있으면 secrets 배열에 포함, 없으면 Secret 없이 배포
-const exchangeStravaCodeConfig = supabaseDualWriteServer.appendServiceRoleSecret({ cors: CORS_ORIGINS });
+const exchangeStravaCodeConfig = { cors: CORS_ORIGINS };
 if (STRAVA_CLIENT_SECRET) {
-  exchangeStravaCodeConfig.secrets.push(STRAVA_CLIENT_SECRET);
+  exchangeStravaCodeConfig.secrets = [STRAVA_CLIENT_SECRET];
 }
 
 exports.exchangeStravaCode = onRequest(
@@ -1150,14 +933,15 @@ exports.exchangeStravaCode = onRequest(
       }
 
       const db = admin.firestore();
-      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
-      if (!appConfig) {
+      const appConfigSnap = await db.collection("appConfig").doc("strava").get();
+      if (!appConfigSnap.exists) {
         throw new HttpsError(
           "failed-precondition",
           "Strava 앱 설정(appConfig/strava)이 없습니다. Firestore에 strava_client_id, strava_redirect_uri를 설정하세요."
         );
       }
 
+      const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       const redirectUri = appConfig.strava_redirect_uri || "";
       
@@ -1286,18 +1070,6 @@ exports.exchangeStravaCode = onRequest(
         throw new HttpsError("not-found", "해당 사용자를 찾을 수 없습니다.");
       }
 
-      const prevAthleteId = Number((userSnap.data() || {}).strava_athlete_id) || 0;
-      // 재연동 시 Strava가 이전과 다른 athlete_id를 반환하면(다른 계정으로 승인) 조용히 덮어쓰지 않고
-      // 감사 로그·플래그를 남긴다 — 잘못된 계정 연결로 이후 활동이 통째로 수집되지 않는 사고 방지.
-      const athleteMismatch =
-        prevAthleteId > 0 && athleteId != null && athleteId > 0 && athleteId !== prevAthleteId;
-      if (athleteMismatch) {
-        console.error(
-          "[exchangeStravaCode] ⚠️ STRAVA ATHLETE MISMATCH — 재연동 시 이전과 다른 Strava 계정이 연결됨:",
-          { userId, previousAthleteId: prevAthleteId, newAthleteId: athleteId }
-        );
-      }
-
       const updateData = {
         strava_access_token: accessToken,
         strava_refresh_token: refreshToken,
@@ -1305,20 +1077,11 @@ exports.exchangeStravaCode = onRequest(
         ...scopeUpdate,
       };
       if (athleteId != null) updateData.strava_athlete_id = athleteId;
-      if (athleteMismatch) {
-        updateData.strava_athlete_id_prev = prevAthleteId;
-        updateData.strava_athlete_mismatch_at = new Date().toISOString();
-        updateData.strava_athlete_mismatch_pending_review = true;
-      }
       await userRef.update(updateData);
       await stravaSyncRetry.clearStravaAuthInvalidOnReconnect(db, userId);
       await stravaSyncRetry.scheduleStravaReconnectBackfill(db, userId);
 
-      res.status(200).json(
-        athleteMismatch
-          ? { success: true, athleteMismatch: true, previousAthleteId: prevAthleteId, newAthleteId: athleteId }
-          : { success: true }
-      );
+      res.status(200).json({ success: true });
     } catch (err) {
       console.error("[exchangeStravaCode]", err);
       if (!res.headersSent) {
@@ -1340,9 +1103,9 @@ exports.exchangeStravaCode = onRequest(
  * onRequest로 변경하여 CORS 수동 처리
  */
 // refreshStravaToken도 동일한 설정 사용
-const refreshStravaTokenConfig = supabaseDualWriteServer.appendServiceRoleSecret({ cors: CORS_ORIGINS });
+const refreshStravaTokenConfig = { cors: CORS_ORIGINS };
 if (STRAVA_CLIENT_SECRET) {
-  refreshStravaTokenConfig.secrets.push(STRAVA_CLIENT_SECRET);
+  refreshStravaTokenConfig.secrets = [STRAVA_CLIENT_SECRET];
 }
 
 exports.refreshStravaToken = onRequest(
@@ -1395,14 +1158,15 @@ exports.refreshStravaToken = onRequest(
         );
       }
 
-      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
-      if (!appConfig) {
+      const appConfigSnap = await db.collection("appConfig").doc("strava").get();
+      if (!appConfigSnap.exists) {
         throw new HttpsError(
           "failed-precondition",
           "Strava 앱 설정(appConfig/strava)이 없습니다."
         );
       }
 
+      const appConfig = appConfigSnap.data();
       const clientId = appConfig.strava_client_id || "";
       
       // Secret에서 값을 가져오되, 없거나 빈 값이면 하드코딩된 값 사용
@@ -1530,40 +1294,12 @@ function buildStravaScopeUpdate(tokenData) {
 const STELVIO_RTSS_DEFAULT_WEIGHT_KG = 70;
 
 /**
- * 지속시간별 생리학적으로 타당한 IF(강도계수=NP/FTP) 상한.
- * Coggan/Allen의 IF 구간 정의(Training and Racing with a Power Meter) 기준 —
- * FTP 자체가 "약 60분간 유지 가능한 최대 파워"로 정의되므로, 60~90분을 넘어서는
- * 라이딩에서 IF가 1.0 이상으로 수 시간 유지되는 것은 생리학적으로 불가능하다
- * (그게 가능하다면 그 라이딩의 NP 자체가 실제 FTP에 더 가깝다는 뜻).
- * FTP를 실제보다 낮게(오래돼) 설정한 사용자가 장시간 라이딩을 하면 TSS가 IF²에
- * 비례해 폭증하는 문제(예: 4시간 라이딩·IF 1.07 → TSS 474)를 막기 위해,
- * Garmin/TrainingPeaks 등이 FTP 자동 감지에 쓰는 것과 동일한 파워-지속시간
- * 곡선 개념으로 라이딩 시간별 IF 상한을 두고 그 이상은 클램프한다.
- */
-function maxPlausibleIntensityFactorForDuration(durationSec) {
-  const min = Number(durationSec) / 60;
-  if (min <= 20) return 1.3; // 무산소/VO2max성 짧은 최대 노력
-  if (min <= 60) return 1.1; // FTP 테스트 길이 내외의 임계 구간
-  if (min <= 90) return 0.98; // 장시간 임계/스위트스팟 경계
-  if (min <= 180) return 0.88; // 템포~스위트스팟(1.5~3시간)
-  if (min <= 300) return 0.8; // 장거리 템포~엔듀런스(3~5시간)
-  return 0.72; // 5시간 이상 초장거리 엔듀런스
-}
-
-/**
  * STELVIO 글로벌 개정 TSS (rTSS) — W/kg 가중치
  * [수정] kJ 가드레일 재설계 (클라이언트 stelvioRtss.js와 동일한 로직 적용)
  *  구버전 wPerKg < 2.5 → tssPerKJ > 15.0, wPerKg > 4.0 → tssPerKJ < 6.0 로직은
  *  정상 범위(0.05~0.8 TSS/kJ)보다 10~100배 높아 비정상 파워 데이터 입력 시 수천~수만 TSS 발생.
  *  (예: 2026-05-09~12 기간 TSS 4173·9927·9927.2 버그의 원인)
  *  변경 후: 1.5 TSS/kJ 단일 상한 + 500 TSS 절대 상한으로 통일.
- * [수정] 지속시간별 IF 상한 가드레일 추가 (클라이언트 stelvioRtss.js와 동일한 로직 적용)
- *  FTP가 실제보다 낮게 설정된 사용자가 장시간(수 시간) 라이딩을 하면, kJ/500 상한에
- *  걸리지 않는 범위 내에서도 IF²에 비례해 TSS가 비정상적으로 높게 산출되는 문제가
- *  있었다(예: 76kg·FTP 159W 사용자가 3.5~3.9시간 라이딩에서 IF 1.07~1.11을 기록해
- *  하루 TSS 462.7·474.8 산출 — 일반 라이더 기준 상식적으로 납득하기 어려운 수치).
- *  IF 1.0 이상을 1시간 넘게 유지하는 것은 FTP 정의상 불가능하므로, 근본 원인인
- *  IF 계산 단계에서 지속시간별 상한(maxPlausibleIntensityFactorForDuration)을 적용한다.
  */
 function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   const d = Number(durationSec);
@@ -1575,10 +1311,8 @@ function calculateStelvioRevisedTSS(durationSec, avgPower, np, ftp, weight) {
   if (!ftpN || !w || ftpN <= 0 || w <= 0) return 0;
   if (npN <= 0 || avgN <= 0) return 0;
   if (!d || d <= 0) return 0;
-  const rawIfFactor = npN / ftpN;
-  const ifCap = maxPlausibleIntensityFactorForDuration(d);
-  const ifFactor = Math.min(rawIfFactor, ifCap);
-  const baseTSS = (d / 3600) * ifFactor * ifFactor * 100;
+  const ifFactor = npN / ftpN;
+  const baseTSS = ((d * npN * ifFactor) / (ftpN * 3600)) * 100;
   const totalKJ = (avgN * d) / 1000;
   if (totalKJ <= 0) return 0;
   const wPerKg = ftpN / w;
@@ -1748,13 +1482,12 @@ async function fetchStravaStreams(accessToken, activityId) {
         const bodyText = await res.text().catch(() => "");
         const appInactive = isStravaApplicationInactiveError(res.status, bodyText);
         if (appInactive) logStravaApplicationInactive("fetchStravaStreams", { activityId });
-        return { success: false, status: res.status, appInactive, watts: null, heartrate: null, altitude: null, time: null };
+        return { success: false, status: res.status, appInactive, watts: null, heartrate: null, altitude: null };
       }
       const raw = await res.json().catch(() => null);
       let wattsArray = null;
       let heartrateArray = null;
       let altitudeArray = null;
-      let timeArray = null;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         wattsArray = Array.isArray(raw.watts) ? raw.watts : (raw.watts && Array.isArray(raw.watts.data) ? raw.watts.data : null);
         heartrateArray = Array.isArray(raw.heartrate)
@@ -1767,24 +1500,21 @@ async function fetchStravaStreams(accessToken, activityId) {
           : raw.altitude && Array.isArray(raw.altitude.data)
             ? raw.altitude.data
             : null;
-        timeArray = Array.isArray(raw.time) ? raw.time : (raw.time && Array.isArray(raw.time.data) ? raw.time.data : null);
       } else {
         const streamArray = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
         const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
         const heartrateStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "heartrate");
         const altitudeStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "altitude");
-        const timeStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "time");
         wattsArray = wattsStream && Array.isArray(wattsStream.data) ? wattsStream.data : null;
         heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
         altitudeArray = altitudeStream && Array.isArray(altitudeStream.data) ? altitudeStream.data : null;
-        timeArray = timeStream && Array.isArray(timeStream.data) ? timeStream.data : null;
       }
-      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray, time: timeArray };
+      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray };
     } catch (e) {
-      if (attempt === maxRetries) return { success: false, watts: null, heartrate: null, time: null };
+      if (attempt === maxRetries) return { success: false, watts: null, heartrate: null };
     }
   }
-  return { success: false, watts: null, heartrate: null, time: null };
+  return { success: false, watts: null, heartrate: null };
 }
 
 async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, perPage) {
@@ -1943,7 +1673,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   }
   const userId = userDoc.id;
   const userData = userDoc.data();
-  const profileFtp = Number(userData.ftp) || 0;
+  const ftp = Number(userData.ftp) || 0;
 
   // 만료 5분 전 이내거나 토큰 없을 때만 갱신 (무조건 갱신 시 Rotating Refresh Token 경쟁 조건 방지)
   let accessToken = userData.strava_access_token || "";
@@ -1996,80 +1726,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   }
 
   const activity = detailRes.activity;
-
-  // moving_time 오염 방어: 실내 트레이너 등에서 기록 종료를 못 해 GPS 자동일시정지가 걸리지 않으면
-  // Strava가 실제 페달링 시간이 아니라 방치된 전체 경과시간을 moving_time으로 보고할 수 있다.
-  // (2026-08-12 실사례: 홍경희 Pd8oNdgYcrZqeQ09rq4OyYBS3iF2, activity 19705200710 —
-  //  moving_time=82562초(22.9시간) 보고. time 스트림 자체도 0~82562초 전체를 span해 "첫~마지막
-  //  샘플 차이"로는 못 잡았음 — 샘플 간 gap 하나가 79436초(22시간)였고 나머지는 전부 1초 간격의
-  //  정상 기록이었음. 즉 "총 경과시간"이 아니라 "연속 기록 구간의 합"이 진짜 활동시간이다.
-  //  gap>30초(신호 드롭 허용 여유)인 구간을 제외하고 합산하면 2813초(46.9분)로, 같은 활동의
-  //  time_in_zones 합(2778~2816초)과 사실상 일치 — 그런데도 TSS는 kJ 상한 가드레일에 걸릴
-  //  정도로(445.8) 부풀려졌음.)
-  if (streamsRes.success && Array.isArray(streamsRes.time) && streamsRes.time.length > 1) {
-    const MAX_CONTINUOUS_GAP_SEC = 30;
-    const t = streamsRes.time;
-    let continuousDurationSec = 0;
-    for (let i = 1; i < t.length; i++) {
-      const gap = Number(t[i]) - Number(t[i - 1]);
-      if (gap > 0 && gap <= MAX_CONTINUOUS_GAP_SEC) continuousDurationSec += gap;
-    }
-    const reportedMovingTime = Number(activity.moving_time) || 0;
-    if (
-      continuousDurationSec > 0 &&
-      reportedMovingTime > continuousDurationSec * 1.5 &&
-      reportedMovingTime - continuousDurationSec > 300
-    ) {
-      // average_watts는 Strava가 kilojoules(실제 일량, gap과 무관하게 유효)를 원래(오염된)
-      // moving_time으로 나눠 보고한 값이라 duration만 고치면 avg_watts가 새 duration과
-      // 안 맞아 TSS 내부 kJ 가드레일(avgPower*duration/1000)이 실제보다 훨씬 작은 값으로
-      // 잘못 계산되어 TSS가 오히려 과소 산정된다(2026-08-12: 위 사례에서 445.8→15.2로만 보정돼
-      // Garmin 산출치 42와 여전히 크게 어긋남 — kilojoules 기준 재계산 후 38.1로 정정, 정합).
-      const kilojoules = Number(activity.kilojoules) || 0;
-      const correctedAvgWatts = kilojoules > 0 ? (kilojoules * 1000) / continuousDurationSec : null;
-      console.warn("[processStravaActivity] moving_time 이상치 감지(비연속 gap 포함), 연속 기록 구간 합으로 보정:", {
-        activityId,
-        userId,
-        reportedMovingTimeSec: reportedMovingTime,
-        continuousDurationSec,
-        reportedAvgWatts: activity.average_watts,
-        correctedAvgWatts,
-      });
-      activity.moving_time = Math.round(continuousDurationSec);
-      if (correctedAvgWatts != null) {
-        activity.average_watts = correctedAvgWatts;
-      }
-    }
-  }
-
-  // TSS 산출 FTP: 프로필 FTP와 "이 라이딩 시점 기준" 동적 FTP(최근 6개 구간 PR 가중평균) 중
-  // 더 높은 값을 사용 — 프로필 FTP를 낮게 설정/방치한 사용자의 TSS 과다 산정을 막는다.
-  // 미래 PR이 과거 라이딩에 소급 적용되지 않도록 반드시 이 라이딩 날짜 이전(포함) 기록만 사용.
-  let tssFtp = profileFtp;
-  try {
-    const activityDateStr = String(activity.start_date_local || activity.start_date || "").slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(activityDateStr)) {
-      const dynStart = new Date(`${activityDateStr}T00:00:00`);
-      dynStart.setDate(dynStart.getDate() - 200);
-      const dynStartStr = dynStart.toISOString().slice(0, 10);
-      const historyLogs = await fetchCyclingLogsInDateRangeRouted(db, userId, dynStartStr, activityDateStr);
-      const dynResult = dynamicFtpServer.calculateDynamicFtp(historyLogs, activityDateStr);
-      if (dynResult.success && dynResult.newFtp > tssFtp) {
-        console.log("[processStravaActivity] 동적 FTP가 프로필보다 높아 채택:", {
-          userId,
-          activityId,
-          activityDateStr,
-          profileFtp,
-          dynamicFtp: dynResult.newFtp,
-        });
-        tssFtp = dynResult.newFtp;
-      }
-    }
-  } catch (e) {
-    console.warn("[processStravaActivity] 동적 FTP 계산 실패(프로필 FTP로 진행):", userId, e && e.message);
-  }
-
-  const mapped = mapStravaActivityToLogSchema(activity, userId, tssFtp, userData.weight ?? userData.weightKg);
+  const mapped = mapStravaActivityToLogSchema(activity, userId, ftp, userData.weight ?? userData.weightKg);
 
   let max1minWatts = null;
   let max5minWatts = null;
@@ -2168,7 +1825,6 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
     if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
     if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
     if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
-    capHrPeaksMonotonicOnRow(logDoc);
   }
 
   const routeProfile = buildStravaRouteProfileFields(activity, streamsRes);
@@ -2214,8 +1870,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
         db,
         userId,
         activityDateYmd,
-        activityDateYmd,
-        true
+        activityDateYmd
       );
     } catch (parityErr) {
       console.warn(
@@ -2454,18 +2109,6 @@ async function getStelvioLogDates(db, userId) {
   const cutoffDate = new Date();
   cutoffDate.setFullYear(cutoffDate.getFullYear() - 1);
   const cutoffStr = cutoffDate.toISOString().split("T")[0];
-
-  // Phase 4 — shadow 중단(기본 ON) 시 users/logs 1년 range 스캔(최다 비용 쿼리) 대신 Supabase rides 조회
-  if (supabaseDualWriteServer.isPhase4FirestoreLogShadowStopped()) {
-    try {
-      const sbDates = await supabaseDualWriteServer.fetchStelvioLogDatesForUser(userId, cutoffStr);
-      sbDates.forEach((d) => dates.add(d));
-      return dates;
-    } catch (sbErr) {
-      console.warn("[getStelvioLogDates] supabase 조회 실패, Firestore로 폴백:", userId, sbErr.message);
-    }
-  }
-
   const snapshot = await db.collection("users").doc(userId).collection("logs")
     .where("date", ">=", cutoffStr)
     .get();
@@ -2601,9 +2244,9 @@ async function refreshStravaTokenForUser(db, userId) {
   const initialUserData = userSnap.data() || {};
   const refreshToken = initialUserData.strava_refresh_token || "";
   if (!refreshToken) throw new Error("Strava 리프레시 토큰이 없습니다.");
-  const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
-  if (!appConfig) throw new Error("Strava 앱 설정이 없습니다.");
-  const clientId = appConfig.strava_client_id || "";
+  const appConfigSnap = await db.collection("appConfig").doc("strava").get();
+  if (!appConfigSnap.exists) throw new Error("Strava 앱 설정이 없습니다.");
+  const clientId = appConfigSnap.data().strava_client_id || "";
   const clientSecret = getStravaClientSecret();
   if (!clientId || !clientSecret) throw new Error("Strava 설정이 불완전합니다.");
   const tokenUrl = "https://www.strava.com/api/v3/oauth/token";
@@ -2751,13 +2394,6 @@ async function updateUserMileageInFirestore(db, userId, todayTss) {
 const STRAVA_SYNC_CHUNK_SIZE = 50;        // 청크당 사용자 수 (팬아웃)
 const STRAVA_SYNC_CONCURRENCY = 10;      // 청크 내 동시 처리 사용자 수
 const STRAVA_SYNC_CHUNK_THRESHOLD = 100; // 이 인원 초과 시 청크 팬아웃 사용
-/**
- * "전체 사용자 한 번에" 방식(stravaSyncSunday/manualStravaSyncTodaySeoul)의 안전 상한.
- * Strava 앱 전체 일일 한도(1000회/day, 이 파일의 "1000명 규모 설계 상수" 원래 설계값)를 이 작업
- * 혼자서 넘기지 않도록 하는 값 — 사용자 수가 이 값을 넘으면 실패/타임아웃이 사실상 확정이므로
- * 예산을 낭비하며 시도하는 대신 건너뛴다(회전 갭 스캔이 지속적으로 커버하므로 안전).
- */
-const STRAVA_FULL_SCAN_MAX_USERS = 1000;
 const INTERNAL_SYNC_SECRET = "stelvio-internal-sync-v1"; // 청크 HTTP 인증 (필요 시 Secret으로 교체)
 
 async function ensureExistingStravaLogMirroredToSupabase(userId, logDocId, logData, contextLabel) {
@@ -2838,12 +2474,6 @@ async function recordStravaActivityFetchDiagnostic(db, userId, diagnostic) {
     }
     if (diagnostic && diagnostic.hint) {
       update.strava_last_activity_fetch_hint = String(diagnostic.hint).slice(0, 500);
-    } else {
-      // hint가 빈 문자열(정상 조회 성공)이면 이전 실패 때 남은 힌트 문구가 그대로 남아있지
-      // 않도록 지운다 — error 필드는 바로 아래에서 이미 이렇게 처리하고 있었는데 hint만
-      // 빠져 있었다. 방치하면 이후 정상 동기화된 뒤에도 "0건 조회" 같은 옛 힌트가 남아
-      // 관리자가 진단 시 최신 상태를 오판하는 원인이 된다.
-      update.strava_last_activity_fetch_hint = admin.firestore.FieldValue.delete();
     }
     if (diagnostic && diagnostic.error) {
       update.strava_last_activity_fetch_error = String(diagnostic.error).slice(0, 500);
@@ -3139,7 +2769,6 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
           if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
           if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
-          capHrPeaksMonotonicOnPartialUpdate(updateData, d);
         }
         if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
           const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
@@ -3288,7 +2917,6 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
       if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
       if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
-      capHrPeaksMonotonicOnRow(logDoc);
     }
     const routeProfileBatch = buildStravaRouteProfileFields(detailedActivity, streamsRes);
     if (routeProfileBatch) {
@@ -3647,13 +3275,18 @@ exports.stravaAthleteIdBackfillSchedule = onSchedule(
 async function summarizeStravaWebhookRetryQueue(db, options = {}) {
   const limit = Math.max(1, Math.min(1000, Number(options.limit) || 500));
   const includeEntries = options.includeEntries !== false;
-  const rows = await stravaGapDetect.listPendingStravaWebhookRetries(db, { maxEntries: limit });
+  const snap = await db
+    .collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION)
+    .where("status_queue", "==", "pending")
+    .limit(limit)
+    .get();
   const byReason = {};
   let unresolvedCount = 0;
   let resolvableCount = 0;
   let oldestFailedAt = null;
   const entries = [];
-  rows.forEach((d) => {
+  snap.docs.forEach((doc) => {
+    const d = doc.data() || {};
     const reason = String(d.reason || "unknown");
     byReason[reason] = (byReason[reason] || 0) + 1;
     if (reason === "user_unresolved" || !d.user_id) unresolvedCount += 1;
@@ -3662,7 +3295,7 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
     if (failedAt && (!oldestFailedAt || String(failedAt) < String(oldestFailedAt))) oldestFailedAt = failedAt;
     if (includeEntries) {
       entries.push({
-        id: d.id,
+        id: doc.id,
         owner_id: d.owner_id ?? null,
         object_id: d.object_id ?? null,
         user_id: d.user_id ?? null,
@@ -3674,8 +3307,8 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
     }
   });
   return {
-    pendingCount: rows.length,
-    truncated: rows.length >= limit,
+    pendingCount: snap.size,
+    truncated: snap.size >= limit,
     unresolvedCount,
     resolvableCount,
     byReason,
@@ -3688,10 +3321,7 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
  * 관리자: Strava 웹훅 재시도 큐 상태 조회 — user_unresolved 등 미해결 이벤트 가시화(대시보드용).
  * 인증: X-Internal-Secret 또는 관리자(grade=1) Firebase Bearer.
  */
-const adminStravaWebhookRetryStatusOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 120,
-});
+const adminStravaWebhookRetryStatusOptions = { cors: true, timeoutSeconds: 120 };
 exports.adminStravaWebhookRetryStatus = onRequest(
   adminStravaWebhookRetryStatusOptions,
   async (req, res) => {
@@ -3709,7 +3339,8 @@ exports.adminStravaWebhookRetryStatus = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const grade = await getCachedCallerGrade(db, uid);
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -3733,111 +3364,11 @@ exports.adminStravaWebhookRetryStatus = onRequest(
 );
 
 /**
- * 관리자: Strava 앱의 실제 push_subscriptions 등록 상태를 Strava API에서 직접 조회.
- * 2026-08-02 점검 중 드러난 맹점 — 재시도 큐(strava_webhook_retries)가 텅 비어 있는 것과
- * "구독 자체가 없어서 이벤트가 원천적으로 안 옴"을 구분할 방법이 이 앱에 전혀 없었다(둘 다 큐가
- * 비어 "정상"처럼 보임). 구독 목록이 비어 있거나 callback_url이 우리 stravaWebhook 주소와
- * 다르면 그 자체가 원인이므로, 정기 점검 시 가장 먼저 확인해야 하는 값이다.
- * 인증: X-Internal-Secret 또는 관리자(grade=1) Firebase Bearer.
- */
-const adminStravaSubscriptionStatusOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 30,
-});
-if (STRAVA_CLIENT_SECRET) {
-  adminStravaSubscriptionStatusOptions.secrets = adminStravaSubscriptionStatusOptions.secrets || [];
-  if (!adminStravaSubscriptionStatusOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
-    adminStravaSubscriptionStatusOptions.secrets.push(STRAVA_CLIENT_SECRET);
-  }
-}
-exports.adminStravaSubscriptionStatus = onRequest(
-  adminStravaSubscriptionStatusOptions,
-  async (req, res) => {
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    try {
-      const db = admin.firestore();
-      const rawSecret =
-        req.headers["x-internal-secret"] || req.headers["X-Internal-Secret"] || req.query.secret;
-      let authorized = rawSecret === INTERNAL_SYNC_SECRET;
-      if (!authorized) {
-        const uid = await getUidFromRequest(req, res);
-        if (!uid) return;
-        const grade = await getCachedCallerGrade(db, uid);
-        if (grade !== "1") {
-          res.status(403).json({
-            success: false,
-            error: "관리자(grade=1) 또는 X-Internal-Secret 헤더가 필요합니다.",
-          });
-          return;
-        }
-        authorized = true;
-      }
-
-      const appConfig = await appConfigCache.getAppConfigDocCached(admin, "strava");
-      const clientId = appConfig && appConfig.strava_client_id;
-      const clientSecret = getStravaClientSecret();
-      if (!clientId || !clientSecret) {
-        res.status(500).json({ success: false, error: "Strava 앱 설정이 불완전합니다(client_id/secret)." });
-        return;
-      }
-
-      const params = new URLSearchParams({ client_id: String(clientId), client_secret: clientSecret });
-      const stravaRes = await fetch(`https://www.strava.com/api/v3/push_subscriptions?${params.toString()}`);
-      const subscriptions = await stravaRes.json().catch(() => null);
-
-      /**
-       * Strava는 모든 API 응답에 15분 윈도우 기준 레이트리밋 헤더를 실어 보낸다.
-       * X-RateLimit-*  = "Overall"(전체 요청), X-ReadRateLimit-* = "Read"(읽기 요청) —
-       * Strava 개발자 대시보드의 "Requests every 15 minutes" 그래프와 동일한 두 계열이다.
-       * 무료 등급 초과·유료 결제 반영 여부는 limit 값 자체의 변화로 확인 가능하다
-       * (예: 무료 100/1000 → 유료 등급으로 상향되면 limit 값이 커짐).
-       */
-      const rateLimit = {
-        overall: {
-          limit: stravaRes.headers.get("x-ratelimit-limit"),
-          usage: stravaRes.headers.get("x-ratelimit-usage"),
-        },
-        read: {
-          limit: stravaRes.headers.get("x-readratelimit-limit"),
-          usage: stravaRes.headers.get("x-readratelimit-usage"),
-        },
-      };
-
-      const healthSnap = await db.collection("appConfig").doc("strava_webhook_health").get();
-      const lastReceivedAt = healthSnap.exists ? healthSnap.data().lastReceivedAt : null;
-      const lastReceivedMs =
-        lastReceivedAt && typeof lastReceivedAt.toMillis === "function" ? lastReceivedAt.toMillis() : 0;
-
-      res.status(200).json({
-        success: stravaRes.ok,
-        httpStatus: stravaRes.status,
-        rateLimitBlocked: stravaRes.status === 429,
-        rateLimit,
-        subscriptionCount: Array.isArray(subscriptions) ? subscriptions.length : 0,
-        subscriptions: Array.isArray(subscriptions) ? subscriptions : subscriptions,
-        lastWebhookReceivedAt: lastReceivedMs > 0 ? new Date(lastReceivedMs).toISOString() : null,
-        staleHours: lastReceivedMs > 0 ? Number(((Date.now() - lastReceivedMs) / 3600000).toFixed(1)) : null,
-      });
-    } catch (err) {
-      console.error("[adminStravaSubscriptionStatus]", err);
-      res.status(500).json({ success: false, error: err && err.message ? err.message : String(err) });
-    }
-  }
-);
-
-/**
  * Strava 웹훅 재시도 큐 모니터 — 6시간마다(서울). pending 적체·user_unresolved를 구조화 로그로 경보.
  * (Cloud Logging 로그 기반 경보/알림에 연동 가능 — 외부 유료 API 미사용)
  */
 exports.stravaWebhookRetryMonitorSchedule = onSchedule(
-  supabaseDualWriteServer.appendServiceRoleSecret({
-    schedule: "0 */6 * * *",
-    timeZone: "Asia/Seoul",
-    timeoutSeconds: 120,
-  }),
+  { schedule: "0 */6 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 120 },
   async () => {
     const db = admin.firestore();
     const summary = await summarizeStravaWebhookRetryQueue(db, { limit: 1000, includeEntries: false });
@@ -3856,28 +3387,6 @@ exports.stravaWebhookRetryMonitorSchedule = onSchedule(
         byReason: summary.byReason,
       });
     }
-
-    // 재시도 큐 적체가 없는 것과 "구독이 죽어서 이벤트 자체가 안 옴"은 구분해야 한다 —
-    // 후자는 큐가 텅 비어 위 체크로는 절대 못 잡는다(실패한 게 없으니 재시도 대상도 없음).
-    // stravaWebhook 핸들러가 POST를 받을 때마다 기록하는 lastReceivedAt으로 별도 판정한다.
-    try {
-      const healthSnap = await db.collection("appConfig").doc("strava_webhook_health").get();
-      const lastReceivedAt = healthSnap.exists ? healthSnap.data().lastReceivedAt : null;
-      const lastReceivedMs = lastReceivedAt && typeof lastReceivedAt.toMillis === "function" ? lastReceivedAt.toMillis() : 0;
-      const staleHours = lastReceivedMs > 0 ? (Date.now() - lastReceivedMs) / 3600000 : Infinity;
-      const STRAVA_WEBHOOK_STALE_ALERT_HOURS = 24;
-      if (staleHours > STRAVA_WEBHOOK_STALE_ALERT_HOURS) {
-        console.error("[stravaWebhookRetryMonitor] ALERT: 웹훅 이벤트 수신이 끊긴 것으로 보임(구독 만료 가능성)", {
-          lastReceivedAt: lastReceivedMs > 0 ? new Date(lastReceivedMs).toISOString() : null,
-          staleHours: Number(staleHours.toFixed(1)),
-          hint: "Strava push_subscriptions 등록 상태 확인 필요 — 큐 적체가 0이어도 구독이 죽으면 이벤트가 아예 안 들어와 재시도 큐로는 감지되지 않는다.",
-        });
-      } else {
-        console.log("[stravaWebhookRetryMonitor] 웹훅 수신 정상", { staleHours: Number(staleHours.toFixed(1)) });
-      }
-    } catch (healthErr) {
-      console.warn("[stravaWebhookRetryMonitor] 웹훅 헬스 체크 실패(무시):", healthErr && healthErr.message);
-    }
   }
 );
 
@@ -3890,44 +3399,28 @@ const STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS = 30;
  * pending 문서(processed_at=null)는 대상에서 제외(status_queue 조건으로 안전 분리).
  */
 exports.stravaWebhookRetryCleanupSchedule = onSchedule(
-  supabaseDualWriteServer.appendServiceRoleSecret({
-    schedule: "0 4 * * *",
-    timeZone: "Asia/Seoul",
-    timeoutSeconds: 540,
-    memory: "256MiB",
-  }),
+  { schedule: "0 4 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 540, memory: "256MiB" },
   async () => {
+    const db = admin.firestore();
     const cutoffIso = new Date(
       Date.now() - STRAVA_WEBHOOK_RETRY_DONE_TTL_DAYS * 24 * 60 * 60 * 1000
     ).toISOString();
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const collRef = db.collection(stravaGapDetect.STRAVA_WEBHOOK_RETRIES_COLLECTION);
     let deleted = 0;
     // 실행당 상한(20배치 × 500 = 10,000건)으로 타임아웃 방지. 남으면 다음날 이어서 정리.
     for (let batchNo = 0; batchNo < 20; batchNo += 1) {
-      /* eslint-disable no-await-in-loop */
-      const { data, error } = await supabase
-        .from("strava_webhook_retries")
-        .select("id")
-        .eq("status_queue", "done")
-        .lt("processed_at", cutoffIso)
-        .order("processed_at", { ascending: true })
-        .limit(500);
-      if (error) {
-        console.warn("[stravaWebhookRetryCleanup] select failed:", error.message);
-        break;
-      }
-      if (!data || data.length === 0) break;
-      const { error: delError } = await supabase
-        .from("strava_webhook_retries")
-        .delete()
-        .in("id", data.map((row) => row.id));
-      /* eslint-enable no-await-in-loop */
-      if (delError) {
-        console.warn("[stravaWebhookRetryCleanup] delete failed:", delError.message);
-        break;
-      }
-      deleted += data.length;
-      if (data.length < 500) break;
+      const snap = await collRef
+        .where("status_queue", "==", "done")
+        .where("processed_at", "<", cutoffIso)
+        .orderBy("processed_at", "asc")
+        .limit(500)
+        .get();
+      if (snap.empty) break;
+      const batch = db.batch();
+      snap.docs.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += snap.size;
+      if (snap.size < 500) break;
     }
     console.log("[stravaWebhookRetryCleanup] 완료", {
       deleted,
@@ -3997,7 +3490,9 @@ exports.manualStravaSyncWithMmp = onRequest(
     const db = admin.firestore();
     let userIdsToProcess = [uid];
     if (targetUidParam) {
-      const callerGrade = await getCachedCallerGrade(db, uid);
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const callerData = callerSnap.exists ? callerSnap.data() : {};
+      const callerGrade = String(callerData.grade ?? "2");
       if (callerGrade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1)만 targetUid를 사용할 수 있습니다." });
         return;
@@ -4009,7 +3504,9 @@ exports.manualStravaSyncWithMmp = onRequest(
         res.status(400).json({ success: false, error: "targetUsers=all|admin 사용 시 startDate와 endDate가 필요합니다." });
         return;
       }
-      const callerGrade = await getCachedCallerGrade(db, uid);
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const callerData = callerSnap.exists ? callerSnap.data() : {};
+      const callerGrade = String(callerData.grade ?? "2");
       if (callerGrade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1)만 사용할 수 있습니다." });
         return;
@@ -4071,9 +3568,7 @@ exports.manualStravaSyncWithMmp = onRequest(
     let totalProcessed = 0;
     let totalUpdated = 0;
     let totalCreated = 0;
-    let totalRunProcessed = 0;
     let globalApiCallCount = 0;
-    const processRunningActivityModule = require("./processRunningActivity");
     const userResults = [];
 
     for (const targetUid of userIdsToProcess) {
@@ -4229,7 +3724,6 @@ exports.manualStravaSyncWithMmp = onRequest(
     let processedCount = 0;
     let updatedCount = 0;
     let createdCount = 0;
-    let runProcessedCount = 0;
     let userTss = 0;
 
     for (const act of activitiesToProcess) {
@@ -4301,7 +3795,6 @@ exports.manualStravaSyncWithMmp = onRequest(
             if (hrPeaks.max_hr_40min != null) updateData.max_hr_40min = hrPeaks.max_hr_40min;
             if (hrPeaks.max_hr_60min != null) updateData.max_hr_60min = hrPeaks.max_hr_60min;
             if (hrPeaks.max_hr != null) updateData.max_hr = hrPeaks.max_hr;
-            capHrPeaksMonotonicOnPartialUpdate(updateData, existingData);
           }
           if (streamsRes.success && (streamsRes.watts?.length > 0 || streamsRes.heartrate?.length > 0)) {
             const effectiveFtp = getFTPWithFallback(userData, streamsRes.watts || []);
@@ -4371,35 +3864,10 @@ exports.manualStravaSyncWithMmp = onRequest(
           await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           continue;
         }
-        const activity = detailRes.activity;
-
-        // Run/VirtualRun/TrailRun → 기존 러닝 파이프라인 재사용 (웹훅·벌크동기화와 동일 경로)
-        if (processRunningActivityModule.isRunningStravaActivityType(activity.type, activity.sport_type)) {
-          const ownerId = Number(userData.strava_athlete_id);
-          if (ownerId) {
-            try {
-              await processRunningActivityModule.processRunningActivity(db, ownerId, actId, activity);
-              runProcessedCount += 1;
-              console.log(`[manualStravaSyncWithMmp] RUN 활동 저장 완료: uid=${uid} actId=${actId} activity_type=${activity.type}`);
-            } catch (runErr) {
-              console.warn(`[manualStravaSyncWithMmp] RUN ingest failed: uid=${uid} actId=${actId}`, runErr && runErr.message ? runErr.message : runErr);
-              const runYmd = rankingDayRollup.normalizeLogDateToSeoulYmd(activity.start_date_local || activity.start_date);
-              await stravaSyncRetry.markStravaSyncRetryPending(db, uid, {
-                dateFrom: runYmd,
-                dateTo: runYmd,
-                reason: "run_ingest_failed",
-                status: (runErr && runErr.status) || 500,
-                activityId: actId,
-              });
-            }
-          }
-          await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
-          continue;
-        }
-
         await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         apiCallCount += 1;
+        const activity = detailRes.activity;
         const mapped = mapStravaActivityToLogSchema(activity, uid, ftp, userData.weight ?? userData.weightKg);
         const rawWatts = streamsRes.success && Array.isArray(streamsRes.watts) ? streamsRes.watts : null;
         const wattsArray = rawWatts && rawWatts.length > 0 ? smoothPowerSpikes(rawWatts) : null;
@@ -4495,7 +3963,6 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (hrPeaks.max_hr_40min != null) logDoc.max_hr_40min = hrPeaks.max_hr_40min;
           if (hrPeaks.max_hr_60min != null) logDoc.max_hr_60min = hrPeaks.max_hr_60min;
           if (hrPeaks.max_hr != null) logDoc.max_hr = hrPeaks.max_hr;
-          capHrPeaksMonotonicOnRow(logDoc);
         }
         if (userWeight != null) logDoc.weight = userWeight;
         const routeProfileManual = buildStravaRouteProfileFields(activity, streamsRes);
@@ -4504,7 +3971,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           if (routeProfileManual.elevation_profile) logDoc.elevation_profile = routeProfileManual.elevation_profile;
           logDoc.route_profile_updated_at = routeProfileManual.route_profile_updated_at;
         }
-        // Swim/Walk/WeightTraining 등 비라이딩 활동은 저장하지 않음 (Run/VirtualRun/TrailRun은 위에서 이미 처리됨)
+        // Run/Swim/Walk/TrailRun/WeightTraining 등 비라이딩 활동은 저장하지 않음
         if (!isCyclingForMmp(mapped)) {
           console.log(`[manualStravaSyncWithMmp] 비라이딩 활동 저장 제외: uid=${uid} actId=${actId} activity_type=${mapped.activity_type}`);
           continue;
@@ -4586,7 +4053,6 @@ exports.manualStravaSyncWithMmp = onRequest(
     totalProcessed += processedCount;
     totalUpdated += updatedCount;
     totalCreated += createdCount;
-    totalRunProcessed += runProcessedCount;
     if (activitiesToProcess.length > 0) {
       userResults.push({
         userId: uid,
@@ -4597,7 +4063,6 @@ exports.manualStravaSyncWithMmp = onRequest(
         processedCount,
         updatedCount,
         createdCount,
-        runProcessedCount,
         dailyRouteMerges: dailyMergeResults,
       });
     }
@@ -4621,7 +4086,6 @@ exports.manualStravaSyncWithMmp = onRequest(
       processedCount: totalProcessed,
       updatedCount: totalUpdated,
       createdCount: totalCreated,
-      runProcessedCount: totalRunProcessed,
       hasMore,
       apiCallCount: globalApiCallCount,
       userResults,
@@ -4635,16 +4099,9 @@ exports.manualStravaSyncWithMmp = onRequest(
 
 /** 스케줄 실행 시 1000명 대비: 인원 > 100이면 청크 URL로 팬아웃, 아니면 in-process 병렬 처리 */
 async function runStravaSyncWithFanOut(db, range, logPrefix, getChunkUrl) {
-  // dead-letter(재연결 필요 확정) 사용자는 청크 예산 낭비 방지를 위해 제외
-  const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUidsExcludingDeadLetter(db);
+  const userIds = await stravaConnectionReader.listStravaConnectedFirebaseUids(db);
   if (userIds.length === 0) {
     console.log(`${logPrefix} Strava 연결 사용자 없음`);
-    return;
-  }
-  if (userIds.length > STRAVA_FULL_SCAN_MAX_USERS) {
-    console.warn(
-      `${logPrefix} 연동 ${userIds.length}명 > 안전 상한 ${STRAVA_FULL_SCAN_MAX_USERS}명 — Strava 일일 한도(1000/day) 초과가 확정적이라 건너뜀. 회전 갭 스캔(stravaRotatingGapScanSchedule)이 지속 커버.`
-    );
     return;
   }
   if (userIds.length <= STRAVA_SYNC_CHUNK_THRESHOLD) {
@@ -4736,9 +4193,9 @@ async function runStravaGapDetectPreviousDayJob(db, logPrefix) {
   );
 }
 
-// [스케줄 해제 2026-07] 새벽 전체 갭 스캔(00:10) — 전체 사용자 스캔은 Strava 레이트리밋(1000/day)·함수 타임아웃으로
-// 확장 불가하여 스케줄 해제. 웹훅 실패 복구는 stravaSyncRetrySchedule의 타겟 드레인(runStravaGapDetectTargetedJob)이 대체.
-// 필요 시 runStravaGapDetectPreviousDayJob(db)로 수동 실행 가능.
+// [스케줄 해제 2026-07] 새벽 전체 갭 스캔(00:10) — 전체 사용자 스캔은 Strava 레이트리밋·함수 타임아웃으로
+// 확장 불가하여 스케줄 해제. 필요 시 runStravaGapDetectPreviousDayJob(db)로 수동 실행 가능.
+// [참고 2026-09-07] 대체용이던 stravaSyncRetrySchedule도 앱 공유 레이트리밋(429) 증폭으로 스케줄 정지.
 // exports.stravaSyncPreviousDay = onSchedule(
 //   stravaSyncScheduleOptions,
 //   async () => {
@@ -4796,13 +4253,13 @@ async function runStravaGapDetectTodayJob(db, logPrefix) {
 
 /**
  * 일요일 19시(Asia/Seoul)에 당일(일요일) Strava 로그 수집. 1000명 대비 청크 팬아웃.
+ * [스케줄 정지 2026-09-07] 앱 공유 레이트리밋(429) — 대량 배치 수집은 웹훅 주력 구조와 충돌.
+ * Cloud Scheduler PAUSED. 필요 시 manualStravaSyncTodaySeoul 등 수동 경로만 사용.
  */
 const stravaSyncSundayOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "0 19 * * 0",
   timeZone: "Asia/Seoul",
-  // 청크 팬아웃 사이 45초 지연(Strava rate-limit 페이싱) × 청크 수가 늘면서 540초로는
-  // 부족해져 5주 연속 타임아웃 실패 — Cloud Scheduler HTTP 최대치인 1800초로 상향.
-  timeoutSeconds: 1800,
+  timeoutSeconds: 540,
 });
 if (STRAVA_CLIENT_SECRET) {
   stravaSyncSundayOptions.secrets = stravaSyncSundayOptions.secrets || [];
@@ -4810,18 +4267,18 @@ if (STRAVA_CLIENT_SECRET) {
     stravaSyncSundayOptions.secrets.push(STRAVA_CLIENT_SECRET);
   }
 }
-exports.stravaSyncSunday = onSchedule(
-  stravaSyncSundayOptions,
-  async (event) => {
-    const db = admin.firestore();
-    const range = getTodayAfterBefore();
-    const getChunkUrl = async () => {
-      const cfg = await appConfigCache.getAppConfigDocCached(admin, "sync");
-      return cfg ? cfg.runStravaSyncChunkUrl || null : null;
-    };
-    await runStravaSyncWithFanOut(db, range, "[stravaSyncSunday]", getChunkUrl);
-  }
-);
+// exports.stravaSyncSunday = onSchedule(
+//   stravaSyncSundayOptions,
+//   async (event) => {
+//     const db = admin.firestore();
+//     const range = getTodayAfterBefore();
+//     const getChunkUrl = async () => {
+//       const snap = await db.collection("appConfig").doc("sync").get();
+//       return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
+//     };
+//     await runStravaSyncWithFanOut(db, range, "[stravaSyncSunday]", getChunkUrl);
+//   }
+// );
 
 /**
  * 수동/긴급: Asia/Seoul 기준 오늘(00:00~23:59) Strava 로그 재수집.
@@ -4831,8 +4288,7 @@ exports.stravaSyncSunday = onSchedule(
 const manualStravaSyncTodaySeoulOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   region: "asia-northeast3",
   cors: false,
-  // stravaSyncSunday와 동일한 runStravaSyncWithFanOut 사용 — 540초로는 청크가 많을 때 부족
-  timeoutSeconds: 1800,
+  timeoutSeconds: 540,
 });
 if (STRAVA_CLIENT_SECRET) {
   manualStravaSyncTodaySeoulOptions.secrets =
@@ -4966,7 +4422,8 @@ exports.backfillStravaRouteProfileForDate = onRequest(
       } else if (rawSecret !== INTERNAL_SYNC_SECRET) {
         const callerUid = await getUidFromRequest(req, res);
         if (!callerUid) return;
-        const grade = await getCachedCallerGrade(db, callerUid);
+        const callerSnap = await db.collection("users").doc(callerUid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
         if (grade !== "1" && callerUid !== targetUid) {
           res.status(403).json({ success: false, error: "권한 없음" });
           return;
@@ -5072,7 +4529,8 @@ exports.runStravaSync429Retry = onRequest(stravaSync429RetryOptions, async (req,
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const grade = await getCachedCallerGrade(db, uid);
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({
           success: false,
@@ -5110,7 +4568,11 @@ exports.runStravaSync429Retry = onRequest(stravaSync429RetryOptions, async (req,
   }
 });
 
-/** pending 재수집(429·웹훅 등) — 매일 03:30·06:30·09:30(서울), 전날+당일 구간 */
+/**
+ * pending 재수집(429·웹훅 등) — 매일 03:30·06:30·09:30(서울), 전날+당일 구간
+ * [스케줄 정지 2026-09-07] 미수집 보완 스케줄이 앱 공유 레이트리밋(429)을 소진·증폭시킴.
+ * Cloud Scheduler PAUSED. 수동은 runStravaSync429Retry / runStravaSyncRetryJob 경로만 사용.
+ */
 const stravaSyncRetryScheduleOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "30 3,6,9 * * *",
   timeZone: "Asia/Seoul",
@@ -5124,161 +4586,23 @@ if (STRAVA_CLIENT_SECRET) {
     stravaSyncRetryScheduleOptions.secrets.push(STRAVA_CLIENT_SECRET);
   }
 }
-exports.stravaSyncRetrySchedule = onSchedule(
-  stravaSyncRetryScheduleOptions,
-  async () => {
-    const db = admin.firestore();
-    const yesterday = getYesterdayAfterBefore();
-    const today = getTodayAfterBefore();
-    console.log("[stravaSyncRetrySchedule] 시작", {
-      yesterday: yesterday.dateFrom,
-      today: today.dateFrom,
-    });
-    await runStravaSyncRetryJob(db, yesterday.dateFrom, yesterday.dateTo, "[stravaSyncRetrySchedule:yesterday]");
-    await runStravaSyncRetryJob(db, today.dateFrom, today.dateTo, "[stravaSyncRetrySchedule:today]");
-    // 웹훅 실패 큐(strava_webhook_retries) 드레인 + strava_athlete_id 자가복구 (전체 스캔 없이 타겟만).
-    // 전체 갭 스캔(stravaSyncPreviousDay/stravaSyncTodayGap) 해제에 따른 웹훅 실패 복구 경로.
-    await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:targeted]");
-  }
-);
-/** stravaSync429RetrySchedule 제거됨(2026-08-20) — stravaSyncRetrySchedule과 완전히 동일한 코드가
- * 별도 Cloud Function으로 중복 배포되어 03:30·06:30·09:30에 동일 작업이 두 번 실행되고 있었음. */
-
-/**
- * 전체 사용자 순환 갭 스캔 — Strava 웹훅이 아예 도착하지 않아 strava_sync_retry_pending /
- * strava_webhook_retries 어느 큐에도 잡히지 않는 케이스의 안전망.
- * (2026-08-02 사례: 박지성(Ys8GQZYyf3ZoEunSVGKnWNbtSkv2)의 라이딩 종료 후 stravaWebhook이
- *  전혀 호출되지 않았고, 재시도 큐에도 진입 기록이 없어 stravaSyncRetrySchedule의 타겟 드레인
- *  (A_pending·B_webhook)으로는 애초에 감지 불가능했음 — 웹훅 자체가 오지 않으면 아무 흔적도
- *  안 남는다는 것이 근본 원인.)
- *
- * 과거의 전체 스캔(stravaSyncPreviousDay/stravaSyncTodayGap, 2026-07 스케줄 해제)은 매 실행마다
- * "전 사용자"를 스캔해 Strava 앱 전체 레이트리밋(1000회/day)을 초과했다. 이번엔 회전 커서로
- * 매 실행마다 일부 사용자만(batchSize) 스캔하고, appConfig/strava_rotating_gap_scan에 커서를
- * 저장해 다음 실행이 이어받는다 — 레이트리밋 예산 안에서 며칠에 걸쳐 전원을 커버한다.
- */
-// 2026-09-05 재발(동일 사용자, 위 주석 사례): 활동 사용자 풀이 291명까지 늘어난 상태에서
-// 하루 4회 x active 48슬롯 = 192슬롯/일로는 291명을 하루 안에 다 못 돌아(1회전에 7회 실행,
-// 약 1.5일 소요) — 라이딩 직후 확인한 시점에 아직 그 사용자 차례가 안 돌아온 상태였다.
-// Strava 레이트리밋(6000회/day)에는 아직 여유가 커서(스캔 도입 당시 실측 사용량 1,665/6000),
-// 활동 사용자 슬롯을 하루 400개(291명 대비 여유 있게)로 늘려 최악의 경우에도 하루 안에는
-// 반드시 재스캔되도록 한다.
-const STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE = 112;
-/** 배치 중 활동 사용자에게 배정하는 슬롯 — 사용자 수가 늘어도 활동 사용자군은 매 회전마다 빠르게 커버 */
-const STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE = 100;
-/** 배치 중 비활동 사용자에게 배정하는 슬롯 — 느리더라도 결국 전원 커버(완전히 배제하지 않음) */
-const STRAVA_ROTATING_GAP_SCAN_INACTIVE_SLICE = 12;
-const stravaRotatingGapScanOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  schedule: "15 4,10,16,22 * * *", // 하루 4회, stravaSyncRetrySchedule(3,6,9시)과 겹치지 않게 배치
-  timeZone: "Asia/Seoul",
-  timeoutSeconds: 1800,
-  memory: "1GiB",
-});
-if (STRAVA_CLIENT_SECRET) {
-  stravaRotatingGapScanOptions.secrets = stravaRotatingGapScanOptions.secrets || [];
-  if (!stravaRotatingGapScanOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
-    stravaRotatingGapScanOptions.secrets.push(STRAVA_CLIENT_SECRET);
-  }
-}
-
-/** pool에서 커서 다음 take명을 가져오고 전진된 커서를 반환(pool이 비었으면 빈 배치). */
-function advanceRotatingCursorOverPool(pool, prevCursor, take) {
-  if (!pool.length || take <= 0) return { batch: [], nextCursor: prevCursor };
-  const actualTake = Math.min(take, pool.length);
-  const start = ((prevCursor % pool.length) + pool.length) % pool.length;
-  const batch = [];
-  for (let i = 0; i < actualTake; i++) {
-    batch.push(pool[(start + i) % pool.length]);
-  }
-  return { batch, nextCursor: start + actualTake };
-}
-
-/**
- * 연동 전체 사용자(dead-letter 제외)를 활동성 기준(최근 30일 주행거리 실적 여부)으로 나눠, 활동 사용자 위주로
- * 우선 스캔하되 비활동 사용자도 느린 주기로 결국 전원 커버하는 배치를 만든다.
- * 사용자 수가 1만명으로 늘어도, 실제로 놓치면 안 되는 "활동 사용자" 집합은 훨씬 작게 유지되므로
- * 이 집합의 회전 주기는 총 사용자 수가 아니라 활동 사용자 수에 비례해 안정적으로 유지된다.
- */
-async function getNextRotatingGapScanBatch(db, batchSize) {
-  const { active, inactive } = await stravaConnectionReader.listStravaConnectedFirebaseUidsByRecency(db);
-  const total = active.length + inactive.length;
-  if (!total) return { batch: [], total: 0 };
-
-  const cursorRef = db.collection("appConfig").doc("strava_rotating_gap_scan");
-  const cursorSnap = await cursorRef.get();
-  const prev = cursorSnap.exists ? cursorSnap.data() || {} : {};
-  // cursor(구버전 단일 커서)는 activeCursor로 승계 — 마이그레이션 시 재스캔 범위가 튀지 않게 함
-  const prevActiveCursor = Number(prev.activeCursor != null ? prev.activeCursor : prev.cursor || 0);
-  const prevInactiveCursor = Number(prev.inactiveCursor || 0);
-
-  const activeTakeWanted = Math.min(STRAVA_ROTATING_GAP_SCAN_ACTIVE_SLICE, batchSize);
-  let activeResult = advanceRotatingCursorOverPool(active, prevActiveCursor, activeTakeWanted);
-
-  let inactiveTakeWanted = Math.min(
-    STRAVA_ROTATING_GAP_SCAN_INACTIVE_SLICE,
-    batchSize - activeResult.batch.length
-  );
-  // 활동 풀이 작아 슬롯이 남으면 비활동 풀로 이월
-  inactiveTakeWanted += activeTakeWanted - activeResult.batch.length;
-  let inactiveResult = advanceRotatingCursorOverPool(inactive, prevInactiveCursor, inactiveTakeWanted);
-
-  // 비활동 풀도 작아 여전히 슬롯이 남으면 활동 풀에서 추가로 당겨온다(예산 낭비 방지)
-  const stillLeftover = batchSize - activeResult.batch.length - inactiveResult.batch.length;
-  if (stillLeftover > 0 && activeResult.batch.length < active.length) {
-    const extra = advanceRotatingCursorOverPool(active, activeResult.nextCursor, stillLeftover);
-    activeResult = { batch: activeResult.batch.concat(extra.batch), nextCursor: extra.nextCursor };
-  }
-
-  const batch = activeResult.batch.concat(inactiveResult.batch);
-
-  await cursorRef.set(
-    {
-      activeCursor: activeResult.nextCursor,
-      inactiveCursor: inactiveResult.nextCursor,
-      activeTotal: active.length,
-      inactiveTotal: inactive.length,
-      totalUsers: total,
-      lastBatchSize: batch.length,
-      lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  return { batch, total };
-}
-
-exports.stravaRotatingGapScanSchedule = onSchedule(stravaRotatingGapScanOptions, async () => {
-  const db = admin.firestore();
-  const { batch, total } = await getNextRotatingGapScanBatch(db, STRAVA_ROTATING_GAP_SCAN_BATCH_SIZE);
-  if (!batch.length) {
-    console.log("[stravaRotatingGapScanSchedule] 연결된 사용자 없음 — 건너뜀");
-    return;
-  }
-  const yesterday = getYesterdayAfterBefore();
-  const today = getTodayAfterBefore();
-  const range = stravaSyncRetry.ymdRangeToUnix({
-    dateFrom: yesterday.dateFrom,
-    dateTo: today.dateTo,
-  });
-  console.log("[stravaRotatingGapScanSchedule] 시작", {
-    batchSize: batch.length,
-    totalConnected: total,
-  });
-  const result = await stravaGapDetect.runGapDetectSyncJob(
-    db,
-    range,
-    {
-      refreshStravaTokenForUser,
-      fetchStravaActivitiesPage,
-      processStravaActivity,
-      processOneUserStravaSync,
-      supabaseDualWriteServer,
-    },
-    "[stravaRotatingGapScanSchedule]",
-    { includeGapScanAllUsers: false, gapScanUserIds: batch }
-  );
-  console.log("[stravaRotatingGapScanSchedule] 완료", result);
-});
+// exports.stravaSyncRetrySchedule = onSchedule(
+//   stravaSyncRetryScheduleOptions,
+//   async () => {
+//     const db = admin.firestore();
+//     const yesterday = getYesterdayAfterBefore();
+//     const today = getTodayAfterBefore();
+//     console.log("[stravaSyncRetrySchedule] 시작", {
+//       yesterday: yesterday.dateFrom,
+//       today: today.dateFrom,
+//     });
+//     await runStravaSyncRetryJob(db, yesterday.dateFrom, yesterday.dateTo, "[stravaSyncRetrySchedule:yesterday]");
+//     await runStravaSyncRetryJob(db, today.dateFrom, today.dateTo, "[stravaSyncRetrySchedule:today]");
+//     await runStravaGapDetectTargetedJob(db, "[stravaSyncRetrySchedule:targeted]");
+//   }
+// );
+/** @deprecated stravaSync429RetrySchedule — 스케줄 정지(2026-09-07). 수동 HTTP만 유지. */
+// exports.stravaSync429RetrySchedule = exports.stravaSyncRetrySchedule;
 
 exports.manualStravaSyncTodaySeoul = onRequest(
   manualStravaSyncTodaySeoulOptions,
@@ -5302,7 +4626,8 @@ exports.manualStravaSyncTodaySeoul = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const grade = await getCachedCallerGrade(db, uid);
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -5315,8 +4640,8 @@ exports.manualStravaSyncTodaySeoul = onRequest(
 
       const range = getTodayAfterBefore();
       const getChunkUrl = async () => {
-        const cfg = await appConfigCache.getAppConfigDocCached(admin, "sync");
-        return cfg ? cfg.runStravaSyncChunkUrl || null : null;
+        const snap = await db.collection("appConfig").doc("sync").get();
+        return snap.exists ? snap.data().runStravaSyncChunkUrl || null : null;
       };
       await runStravaSyncWithFanOut(db, range, "[manualStravaSyncTodaySeoul]", getChunkUrl);
       res.status(200).json({
@@ -5386,77 +4711,11 @@ function weeklyTssBoardPayloadHasRows(payload) {
 }
 
 /**
- * Supabase 라우팅이 켜져 있으면 fn_weekly_tss_leaderboard_live로 짧은 TTL(RANKING_SUPABASE_LIVE_MAX_AGE_MS)만
- * 신선도로 인정하고, 지나면 즉시 라이브 재조회 후 캐시에 되써서 다음 요청은 캐시로 응답한다.
- * 03:40·09:00 배치 스케줄 사이(최대 26h) 공백 동안 당일 라이딩이 랭킹보드에 반영되지 않는 문제의 근본 해결.
- * 실패·미라우팅이면 null → 호출측이 기존 26h 캐시·stale 폴백 체인으로 처리(Supabase 장애 시 안전망).
- */
-async function tryLiveWeeklyTssPayloadFromSupabase(db, cacheKey, startStr, endStr, gender) {
-  try {
-    const cfg = rankingReadConfig.getRankingReadConfig();
-    if (!cfg || cfg.useSupabaseGlobal !== true) return null;
-
-    const recentCache = await readRankingAggregatePayloadIfFresh(
-      db,
-      cacheKey,
-      RANKING_SUPABASE_LIVE_MAX_AGE_MS
-    );
-    if (recentCache && weeklyTssBoardPayloadHasRows(recentCache)) {
-      return { payload: recentCache, cacheKey, precomputed: true };
-    }
-
-    const live = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, gender);
-    if (!live || !weeklyTssBoardPayloadHasRows(live)) return null;
-    const payload = { byCategory: live.byCategory, entries: live.entries, startStr, endStr };
-    await writeRankingAggregatePayload(db, cacheKey, payload);
-    return { payload, cacheKey, precomputed: true };
-  } catch (e) {
-    console.warn(
-      "[readWeeklyTssRankingPayloadForHttp] Supabase 라이브 폴백 실패, 캐시 체인으로 폴백:",
-      e && e.message ? e.message : e
-    );
-    return null;
-  }
-}
-
-/**
- * personal_dist(30일 거리) 탭용 — tryLiveWeeklyTssPayloadFromSupabase와 동일 패턴.
- * 짧은 TTL 캐시 → 없으면 fn_personal_dist_leaderboard_live 라이브 조회 후 캐시에 되쓰기.
- */
-async function tryLivePersonalDistPayloadFromSupabase(db, cacheKey, startStr, endStr, gender) {
-  try {
-    const cfg = rankingReadConfig.getRankingReadConfig();
-    if (!cfg || cfg.useSupabaseGlobal !== true) return null;
-
-    const recentCache = await readRankingAggregatePayloadIfFresh(
-      db,
-      cacheKey,
-      RANKING_SUPABASE_LIVE_MAX_AGE_MS
-    );
-    if (recentCache && recentCache.byCategory) return recentCache;
-
-    const live = await supabaseRankingReader.fetchPersonalDist(admin, startStr, endStr, gender);
-    if (!live || !live.byCategory) return null;
-    const payload = { byCategory: live.byCategory, entries: live.entries, startStr, endStr };
-    await writeRankingAggregatePayload(db, cacheKey, payload);
-    return payload;
-  } catch (e) {
-    console.warn(
-      "[personal_dist] Supabase 라이브 폴백 실패, 캐시 체인으로 폴백:",
-      e && e.message ? e.message : e
-    );
-    return null;
-  }
-}
-
-/**
  * 주간 TSS HTTP: endStr(오늘)이 바뀌면 새 cacheKey에 집계가 없어 빈 보드가 나오는 문제 방지.
- * 0) Supabase 라이브(짧은 TTL) 1) 당일 키 fresh/stale 2) 같은 주 시작·전일 endStr 키 stale 3) null → 라이브 재집계
+ * 1) 당일 키 fresh/stale 2) 같은 주 시작·전일 endStr 키 stale 3) null → 라이브 재집계
  */
 async function readWeeklyTssRankingPayloadForHttp(db, startStr, endStr, gender) {
   const cacheKey = `peakRanking_weekly_tss_v2_${gender}_${startStr}_${endStr}`;
-  const liveHit = await tryLiveWeeklyTssPayloadFromSupabase(db, cacheKey, startStr, endStr, gender);
-  if (liveHit) return liveHit;
   const fresh = await readRankingAggregatePayloadIfFresh(db, cacheKey);
   if (fresh && weeklyTssBoardPayloadHasRows(fresh)) {
     return { payload: fresh, cacheKey, precomputed: true };
@@ -6729,22 +5988,12 @@ exports.getWeeklyRanking = onRequest(
 );
 
 /** 일요일 21:00 Asia/Seoul 주간 랭킹 확정 및 1/2/3등 포인트 지급 (1000명 대비 타임아웃 9분)
- * 1일 500+ TSS 치팅: 합산 제외 + 포인트 적립 대상에서도 제외 (hasWeeklyTssCheatDay)
- *
- * 2026-09 조사: 이 함수에 SUPABASE_SERVICE_ROLE_KEY Secret이 누락되어 있어
- * fetchWeeklyTssRanking(주간 TSS 정상 조회)이 "SUPABASE_URL 또는
- * SUPABASE_SERVICE_ROLE_KEY 미설정"으로 매주 실패 → 항상 비상 폴백(getWeeklyRankingEntries,
- * 전체 사용자 Firestore 풀스캔)으로 떨어지고 있었다. 그 폴백 내부에서도 사용자별
- * tryFetchUserRangeSummaryFromSupabase가 같은 이유로 매번 실패해 다시 Firestore 버킷 스캔으로
- * 재폴백 — 이중으로 비싸다. Cloud Monitoring으로 5주 연속 매주 일요일 20:55~21:00 KST에
- * Firestore NOT_FOUND 읽기 약 22만 건이 반복되는 것을 실측 확인했다(로그에서도 실행마다
- * "Supabase weekly TSS failed" 확인). Secret을 붙여 정상 경로(Supabase 단일 조회)가 항상
- * 성공하도록 수정 — 랭킹·포인트 지급 로직 자체는 변경 없음. */
-const finalizeWeeklyOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+ * 1일 500+ TSS 치팅: 합산 제외 + 포인트 적립 대상에서도 제외 (hasWeeklyTssCheatDay) */
+const finalizeWeeklyOptions = {
   schedule: "0 21 * * 0",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 540,
-});
+};
 exports.finalizeWeeklyRanking = onSchedule(
   finalizeWeeklyOptions,
   async (event) => {
@@ -8187,12 +7436,6 @@ async function getRolling30dGroupDistanceByHostEntries(db, startStr, endStr, vie
 const RANKING_AGGREGATES_COLLECTION = "ranking_aggregates";
 /** ranking_aggregates 읽기 허용 최대 경과 시간. 집계 cron 간격보다 길게 두어 사용자 요청 시 전체 재스캔 빈도를 줄임 */
 const RANKING_AGG_MAX_STALE_MS = 26 * 60 * 60 * 1000; // 26시간 (하루 1회 23:00 기준 최대 24h 공백 + 여유)
-/**
- * daily_summaries 기반 live RPC(fn_weekly_tss_leaderboard_live·fn_personal_dist_leaderboard_live)가
- * 붙어있는 탭(TSS·30일 거리) 전용 짧은 신선도 — 03:40·09:00 배치 사이(최대 26h) 동안 당일 라이딩이
- * 랭킹보드에 반영되지 않는 공백을 막는다. RANKING_AGG_MAX_STALE_MS(26h) 캐시는 Supabase 장애 시 폴백으로 유지.
- */
-const RANKING_SUPABASE_LIVE_MAX_AGE_MS = 5 * 60 * 1000;
 /** 헵타곤 재집계: 마스터 23:00 타임아웃·수동 재시도 시에도 ranking_aggregates 피크 보드 읽기 허용 */
 const HEPTAGON_AGG_STALE_MS = 8 * 24 * 60 * 60 * 1000;
 const HEPTAGON_REBUILD_RUNNING_STALE_MS = 25 * 60 * 1000;
@@ -8439,8 +7682,7 @@ async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
   const { startStr: wStart, endStr: wEnd } = getWeekRangeSeoul();
   const t0 = Date.now();
   try {
-    const { batch: stravaUserIds } = await getNextWeeklyTssParityStravaBatch(db);
-    await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(db, admin, wStart, wEnd, stravaUserIds);
+    await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(db, admin, wStart, wEnd);
   } catch (parityErr) {
     console.warn(prefix, "parity warn:", parityErr && parityErr.message ? parityErr.message : parityErr);
   }
@@ -8451,64 +7693,6 @@ async function runSupabaseWeeklyTssDaytimePipeline(db, logPrefix) {
   return { mode: "supabase_daytime", ms: Date.now() - t0 };
 }
 
-const WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE = 300;
-const WEEKLY_TSS_PARITY_ROTATION_ACTIVE_SLICE = 250;
-const WEEKLY_TSS_PARITY_ROTATION_INACTIVE_SLICE = 50;
-
-/**
- * Weekly TSS Parity 스케줄(하루 4회: scheduledWeeklyTssSupabaseParity ×2, scheduledPreMasterWeeklyTssParity,
- * scheduledWeeklyTop10PeakRefresh) 전용 Strava 대상 사용자 배치 — getNextRotatingGapScanBatch와 동일한
- * 원리로 active/inactive 모두 고정 배치만 처리한다. 유저 수가 늘어도 1회 실행 시간은 항상 일정하게
- * 유지되고, 대신 한 사용자가 이 안전망에 의해 재점검되는 주기가 유저 수에 비례해 늘어난다(의도된
- * 트레이드오프 — Strava 실시간 dual-write가 이미 주 경로라 이 잡은 순수 안전망).
- * stravaRotatingGapScanSchedule과는 별도 커서를 써서 두 스케줄의 회전 진행이 서로 간섭하지 않는다.
- */
-async function getNextWeeklyTssParityStravaBatch(db) {
-  const { active, inactive } = await stravaConnectionReader.listStravaConnectedFirebaseUidsByRecency(db);
-  const total = active.length + inactive.length;
-  if (!total) return { batch: [], total: 0 };
-
-  const cursorRef = db.collection("appConfig").doc("weekly_tss_parity_rotation");
-  const cursorSnap = await cursorRef.get();
-  const prev = cursorSnap.exists ? cursorSnap.data() || {} : {};
-  const prevActiveCursor = Number(prev.activeCursor || 0);
-  const prevInactiveCursor = Number(prev.inactiveCursor || 0);
-
-  const activeTakeWanted = Math.min(WEEKLY_TSS_PARITY_ROTATION_ACTIVE_SLICE, active.length);
-  let activeResult = advanceRotatingCursorOverPool(active, prevActiveCursor, activeTakeWanted);
-
-  let inactiveTakeWanted = Math.min(
-    WEEKLY_TSS_PARITY_ROTATION_INACTIVE_SLICE,
-    WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE - activeResult.batch.length
-  );
-  inactiveTakeWanted += activeTakeWanted - activeResult.batch.length;
-  let inactiveResult = advanceRotatingCursorOverPool(inactive, prevInactiveCursor, inactiveTakeWanted);
-
-  const stillLeftover =
-    WEEKLY_TSS_PARITY_ROTATION_BATCH_SIZE - activeResult.batch.length - inactiveResult.batch.length;
-  if (stillLeftover > 0 && activeResult.batch.length < active.length) {
-    const extra = advanceRotatingCursorOverPool(active, activeResult.nextCursor, stillLeftover);
-    activeResult = { batch: activeResult.batch.concat(extra.batch), nextCursor: extra.nextCursor };
-  }
-
-  const batch = activeResult.batch.concat(inactiveResult.batch);
-
-  await cursorRef.set(
-    {
-      activeCursor: activeResult.nextCursor,
-      inactiveCursor: inactiveResult.nextCursor,
-      activeTotal: active.length,
-      inactiveTotal: inactive.length,
-      totalUsers: total,
-      lastBatchSize: batch.length,
-      lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  return { batch, total };
-}
-
 /**
  * 이번 주 활동 사용자 전원 Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
  */
@@ -8516,16 +7700,15 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
   const prefix = logPrefix || "[scheduledWeeklyTssSupabaseParity]";
   const { startStr, endStr } = getWeekRangeSeoul();
   const t0 = Date.now();
-  const { batch: stravaUserIds } = await getNextWeeklyTssParityStravaBatch(db);
   const result = await supabaseDualWriteServer.runWeeklyTssSupabaseParityForActiveUsers(
     db,
     admin,
     startStr,
-    endStr,
-    stravaUserIds
+    endStr
   );
   let runningGap = { users: 0, ingested: 0, failed: 0, missing: 0, apiCalls: 0 };
   try {
+    const stravaUserIds = await stravaGapDetect.listStravaConnectedUserIds(db);
     const range = stravaSyncRetry.ymdRangeToUnix({ dateFrom: startStr, dateTo: endStr });
     runningGap = await stravaGapDetect.syncUsersRunningActivitiesGapParity(
       db,
@@ -8550,7 +7733,6 @@ async function runWeeklyTssSupabaseParityScheduledJob(db, logPrefix) {
     ms: Date.now() - t0,
     ...result,
     runningGap,
-    stravaScopeUsers: stravaUserIds.length,
   });
   return { startStr, endStr, ...result, runningGap };
 }
@@ -8781,10 +7963,9 @@ async function hydratePeakRankMovementOnPayload(db, byCategory, entries, history
 /**
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} cacheKey
- * @param {number} [maxAgeMs] 기본 RANKING_AGG_MAX_STALE_MS(26h)
  * @returns {Promise<object|null>} payload
  */
-async function readRankingAggregatePayloadIfFresh(db, cacheKey, maxAgeMs) {
+async function readRankingAggregatePayloadIfFresh(db, cacheKey) {
   if (!db || !cacheKey) return null;
   try {
     const ref = db.collection(RANKING_AGGREGATES_COLLECTION).doc(cacheKey);
@@ -8792,8 +7973,7 @@ async function readRankingAggregatePayloadIfFresh(db, cacheKey, maxAgeMs) {
     if (!snap.exists) return null;
     const d = snap.data() || {};
     const updatedAt = d.updatedAt && (d.updatedAt.toMillis ? d.updatedAt.toMillis() : d.updatedAt);
-    const maxAge = Number.isFinite(maxAgeMs) && maxAgeMs > 0 ? maxAgeMs : RANKING_AGG_MAX_STALE_MS;
-    if (!updatedAt || (Date.now() - updatedAt > maxAge)) return null;
+    if (!updatedAt || (Date.now() - updatedAt > RANKING_AGG_MAX_STALE_MS)) return null;
     return d.payload && typeof d.payload === "object" ? d.payload : null;
   } catch (e) {
     console.warn("[readRankingAggregatePayloadIfFresh]", cacheKey, e.message);
@@ -9546,70 +8726,27 @@ async function buildPeakPowerAllDurationsForRangeAllGendersOnePass(db, startStr,
  * @param {FirebaseFirestore.Firestore} db
  * @param {string} uid
  */
-/**
- * 클럽/그룹 랭킹 탭의 "내가 참가한 모임" 표시(currentUserParticipated)용 — 뷰어가 참가한
- * 오픈 라이딩의 호스트 uid 집합을 조회한다.
- * [2026-08] Firestore rides 전체 스캔(랭킹보드 클럽 탭 요청마다 매번 발생, 라우팅 설정과
- * 무관하게 항상 실행됨) 대신 Supabase open_ride_participants/open_rides를 사용하도록 변경
- * — 랭킹보드 표시 로직에서 Firestore 조회 트래픽을 없애기 위함(기존 반환 형태·시맨틱 동일:
- * 취소되지 않고 날짜 범위 내인 라이딩만, 호스트 firebase uid Set).
- */
 async function getHostUserIdsForOpenRidesParticipation(db, uid, startStr, endStr) {
   const out = new Set();
   if (!uid) return out;
+  const tsStart = admin.firestore.Timestamp.fromDate(new Date(`${startStr}T00:00:00+09:00`));
+  const tsEnd = admin.firestore.Timestamp.fromDate(new Date(`${endStr}T23:59:59.999+09:00`));
   const uidStr = String(uid).trim();
-  try {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-
-    const { data: viewerRow, error: viewerErr } = await supabase
-      .from("users")
-      .select("id")
-      .eq("firebase_uid", uidStr)
-      .maybeSingle();
-    if (viewerErr || !viewerRow || !viewerRow.id) return out;
-    const viewerUuid = String(viewerRow.id);
-
-    const { data: partRows, error: partErr } = await supabase
-      .from("open_ride_participants")
-      .select("ride_id")
-      .eq("user_id", viewerUuid)
-      .eq("is_waitlist", false);
-    if (partErr || !partRows || !partRows.length) return out;
-    const rideIds = Array.from(
-      new Set(partRows.map((r) => r && r.ride_id).filter(Boolean).map(String))
-    );
-    if (!rideIds.length) return out;
-
-    const { data: rideRows, error: rideErr } = await supabase
-      .from("open_rides")
-      .select("host_user_id, ride_date, status")
-      .in("id", rideIds)
-      .gte("ride_date", startStr)
-      .lte("ride_date", endStr)
-      .neq("status", "cancelled");
-    if (rideErr || !rideRows || !rideRows.length) return out;
-    const hostUuids = Array.from(
-      new Set(rideRows.map((r) => r && r.host_user_id).filter(Boolean).map(String))
-    );
-    if (!hostUuids.length) return out;
-
-    const { data: hostUserRows, error: hostErr } = await supabase
-      .from("users")
-      .select("id, firebase_uid")
-      .in("id", hostUuids);
-    if (hostErr || !hostUserRows) return out;
-    hostUserRows.forEach((u) => {
-      const fUid = u && u.firebase_uid ? String(u.firebase_uid).trim() : "";
-      if (fUid) out.add(fUid);
-    });
-    return out;
-  } catch (e) {
-    console.warn(
-      "[getHostUserIdsForOpenRidesParticipation] Supabase 조회 실패:",
-      e && e.message ? e.message : e
-    );
-    return out;
-  }
+  const ridesSnap = await db.collection("rides")
+    .where("date", ">=", tsStart)
+    .where("date", "<=", tsEnd)
+    .get();
+  ridesSnap.forEach((rdoc) => {
+    const r = rdoc.data() || {};
+    if (String(r.rideStatus || "active") === "cancelled") return;
+    const ymd = rideDocDateToSeoulYmd(r.date);
+    if (!ymd || ymd < startStr || ymd > endStr) return;
+    const parts = Array.isArray(r.participants) ? r.participants : [];
+    if (!parts.some((p) => String(p || "").trim() === uidStr)) return;
+    const h = String(r.hostUserId || "").trim();
+    if (h) out.add(h);
+  });
+  return out;
 }
 
 /**
@@ -10000,36 +9137,33 @@ async function assertPeakHeptagonCompleteBeforeMaster(db, opts) {
   }
 }
 
-/** KST 03:38 — pg_cron 03:40 마스터 직전 Firestore→Supabase 주간 TSS parity (Supabase 집계 모드 전용) */
+/**
+ * KST 03:38 — pg_cron 03:40 마스터 직전 Firestore→Supabase 주간 TSS parity (Supabase 집계 모드 전용)
+ * [스케줄 정지 2026-09-07] 잡 내부 RUN gap parity가 Strava API를 대량 호출해 429 증폭.
+ * Cloud Scheduler PAUSED. 재개 전 Strava 호출 분리·상한 필요.
+ */
 const scheduledPreMasterWeeklyTssParityOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "38 3 * * *",
   timeZone: "Asia/Seoul",
   memory: "1GiB",
   timeoutSeconds: 1800,
 });
-if (STRAVA_CLIENT_SECRET) {
-  scheduledPreMasterWeeklyTssParityOptions.secrets =
-    scheduledPreMasterWeeklyTssParityOptions.secrets || [];
-  if (!scheduledPreMasterWeeklyTssParityOptions.secrets.includes(STRAVA_CLIENT_SECRET)) {
-    scheduledPreMasterWeeklyTssParityOptions.secrets.push(STRAVA_CLIENT_SECRET);
-  }
-}
-exports.scheduledPreMasterWeeklyTssParity = onSchedule(
-  scheduledPreMasterWeeklyTssParityOptions,
-  async () => {
-    if (await shouldRunFirebaseRankingScheduledJob(admin.firestore(), "rebuildRankingAggregates")) {
-      return;
-    }
-    if (!shouldRunSupabaseWeeklyTssParitySchedule()) return;
-    const db = admin.firestore();
-    try {
-      await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledPreMasterWeeklyTssParity]");
-    } catch (e) {
-      console.error("[scheduledPreMasterWeeklyTssParity]", e && e.message ? e.message : e);
-      throw e;
-    }
-  }
-);
+// exports.scheduledPreMasterWeeklyTssParity = onSchedule(
+//   scheduledPreMasterWeeklyTssParityOptions,
+//   async () => {
+//     if (await shouldRunFirebaseRankingScheduledJob(admin.firestore(), "rebuildRankingAggregates")) {
+//       return;
+//     }
+//     if (!shouldRunSupabaseWeeklyTssParitySchedule()) return;
+//     const db = admin.firestore();
+//     try {
+//       await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledPreMasterWeeklyTssParity]");
+//     } catch (e) {
+//       console.error("[scheduledPreMasterWeeklyTssParity]", e && e.message ? e.message : e);
+//       throw e;
+//     }
+//   }
+// );
 
 /** KST 03:40 — 마스터 집계 (주간 TSS·TOP10·거리·항속). 02:50 피크·03:20 헵타곤 complete 후만 실행. */
 exports.rebuildRankingAggregates = onSchedule(
@@ -10086,7 +9220,8 @@ exports.manualRebuildWeeklyRanking = onRequest(
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const grade = await getCachedCallerGrade(db, uid);
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -10196,7 +9331,8 @@ exports.manualRebuildRankingPhase = onRequest(
     if (!authorized) {
       const uid = await getUidFromRequest(req, res);
       if (!uid) return;
-      const grade = await getCachedCallerGrade(db, uid);
+      const callerSnap = await db.collection("users").doc(uid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -10271,12 +9407,12 @@ exports.manualRebuildRankingPhase = onRequest(
 
 /** KST 09:00 — 주간 마일리지 TOP10·TSS 보드 전체 재집계 (낮 1회, 03:40 마스터와 별도) */
 exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
-  supabaseDualWriteServer.appendServiceRoleSecret({
+  {
     schedule: WEEKLY_MILEAGE_TOP10_DAYTIME_CRON,
     timeZone: "Asia/Seoul",
     memory: "1GiB",
     timeoutSeconds: 540,
-  }),
+  },
   async () => {
     const db = admin.firestore();
     try {
@@ -10302,29 +9438,33 @@ exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
 
 /** @deprecated KST 00:05 증분 스케줄 제거 — TOP10은 03:40 마스터 + 09:00 2회만 갱신. refreshWeeklyTssMidnightIncremental()은 수동용 유지 */
 
-/** KST 04:45·21:45 — 이번 주 활동 사용자 전원 Supabase 주간 TSS parity (Strava 지연 수집 보정) */
+/**
+ * KST 04:45·21:45 — 이번 주 활동 사용자 전원 Supabase 주간 TSS parity (Strava 지연 수집 보정)
+ * [스케줄 정지 2026-09-07] Strava gap parity 호출로 앱 레이트리밋(429) 소진.
+ * Cloud Scheduler PAUSED.
+ */
 const scheduledWeeklyTssSupabaseParityOptions = supabaseDualWriteServer.appendServiceRoleSecret({
   schedule: "45 4,21 * * *",
   timeZone: "Asia/Seoul",
   memory: "1GiB",
   timeoutSeconds: 1800,
 });
-exports.scheduledWeeklyTssSupabaseParity = onSchedule(
-  scheduledWeeklyTssSupabaseParityOptions,
-  async () => {
-    if (!shouldRunSupabaseWeeklyTssParitySchedule()) {
-      console.log("[scheduledWeeklyTssSupabaseParity] skipped (env disabled)");
-      return;
-    }
-    const db = admin.firestore();
-    try {
-      await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledWeeklyTssSupabaseParity]");
-    } catch (e) {
-      console.error("[scheduledWeeklyTssSupabaseParity]", e && e.message ? e.message : e);
-      throw e;
-    }
-  }
-);
+// exports.scheduledWeeklyTssSupabaseParity = onSchedule(
+//   scheduledWeeklyTssSupabaseParityOptions,
+//   async () => {
+//     if (!shouldRunSupabaseWeeklyTssParitySchedule()) {
+//       console.log("[scheduledWeeklyTssSupabaseParity] skipped (env disabled)");
+//       return;
+//     }
+//     const db = admin.firestore();
+//     try {
+//       await runWeeklyTssSupabaseParityScheduledJob(db, "[scheduledWeeklyTssSupabaseParity]");
+//     } catch (e) {
+//       console.error("[scheduledWeeklyTssSupabaseParity]", e && e.message ? e.message : e);
+//       throw e;
+//     }
+//   }
+// );
 
 /**
  * KST 02:50 — Strava 00:10 갭 탐지 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
@@ -10798,295 +9938,6 @@ exports.adminBackfillStravaLogsToSupabase = onRequest(
 );
 
 /**
- * 긴급 복구 도구: 특정 사용자·날짜의 daily_summaries를 Supabase rides(원본 소스)에서 직접 재계산.
- * Firestore ranking_day_totals 버킷·Strava 재동기화(processOneUserStravaSync) 경로를 전부 우회한다
- * — 그 경로들은 stale 버킷을 그대로 push하거나(수정 완료) 기존 활동 재조회 시 date 누락으로 실패하는 등
- * 이번 인시던트에서 확인된 약점이 있어, rides 테이블만을 신뢰하는 fn_reconcile_daily_summary를 직접 호출한다.
- * 이후 Firestore 버킷도 강제 재계산해 동기화한다.
- * 인증: X-Internal-Secret(runStravaSyncChunk와 동일).
- * POST { uid, date(YYYY-MM-DD) }
- */
-exports.adminReconcileDailySummaryForUserDate = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, X-Internal-Secret");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "POST") {
-      res.status(405).json({ success: false, error: "POST만 지원합니다." });
-      return;
-    }
-    const secret = req.headers["x-internal-secret"] || req.query.secret;
-    if (secret !== INTERNAL_SYNC_SECRET) {
-      res.status(403).json({ success: false, error: "Forbidden" });
-      return;
-    }
-
-    try {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const uid = String(body.uid || req.query.uid || "").trim();
-      const dateYmd = String(body.date || req.query.date || "").trim();
-      if (!uid || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
-        res.status(400).json({ success: false, error: "uid, date(YYYY-MM-DD) 필요" });
-        return;
-      }
-
-      const db = admin.firestore();
-      const userSnap = await db.collection("users").doc(uid).get();
-      if (!userSnap.exists) {
-        res.status(404).json({ success: false, error: "사용자를 찾을 수 없습니다." });
-        return;
-      }
-      const userData = userSnap.data() || {};
-
-      const uidConfig = {
-        uidNamespace: String(supabaseDualWriteServer.uidNamespaceParam.value() || "").trim(),
-        uidMode: String(supabaseDualWriteServer.uidModeParam.value() || "v5").trim(),
-      };
-      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-      const supabaseUserId = await supabaseDualWriteServer.resolveRideUserIdForFirebaseUid(
-        supabase,
-        uid,
-        uidConfig
-      );
-      if (!supabaseUserId) {
-        res.status(404).json({ success: false, error: "Supabase 사용자 매핑을 찾을 수 없습니다." });
-        return;
-      }
-
-      const { data: rides, error: ridesErr } = await supabase
-        .from("rides")
-        .select("activity_id, source, tss, distance_km")
-        .eq("user_id", supabaseUserId)
-        .eq("ride_date", dateYmd);
-      if (ridesErr) throw ridesErr;
-
-      const { error: rpcErr } = await supabase.rpc("fn_reconcile_daily_summary", {
-        p_user_id: supabaseUserId,
-        p_date: dateYmd,
-      });
-      if (rpcErr) throw rpcErr;
-
-      const { data: summaryAfter, error: summaryErr } = await supabase
-        .from("daily_summaries")
-        .select("tss_strava_sum, tss_stelvio_sum, km_strava_sum, km_stelvio_sum, reconciled_at")
-        .eq("user_id", supabaseUserId)
-        .eq("summary_date", dateYmd)
-        .maybeSingle();
-      if (summaryErr) throw summaryErr;
-
-      /* reconcileUserRankingDayBucket의 Supabase 우선 조회(tryBuildDayBucketPayloadFromSupabase)는
-       * rankingReadConfig 캐시가 useSupabaseLogsRead=true로 갱신돼 있어야 동작한다. 콜드 인스턴스에서
-       * 갱신 없이 호출하면 기본값(false)으로 막혀 Firestore logs(현재 비어있음) 폴백 → 전부 0 → 버킷 삭제로
-       * 이어진다(이번 인시던트에서 실제로 발생). 반드시 먼저 강제 갱신한다. */
-      await rankingReadConfig.refreshRankingReadConfig(admin, true);
-      await rankingDayRollup.reconcileUserRankingDayBucket(db, uid, dateYmd, userData);
-      await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
-        db,
-        uid,
-        dateYmd,
-        dateYmd,
-        true
-      );
-
-      res.status(200).json({
-        success: true,
-        uid,
-        date: dateYmd,
-        ridesFound: (rides || []).length,
-        rides: rides || [],
-        dailySummaryAfter: summaryAfter || null,
-      });
-    } catch (e) {
-      console.warn("[adminReconcileDailySummaryForUserDate]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-const SCAN_STALE_SUMMARY_EXCLUDED_TYPES = new Set([
-  "run", "swim", "walk", "trailrun", "weighttraining",
-]);
-
-function scanIsCyclingRideRow(row) {
-  const type = String(row && row.activity_type || "").trim().toLowerCase();
-  if (!type) return true;
-  return !SCAN_STALE_SUMMARY_EXCLUDED_TYPES.has(type);
-}
-
-/** rides/daily_summaries 전체 페이지네이션 조회 (page당 1000행) */
-async function scanFetchAllRows(supabase, table, columns, filterFn) {
-  const PAGE = 1000;
-  let from = 0;
-  const out = [];
-  for (;;) {
-    let q = supabase.from(table).select(columns).range(from, from + PAGE - 1);
-    if (typeof filterFn === "function") q = filterFn(q);
-    const { data, error } = await q;
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    out.push(...data);
-    if (data.length < PAGE) break;
-    from += PAGE;
-  }
-  return out;
-}
-
-/**
- * 전체 스캔: 하루 2건 이상 Strava 활동이 있는 사용자·날짜 중, daily_summaries.tss_strava_sum이
- * rides 원본 합계와 어긋나 있는 건(=이번 인시던트와 동일한 증상, 두 번째 활동이 stale 버킷에
- * 덮어써진 케이스)을 찾아낸다. fix=true면 발견 즉시 fn_reconcile_daily_summary로 복구한다.
- * 인증: X-Internal-Secret. GET/POST { fix?: boolean, tolerance?: number }
- */
-exports.adminScanStaleDailySummaries = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "512MiB" }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Headers", "Content-Type, X-Internal-Secret");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const secret = req.headers["x-internal-secret"] || req.query.secret;
-    if (secret !== INTERNAL_SYNC_SECRET) {
-      res.status(403).json({ success: false, error: "Forbidden" });
-      return;
-    }
-
-    try {
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const doFix = String(body.fix ?? req.query.fix ?? "false").toLowerCase() === "true";
-      const tolerance = Number(body.tolerance ?? req.query.tolerance ?? 0.05) || 0.05;
-
-      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-
-      const rides = await scanFetchAllRows(
-        supabase,
-        "rides",
-        "user_id, ride_date, tss, source, activity_type",
-        (q) => q.eq("source", "strava")
-      );
-
-      const byKey = new Map(); // `${user_id}|${ride_date}` -> { sum, count }
-      for (const r of rides) {
-        if (!scanIsCyclingRideRow(r)) continue;
-        if (!r.user_id || !r.ride_date) continue;
-        const key = `${r.user_id}|${r.ride_date}`;
-        const cur = byKey.get(key) || { sum: 0, count: 0 };
-        cur.sum += Number(r.tss) || 0;
-        cur.count += 1;
-        byKey.set(key, cur);
-      }
-
-      const candidateKeys = [...byKey.entries()].filter(([, v]) => v.count >= 2);
-
-      const summaries = await scanFetchAllRows(
-        supabase,
-        "daily_summaries",
-        "user_id, summary_date, tss_strava_sum"
-      );
-      const summaryByKey = new Map();
-      for (const s of summaries) {
-        summaryByKey.set(`${s.user_id}|${s.summary_date}`, Number(s.tss_strava_sum) || 0);
-      }
-
-      const drifted = [];
-      for (const [key, v] of candidateKeys) {
-        const [userId, rideDate] = key.split("|");
-        const actual = summaryByKey.has(key) ? summaryByKey.get(key) : 0;
-        const expected = Math.round(v.sum * 100) / 100;
-        if (Math.abs(actual - expected) > tolerance) {
-          drifted.push({
-            supabaseUserId: userId,
-            date: rideDate,
-            rideCount: v.count,
-            expectedTssStravaSum: expected,
-            actualTssStravaSum: Math.round(actual * 100) / 100,
-          });
-        }
-      }
-
-      // firebase_uid·이름 보강
-      if (drifted.length > 0) {
-        const uniqueUserIds = [...new Set(drifted.map((d) => d.supabaseUserId))];
-        const { data: users, error: usersErr } = await supabase
-          .from("users")
-          .select("id, firebase_uid, name")
-          .in("id", uniqueUserIds);
-        if (!usersErr && users) {
-          const profileMap = new Map(users.map((u) => [u.id, u]));
-          drifted.forEach((d) => {
-            const p = profileMap.get(d.supabaseUserId);
-            d.firebaseUid = p ? p.firebase_uid : null;
-            d.name = p ? p.name : null;
-          });
-        }
-      }
-
-      let fixed = [];
-      let fixErrors = [];
-      if (doFix && drifted.length > 0) {
-        await rankingReadConfig.refreshRankingReadConfig(admin, true);
-        const db = admin.firestore();
-        for (const d of drifted) {
-          try {
-            const { error: rpcErr } = await supabase.rpc("fn_reconcile_daily_summary", {
-              p_user_id: d.supabaseUserId,
-              p_date: d.date,
-            });
-            if (rpcErr) throw rpcErr;
-            if (d.firebaseUid) {
-              const userSnap = await db.collection("users").doc(d.firebaseUid).get();
-              if (userSnap.exists) {
-                await rankingDayRollup.reconcileUserRankingDayBucket(
-                  db,
-                  d.firebaseUid,
-                  d.date,
-                  userSnap.data() || {}
-                );
-                await supabaseDualWriteServer.syncRankingDayBucketsToSupabaseForUser(
-                  db,
-                  d.firebaseUid,
-                  d.date,
-                  d.date,
-                  true
-                );
-              }
-            }
-            fixed.push({ supabaseUserId: d.supabaseUserId, date: d.date });
-          } catch (e) {
-            fixErrors.push({
-              supabaseUserId: d.supabaseUserId,
-              date: d.date,
-              error: e && e.message ? e.message : String(e),
-            });
-          }
-        }
-      }
-
-      res.status(200).json({
-        success: true,
-        ridesScanned: rides.length,
-        summariesScanned: summaries.length,
-        candidateDayCount: candidateKeys.length,
-        driftedCount: drifted.length,
-        drifted,
-        fixApplied: doFix,
-        fixed,
-        fixErrors,
-      });
-    } catch (e) {
-      console.warn("[adminScanStaleDailySummaries]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
  * 관리자(grade=1): 이번 주(또는 지정 구간) ranking_day_totals 활동 사용자 전원
  * Firestore → Supabase 주간 TSS parity (rides + daily_summaries).
  * POST { startDate?, endDate?, offset?, limit?, dryRun? }
@@ -11285,48 +10136,10 @@ exports.getRankingBuildMetaPublic = onRequest(
           rankingMetricsLive: buildMeta.rankingMetricsLive,
         },
         buildMetaFingerprint: buildMeta.fingerprint || "",
-        runPrivacyVersion: buildMeta.runPrivacyVersion || 0,
         error: buildMeta.error || undefined,
       });
     } catch (e) {
       console.warn("[getRankingBuildMetaPublic]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * appConfig/strava(비민감 OAuth client_id·redirect_uri) 공개 조회 — Supabase app_config 미러 사용.
- * Client Secret은 포함하지 않음(Secret Manager 전용). 앱 로드마다 매번 Firestore를 읽던 것을 대체.
- */
-exports.getAppConfigPublic = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type");
-    res.set("Cache-Control", "public, max-age=300, s-maxage=300");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-    try {
-      const strava = await appConfigCache.getAppConfigDocCached(admin, "strava");
-      res.status(200).json({
-        success: true,
-        strava: strava
-          ? {
-              strava_client_id: strava.strava_client_id || null,
-              strava_redirect_uri: strava.strava_redirect_uri || null,
-            }
-          : null,
-      });
-    } catch (e) {
-      console.warn("[getAppConfigPublic]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
@@ -11453,7 +10266,7 @@ exports.getRunningLeaderboard = onRequest(
  * Phase 6 — 훈련 로그 Read DB (Firebase logs vs Supabase rides) 공개 조회.
  */
 exports.getLogsReadRoutingPublic = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
+  { cors: true, timeoutSeconds: 15 },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -11481,7 +10294,7 @@ exports.getLogsReadRoutingPublic = onRequest(
  * 전 사용자 — 라이딩 모임 Read DB (Firebase vs Supabase) 공개 조회.
  */
 exports.getGroupsReadRoutingPublic = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 15 }),
+  { cors: true, timeoutSeconds: 15 },
   async (req, res) => {
     res.set("Access-Control-Allow-Origin", "*");
     res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -11540,57 +10353,6 @@ exports.getOpenRideForRead = onRequest(
       res.status(404).json({ success: false, error: "not_found" });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 오픈 라이딩/러닝 모임 "출발 지역" 날씨 — 기상청 단기예보(getVilageFcst) 06/08/10/12/14/16시.
- * GET ?region=<시도 구군>&date=<YYYY-MM-DD>
- */
-// 기상청 API(apis.data.go.kr) 연결 지연·실패가 us-central1 등 원거리 리전에서 두드러져
-// asia-northeast3(서울)로 배포 — 클라이언트 호출 URL도 함께 변경해야 함(OpenRidingScreens.jsx).
-const getOpenRidingDepartureWeatherOptions = {
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 30,
-  secrets: [kmaServiceKeySecret],
-};
-exports.getOpenRidingDepartureWeather = onRequest(
-  getOpenRidingDepartureWeatherOptions,
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-    const region = String(req.query.region || "").trim();
-    const date = String(req.query.date || "").trim();
-    if (!region || !date) {
-      res.status(400).json({ success: false, error: "region, date 필요" });
-      return;
-    }
-    try {
-      const serviceKey = kmaServiceKeySecret.value();
-      if (!serviceKey) {
-        res.status(500).json({ success: false, error: "kma_service_key_missing" });
-        return;
-      }
-      res.set("Cache-Control", "public, max-age=1800, s-maxage=1800");
-      const result = await kmaWeatherService.getDepartureWeatherForRegion(
-        region,
-        date,
-        serviceKey,
-        admin.firestore()
-      );
-      res.status(result.success ? 200 : 400).json(result);
-    } catch (e) {
-      console.warn("[getOpenRidingDepartureWeather]", e && e.message ? e.message : e);
-      res.status(500).json({ success: false, error: e && e.message ? e.message : String(e) });
     }
   }
 );
@@ -11687,28 +10449,15 @@ exports.getTrainingLogsForRead = onRequest(
 
     const yearRaw = req.query.year;
     const monthRaw = req.query.month;
-    const startRaw = req.query.start;
-    const endRaw = req.query.end;
     const hasMonth =
       yearRaw != null &&
       String(yearRaw).trim() !== "" &&
       monthRaw != null &&
       String(monthRaw).trim() !== "";
-    const hasRange =
-      startRaw != null &&
-      String(startRaw).trim() !== "" &&
-      endRaw != null &&
-      String(endRaw).trim() !== "";
 
     try {
       let logs;
-      if (hasRange) {
-        logs = await supabaseGroupReader.fetchUserRideLogsInDateRange(
-          requestedUid,
-          String(startRaw),
-          String(endRaw)
-        );
-      } else if (hasMonth) {
+      if (hasMonth) {
         logs = await supabaseGroupReader.fetchUserRideLogsForMonth(
           requestedUid,
           Number(yearRaw),
@@ -11880,10 +10629,6 @@ exports.getRunWeeklyTssForRead = onRequest(
   }
 );
 
-/** 자기 자신의 연간 최고기록 조회 — 같은 화면 재진입/새로고침 시 반복 호출 대비 짧게 캐싱.
- *  본인 데이터만 조회 가능한 엔드포인트라 캐시 키에 uid를 포함해도 다른 사용자와 섞이지 않는다. */
-const YEARLY_PEAKS_CACHE_TTL_MS = 60000;
-
 /**
  * PR 표시용 yearly_peaks Read — Supabase (Service Role relay).
  * GET ?uid=&year=2026
@@ -11919,21 +10664,7 @@ exports.getYearlyPeaksForRead = onRequest(
     }
 
     try {
-      const cacheKey = "yearly_peaks_v1__" + requestedUid + "__" + yearNum;
-      let peaks = await supabaseRankingReader.readRankingComputeCache(
-        admin,
-        cacheKey,
-        YEARLY_PEAKS_CACHE_TTL_MS
-      );
-      if (peaks === null || peaks === undefined) {
-        peaks = await supabaseGroupReader.fetchYearlyPeaksForYear(requestedUid, yearNum);
-        // 캐시는 값이 있을 때만(null 저장 시 "미존재"와 "미조회"를 구분 못 해 매번 재조회하게 됨).
-        if (peaks) {
-          await supabaseRankingReader
-            .writeRankingComputeCache(admin, cacheKey, peaks)
-            .catch(function () {});
-        }
-      }
+      const peaks = await supabaseGroupReader.fetchYearlyPeaksForYear(requestedUid, yearNum);
       res.status(200).json({
         success: true,
         year: yearNum,
@@ -11977,7 +10708,8 @@ exports.backfillFirestoreRidesToSupabase = onRequest(
     const dateYmd = String(body.date || today.dateFrom).slice(0, 10);
 
     if (targetUid !== String(callerUid).trim()) {
-      const grade = await getCachedCallerGrade(db, callerUid);
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "다른 사용자 백필은 관리자(grade=1)만 가능합니다." });
         return;
@@ -12113,14 +10845,7 @@ exports.getRidingGroupForRead = onRequest(
     const includeJoinRequests =
       req.query.includeJoinRequests === "1" || req.query.includeJoinRequests === "true";
     try {
-      const groupCacheKey =
-        "riding_group_read_v1__" + groupId + "__" + (includeJoinRequests ? "1" : "0");
-      const fromSb = await withComputeCache(
-        admin,
-        groupCacheKey,
-        8000,
-        () => groupReadRouter.tryFetchRidingGroupFromSupabase(admin, db, req.query)
-      );
+      const fromSb = await groupReadRouter.tryFetchRidingGroupFromSupabase(admin, db, req.query);
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -12203,12 +10928,7 @@ exports.getMyRidingGroupsForRead = onRequest(
       return;
     }
     try {
-      const fromSb = await withComputeCache(
-        admin,
-        "my_riding_groups_read_v1__" + uid,
-        15000,
-        () => groupReadRouter.tryFetchMyRidingGroupsFromSupabase(admin, req.query)
-      );
+      const fromSb = await groupReadRouter.tryFetchMyRidingGroupsFromSupabase(admin, req.query);
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -12302,14 +11022,7 @@ exports.getMyGroupContactSetForRead = onRequest(
       return;
     }
     try {
-      const contactCacheKey =
-        "my_group_contact_set_v1__" + uid + "__" + groupIds.slice().sort().join(",");
-      const fromSb = await withComputeCache(
-        admin,
-        contactCacheKey,
-        10000,
-        () => groupReadRouter.tryFetchMyGroupContactSetFromSupabase(admin, req.query)
-      );
+      const fromSb = await groupReadRouter.tryFetchMyGroupContactSetFromSupabase(admin, req.query);
       if (fromSb) {
         res.status(200).json(fromSb);
         return;
@@ -12324,705 +11037,6 @@ exports.getMyGroupContactSetForRead = onRequest(
       });
     } catch (e) {
       res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/** 전화번호 정규화 (assets/js/app.js _normPhone 동일 로직) */
-function normalizePhoneDigitsForBadge(input) {
-  var d = String(input || "").replace(/\D/g, "");
-  if (d.slice(0, 2) === "82" && d.length >= 10) d = "0" + d.slice(2);
-  return d.slice(0, 15);
-}
-
-/**
- * 모임 정산 항목에서 특정 uid의 분담액 합계 — 1/n 분담 후 10원 단위 절상.
- * assets/js/openRiding/OpenRidingScreens.jsx의 openRidingRoundUpTo10 +
- * computeOpenRidingSettlementBreakdown과 동일 로직(Node.js 버전).
- */
-function computeRideSettlementUnpaidShareForUid(settlement, uid) {
-  if (!settlement || !Array.isArray(settlement.items)) return 0;
-  var uidStr = String(uid);
-  var total = 0;
-  settlement.items.forEach((item) => {
-    var amount = Number(item && item.amount) || 0;
-    var uids = Array.isArray(item && item.participantUids) ? item.participantUids.map(String) : [];
-    if (!uids.length || amount <= 0 || uids.indexOf(uidStr) === -1) return;
-    total += Math.ceil(amount / uids.length / 10) * 10;
-  });
-  return total;
-}
-
-/**
- * 베이스캠프 알림 배지 — 초대 라이딩/러닝·모임 가입신청·친구요청 집계 (1회성 조회).
- * assets/js/app.js 의 4개 전역 상시 onSnapshot(초대 rides, 소mo임 목록 + 그룹별 joinRequests 팬아웃,
- * friendRequests)을 대체하는 단발 조회 엔드포인트 — 클라이언트는 이 API를 주기적으로 폴링한다.
- * 모임 가입신청은 Supabase(riding_groups·riding_group_join_requests)에서, 라이딩/러닝 초대와
- * 친구요청은 Supabase 미러가 없어 Firestore 1회 조회로 집계한다(리스너 제거가 핵심 — 백엔드는 유지).
- */
-exports.getBasecampBadgeCountsForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-
-    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
-    if (!requestedUid) {
-      res.status(400).json({ success: false, error: "uid 필요" });
-      return;
-    }
-    const callerUid = await getUidFromRequest(req, res);
-    if (!callerUid) return;
-    if (String(callerUid).trim() !== requestedUid) {
-      res.status(403).json({ success: false, error: "본인 알림 배지만 조회할 수 있습니다." });
-      return;
-    }
-
-    const db = admin.firestore();
-    try {
-      const counts = await withComputeCache(
-        admin,
-        "basecamp_badge_counts_v1__" + requestedUid,
-        15000,
-        async () => {
-          const userSnap = await db.collection("users").doc(requestedUid).get();
-          const userData = userSnap.exists ? userSnap.data() || {} : {};
-          const normPhone = normalizePhoneDigitsForBadge(
-            userData.phone || userData.phoneNumber || userData.contact || userData.tel || ""
-          );
-
-          // Cloud Functions 서버는 UTC이므로 서울 시간 기준 자정으로 명시 계산해야 함
-          // (getTodayAfterBefore 등 기존 관례와 동일) — 그렇지 않으면 KST 자정이 지나도
-          // UTC 자정(=KST 오전 9시)까지 최대 9시간 만료된 라이딩 초대가 계속 배지에 잡힘.
-          const todaySeoulStr = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-          const todayTs = admin.firestore.Timestamp.fromDate(new Date(`${todaySeoulStr}T00:00:00+09:00`));
-
-          const ridesPromise =
-            normPhone.length >= 8
-              ? db
-                  .collection("rides")
-                  .where("invitedList", "array-contains", normPhone)
-                  .get()
-                  .then((snap) => {
-                    var cycleCount = 0;
-                    var runCount = 0;
-                    var crewInviteCycle = 0;
-                    var crewInviteRun = 0;
-                    // 카테고리(CYCLE/RUN)별로 분리 — 크루 리스트 화면은 clubCategory로 필터링된
-                    // 크루만 보여주므로, 맵도 카테고리별로 나눠야 화면에 보이는 크루의 id와만 매칭된다.
-                    // (섞어서 하나로 두면 RUN 크루 초대 건수가 CYCLE 클럽 탭 배지에도 합산되는데,
-                    // CYCLE 크루 리스트엔 그 RUN 크루가 안 보여 숫자만 있고 매칭 배지가 없는 버그 발생)
-                    var crewInviteMapCycle = {};
-                    var crewInviteMapRun = {};
-                    snap.forEach((doc) => {
-                      var d = doc.data() || {};
-                      var rideDate = d.date;
-                      if (rideDate && typeof rideDate.toDate === "function") {
-                        if (rideDate.toDate() < todayTs.toDate()) return;
-                      }
-                      var parts = Array.isArray(d.participants) ? d.participants : [];
-                      if (parts.indexOf(requestedUid) !== -1) return;
-                      var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
-                      // 크루(그룹)가 생성한 모임(rides.groupId 있음)에 의한 초대는 "크루" 배지 쪽으로
-                      // 집계하고 "라이딩/러닝" 개인 초대 집계에서는 제외한다(중복 카운트 방지).
-                      var gid = d.groupId ? String(d.groupId).trim() : "";
-                      var isCrewRide = !!gid;
-                      if (cat === "RUN") {
-                        if (isCrewRide) crewInviteRun++;
-                        else runCount++;
-                      } else if (isCrewRide) {
-                        crewInviteCycle++;
-                      } else {
-                        cycleCount++;
-                      }
-                      if (isCrewRide) {
-                        if (cat === "RUN") crewInviteMapRun[gid] = (crewInviteMapRun[gid] || 0) + 1;
-                        else crewInviteMapCycle[gid] = (crewInviteMapCycle[gid] || 0) + 1;
-                      }
-                    });
-                    return {
-                      ridesCycle: cycleCount,
-                      ridesRun: runCount,
-                      crewInviteCycle: crewInviteCycle,
-                      crewInviteRun: crewInviteRun,
-                      crewInviteMapCycle: crewInviteMapCycle,
-                      crewInviteMapRun: crewInviteMapRun,
-                    };
-                  })
-                  .catch(() => ({
-                    ridesCycle: 0,
-                    ridesRun: 0,
-                    crewInviteCycle: 0,
-                    crewInviteRun: 0,
-                    crewInviteMapCycle: {},
-                    crewInviteMapRun: {},
-                  }))
-              : Promise.resolve({
-                  ridesCycle: 0,
-                  ridesRun: 0,
-                  crewInviteCycle: 0,
-                  crewInviteRun: 0,
-                  crewInviteMapCycle: {},
-                  crewInviteMapRun: {},
-                });
-
-          const friendsPromise = db
-            .collection("friendRequests")
-            .where("toUid", "==", requestedUid)
-            .where("status", "==", "pending")
-            .count()
-            .get()
-            .then((snap) => snap.data().count || 0)
-            .catch(() => 0);
-
-          const groupsPromise = supabaseGroupReader
-            .fetchOwnedGroupsPendingJoinRequestCount(admin, requestedUid)
-            .catch(() => 0);
-
-          const stravaTodayPromise = supabaseDualWriteServer
-            .fetchStravaActivityPresenceForDate(requestedUid, todaySeoulStr)
-            .catch(() => ({ hasCycle: false, hasRun: false }));
-
-          // "내가 주최한 모임" 배지 — invitedList와 무관하게 hostUserId 기준으로 별도 집계.
-          // groupId가 있는(크루 상세에서 생성한) 모임은 크루별로도 나눠 hostedInCrewMap에 담아
-          // 크루 리스트 화면의 아바타별 배지·클럽 탭 배지에 쓴다. crewInviteMap과 마찬가지로
-          // CYCLE/RUN을 분리해야 화면에 보이는(clubCategory로 필터링된) 크루의 id와만 매칭된다.
-          const hostedRidesPromise = db
-            .collection("rides")
-            .where("hostUserId", "==", requestedUid)
-            .get()
-            .then((snap) => {
-              var hostedCycle = 0;
-              var hostedRun = 0;
-              var hostedInCrewMapCycle = {};
-              var hostedInCrewMapRun = {};
-              snap.forEach((doc) => {
-                var d = doc.data() || {};
-                var rideDate = d.date;
-                if (rideDate && typeof rideDate.toDate === "function") {
-                  if (rideDate.toDate() < todayTs.toDate()) return;
-                }
-                if (String(d.rideStatus || "active") === "cancelled") return;
-                var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
-                var isRunRide = cat === "RUN";
-                if (isRunRide) hostedRun++;
-                else hostedCycle++;
-                var gid = d.groupId ? String(d.groupId).trim() : "";
-                if (gid) {
-                  if (isRunRide) hostedInCrewMapRun[gid] = (hostedInCrewMapRun[gid] || 0) + 1;
-                  else hostedInCrewMapCycle[gid] = (hostedInCrewMapCycle[gid] || 0) + 1;
-                }
-              });
-              return {
-                hostedCycle: hostedCycle,
-                hostedRun: hostedRun,
-                hostedInCrewMapCycle: hostedInCrewMapCycle,
-                hostedInCrewMapRun: hostedInCrewMapRun,
-              };
-            })
-            .catch(() => ({ hostedCycle: 0, hostedRun: 0, hostedInCrewMapCycle: {}, hostedInCrewMapRun: {} }));
-
-          // "미입금 정산" 배지 — 내가 확정 참가자인 모임(과거 포함, 날짜 제한 없음) 중
-          // settlement.items로 계산한 내 분담액이 있고 아직 paidUids에 없는 것만 카운트.
-          // hostedRidesPromise와 동일하게 fetch-then-filter-in-JS — 정산은 모임이 끝난 뒤
-          // 이뤄지는 경우가 많아 날짜로 미리 거르면 안 된다.
-          const settlementPromise = db
-            .collection("rides")
-            .where("participants", "array-contains", requestedUid)
-            .get()
-            .then((snap) => {
-              var unpaidCycle = 0;
-              var unpaidRun = 0;
-              snap.forEach((doc) => {
-                var d = doc.data() || {};
-                if (String(d.rideStatus || "active") === "cancelled") return;
-                var settlement = d.settlement || null;
-                if (!settlement) return;
-                var owed = computeRideSettlementUnpaidShareForUid(settlement, requestedUid);
-                if (owed <= 0) return;
-                var paidUids = Array.isArray(settlement.paidUids) ? settlement.paidUids.map(String) : [];
-                if (paidUids.indexOf(requestedUid) !== -1) return;
-                var cat = d.category != null ? String(d.category).trim().toUpperCase() : "";
-                if (cat === "RUN") unpaidRun++;
-                else unpaidCycle++;
-              });
-              return { settlementUnpaidCycle: unpaidCycle, settlementUnpaidRun: unpaidRun };
-            })
-            .catch(() => ({ settlementUnpaidCycle: 0, settlementUnpaidRun: 0 }));
-
-          const [ridesCounts, friends, groups, stravaToday, hostedCounts, settlementCounts] = await Promise.all([
-            ridesPromise,
-            friendsPromise,
-            groupsPromise,
-            stravaTodayPromise,
-            hostedRidesPromise,
-            settlementPromise,
-          ]);
-
-          return {
-            success: true,
-            ridesCycle: ridesCounts.ridesCycle,
-            ridesRun: ridesCounts.ridesRun,
-            crewInviteCycle: ridesCounts.crewInviteCycle || 0,
-            crewInviteRun: ridesCounts.crewInviteRun || 0,
-            crewInviteMapCycle: ridesCounts.crewInviteMapCycle || {},
-            crewInviteMapRun: ridesCounts.crewInviteMapRun || {},
-            hostedCycle: hostedCounts.hostedCycle || 0,
-            hostedRun: hostedCounts.hostedRun || 0,
-            hostedInCrewMapCycle: hostedCounts.hostedInCrewMapCycle || {},
-            hostedInCrewMapRun: hostedCounts.hostedInCrewMapRun || {},
-            friends: friends,
-            groups: groups || 0,
-            stravaTodayCycle: !!stravaToday.hasCycle,
-            stravaTodayRun: !!stravaToday.hasRun,
-            settlementUnpaidCycle: settlementCounts.settlementUnpaidCycle || 0,
-            settlementUnpaidRun: settlementCounts.settlementUnpaidRun || 0,
-          };
-        }
-      );
-
-      res.status(200).json(counts);
-    } catch (e) {
-      console.warn("[getBasecampBadgeCountsForRead]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 오픈라이딩 룸 화면 — 내가 방장인 소mo임들의 가입신청 대기 건수(총합 + 그룹별 breakdown).
- * openRidingGroupService.js 의 subscribeMyManagedGroupsJoinRequestCounts 전역 fan-out
- * onSnapshot(오너 그룹 목록 + 그룹별 joinRequests, 그룹 수만큼 리스너) 대체.
- */
-exports.getManagedGroupsPendingJoinRequestCountForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-
-    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
-    if (!requestedUid) {
-      res.status(400).json({ success: false, error: "uid 필요" });
-      return;
-    }
-    const callerUid = await getUidFromRequest(req, res);
-    if (!callerUid) return;
-    if (String(callerUid).trim() !== requestedUid) {
-      res.status(403).json({ success: false, error: "본인 관리 모임만 조회할 수 있습니다." });
-      return;
-    }
-
-    try {
-      const { total, countMap } = await withComputeCache(
-        admin,
-        "managed_groups_pending_join_v1__" + requestedUid,
-        10000,
-        () => supabaseGroupReader.fetchOwnedGroupsPendingJoinRequestBreakdown(admin, requestedUid)
-      );
-      res.status(200).json({ success: true, total: total || 0, countMap: countMap || {} });
-    } catch (e) {
-      console.warn("[getManagedGroupsPendingJoinRequestCountForRead]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 오픈라이딩 룸 화면 — 특정 소mo임에 대한 내(uid) 가입신청 대기 상태.
- * openRidingGroupService.js 의 subscribeRidingGroupMyJoinRequest 단건 onSnapshot 대체.
- */
-exports.getMyGroupJoinRequestStatusForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-
-    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
-    const groupId = String(req.query.groupId || "").trim();
-    if (!requestedUid || !groupId) {
-      res.status(400).json({ success: false, error: "uid, groupId 필요" });
-      return;
-    }
-    const callerUid = await getUidFromRequest(req, res);
-    if (!callerUid) return;
-    if (String(callerUid).trim() !== requestedUid) {
-      res.status(403).json({ success: false, error: "본인 가입신청 상태만 조회할 수 있습니다." });
-      return;
-    }
-
-    try {
-      const row = await withComputeCache(
-        admin,
-        "my_group_join_request_status_v1__" + requestedUid + "__" + groupId,
-        8000,
-        () => supabaseGroupReader.fetchMyGroupJoinRequestStatus(admin, groupId, requestedUid)
-      );
-      res.status(200).json({ success: true, row: row || null });
-    } catch (e) {
-      console.warn("[getMyGroupJoinRequestStatusForRead]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 라이딩/러닝 모임 생성 화면 "GPX 파일(선택) → 즐겨찾기 코스" 팝업 —
- * 내가 host로 만든 모임 중 GPX가 등록된 것들을 gpx_url 기준 중복 제외 후 반환.
- */
-exports.getMyGpxCoursesForRead = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60, invoker: "public" }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET") {
-      res.status(405).json({ success: false, error: "GET만 지원합니다." });
-      return;
-    }
-
-    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
-    const category = String(req.query.category || "CYCLE").trim().toUpperCase() === "RUN" ? "RUN" : "CYCLE";
-    if (!requestedUid) {
-      res.status(400).json({ success: false, error: "uid 필요" });
-      return;
-    }
-    const callerUid = await getUidFromRequest(req, res);
-    if (!callerUid) return;
-    if (String(callerUid).trim() !== requestedUid) {
-      res.status(403).json({ success: false, error: "본인 코스 목록만 조회할 수 있습니다." });
-      return;
-    }
-
-    try {
-      const courses = await withComputeCache(
-        admin,
-        "my_gpx_courses_v1__" + requestedUid + "__" + category,
-        30000,
-        () => gpxCourseLibraryReader.fetchMyGpxCourses(admin, requestedUid, category)
-      );
-      res.status(200).json({ success: true, courses: courses || [] });
-    } catch (e) {
-      console.warn("[getMyGpxCoursesForRead]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 라이딩/러닝 모임 생성·수정 시 방금 첨부한 GPX가 내 기존 코스 라이브러리와 지오메트리상
- * 같은 코스인지 확인. 매치되면 기존 gpxUrl을 돌려줘서 새 Storage 업로드 없이 재사용하게 해
- * 중복 코스맵이 쌓이는 것을 원천 차단한다.
- * POST { uid, category, gpxText }
- */
-exports.matchExistingGpxCourse = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60, invoker: "public" }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "POST") {
-      res.status(405).json({ success: false, error: "POST만 지원합니다." });
-      return;
-    }
-
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const requestedUid = String(body.uid || body.userId || "").trim();
-    const category = String(body.category || "CYCLE").trim().toUpperCase() === "RUN" ? "RUN" : "CYCLE";
-    const gpxText = typeof body.gpxText === "string" ? body.gpxText : "";
-    if (!requestedUid || !gpxText.trim()) {
-      res.status(400).json({ success: false, error: "uid, gpxText 필요" });
-      return;
-    }
-    const callerUid = await getUidFromRequest(req, res);
-    if (!callerUid) return;
-    if (String(callerUid).trim() !== requestedUid) {
-      res.status(403).json({ success: false, error: "본인 코스만 비교할 수 있습니다." });
-      return;
-    }
-
-    try {
-      const match = await gpxCourseLibraryReader.findMatchingExistingCourse(admin, requestedUid, category, gpxText);
-      res.status(200).json({ success: true, matched: !!match, course: match || null });
-    } catch (e) {
-      console.warn("[matchExistingGpxCourse]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 크루/클럽 가입·승인·거절·탈퇴 — Supabase Primary 쓰기 4종 공용 핸들러.
- * @see functions/ridingGroupSupabaseWrites.js — 검증·Supabase 쓰기·Firestore 동기 미러링 로직
- */
-function registerRidingGroupSupabaseWriteEndpoint(exportName, handlerFn) {
-  exports[exportName] = onRequest(
-    supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
-    async (req, res) => {
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      if (req.method === "OPTIONS") {
-        res.status(204).send("");
-        return;
-      }
-      if (req.method !== "POST") {
-        res.status(405).json({ success: false, error: "POST만 지원합니다." });
-        return;
-      }
-      const uid = await getUidFromRequest(req, res);
-      if (!uid) return;
-      try {
-        const result = await handlerFn(admin, uid, req.body || {});
-        res.status(200).json(result);
-      } catch (e) {
-        const status = e instanceof ridingGroupSupabaseWrites.WriteError ? e.status : 500;
-        if (status >= 500) console.error("[" + exportName + "]", e.message || e);
-        res.status(status).json({ success: false, error: e.message || String(e) });
-      }
-    }
-  );
-}
-
-registerRidingGroupSupabaseWriteEndpoint(
-  "joinRidingGroupSupabase",
-  ridingGroupSupabaseWrites.handleJoinRidingGroup
-);
-registerRidingGroupSupabaseWriteEndpoint(
-  "approveRidingGroupJoinRequestSupabase",
-  ridingGroupSupabaseWrites.handleApproveJoinRequest
-);
-registerRidingGroupSupabaseWriteEndpoint(
-  "rejectRidingGroupJoinRequestSupabase",
-  ridingGroupSupabaseWrites.handleRejectJoinRequest
-);
-registerRidingGroupSupabaseWriteEndpoint(
-  "leaveRidingGroupSupabase",
-  ridingGroupSupabaseWrites.handleLeaveRidingGroup
-);
-
-/**
- * 운영 도구(관리자 grade=1 전용) — 전체 크루/클럽의 Firestore↔Supabase 멤버·가입신청 드리프트
- * 스캔 및 복구. GET(또는 ?dryRun=1)은 리포트만, POST는 실제 복구까지 수행.
- * @see functions/ridingGroupSupabaseWrites.js handleBackfillRidingGroupMembers
- */
-exports.manualBackfillRidingGroupMembers = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "GET" && req.method !== "POST") {
-      res.status(405).json({ success: false, error: "GET 또는 POST만 지원합니다." });
-      return;
-    }
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    try {
-      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
-      const dryRun = req.method === "GET" || req.query.dryRun === "1" || req.query.dryRun === "true";
-      const result = await ridingGroupSupabaseWrites.handleBackfillRidingGroupMembers(admin, { dryRun });
-      res.status(200).json(result);
-    } catch (e) {
-      const status = e.status || 500;
-      if (status >= 500) console.error("[manualBackfillRidingGroupMembers]", e.message || e);
-      res.status(status).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 운영 진단 도구(관리자 grade=1 전용) — 특정 사용자 Firestore users/{uid} 문서의 프로필 사진
- * 관련 필드 원본 값 확인(프로필 선택 화면에서 사진이 갑자기 안 보이는 문의 조사용). 읽기 전용.
- */
-exports.adminDebugUserProfile = onRequest(
-  { cors: true, timeoutSeconds: 30, invoker: "public" },
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    try {
-      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
-      const targetUid = String(req.query.uid || "").trim();
-      if (!targetUid) {
-        res.status(400).json({ success: false, error: "uid 쿼리 파라미터가 필요합니다." });
-        return;
-      }
-      const snap = await admin.firestore().collection("users").doc(targetUid).get();
-      if (!snap.exists) {
-        res.status(404).json({ success: false, error: "해당 uid의 users 문서를 찾을 수 없습니다." });
-        return;
-      }
-      const d = snap.data() || {};
-      res.status(200).json({
-        success: true,
-        uid: targetUid,
-        fields: Object.keys(d).sort(),
-        doc: d,
-      });
-    } catch (e) {
-      const status = e.status || 500;
-      if (status >= 500) console.error("[adminDebugUserProfile]", e.message || e);
-      res.status(status).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 운영 도구(관리자 grade=1 전용) — Storage profile_images/{uid}_profile.{webp|jpg}는 있는데
- * Firestore users/{uid}.profileImageUrl은 비어 있는 계정을 찾아 복구한다(2026-08 굵은다리 케이스
- * 조사 중 발견 — apiUpdateUser가 updateDoc()을 써서, users 문서가 아직 없는 타이밍에 사진을
- * 올리면 Storage 업로드는 성공하고 Firestore 반영만 조용히 실패할 수 있었다). GET(dryRun)은
- * 리포트만, POST는 실제 복구까지 수행. uids를 주면 그 사용자들만, 안 주면 프로필 사진
- * 전체를 스캔한다(용량에 따라 시간이 걸릴 수 있음).
- */
-exports.adminRepairMissingProfileImages = onRequest(
-  { cors: true, timeoutSeconds: 300, memory: "512MiB", invoker: "public" },
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    try {
-      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
-      const dryRun = req.method !== "POST";
-      const body = req.body && typeof req.body === "object" ? req.body : {};
-      const onlyUids =
-        Array.isArray(body.uids) && body.uids.length
-          ? new Set(body.uids.map((u) => String(u || "").trim()).filter(Boolean))
-          : null;
-
-      const bucket = admin.storage().bucket();
-      const [files] = await bucket.getFiles({ prefix: "profile_images/" });
-      const fileRe = /^profile_images\/([^/]+)_profile\.(webp|jpg)$/;
-      const byUid = new Map();
-      for (const f of files) {
-        const m = fileRe.exec(f.name);
-        if (!m) continue;
-        const fUid = m[1];
-        if (onlyUids && !onlyUids.has(fUid)) continue;
-        // 같은 uid에 webp/jpg 둘 다 있으면 webp 우선(현재 인코딩 기본값과 일치)
-        const prev = byUid.get(fUid);
-        if (!prev || (prev.ext === "jpg" && m[2] === "webp")) {
-          byUid.set(fUid, { file: f, ext: m[2] });
-        }
-      }
-
-      const report = [];
-      const db = admin.firestore();
-      let checked = 0;
-      for (const [targetUid, hit] of byUid.entries()) {
-        checked += 1;
-        const userSnap = await db.collection("users").doc(targetUid).get();
-        const existingUrl = userSnap.exists ? userSnap.data().profileImageUrl : undefined;
-        if (existingUrl) continue; // 이미 정상 — 리포트에 안 올림
-
-        let downloadUrl = null;
-        try {
-          const [urls] = await hit.file.getSignedUrl({
-            action: "read",
-            expires: "01-01-2100",
-          });
-          downloadUrl = urls;
-        } catch (eSign) {
-          // getSignedUrl은 서비스 계정에 signBlob 권한 필요 — 실패 시 공개 다운로드 URL(토큰 방식)로 폴백
-          try {
-            const [meta] = await hit.file.getMetadata();
-            const token =
-              meta.metadata && meta.metadata.firebaseStorageDownloadTokens
-                ? String(meta.metadata.firebaseStorageDownloadTokens).split(",")[0]
-                : null;
-            if (token) {
-              downloadUrl =
-                "https://firebasestorage.googleapis.com/v0/b/" +
-                bucket.name +
-                "/o/" +
-                encodeURIComponent(hit.file.name) +
-                "?alt=media&token=" +
-                token;
-            }
-          } catch (eMeta) {
-            console.warn("[adminRepairMissingProfileImages] getMetadata failed:", targetUid, eMeta.message || eMeta);
-          }
-        }
-
-        const entry = {
-          uid: targetUid,
-          userDocExists: userSnap.exists,
-          storagePath: hit.file.name,
-          resolvedUrl: downloadUrl,
-        };
-        if (!dryRun && downloadUrl) {
-          try {
-            await db
-              .collection("users")
-              .doc(targetUid)
-              .set({ profileImageUrl: downloadUrl }, { merge: true });
-            entry.repaired = true;
-          } catch (eWrite) {
-            entry.repaired = false;
-            entry.error = eWrite.message || String(eWrite);
-          }
-        }
-        report.push(entry);
-      }
-
-      res.status(200).json({
-        success: true,
-        dryRun,
-        scannedStorageFiles: files.length,
-        checkedUids: checked,
-        mismatches: report.length,
-        report,
-      });
-    } catch (e) {
-      const status = e.status || 500;
-      if (status >= 500) console.error("[adminRepairMissingProfileImages]", e.message || e);
-      res.status(status).json({ success: false, error: e.message || String(e) });
     }
   }
 );
@@ -13058,38 +11072,6 @@ exports.ingestOpenRideDualWriteRelay = onRequest(
       res.status(200).json({ success: true, ...result });
     } catch (e) {
       console.warn("[ingestOpenRideDualWriteRelay]", e.message || e);
-      res.status(500).json({ success: false, error: e.message || String(e) });
-    }
-  }
-);
-
-/**
- * 클라이언트 Secondary relay — open_rides 하드 삭제(모임 삭제).
- * Firestore Primary 삭제 성공 후 호출 — 실패해도 onOpenRideWrittenDualWrite 트리거가 백업으로 정리한다.
- */
-exports.ingestOpenRideDeleteRelay = onRequest(
-  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
-  async (req, res) => {
-    res.set("Access-Control-Allow-Origin", "*");
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "POST") {
-      res.status(405).json({ success: false, error: "POST만 지원" });
-      return;
-    }
-    try {
-      const body = req.body || {};
-      const firestoreDocId = String(body.firestoreDocId || "").trim();
-      if (!firestoreDocId) {
-        res.status(400).json({ success: false, error: "firestoreDocId 필요" });
-        return;
-      }
-      await supabaseGroupDualWrite.deleteOpenRideFromSupabase(firestoreDocId);
-      res.status(200).json({ success: true });
-    } catch (e) {
-      console.warn("[ingestOpenRideDeleteRelay]", e.message || e);
       res.status(500).json({ success: false, error: e.message || String(e) });
     }
   }
@@ -13159,49 +11141,6 @@ exports.scheduledRankingParityAudit = onSchedule(
 
 // ---------- STELVIO 헵타곤·GC 랭킹: heptagon_cohort_ranks (일 1회 03:20 KST — scheduledPeak28dHeptagonOnly) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
-const heptagonDashboardSupabaseReader = require("./heptagonDashboardSupabaseReader");
-
-const getHeptagonDashboardCohortOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 30,
-});
-/**
- * 대시보드 헵타곤/옥타곤 카드 전용 — 클라이언트 직접 Firestore 조회(heptagon_cohort_ranks, limit 최대 10000)를
- * Supabase 서버 프록시로 대체(트래픽 절감). op=bySumDesc|entry|boardN — stelvioHeptagonRankLog.js 참고.
- */
-exports.getHeptagonDashboardCohort = onRequest(getHeptagonDashboardCohortOptions, async (req, res) => {
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  res.set("Access-Control-Allow-Origin", "*");
-  res.set("Cache-Control", "public, max-age=60, s-maxage=60, stale-while-revalidate=30");
-  const op = String(req.query.op || "").trim();
-  const params = {
-    monthKey: req.query.monthKey,
-    filterCategory: req.query.filterCategory,
-    filterGender: req.query.filterGender,
-    userId: req.query.userId,
-    limit: req.query.limit,
-  };
-  try {
-    let payload;
-    if (op === "bySumDesc") {
-      payload = await heptagonDashboardSupabaseReader.fetchCohortBySumDesc(admin, params);
-    } else if (op === "entry") {
-      payload = await heptagonDashboardSupabaseReader.fetchCohortEntry(admin, params);
-    } else if (op === "boardN") {
-      payload = await heptagonDashboardSupabaseReader.fetchCohortBoardN(admin, params);
-    } else {
-      res.status(400).json({ ok: false, error: "unknown op" });
-      return;
-    }
-    res.status(200).json(payload);
-  } catch (e) {
-    console.error("[getHeptagonDashboardCohort]", op, e && e.message ? e.message : e);
-    res.status(200).json({ ok: false, error: String(e && e.message ? e.message : e) });
-  }
-});
 
 /** 스케줄·수동 배치 공통 — `scheduledPeak28dHeptagonOnly` / `manualRebuildHeptagonCohortRanks` */
 async function runHeptagonCohortRanksRebuildJob() {
@@ -13427,7 +11366,8 @@ exports.manualRebuildHeptagonCohortRanks = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const grade = await getCachedCallerGrade(db, uid);
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -13923,12 +11863,6 @@ exports.getPeakPowerRanking = onRequest(
       res.set("Cache-Control", "public, max-age=300, s-maxage=300, stale-while-revalidate=60");
     }
     const origJsonPeak = res.json.bind(res);
-    /**
-     * 응답이 카테고리별 전체 보드(수백 행)를 포함해 평균 300KB대 — gzip 미적용 상태로 매 요청
-     * 원문 그대로 전송되어 네트워크 비용의 대부분을 차지함(실측: 310KB→gzip 56KB, 약 82% 절감).
-     * byCategory/entries는 분포 차트·클럽 랭킹 등 여러 화면이 전체 행을 그대로 소비하므로
-     * 응답 자체를 줄이는 대신, 전송 단계에서만 압축한다(클라이언트 fetch()는 gzip을 자동 해제).
-     */
     res.json = (payload) => {
       if (payload && typeof payload === "object" && payload.success && !payload.readBackend) {
         const fbReadLegacy = rankingReadConfig.safeIsFirebaseRankingReadAllowed();
@@ -13938,24 +11872,7 @@ exports.getPeakPowerRanking = onRequest(
       if (payload && typeof payload === "object" && (payload.byCategory || payload.entries || payload.ranking)) {
         filterWithdrawnUsersFromRankingPayload(payload);
       }
-      const acceptEncoding = String(req.headers["accept-encoding"] || "");
-      if (acceptEncoding.indexOf("gzip") === -1) {
-        return origJsonPeak(payload);
-      }
-      try {
-        const jsonStr = JSON.stringify(payload);
-        if (jsonStr.length < 2048) {
-          return origJsonPeak(payload);
-        }
-        const gzipped = zlib.gzipSync(Buffer.from(jsonStr, "utf8"));
-        res.set("Content-Type", "application/json; charset=utf-8");
-        res.set("Content-Encoding", "gzip");
-        res.set("Vary", "Accept-Encoding, Origin");
-        return res.send(gzipped);
-      } catch (eGzip) {
-        console.warn("[getPeakPowerRanking] gzip 압축 실패, 원문 전송:", eGzip && eGzip.message);
-        return origJsonPeak(payload);
-      }
+      return origJsonPeak(payload);
     };
     try {
     let period = req.query.period || "monthly";
@@ -14163,9 +12080,7 @@ exports.getPeakPowerRanking = onRequest(
     if (durationType === "personal_dist") {
       const { startStr, endStr } = getRolling30DaysRangeSeoul();
       const cacheKey = `peakRanking_personal_dist_30d_${gender}_${startStr}_${endStr}`;
-      const aggPd = forceRankMv
-        ? null
-        : await tryLivePersonalDistPayloadFromSupabase(db, cacheKey, startStr, endStr, gender);
+      const aggPd = forceRankMv ? null : await readRankingAggregatePayloadIfFresh(db, cacheKey);
       if (aggPd && aggPd.byCategory) {
         let out = {
           success: true,
@@ -15281,8 +13196,7 @@ const onUserLogWrittenHandler = async (change, context) => {
               db,
               userId,
               activityDateYmd,
-              activityDateYmd,
-              true
+              activityDateYmd
             );
           } catch (bucketErr) {
             console.warn(
@@ -15814,10 +13728,14 @@ exports.getFtpSuggestion = onRequest(
     const start30Str = getDateStrDaysAgo(30);
     const start14Str = getDateStrDaysAgo(14);
 
-    const logs = await fetchCyclingLogsInDateRangeRouted(db, uid, start42Str, todayStr);
+    const logsSnap = await db.collection("users").doc(uid).collection("logs")
+      .where("date", ">=", start42Str)
+      .where("date", "<=", todayStr)
+      .get();
 
     const byDate = {};
-    logs.forEach((d) => {
+    logsSnap.docs.forEach((doc) => {
+      const d = doc.data();
       if (!isCyclingForMmp(d)) return; // Run 등 비사이클링 Strava 로그는 FTP 제안에서 제외
       const dateStr = normalizeLogDateToSeoulYmd(d.date);
       if (!dateStr) return;
@@ -16316,7 +14234,8 @@ exports.backfillVo2DemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const grade = await getCachedCallerGrade(db, callerUid);
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -16423,7 +14342,8 @@ exports.backfillFitnessDemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const grade = await getCachedCallerGrade(db, callerUid);
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -16529,7 +14449,8 @@ exports.backfillWeeklyTssDemographicSamplesHttp = onRequest(
     if (!authorized) {
       const callerUid = await getUidFromRequest(req, res);
       if (!callerUid) return;
-      const grade = await getCachedCallerGrade(db, callerUid);
+      const callerSnap = await db.collection("users").doc(callerUid).get();
+      const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
       if (grade !== "1") {
         res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
         return;
@@ -16735,209 +14656,6 @@ exports.provisionSupabaseUserAfterProfileHttp = onRequest(
   }
 );
 
-/**
- * 관리자 전용 — Firestore users에는 있지만 Supabase public.users 미러에는 없는 계정을 특정
- * UID 목록으로 일괄 백필한다. provisionSupabaseUserAfterProfileHttp는 본인 셀프 프로비저닝만
- * 가능해 다른 사용자 UID는 처리할 수 없어서 별도로 둔다.
- * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { uids: string[] }
- */
-const adminBackfillMissingSupabaseUsersOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 540,
-});
-exports.adminBackfillMissingSupabaseUsers = onRequest(
-  adminBackfillMissingSupabaseUsersOptions,
-  async (req, res) => {
-    setCorsHeaders(req, res);
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const db = admin.firestore();
-    const rawSecret =
-      req.query.secret ||
-      req.headers["x-internal-secret"] ||
-      req.headers["X-Internal-Secret"] ||
-      (req.body && req.body.secret);
-    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
-    if (!authorized) {
-      const uid = await getUidFromRequest(req, res);
-      if (!uid) return;
-      const grade = await getCachedCallerGrade(db, uid);
-      if (grade !== "1") {
-        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
-        return;
-      }
-      authorized = true;
-    }
-
-    let uids = Array.isArray(req.query.uids)
-      ? req.query.uids
-      : Array.isArray(req.body && req.body.uids)
-        ? req.body.uids
-        : String(req.query.uids || (req.body && req.body.uids) || "")
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean);
-
-    // all=1: uids 없이 Firestore users 컬렉션 전체(문서 ID만, listDocuments는 읽기 비용 없음)를
-    // 대상으로 재동기화 — has_strava_connected/has_gemini_registered 같은 신규 컬럼을 기존
-    // 사용자 전원에게 소급 반영할 때 클라이언트에서 674명 uid를 일일이 넘길 필요가 없게 한다.
-    // offset/limit(선택)으로 나눠 호출하면 300초 타임아웃 안에서 여러 번에 나눠 처리 가능.
-    const wantAll = req.query.all === "1" || (req.body && req.body.all === true);
-    if (!uids.length && wantAll) {
-      const allRefs = await db.collection("users").listDocuments();
-      let allIds = allRefs.map((r) => r.id);
-      const offset = parseInt(req.query.offset, 10) || 0;
-      const limit = parseInt(req.query.limit, 10) || allIds.length;
-      uids = allIds.slice(offset, offset + limit);
-    }
-
-    if (!uids.length) {
-      res.status(400).json({ success: false, error: "uids 필요(배열 또는 콤마구분 문자열) 또는 all=1" });
-      return;
-    }
-
-    const results = [];
-    for (const uid of uids) {
-      try {
-        const r = await supabaseUserProvision.upsertSupabaseUserProfileFromFirestore(admin, uid, {
-          requireNameContact: false,
-        });
-        results.push({ uid, success: true, supabaseUserId: r.supabaseUserId });
-      } catch (e) {
-        results.push({ uid, success: false, error: (e && e.message) || String(e) });
-      }
-    }
-    res.status(200).json({
-      success: true,
-      processed: results.length,
-      okCount: results.filter((r) => r.success).length,
-      results,
-    });
-  }
-);
-
-/**
- * Supabase public.users 행 → 클라이언트(userManager.js)가 기대하는 Firestore 문서 필드 형태로 역매핑.
- * supabaseUserProvision.mapFirestoreUserToRow()의 역방향이며, 해당 함수가 다루는 필드만 채운다.
- * Supabase users 테이블은 랭킹/매칭용으로 선별된 필드만 미러링하므로 원본 Firestore 문서의
- * 그 외 상세 필드(예: 알림 토큰, 주소 등)는 이 응답에 포함되지 않는다 — "안전한 하이브리드" 설계상
- * 이 엔드포인트가 실패하면 호출부가 기존 Firestore 전체 스캔으로 폴백한다.
- */
-function supabaseUserRowToAdminListItem(row) {
-  if (!row || !row.firebase_uid) return null;
-  const out = { id: row.firebase_uid };
-  if (row.name != null) out.name = row.name;
-  if (row.display_name != null) out.displayName = row.display_name;
-  if (row.contact != null) out.contact = row.contact;
-  if (row.phone != null) out.phone = row.phone;
-  if (row.email != null) out.email = row.email;
-  if (row.ftp != null) out.ftp = row.ftp;
-  if (row.ftp_updated_at != null) out.ftp_updated_at = row.ftp_updated_at;
-  if (row.weight_kg != null) out.weight = row.weight_kg;
-  if (row.birth_year != null) {
-    out.birth_year = row.birth_year;
-    out.birthYear = row.birth_year;
-  }
-  // mapGender()가 Firestore의 '남'/'여'를 Supabase enum "male"/"female"/"unknown"으로
-  // 변환해 저장하므로, 클라이언트(userData.gender === '남' 등 한글 비교)와 맞추려면 역변환 필요.
-  if (row.gender === "male") out.gender = "남";
-  else if (row.gender === "female") out.gender = "여";
-  if (row.challenge != null) out.challenge = row.challenge;
-  if (row.run_challenge != null) out.run_challenge = row.run_challenge;
-  if (row.sport_category != null) {
-    out.category = row.sport_category;
-    out.sport_category = row.sport_category;
-  }
-  // mapGrade()가 Firestore의 '1'/'2'/'3'을 Supabase enum "admin"/"sub_admin"/"member"로
-  // 변환해 저장하므로, isStelvioAdminGrade() 등 클라이언트 권한 판별이 문자열 '1'/'2'/'3'을
-  // 기대하는 것과 맞추기 위해 역변환한다 — 이 매핑을 빠뜨리면 관리자 계정도 grade="admin"으로
-  // 내려가 isStelvioAdminGrade가 false를 반환해 관리자 전용 화면이 조용히 깨진다(2026-08 확인).
-  if (row.grade === "admin") out.grade = "1";
-  else if (row.grade === "sub_admin") out.grade = "3";
-  else if (row.grade != null) out.grade = "2";
-  if (row.account_status != null) out.account_status = row.account_status;
-  if (row.is_active != null) out.is_active = row.is_active;
-  if (row.legacy_status != null) out.status = row.legacy_status;
-  if (row.expiry_date != null) out.expiry_date = row.expiry_date;
-  if (row.acc_points != null) out.acc_points = row.acc_points;
-  if (row.rem_points != null) out.rem_points = row.rem_points;
-  if (row.last_training_date != null) out.last_training_date = row.last_training_date;
-  if (row.is_private != null) out.is_private = row.is_private;
-  if (row.profile_image_url != null) out.profileImageUrl = row.profile_image_url;
-  if (row.max_hr != null) out.maxHr = row.max_hr;
-  // 원본 Strava 토큰·Gemini API 키는 Supabase에 저장하지 않으므로, 연결 여부 boolean만
-  // 클라이언트의 userHasStravaConnected()/userHasGeminiApiRegistered()가 읽는 필드명으로 매핑
-  if (row.has_strava_connected != null) out.strava_connected = row.has_strava_connected;
-  if (row.has_gemini_registered != null) {
-    out.API_sts = row.has_gemini_registered;
-    out.gemini_api_registered = row.has_gemini_registered;
-  }
-  if (row.ranking_favorite_user_ids != null) out.ranking_favorite_user_ids = row.ranking_favorite_user_ids;
-  if (row.created_at != null) out.created_at = row.created_at;
-  return out;
-}
-
-/**
- * 관리자 전용 — Firestore users 전체 스캔(약 673건, 매 로그인 시 발생) 대신 Supabase
- * public.users 미러에서 목록을 읽어 Firebase 트래픽을 줄인다. 클라이언트(apiGetUsers)는
- * 이 엔드포인트 실패 시 기존 Firestore 전체 스캔으로 자동 폴백한다(Canary 패턴).
- * GET/POST, 관리자(grade=1) ID 토큰 필요.
- */
-const getAllUsersForAdminReadOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 60,
-  invoker: "public",
-});
-exports.getAllUsersForAdminRead = onRequest(
-  getAllUsersForAdminReadOptions,
-  async (req, res) => {
-    setCorsHeaders(req, res);
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const db = admin.firestore();
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    const grade = await getCachedCallerGrade(db, uid);
-    if (String(grade).trim() !== "1") {
-      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
-      return;
-    }
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    try {
-      const PAGE_SIZE = 1000;
-      const items = [];
-      for (let page = 0; page < 50; page += 1) {
-        const from = page * PAGE_SIZE;
-        /* eslint-disable no-await-in-loop */
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .not("firebase_uid", "is", null)
-          .order("id", { ascending: true })
-          .range(from, from + PAGE_SIZE - 1);
-        /* eslint-enable no-await-in-loop */
-        if (error) throw error;
-        for (const row of data || []) {
-          const item = supabaseUserRowToAdminListItem(row);
-          if (item) items.push(item);
-        }
-        if (!data || data.length < PAGE_SIZE) break;
-      }
-      res.status(200).json({ success: true, items });
-    } catch (e) {
-      res.status(500).json({ success: false, error: (e && e.message) || String(e) });
-    }
-  }
-);
-
 const deleteUserAccountConfig = supabaseDualWriteServer.appendServiceRoleSecret({
   cors: CORS_ORIGINS,
   timeoutSeconds: 120,
@@ -16970,8 +14688,6 @@ const USER_PROFILE_SYNC_FIELDS = [
   "grade",
   "email",
   "account_status",
-  "is_active",
-  "status",
   "expiry_date",
   "subscription_end_date",
   "is_private",
@@ -16981,14 +14697,6 @@ const USER_PROFILE_SYNC_FIELDS = [
   "starredUsers",
   "rankingFavoritesUpdatedAt",
   "rankingFavoritesSchemaVersion",
-  "strava_refresh_token",
-  "strava_access_token",
-  "strava_connected",
-  "has_strava",
-  "strava_athlete_id",
-  "API_sts",
-  "gemini_api_registered",
-  "gemini_api_key",
 ];
 
 function userProfileFieldsChanged(before, after) {
@@ -17009,14 +14717,8 @@ exports.onUserProfileWritten = functions
     if (!userProfileFieldsChanged(before, after)) return;
 
     try {
-      // ensureAuth:true — 클라이언트의 1회성 self-provisioning 호출(가입 직후 fire-and-forget,
-      // 실패해도 콘솔 경고만 남기고 조용히 무시됨)이 레이스·네트워크 오류로 실패하면 auth.users
-      // 행이 영원히 생성되지 않아 이후 모든 프로필 쓰기가 users_id_fkey 위반으로 계속 실패하는
-      // 영구 고장 상태가 됐다(2026-08-25, 신규가입자 다수에서 재현 확인). ensureSupabaseAuthUser는
-      // 존재 여부를 먼저 확인하는 멱등 함수라 매 쓰기마다 호출해도 안전 — 이 트리거 자체를
-      // self-healing하게 만들어 근본 원인을 해결한다.
       await supabaseUserProvision.upsertSupabaseUserProfileFromFirestore(admin, userId, {
-        ensureAuth: true,
+        ensureAuth: false,
         requireNameContact: false,
       });
     } catch (e) {
@@ -17040,20 +14742,16 @@ exports.onUserProfileWritten = functions
             },
             { merge: true }
           );
+        // 비공개 사용자 색인(샤드) 증분 유지 — 랭킹보드 저비용 비공개 오버레이의 원천.
         try {
-          const rankingBuildMetaSupabase = require("./rankingBuildMetaSupabase");
-          await rankingBuildMetaSupabase.touchRunPrivacyVersionMeta(userId);
-        } catch (eVer) {
+          await updatePrivateUserIdIndexForUser(db, userId, nowPrivate);
+        } catch (eIdx) {
           console.warn(
-            "[onUserProfileWritten] Supabase run_privacy_version touch failed:",
+            "[onUserProfileWritten] private index update failed:",
             userId,
-            eVer.message || eVer
+            eIdx.message || eIdx
           );
         }
-        // 비공개 사용자 집합 인메모리 캐시 무효화(이 인스턴스) — Supabase users.is_private은
-        // 위 upsertSupabaseUserProfileFromFirestore에서 이미 갱신됨. 다른 인스턴스는 TTL 내 자연 반영.
-        _privateUserIdSetCache = null;
-        _privateUserIdSetCacheAt = 0;
       }
     } catch (e) {
       console.warn("[onUserProfileWritten] privacy version bump failed:", userId, e.message || e);
@@ -17061,76 +14759,21 @@ exports.onUserProfileWritten = functions
   });
 
 /**
- * Firestore appConfig/{configId} 변경 → Supabase public.app_config 미러(dual-write).
- * Firestore가 여전히 admin 쓰기 원본 — 기존 admin 저장 경로(persistRankingReadRouting 등)를
- * 하나도 수정하지 않고 이 트리거 하나로 전부 미러링해 읽기 경로만 Supabase로 옮긴다.
- */
-exports.onAppConfigWritten = functions
-  .runWith({ timeoutSeconds: 30, secrets: ["SUPABASE_SERVICE_ROLE_KEY"] })
-  .firestore.document("appConfig/{configId}")
-  .onWrite(async (change, context) => {
-    const configId = context.params.configId;
-    if (!configId || !change.after.exists) return;
-    try {
-      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-      const { error } = await supabase.from("app_config").upsert(
-        {
-          config_key: configId,
-          data: change.after.data() || {},
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "config_key" }
-      );
-      if (error) throw error;
-    } catch (e) {
-      console.warn("[onAppConfigWritten] Supabase mirror failed:", configId, e.message || e);
-    }
-  });
-
-/**
- * 비공개 사용자 집합 캐시 새로고침 — 매일 03:20(서울).
- * Supabase 조회 자체가 상시 원천이라 재구성이라기보다 "인메모리 캐시 강제 새로고침 + 헬스체크" 역할.
- * (과거 Firestore 샤드 색인 재구성 스케줄을 대체)
+ * 비공개 사용자 색인(샤드) 재구성 — 매일 03:20(서울).
+ * 트리거 누락·강등 미반영을 자가 치유하고, 배포 직후 최초 초기화도 담당한다.
+ * users(is_private=true) 원천을 1회 조회(비공개=소수)하므로 비용이 낮다.
  */
 exports.privateUserIdsRebuildSchedule = onSchedule(
-  supabaseDualWriteServer.appendServiceRoleSecret({
-    schedule: "20 3 * * *",
-    timeZone: "Asia/Seoul",
-    timeoutSeconds: 300,
-    memory: "256MiB",
-  }),
+  { schedule: "20 3 * * *", timeZone: "Asia/Seoul", timeoutSeconds: 300, memory: "256MiB" },
   async () => {
-    _privateUserIdSetCache = null;
-    _privateUserIdSetCacheAt = 0;
-    const set = await getPrivateUserIdSetCached(admin.firestore());
-    console.log("[privateUserIdsRebuild] 완료", { total: set ? set.size : 0 });
-
-    // http_live_* 재집계 락 문서 정리 — 만료된(untilMs < now) 락은 재사용되지 않으므로 무한 증가 방지.
-    // ranking_meta 자체가 소수 문서(빌드 메타 몇 개 + 누적 락)라 전체 스캔 1회/일 비용은 낮다.
-    try {
-      const db = admin.firestore();
-      const nowMs = Date.now();
-      const snap = await db.collection("ranking_meta").get();
-      let deleted = 0;
-      const batch = db.batch();
-      snap.docs.forEach((doc) => {
-        if (!doc.id.startsWith("http_live_")) return;
-        const untilMs = Number((doc.data() || {}).untilMs) || 0;
-        if (untilMs > 0 && untilMs < nowMs) {
-          batch.delete(doc.ref);
-          deleted += 1;
-        }
-      });
-      if (deleted > 0) await batch.commit();
-      console.log("[privateUserIdsRebuild] http_live_* 락 정리 완료", { deleted });
-    } catch (eLock) {
-      console.warn("[privateUserIdsRebuild] http_live_* 락 정리 실패:", eLock && eLock.message);
-    }
+    const db = admin.firestore();
+    const result = await rebuildPrivateUserIdShards(db);
+    console.log("[privateUserIdsRebuild] 완료", result);
   }
 );
 
 /**
- * 관리자/내부 시크릿: 비공개 사용자 집합 캐시 즉시 새로고침(수동 보정용).
+ * 관리자/내부 시크릿: 비공개 사용자 색인(샤드) 즉시 재구성 (배포 직후 초기화·수동 보정용).
  * 인증: X-Internal-Secret 헤더 또는 grade=1 관리자.
  */
 const adminRebuildPrivateUserIdsOptions = { cors: true, timeoutSeconds: 300 };
@@ -17151,7 +14794,8 @@ exports.adminRebuildPrivateUserIds = onRequest(
       if (!authorized) {
         const uid = await getUidFromRequest(req, res);
         if (!uid) return;
-        const grade = await getCachedCallerGrade(db, uid);
+        const callerSnap = await db.collection("users").doc(uid).get();
+        const grade = callerSnap.exists ? String((callerSnap.data() || {}).grade ?? "2") : "2";
         if (grade !== "1") {
           res.status(403).json({
             success: false,
@@ -17205,13 +14849,11 @@ exports.adminBackfillSupabaseUserGender = onRequest(
         Math.min(5000, Number(body.maxUsers || req.query.maxUsers || 500) || 500)
       );
       const dryRun = String(body.dryRun ?? req.query.dryRun ?? "false").toLowerCase() === "true";
-      const uids = Array.isArray(body.uids) ? body.uids : [];
 
       const stats = await supabaseUserProvision.backfillSupabaseUserGenderFromFirestore(admin, {
         startAfterUid,
         maxUsers,
         dryRun,
-        uids,
       });
 
       res.status(200).json({
@@ -17229,3160 +14871,6 @@ exports.adminBackfillSupabaseUserGender = onRequest(
         error: e.message || String(e),
       });
     }
-  }
-);
-
-// ---------- 대회 선착순 대행 신청 (Upstash Redis 원자적 슬롯 제어 + 토스페이먼츠 가상계좌) ----------
-
-const RACE_APPLICATIONS_COLLECTION = "race_applications";
-const RACE_COMPETITIONS_COLLECTION = "competitions";
-const RACE_WAITLIST_COLLECTION = "race_waitlist";
-const TOSS_WEBHOOK_RETRIES_COLLECTION = "toss_webhook_retries";
-/** 가상계좌 발급 은행 기본값 — 대회 문서에 bankAllowlist가 없을 때만 사용(운영 시 competitions.bankAllowlist[0] 권장) */
-const DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE = "20"; // 우리은행 — Toss bank 코드는 실제 콘솔에서 재확인 필요
-const DEFAULT_VIRTUAL_ACCOUNT_VALID_HOURS = 1;
-/** 미입금 자동 취소 배치 1회 처리 상한(타임아웃 방지) */
-const RACE_UNPAID_CLEANUP_BATCH_LIMIT = 200;
-/** 마감 이후 취소로 자리가 나면 대기자 1순위에게 신청하기를 열어 두는 시간 — 응답 없으면 다음 순위로 승격 */
-const RACE_WAITLIST_INVITE_VALID_HOURS = 24;
-
-/** 참가 취소 환불 규정 — 프론트(competitionBottomSheet.js)의 동일 공식과 반드시 맞춰 유지 */
-const COMPETITION_REFUND_FEE_KRW = 440;
-const COMPETITION_REFUND_D30_MS = 30 * 24 * 60 * 60 * 1000;
-
-/**
- * 참가 취소 환불 규정 계산.
- * - 100% 환불: 대회 접수 기간(~closesAt) 내 취소 — 수수료 440원 차감
- * - 부분 환불(50%): 접수 종료 이후 ~ 대회 개최 D-30일까지 — 50% 후 수수료 440원 차감
- * - 환불 불가: D-30일 이후 취소(대회 당일 불참 포함)
- * @param {number} amount 원래 결제 금액
- * @param {number|null} closesAtMs 접수 마감 시각(ms)
- * @param {number|null} raceDateMs 대회 개최 시각(ms)
- * @param {number} nowMs
- */
-function computeCompetitionRefundPolicy(amount, closesAtMs, raceDateMs, nowMs) {
-  const amt = Math.max(0, Number(amount) || 0);
-  if (closesAtMs != null && nowMs <= closesAtMs) {
-    return {
-      tier: "FULL",
-      refundAmount: Math.max(0, amt - COMPETITION_REFUND_FEE_KRW),
-      label: "100% 환불(수수료 " + COMPETITION_REFUND_FEE_KRW + "원 차감)",
-    };
-  }
-  if (raceDateMs != null && nowMs <= raceDateMs - COMPETITION_REFUND_D30_MS) {
-    return {
-      tier: "PARTIAL",
-      refundAmount: Math.max(0, Math.floor(amt * 0.5) - COMPETITION_REFUND_FEE_KRW),
-      label: "50% 환불(수수료 " + COMPETITION_REFUND_FEE_KRW + "원 차감)",
-    };
-  }
-  return { tier: "NONE", refundAmount: 0, label: "환불 불가(대회 개최 30일 전 이후 취소)" };
-}
-
-function appendRaceSecrets(options) {
-  const o = Object.assign({}, options);
-  o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
-  [tossSecretKeySecret, upstashRedisRestUrlSecret, upstashRedisRestTokenSecret].forEach((s) => {
-    if (!o.secrets.includes(s)) o.secrets.push(s);
-  });
-  return o;
-}
-
-function raceRedisConn() {
-  return {
-    restUrl: upstashRedisRestUrlSecret.value(),
-    restToken: upstashRedisRestTokenSecret.value(),
-  };
-}
-
-function raceTossSecretKey() {
-  return tossSecretKeySecret.value();
-}
-
-/** 상태 변경 원장(감사 추적) — PointRewardService.processRidingReward와 동일 read-then-write-plus-ledger 패턴 */
-function writeRaceLedgerEntry(db, applicationRef, payload) {
-  return db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationRef.id).collection("history").add({
-    ...payload,
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
-  });
-}
-
-function writeTossWebhookRetry(db, payload) {
-  return db.collection(TOSS_WEBHOOK_RETRIES_COLLECTION).add({
-    ...payload,
-    status_queue: "pending",
-    created_at: admin.firestore.FieldValue.serverTimestamp(),
-    processed_at: null,
-  });
-}
-
-/** Authorization: Bearer <idToken> 검증 — 관리자 비밀번호 초기화 엔드포인트와 동일 패턴(index.js:592-606) */
-async function verifyRaceRequestAuth(req) {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    const err = new Error("로그인이 필요합니다.");
-    err.status = 401;
-    throw err;
-  }
-  const idToken = authHeader.split("Bearer ")[1];
-  try {
-    return await admin.auth().verifyIdToken(idToken);
-  } catch (e) {
-    const err = new Error("로그인이 만료되었거나 유효하지 않습니다. 다시 로그인해 주세요.");
-    err.status = 401;
-    throw err;
-  }
-}
-
-function raceOrderIdFor(competitionId, uid) {
-  const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).slice(2, 8);
-  return `race_${competitionId}_${uid}_${ts}${rand}`.slice(0, 64);
-}
-
-const RACE_APPLICANT_GENDER = ["M", "F"];
-const RACE_APPLICANT_NATIONALITY = ["DOMESTIC", "FOREIGN"];
-const RACE_APPLICANT_DIVISION = {
-  RUN: ["FULL", "HALF", "10K", "5K"],
-  CYCLE: ["GRANFONDO", "MEDIOFONDO"],
-};
-const RACE_APPLICANT_SIZE = ["S", "M", "L", "XL", "XXL"];
-const RACE_APPLICANT_START_GROUP = ["A", "B", "C", "D", "E"];
-const RACE_APPLICANT_BLOOD_TYPE = [
-  "RH+A", "RH+B", "RH+O", "RH+AB", "RH-A", "RH-B", "RH-O", "RH-AB",
-];
-const RACE_PHONE_RE = /^010-\d{4}-\d{4}$/;
-
-/**
- * 신청서(competitionApplicationForm.js) 제출값 서버측 검증 — 클라이언트 검증을 우회해 직접 호출하는
- * 경우를 대비한 방어적 검증이므로 화이트리스트에 없는 값은 전부 거부하고, 통과한 필드만 저장한다.
- */
-function validateRaceApplicant(applicant, category) {
-  const a = applicant && typeof applicant === "object" ? applicant : {};
-  const name = String(a.name || "").trim().slice(0, 50);
-  const birth6 = String(a.birth6 || "").trim();
-  const phone = String(a.phone || "").trim();
-  const zipCode = String(a.zipCode || "").trim();
-  const address1 = String(a.address1 || "").trim().slice(0, 200);
-  const address2 = String(a.address2 || "").trim().slice(0, 200);
-  const emergencyName = String(a.emergencyName || "").trim().slice(0, 50);
-  const emergencyRelation = String(a.emergencyRelation || "").trim().slice(0, 30);
-  const emergencyPhone = String(a.emergencyPhone || "").trim();
-  const medicalNote = String(a.medicalNote || "").trim().slice(0, 500);
-  const divisionWhitelist = category === "CYCLE" ? RACE_APPLICANT_DIVISION.CYCLE : RACE_APPLICANT_DIVISION.RUN;
-
-  if (!name) return { error: "이름을 입력해 주세요." };
-  if (!RACE_APPLICANT_GENDER.includes(a.gender)) return { error: "성별을 선택해 주세요." };
-  if (!/^\d{6}$/.test(birth6)) return { error: "생년월일 6자리를 정확히 입력해 주세요." };
-  if (!RACE_APPLICANT_NATIONALITY.includes(a.nationality)) return { error: "국적을 선택해 주세요." };
-  if (!RACE_PHONE_RE.test(phone)) return { error: "휴대전화 번호를 정확히 입력해 주세요." };
-  if (!zipCode || !address1) return { error: "배송지 주소를 입력해 주세요." };
-  if (!address2) return { error: "상세 주소를 입력해 주세요." };
-  if (!divisionWhitelist.includes(a.division)) return { error: "참가 부문을 선택해 주세요." };
-  if (!RACE_APPLICANT_SIZE.includes(a.size)) return { error: "기념품 사이즈를 선택해 주세요." };
-  if (!RACE_APPLICANT_START_GROUP.includes(a.startGroup)) return { error: "출발 그룹을 선택해 주세요." };
-  if (!emergencyName) return { error: "비상 연락처 이름을 입력해 주세요." };
-  if (!emergencyRelation) return { error: "참가자와의 관계를 입력해 주세요." };
-  if (!RACE_PHONE_RE.test(emergencyPhone)) return { error: "비상 연락처 번호를 정확히 입력해 주세요." };
-  if (emergencyPhone === phone) return { error: "비상 연락처는 본인의 연락처와 동일할 수 없습니다." };
-  if (!RACE_APPLICANT_BLOOD_TYPE.includes(a.bloodType)) return { error: "혈액형을 선택해 주세요." };
-  if (a.agreements && a.agreements.privacyCollect && a.agreements.privacyThirdParty && a.agreements.medicalWaiver) {
-    // ok
-  } else {
-    return { error: "필수 약관에 모두 동의해 주세요." };
-  }
-
-  return {
-    data: {
-      name, gender: a.gender, birth6, nationality: a.nationality,
-      phone, zipCode, address1, address2,
-      division: a.division, size: a.size, startGroup: a.startGroup,
-      emergencyName, emergencyRelation, emergencyPhone,
-      bloodType: a.bloodType, medicalNote,
-      agreements: { privacyCollect: true, privacyThirdParty: true, medicalWaiver: true },
-    },
-  };
-}
-
-/**
- * 마감(SOLD_OUT) 시 대기자 명단에 자동 등록 — 이미 대기중/초대된 건이 있으면 중복 등록하지 않는다.
- * competitionId+userId 등가 필터만 사용해 복합 인덱스 없이 조회(status는 클라이언트 측에서 필터).
- */
-async function joinCompetitionWaitlistIfNotAlready(db, competitionId, uid) {
-  const existingSnap = await db
-    .collection(RACE_WAITLIST_COLLECTION)
-    .where("competitionId", "==", competitionId)
-    .where("userId", "==", uid)
-    .get();
-  const active = existingSnap.docs.find((d) => {
-    const status = (d.data() || {}).status;
-    return status === "WAITING" || status === "INVITED";
-  });
-  if (active) return active.id;
-
-  const ref = await db.collection(RACE_WAITLIST_COLLECTION).add({
-    competitionId,
-    userId: uid,
-    status: "WAITING",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    invitedAt: null,
-    inviteExpiresAt: null,
-    convertedApplicationId: null,
-  });
-  return ref.id;
-}
-
-/**
- * 접수 마감(closesAt 경과) 이후에 슬롯이 반환되면, 정상 선착순으로는 아무도 잡을 수 없으므로
- * 대기자 1순위(가장 먼저 등록한 WAITING 건)를 24시간 동안 신청 가능하도록 초대(INVITED)한다.
- * 접수가 아직 열려 있으면(마감 전) 그냥 반환 — 그 경우는 일반 선착순 재신청으로 충분하다.
- */
-async function inviteNextWaitlistEntryIfClosed(db, competitionId) {
-  const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-  if (!compSnap.exists) return;
-  const comp = compSnap.data() || {};
-  const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
-  if (closesAtMs == null || Date.now() <= closesAtMs) return;
-
-  const snap = await db
-    .collection(RACE_WAITLIST_COLLECTION)
-    .where("competitionId", "==", competitionId)
-    .where("status", "==", "WAITING")
-    .orderBy("createdAt", "asc")
-    .limit(1)
-    .get();
-  if (snap.empty) return;
-
-  const ref = snap.docs[0].ref;
-  await db.runTransaction(async (tx) => {
-    const fresh = await tx.get(ref);
-    if (!fresh.exists || (fresh.data() || {}).status !== "WAITING") return; // 이미 처리됨(멱등)
-    tx.update(ref, {
-      status: "INVITED",
-      invitedAt: admin.firestore.FieldValue.serverTimestamp(),
-      inviteExpiresAt: admin.firestore.Timestamp.fromMillis(
-        Date.now() + RACE_WAITLIST_INVITE_VALID_HOURS * 3600 * 1000
-      ),
-    });
-  });
-}
-
-/**
- * 대회 잔여 인원 리컨실 — Redis INCR/DECR는 취소·롤백 시 releaseSlot 호출이 일시적으로 실패하면
- * (네트워크 오류 등) 재시도·복구 수단이 없어 "Firestore는 취소됐는데 Redis 카운트만 안 줄어드는"
- * 드리프트가 쌓일 수 있다. Firestore의 실제 유효 신청 건수(PAYMENT_WAITING·PAYMENT_COMPLETED)를
- * 신뢰 원본으로 삼아 Redis 카운트를 그 값으로 직접 맞춘다(scheduledReconcileCompetitionSlots·수동 트리거 공용).
- */
-async function reconcileCompetitionSlotCount(db, competitionId, preloadedComp) {
-  let comp = preloadedComp;
-  if (!comp) {
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-    if (!compSnap.exists) return null;
-    comp = compSnap.data() || {};
-  }
-  const redisKey = comp.redisKey || `race:${competitionId}:count`;
-
-  const appsSnap = await db
-    .collection(RACE_APPLICATIONS_COLLECTION)
-    .where("competitionId", "==", competitionId)
-    .get();
-  const actualCount = appsSnap.docs.filter((d) => {
-    const status = (d.data() || {}).status;
-    return status === "PAYMENT_WAITING" || status === "PAYMENT_COMPLETED";
-  }).length;
-
-  const conn = raceRedisConn();
-  const before = await raceRedisClient.getSlotCount(conn, redisKey);
-  await raceRedisClient.setSlotCount(conn, redisKey, actualCount);
-  return { competitionId, redisKey, before, after: actualCount };
-}
-
-/**
- * 관리자 수동 트리거 — 특정 대회의 잔여 인원을 즉시 재계산해 Redis 카운트를 바로잡는다.
- * 매시 정각 스케줄(scheduledReconcileCompetitionSlots)을 기다리지 않고 바로 확인·수정할 때 사용.
- */
-const reconcileCompetitionSlotsOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.reconcileCompetitionSlots = onRequest(reconcileCompetitionSlotsOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  const db = admin.firestore();
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const competitionId = String(body.competitionId || "").trim();
-    if (!competitionId) {
-      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
-      return;
-    }
-
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-    if (!compSnap.exists) {
-      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
-      return;
-    }
-    const comp = compSnap.data() || {};
-
-    const userSnap = await db.collection("users").doc(decoded.uid).get();
-    const userData = userSnap.exists ? userSnap.data() || {} : {};
-    // 관리자이거나 이 대회의 생성자 본인만 재계산할 수 있다(생성자 화면에서도 동일 버튼을 노출하므로).
-    const isAdminUser = String(userData.grade) === "1";
-    const isOwner = comp.createdBy === decoded.uid;
-    if (!isAdminUser && !isOwner) {
-      res.status(403).json({ success: false, error: "관리자 또는 대회 생성자만 사용할 수 있습니다." });
-      return;
-    }
-
-    const result = await reconcileCompetitionSlotCount(db, competitionId, comp);
-    if (!result) {
-      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
-      return;
-    }
-    res.status(200).json(Object.assign({ success: true }, result));
-  } catch (e) {
-    const status = e.status || 500;
-    console.error("[reconcileCompetitionSlots]", e && e.message ? e.message : e);
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 대회 신청 접수 알림톡 전용 HTTPS 릴레이 (VPC + ALL_TRAFFIC egress).
- * openRidingMeetupAlimtalk.js·meetupInviteAlimtalkHttpsRelay와 동일한 이유로 분리한다: applyForCompetition은
- * VPC egress가 없어 알리고 kakaoapi 호출 시 IP 화이트리스트 미등록으로 code=-99가 날 수 있으므로,
- * 결제(가상계좌)·Firestore 기록까지 끝난 뒤 이 릴레이에만 알림톡 발송을 위임한다.
- * receiverPhone/displayName/subject/message는 호출측(applyForCompetition)이 이미 완성해서 넘긴다
- * (missionSubscriptionAlimtalkHttpsRelay와 동일한 "범용 단건 발송" 구조 — 대회 데이터를 릴레이가 다시 조회하지 않음).
- */
-const competitionApplyAlimtalk = require("./competitionApplyAlimtalk");
-const marketNegoAlimtalk = require("./marketNegoAlimtalk");
-const aligoKakaoNatEgress = require("./lib/aligoKakaoNatEgress");
-const { sendAlimtalkUnified } = require("./lib/aligoAlimtalkUnified");
-const { scrubAligoCredential: scrubAligoCredentialForRace } = require("./lib/aligoCredentials");
-
-exports.competitionApplyAlimtalkHttpsRelay = onRequest(
-  {
-    ...aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
-    timeoutSeconds: 60,
-    memory: "256MiB",
-    cors: false,
-    secrets: [competitionAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-  },
-  async (req, res) => {
-    if (req.method !== "POST") {
-      res.status(405).send("Method Not Allowed");
-      return;
-    }
-    let expectedRelay;
-    try {
-      expectedRelay = scrubAligoCredentialForRace(competitionAlimRelaySecret.value());
-    } catch (e) {
-      res.status(500).json({ ok: false, error: "COMPETITION_ALIM_RELAY_SECRET 없음" });
-      return;
-    }
-    const gotRelay = String(req.headers["x-competition-alim-relay-secret"] || "").trim();
-    if (!expectedRelay || gotRelay !== expectedRelay) {
-      res.status(403).json({ ok: false, error: "Forbidden" });
-      return;
-    }
-
-    // 알리고 인증 Secret을 process.env로 주입 (loadCompetitionAlimtalkConfig가 동일 패턴으로 읽음)
-    try {
-      process.env.ALIGO_API_KEY = scrubAligoCredentialForRace(aligoApiKeySecret.value()) || process.env.ALIGO_API_KEY;
-      process.env.ALIGO_USER_ID = scrubAligoCredentialForRace(aligoUserIdSecret.value()) || process.env.ALIGO_USER_ID;
-      process.env.ALIGO_TOKEN = scrubAligoCredentialForRace(aligoTokenSecret.value()) || process.env.ALIGO_TOKEN;
-    } catch (eEnv) {
-      // Secret 미설정 시 이후 loadCompetitionAlimtalkConfig에서 missing 필드로 명확히 실패
-    }
-
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const receiverPhone = String(body.receiverPhone || "").trim();
-    const displayName = String(body.displayName || "").trim();
-    const subject = String(body.subject || "").trim();
-    const message = String(body.message || "").trim();
-    if (!receiverPhone || !subject || !message) {
-      res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
-      return;
-    }
-
-    try {
-      const db = admin.firestore();
-      const cfg = await competitionApplyAlimtalk.loadCompetitionAlimtalkConfig(db);
-      await sendAlimtalkUnified(cfg, {
-        receiverPhone,
-        displayName,
-        subject,
-        message,
-        templateKind: "competition_signup",
-        logTag: "[competitionApplyAlimtalk vpc-relay]",
-      });
-      res.status(200).json({ ok: true });
-    } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      console.error("[competitionApplyAlimtalkHttpsRelay]", msg);
-      res.status(500).json({ ok: false, error: msg });
-    }
-  }
-);
-
-/**
- * 중고랜드 알림톡 릴레이(UK_6794) — competitionApplyAlimtalkHttpsRelay와 동일 구조·이유.
- * tossPaymentWebhook(입금 확인 웹훅)처럼 VPC egress를 붙이기엔 리스크가 큰(결제 웹훅, 다른
- * 목적의 외부 호출도 함께 함) 서버 쪽 트리거에서, receiverPhone/displayName/subject/message를
- * 이미 완성해서 넘기면 이 릴레이가 그대로 알리고에 전달한다(범용 단건 발송 — 대상 데이터를
- * 릴레이가 다시 조회하지 않음). notifyMarketNegoRequest/notifyMarketDirectDealRequest는 구매자의
- * Firebase ID 토큰으로 직접 인증되는 별개 경로라 이 릴레이를 쓰지 않는다(자체 VPC egress 보유).
- */
-exports.marketAlimtalkHttpsRelay = onRequest(
-  {
-    ...aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS,
-    timeoutSeconds: 60,
-    memory: "256MiB",
-    cors: false,
-    secrets: [marketAlimRelaySecret, aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret],
-  },
-  async (req, res) => {
-    if (req.method !== "POST") {
-      res.status(405).send("Method Not Allowed");
-      return;
-    }
-    let expectedRelay;
-    try {
-      expectedRelay = scrubAligoCredentialForRace(marketAlimRelaySecret.value());
-    } catch (e) {
-      res.status(500).json({ ok: false, error: "MARKET_ALIM_RELAY_SECRET 없음" });
-      return;
-    }
-    const gotRelay = String(req.headers["x-market-alim-relay-secret"] || "").trim();
-    if (!expectedRelay || gotRelay !== expectedRelay) {
-      res.status(403).json({ ok: false, error: "Forbidden" });
-      return;
-    }
-
-    try {
-      process.env.ALIGO_API_KEY = scrubAligoCredentialForRace(aligoApiKeySecret.value()) || process.env.ALIGO_API_KEY;
-      process.env.ALIGO_USER_ID = scrubAligoCredentialForRace(aligoUserIdSecret.value()) || process.env.ALIGO_USER_ID;
-      process.env.ALIGO_TOKEN = scrubAligoCredentialForRace(aligoTokenSecret.value()) || process.env.ALIGO_TOKEN;
-    } catch (eEnv) {
-      // Secret 미설정 시 이후 loadMarketAlimtalkConfig에서 missing 필드로 명확히 실패
-    }
-
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const receiverPhone = String(body.receiverPhone || "").trim();
-    const displayName = String(body.displayName || "").trim();
-    const subject = String(body.subject || "").trim();
-    const message = String(body.message || "").trim();
-    if (!receiverPhone || !subject || !message) {
-      res.status(400).json({ ok: false, error: "MISSING_FIELDS" });
-      return;
-    }
-
-    try {
-      const db = admin.firestore();
-      const cfg = await marketNegoAlimtalk.loadMarketAlimtalkConfig(db);
-      await sendAlimtalkUnified(cfg, {
-        receiverPhone,
-        displayName,
-        subject,
-        message,
-        templateKind: "market_progress",
-        logTag: "[marketAlimtalkHttpsRelay]",
-      });
-      res.status(200).json({ ok: true });
-    } catch (e) {
-      const msg = e && e.message ? e.message : String(e);
-      console.error("[marketAlimtalkHttpsRelay]", msg);
-      res.status(500).json({ ok: false, error: msg });
-    }
-  }
-);
-
-/**
- * 대회 신청 — Redis 원자적 슬롯 예약 → 성공 시에만 토스 가상계좌 발급 → Firestore 기록.
- * 정원 초과는 에러가 아니라 { success:false, reason:'SOLD_OUT' } 정상 응답으로 처리한다(폭주 시 5xx 방지).
- * applicant(신청서 — competitionApplicationForm.js)는 서버에서도 화이트리스트 재검증 후 저장하며,
- * 신청 접수 알림톡(UJ_6279, competitionApplyAlimtalkHttpsRelay)을 신청 완료 직후 발송한다.
- * 마감(closesAt) 이후라도 대기자 1순위로 초대(INVITED)되어 있고 초대가 만료되지 않았다면 예외적으로
- * 신청을 허용한다(대기자 우선 구제) — 관리자가 명시적으로 닫은 대회(status!=='open')는 예외 없이 막는다.
- */
-const applyForCompetitionOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
-applyForCompetitionOptions.secrets.push(competitionAlimRelaySecret);
-exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  const db = admin.firestore();
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const competitionId = String(body.competitionId || "").trim();
-    if (!competitionId) {
-      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
-      return;
-    }
-
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-    if (!compSnap.exists) {
-      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
-      return;
-    }
-    const comp = compSnap.data() || {};
-    const nowMs = Date.now();
-    const opensAtMs = comp.opensAt && comp.opensAt.toMillis ? comp.opensAt.toMillis() : null;
-    const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
-    const isAdminClosed = comp.status !== "open";
-    const isNotYetOpen = opensAtMs != null && nowMs < opensAtMs;
-    const isPastDeadline = closesAtMs != null && nowMs > closesAtMs;
-
-    // 마감 이후라도 본인이 대기자 1순위로 초대(INVITED)되어 있고 그 초대가 아직 유효하면 구제 신청을 허용한다.
-    let waitlistInvite = null;
-    if (isPastDeadline && !isAdminClosed && !isNotYetOpen) {
-      const inviteSnap = await db
-        .collection(RACE_WAITLIST_COLLECTION)
-        .where("competitionId", "==", competitionId)
-        .where("userId", "==", uid)
-        .get();
-      waitlistInvite =
-        inviteSnap.docs
-          .map((d) => Object.assign({ id: d.id }, d.data()))
-          .find((w) => {
-            if (w.status !== "INVITED") return false;
-            const expiresMs = w.inviteExpiresAt && w.inviteExpiresAt.toMillis ? w.inviteExpiresAt.toMillis() : null;
-            return expiresMs != null && expiresMs > nowMs;
-          }) || null;
-    }
-
-    if (isAdminClosed || isNotYetOpen || (isPastDeadline && !waitlistInvite)) {
-      res.status(200).json({ success: false, reason: "CLOSED", error: "접수 기간이 아닙니다." });
-      return;
-    }
-
-    const applicantResult = validateRaceApplicant(body.applicant, comp.category === "CYCLE" ? "CYCLE" : "RUN");
-    if (applicantResult.error) {
-      res.status(400).json({ success: false, error: applicantResult.error });
-      return;
-    }
-    const applicant = applicantResult.data;
-
-    // 중복 신청 방지: 이미 대기중/완료된 신청이 있으면 그대로 반환(재시도로 인한 이중 결제 방지)
-    const dupSnap = await db
-      .collection(RACE_APPLICATIONS_COLLECTION)
-      .where("userId", "==", uid)
-      .where("competitionId", "==", competitionId)
-      .where("status", "in", ["PAYMENT_WAITING", "PAYMENT_COMPLETED"])
-      .limit(1)
-      .get();
-    if (!dupSnap.empty) {
-      const existingDoc = dupSnap.docs[0];
-      const existing = existingDoc.data() || {};
-      const dueMs =
-        existing.paymentDueAt && existing.paymentDueAt.toMillis ? existing.paymentDueAt.toMillis() : null;
-      const isExpiredWaiting = existing.status === "PAYMENT_WAITING" && dueMs != null && dueMs <= nowMs;
-
-      if (!isExpiredWaiting) {
-        res.status(200).json({
-          success: true,
-          alreadyApplied: true,
-          applicationId: existingDoc.id,
-          status: existing.status,
-          virtualAccount: existing.virtualAccount || null,
-          amount: existing.amount,
-        });
-        return;
-      }
-
-      // 입금 기한이 지난 대기중 건 — cancelUnpaidCompetitionApplications(5분 주기) 처리 전에 재신청한 경우,
-      // 만료된 옛 가상계좌를 그대로 돌려주지 않도록 즉시 취소 처리하고 슬롯을 반환한 뒤 아래에서 새로 발급한다.
-      let releasedExpiredSlot = false;
-      await db.runTransaction(async (tx) => {
-        const freshSnap = await tx.get(existingDoc.ref);
-        const fresh = freshSnap.data() || {};
-        if (fresh.status !== "PAYMENT_WAITING") return; // 그 사이 입금 확인·취소됨(멱등)
-        tx.update(existingDoc.ref, {
-          status: "CANCELED_UNPAID",
-          redisSlotConsumed: false,
-          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        releasedExpiredSlot = fresh.redisSlotConsumed !== false;
-      });
-      await writeRaceLedgerEntry(db, existingDoc.ref, { event: "CANCELED_UNPAID", reason: "reapply_after_expiry" });
-      if (releasedExpiredSlot) {
-        const expiredRedisKey = existing.redisKey || `race:${competitionId}:count`;
-        await raceRedisClient.releaseSlot(raceRedisConn(), expiredRedisKey).catch((releaseErr) => {
-          console.error(
-            "[applyForCompetition] 만료 건 slot release 실패(수동 확인 필요):",
-            expiredRedisKey,
-            releaseErr.message
-          );
-        });
-      }
-      // 반환하지 않고 아래 신규 신청 플로우(슬롯 재예약 + 신규 가상계좌 발급)로 계속 진행한다.
-    }
-
-    const redisKey = comp.redisKey || `race:${competitionId}:count`;
-    const capacity = Number(comp.capacity) || 0;
-    const conn = raceRedisConn();
-    const reserved = await raceRedisClient.reserveSlot(conn, redisKey, capacity);
-    if (reserved === raceRedisClient.SOLD_OUT) {
-      await joinCompetitionWaitlistIfNotAlready(db, competitionId, uid).catch((waitlistErr) => {
-        console.error("[applyForCompetition] 대기자 등록 실패(수동 확인 필요):", competitionId, waitlistErr.message);
-      });
-      res.status(200).json({ success: false, reason: "SOLD_OUT", error: "마감되었습니다.", waitlisted: true });
-      return;
-    }
-
-    // Redis 슬롯 확보 이후에는 반드시 성공 응답을 주거나, 실패 시 slot을 반환(release)해야 한다.
-    try {
-      const userSnap = await db.collection("users").doc(uid).get();
-      const userData = userSnap.exists ? userSnap.data() || {} : {};
-      // 가상계좌 예금주 표시명은 실제 참가자 이름(신청서)을 우선한다 — 앱 프로필명(닉네임)과 다를 수 있음
-      const customerName = String(applicant.name || userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
-      const orderId = raceOrderIdFor(competitionId, uid);
-      const amount = Number(comp.entryFee) || 0;
-      const bank =
-        (Array.isArray(comp.bankAllowlist) && comp.bankAllowlist[0]) ||
-        DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE;
-      const validHours = Number(comp.validHours) > 0 ? Number(comp.validHours) : DEFAULT_VIRTUAL_ACCOUNT_VALID_HOURS;
-
-      const payment = await tossPaymentsClient.issueVirtualAccount(raceTossSecretKey(), {
-        amount,
-        orderId,
-        orderName: String(comp.title || "대회 참가 신청").slice(0, 100),
-        customerName,
-        bank,
-        validHours,
-      });
-
-      const va = payment.virtualAccount || {};
-      // Toss virtualAccount 응답에는 은행 "이름" 필드가 없고 bankCode만 내려온다 — 직접 매핑해서 채운다
-      // (그대로 두면 알림톡·앱 화면 모두 "입금 은행 : "이 빈 값으로 표시됨).
-      const bankNameKo = competitionApplyAlimtalk.resolveBankNameKo(va.bankCode || bank);
-      const paymentDueMs = va.dueDate ? new Date(va.dueDate).getTime() : nowMs + validHours * 3600 * 1000;
-
-      const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc();
-      await appRef.set({
-        userId: uid,
-        competitionId,
-        status: "PAYMENT_WAITING",
-        redisSlotConsumed: true,
-        redisKey,
-        tossOrderId: orderId,
-        tossPaymentKey: payment.paymentKey || null,
-        /* secret은 virtualAccount 안이 아니라 Payment 객체 최상위 필드다(토스 공식 문서 확인,
-           2026-08) — va.secret으로 읽으면 항상 undefined라 웹훅의 secret 검증이 매번
-           실패하고, 입금이 실제로 확인돼도 PAYMENT_COMPLETED로 못 넘어가는 버그였다. */
-        tossVirtualAccountSecret: payment.secret || null,
-        virtualAccount: {
-          bankCode: va.bankCode || bank,
-          bankName: bankNameKo || null,
-          accountNumber: va.accountNumber || null,
-          dueDate: va.dueDate || null,
-        },
-        amount,
-        applicant,
-        refundAccount: null,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        paymentDueAt: admin.firestore.Timestamp.fromMillis(paymentDueMs),
-        paidAt: null,
-        canceledAt: null,
-      });
-      await writeRaceLedgerEntry(db, appRef, { event: "APPLIED", orderId, amount });
-      if (waitlistInvite) {
-        await db
-          .collection(RACE_WAITLIST_COLLECTION)
-          .doc(waitlistInvite.id)
-          .update({ status: "CONVERTED", convertedApplicationId: appRef.id })
-          .catch((werr) => {
-            console.error("[applyForCompetition] 대기자 전환 처리 실패(수동 확인 필요):", waitlistInvite.id, werr.message);
-          });
-      }
-
-      // 신청 접수 알림톡 — 결제/Firestore 기록이 끝난 뒤에만 시도. 실패해도 신청 자체는 이미 성공했으므로
-      // 아래 성공 응답을 막지 않고 appRef에 결과만 기록한다(라이딩 모임 meetupInviteAlimtalkSummary와 동일 관례).
-      try {
-        const userNameForAlim = String(userData.name || userData.displayName || applicant.name || "STELVIO 회원");
-        const message = competitionApplyAlimtalk.buildCompetitionApplyAlimtalkMessage({
-          userName: userNameForAlim,
-          competitionName: comp.title || "대회",
-          competitionDivision: competitionApplyAlimtalk.formatCompetitionDivisionKo(comp.category, applicant.division),
-          applicantName: applicant.name,
-          paymentAmount: amount,
-          bankName: bankNameKo || "",
-          accountNumber: va.accountNumber || "",
-          accountHolderName: customerName,
-          paymentDueDate: competitionApplyAlimtalk.formatPaymentDueDateKo(va.dueDate),
-        });
-        const relayUrl =
-          process.env.COMPETITION_ALIM_RELAY_URL ||
-          "https://asia-northeast3-stelvio-ai.cloudfunctions.net/competitionApplyAlimtalkHttpsRelay";
-        const ac = new AbortController();
-        const relayTimeout = setTimeout(() => ac.abort(), 10000);
-        let relayResp;
-        try {
-          relayResp = await fetch(relayUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-competition-alim-relay-secret": competitionAlimRelaySecret.value(),
-            },
-            body: JSON.stringify({
-              receiverPhone: applicant.phone,
-              displayName: applicant.name,
-              subject: competitionApplyAlimtalk.COMPETITION_APPLY_ALIM_SUBJECT_KO,
-              message,
-            }),
-            signal: ac.signal,
-          });
-        } finally {
-          clearTimeout(relayTimeout);
-        }
-        const relayJson = await relayResp.json().catch(() => ({}));
-        await appRef.set(
-          {
-            alimtalk_sent: !!(relayResp.ok && relayJson && relayJson.ok),
-            alimtalk_error: relayResp.ok && relayJson && relayJson.ok ? null : String((relayJson && relayJson.error) || relayResp.status),
-            alimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-          },
-          { merge: true }
-        );
-      } catch (alimErr) {
-        console.error("[applyForCompetition] 신청 접수 알림톡 발송 실패(수동 확인 필요):", appRef.id, alimErr.message);
-        await appRef
-          .set(
-            {
-              alimtalk_sent: false,
-              alimtalk_error: alimErr.message || String(alimErr),
-              alimtalkAt: admin.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          )
-          .catch(() => {});
-      }
-
-      res.status(200).json({
-        success: true,
-        applicationId: appRef.id,
-        virtualAccount: {
-          bankName: bankNameKo || null,
-          accountNumber: va.accountNumber || null,
-          dueDate: va.dueDate || null,
-        },
-        amount,
-      });
-    } catch (issueErr) {
-      // 가상계좌 발급 실패 — 예약한 슬롯을 반드시 반환(마감 오탐 방지)
-      await raceRedisClient.releaseSlot(conn, redisKey).catch((releaseErr) => {
-        console.error("[applyForCompetition] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
-      });
-      throw issueErr;
-    }
-  } catch (e) {
-    const status = e.status || 500;
-    console.error("[applyForCompetition]", e && e.message ? e.message : e);
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/** 대회 카드용 잔여 인원 표시 — Redis 카운트만 읽는 가벼운 GET, 부작용 없음 */
-const getCompetitionStatusOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.getCompetitionStatus = onRequest(getCompetitionStatusOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  try {
-    const competitionId = String((req.query && req.query.competitionId) || "").trim();
-    if (!competitionId) {
-      res.status(400).json({ success: false, error: "competitionId가 필요합니다." });
-      return;
-    }
-    const db = admin.firestore();
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(competitionId).get();
-    if (!compSnap.exists) {
-      res.status(404).json({ success: false, error: "존재하지 않는 대회입니다." });
-      return;
-    }
-    const comp = compSnap.data() || {};
-    const redisKey = comp.redisKey || `race:${competitionId}:count`;
-    const capacity = Number(comp.capacity) || 0;
-    const conn = raceRedisConn();
-    const count = await raceRedisClient.getSlotCount(conn, redisKey);
-    res.status(200).json({
-      success: true,
-      capacity,
-      remaining: Math.max(0, capacity - count),
-      isOpen: comp.status === "open" && capacity - count > 0,
-    });
-  } catch (e) {
-    console.error("[getCompetitionStatus]", e && e.message ? e.message : e);
-    res.status(500).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 토스페이먼츠 웹훅 — DEPOSIT_CALLBACK(가상계좌 입금)만 처리.
- * 서명 헤더가 없으므로 (1) 발급 시 저장해둔 payment.secret(Payment 객체 최상위 필드)과 웹훅 secret 대조,
- * (2) orderId로 결제를 재조회(authoritative)해 status==='DONE'일 때만 신뢰한다 — 웹훅 바디를 직접 믿지 않는다.
- */
-const tossPaymentWebhookOptions = supabaseDualWriteServer.appendServiceRoleSecret(
-  appendRaceSecrets({ region: "asia-northeast3", cors: false, timeoutSeconds: 60 })
-);
-tossPaymentWebhookOptions.secrets.push(marketAlimRelaySecret);
-exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, res) => {
-  if (req.method !== "POST") {
-    res.status(200).send("OK");
-    return;
-  }
-  const db = admin.firestore();
-  const body = (typeof req.body === "object" && req.body !== null ? req.body : {});
-  const eventType = String(body.eventType || "").trim();
-  const flat = body.data && typeof body.data === "object" ? body.data : body;
-  const orderId = String(flat.orderId || "").trim();
-
-  try {
-    if (eventType && eventType !== "DEPOSIT_CALLBACK") {
-      res.status(200).send("OK");
-      return;
-    }
-    if (!orderId) {
-      res.status(200).send("OK");
-      return;
-    }
-
-    const appSnap = await db
-      .collection(RACE_APPLICATIONS_COLLECTION)
-      .where("tossOrderId", "==", orderId)
-      .limit(1)
-      .get();
-    if (appSnap.empty) {
-      if (orderId.startsWith("market_")) {
-        await handleMarketOrderWebhook(orderId, flat);
-        res.status(200).send("OK");
-        return;
-      }
-      await writeTossWebhookRetry(db, { reason: "application_not_found", orderId, rawBody: body });
-      res.status(200).send("OK");
-      return;
-    }
-    const appDoc = appSnap.docs[0];
-    const appData = appDoc.data() || {};
-
-    const webhookSecret = String(flat.secret || "").trim();
-    if (!webhookSecret || webhookSecret !== String(appData.tossVirtualAccountSecret || "")) {
-      console.error("[tossPaymentWebhook] secret 불일치 — 위조 의심:", orderId);
-      await writeTossWebhookRetry(db, { reason: "secret_mismatch", orderId, applicationId: appDoc.id });
-      res.status(200).send("OK");
-      return;
-    }
-
-    // authoritative 재조회 — 웹훅 바디의 status를 신뢰하지 않는다.
-    const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), orderId);
-    if (payment.status !== "DONE") {
-      console.log("[tossPaymentWebhook] 입금 미완료 상태 — 무시:", orderId, payment.status);
-      res.status(200).send("OK");
-      return;
-    }
-
-    await db.runTransaction(async (tx) => {
-      const freshSnap = await tx.get(appDoc.ref);
-      const fresh = freshSnap.data() || {};
-      if (fresh.status !== "PAYMENT_WAITING") return; // 이미 처리됨(멱등)
-      tx.update(appDoc.ref, {
-        status: "PAYMENT_COMPLETED",
-        tossPaymentKey: payment.paymentKey || fresh.tossPaymentKey || null,
-        paidAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    });
-    await writeRaceLedgerEntry(db, appDoc.ref, { event: "PAYMENT_COMPLETED", orderId });
-
-    res.status(200).send("OK");
-  } catch (e) {
-    console.error("[tossPaymentWebhook]", e && e.message ? e.message : e);
-    await writeTossWebhookRetry(db, {
-      reason: "processing_error",
-      orderId,
-      error: (e && e.message) || String(e),
-      rawBody: body,
-    }).catch(() => {});
-    // 재시도 큐에 적재했으므로 Toss에는 200으로 응답(자체 재처리 스케줄에 위임)
-    res.status(200).send("OK");
-  }
-});
-
-/**
- * 결제 완료 신청 건 취소·환불 — 사용자가 입력한 본인 명의 환불 계좌로 토스 결제취소 API 호출.
- * status가 PAYMENT_WAITING(아직 입금 확인 전)이면 환불할 금액이 없으므로 거절 —
- * 이 경우 사용자는 입금을 하지 않으면 cancelUnpaidCompetitionApplications가 자동 취소·좌석 반환한다.
- */
-const requestCompetitionRefundOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
-exports.requestCompetitionRefund = onRequest(requestCompetitionRefundOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  const db = admin.firestore();
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const applicationId = String(body.applicationId || "").trim();
-    const refundAccount = body.refundAccount || {};
-    const bank = String(refundAccount.bank || "").trim();
-    const accountNumber = String(refundAccount.accountNumber || "").trim();
-    const holderName = String(refundAccount.holderName || "").trim();
-    if (!applicationId || !bank || !accountNumber || !holderName) {
-      res.status(400).json({ success: false, error: "applicationId·refundAccount(bank/accountNumber/holderName)가 필요합니다." });
-      return;
-    }
-
-    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
-    const appSnap = await appRef.get();
-    if (!appSnap.exists) {
-      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
-      return;
-    }
-    const appData = appSnap.data() || {};
-    if (appData.userId !== uid) {
-      res.status(403).json({ success: false, error: "본인 신청 건만 취소할 수 있습니다." });
-      return;
-    }
-    if (appData.status !== "PAYMENT_COMPLETED") {
-      res.status(400).json({
-        success: false,
-        error:
-          appData.status === "PAYMENT_WAITING"
-            ? "아직 입금이 확인되지 않았습니다. 입금하지 않으면 자동으로 취소됩니다."
-            : "이미 취소되었거나 취소할 수 없는 상태입니다.",
-      });
-      return;
-    }
-    if (!appData.tossPaymentKey) {
-      res.status(400).json({ success: false, error: "결제 정보가 없어 취소할 수 없습니다. 관리자에게 문의해 주세요." });
-      return;
-    }
-
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(appData.competitionId).get();
-    const comp = compSnap.exists ? compSnap.data() || {} : {};
-    const closesAtMs = comp.closesAt && comp.closesAt.toMillis ? comp.closesAt.toMillis() : null;
-    const raceDateMs = comp.raceDate && comp.raceDate.toMillis ? comp.raceDate.toMillis() : null;
-    const policy = computeCompetitionRefundPolicy(appData.amount, closesAtMs, raceDateMs, Date.now());
-    if (policy.tier === "NONE" || policy.refundAmount <= 0) {
-      res.status(400).json({
-        success: false,
-        error: "대회 개최 30일 전이 지나 환불이 불가능한 기간입니다. 참가 취소는 대회 주최자(관리자)에게 문의해 주세요.",
-      });
-      return;
-    }
-
-    await tossPaymentsClient.cancelPayment(
-      raceTossSecretKey(),
-      appData.tossPaymentKey,
-      {
-        cancelReason: "사용자 요청 취소(" + policy.label + ")",
-        cancelAmount: policy.refundAmount,
-        refundReceiveAccount: { bank, accountNumber, holderName },
-      },
-      `${applicationId}-cancel`
-    );
-
-    await db.runTransaction(async (tx) => {
-      const freshSnap = await tx.get(appRef);
-      const fresh = freshSnap.data() || {};
-      if (fresh.status !== "PAYMENT_COMPLETED") return; // 이미 처리됨(멱등)
-      tx.update(appRef, {
-        status: "CANCELED_REFUNDED",
-        redisSlotConsumed: false,
-        refundAccount: { bankCode: bank, accountNumber, holderName },
-        refundAmount: policy.refundAmount,
-        refundTier: policy.tier,
-        canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-    });
-    await writeRaceLedgerEntry(db, appRef, {
-      event: "CANCELED_REFUNDED",
-      applicationId,
-      refundAmount: policy.refundAmount,
-      refundTier: policy.tier,
-    });
-
-    if (appData.redisSlotConsumed !== false) {
-      const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
-      await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
-        console.error("[requestCompetitionRefund] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
-      });
-      await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
-        console.error("[requestCompetitionRefund] 대기자 초대 실패(수동 확인 필요):", appData.competitionId, waitlistErr.message);
-      });
-    }
-
-    res.status(200).json({ success: true, refundAmount: policy.refundAmount, refundTier: policy.tier });
-  } catch (e) {
-    const status = e.status || 500;
-    console.error("[requestCompetitionRefund]", e && e.message ? e.message : e);
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 중고랜드(Market Land) — 구매 요청 시 안전결제(가상계좌) 발급.
- * 결제 대금(상품가+수수료 1,000원 정액)은 STELVIO 정산 계좌로 입금된다. Toss Payments 가상계좌
- * API 자체에는 제3자 에스크로 개념이 없으므로, "에스크로"는 앱 레벨에서 구현한다 — 구매자가
- * [구매 확정]을 누르기 전까지 market_orders.escrow_status를 PAID로 유지하고 정산을 보류한다.
- */
-const MARKET_ORDER_FEE_KRW = 1000;
-const MARKET_ORDER_VALID_HOURS = 24;
-
-/**
- * Toss orderId는 결제 시도마다 고유해야 하고 최대 64자 제한이 있다. 기존 구현은
- * `market_${itemId}_${uid}_${ts}${rand}`를 만든 뒤 64자로 잘랐는데, item_id(UUID, 36자)
- * +uid(Firebase, 보통 28자)만으로 이미 64자를 넘어(실측 87자) 유일성의 유일한 원천인
- * 타임스탬프+랜덤 접미사가 통째로 잘려나가는 버그가 있었다. 그 결과 같은 상품을 같은
- * 구매자가 재구매 시도할 때마다(과거 주문이 취소·환불된 뒤 새 가격으로 재시도 등) 완전히
- * 동일한 orderId가 생성되어, Toss가 "이미 사용된 주문번호"로 거부해 가상계좌 발급 자체가
- * 실패하는 사례가 실측 확인됨(2026-09). item_id/uid는 문자열 안에 없어도 되므로(조회는
- * 항상 DB의 toss_order_id 컬럼 정확 매칭이지 문자열 파싱이 아님) 식별용 짧은 접두사만
- * 남기고, 유일성 접미사(타임스탬프+2단 랜덤)가 항상 살아남도록 전체 길이를 여유 있게
- * 짧게(약 50자) 구성한다.
- */
-function marketOrderIdFor(itemId, uid) {
-  const itemShort = String(itemId || "").replace(/-/g, "").slice(0, 8);
-  const uidShort = String(uid || "").slice(0, 8);
-  const ts = Date.now().toString(36);
-  const rand = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
-  return `market_${itemShort}_${uidShort}_${ts}${rand}`.slice(0, 64);
-}
-
-function appendMarketSecrets(options) {
-  const o = supabaseDualWriteServer.appendServiceRoleSecret(options);
-  o.secrets = Array.isArray(o.secrets) ? o.secrets.slice() : [];
-  if (!o.secrets.includes(tossSecretKeySecret)) o.secrets.push(tossSecretKeySecret);
-  return o;
-}
-
-function resolveMarketBuyerUuid(uid) {
-  const uidNamespace = supabaseDualWriteServer.uidNamespaceParam.value();
-  const uidMode = supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
-  return supabaseDualWriteServer.resolveUserUuid(uid, uidNamespace, uidMode);
-}
-
-/**
- * 중고랜드 "거래 진행 상황 안내" 판매자 알림톡(UK_6794) 공용 옵션 — 알리고 kakaoapi는 IP
- * 화이트리스트가 있어 이 함수들 자체에 VPC egress를 붙여 competitionApplyAlimtalkHttpsRelay 같은
- * 별도 릴레이 없이 바로 발송한다(단일 목적 함수라 relay용 공유 시크릿이 불필요 — Firebase ID
- * 토큰으로 이미 사용자 인증됨).
- */
-function buildMarketAlimtalkFunctionOptions() {
-  const o = Object.assign(
-    supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30, memory: "256MiB" }),
-    aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS
-  );
-  o.secrets = o.secrets.slice();
-  [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret].forEach((s) => {
-    if (!o.secrets.includes(s)) o.secrets.push(s);
-  });
-  return o;
-}
-
-/**
- * 중고랜드 이벤트(가격 조정 요구/직거래 요청/가격 조정 수락·거절 등) 거래 진행 상황 알림톡 공용
- * 핸들러 — 구매자·판매자가 해당 요청을 성공시킨 직후 클라이언트에서 fire-and-forget으로 호출한다
- * (원 요청은 이미 성공했으므로, 여기서 실패해도 그 응답을 막지 않는다 — 클라이언트가 .catch()로 무시).
- * @param {{
- *   requireCallerRole: 'buyer'|'seller' — 이 알림톡을 트리거할 수 있는 사람(구매자 or 판매자),
- *   computeProgressContent: (item: object, body: object, callerUuid: string|null, supabase: object)
- *     => Promise<string | {progressContent: string, recipientUuid: string}> — #{진행내용} 조립.
- *     문자열만 반환하면 수신자는 기본값인 판매자(item.user_id)다. 수신자를 판매자가 아닌 다른 사람
- *     으로 바꿔야 하면(예: 가격 조정 수락/거절은 요청을 보낸 구매자에게 결과를 알려야 함)
- *     {progressContent, recipientUuid}를 반환한다. 유효성 문제가 있으면 status를 던지는 Error를
- *     throw한다(예: 400),
- *   logTag: string
- * }} opts
- */
-async function handleMarketProgressAlimtalkNotify(req, res, opts) {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  const logTag = opts.logTag;
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const itemId = String(body.itemId || "").trim();
-    if (!itemId) {
-      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-
-    const callerUuid = resolveMarketBuyerUuid(uid);
-    const { data: item, error: itemErr } = await supabase
-      .from("market_items")
-      .select("id, title, category, sub_category, deal_method, negotiable, price, status, user_id")
-      .eq("id", itemId)
-      .maybeSingle();
-    if (itemErr || !item) {
-      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
-      return;
-    }
-    const isSeller = !!(callerUuid && item.user_id === callerUuid);
-    if (opts.requireCallerRole === "buyer" && isSeller) {
-      res.status(400).json({ success: false, error: "본인이 등록한 상품입니다." });
-      return;
-    }
-    if (opts.requireCallerRole === "seller" && !isSeller) {
-      res.status(403).json({ success: false, error: "본인 상품에 대한 요청만 처리할 수 있습니다." });
-      return;
-    }
-
-    // computeProgressContent는 문자열(수신자=판매자, 기본값)이나 { progressContent, recipientUuid }
-    // (수신자를 판매자가 아닌 다른 사람 — 예: 가격 조정 수락/거절은 요청을 보낸 구매자 — 로 바꿔야 할
-    // 때)를 반환할 수 있다.
-    const computed = await opts.computeProgressContent(item, body, callerUuid, supabase);
-    const progressContent = typeof computed === "string" ? computed : computed.progressContent;
-    const recipientUuid = (typeof computed === "object" && computed.recipientUuid) || item.user_id;
-
-    const { data: recipient } = await supabase
-      .from("users")
-      .select("name, display_name, phone, contact")
-      .eq("id", recipientUuid)
-      .maybeSingle();
-    const recipientPhone = String((recipient && (recipient.phone || recipient.contact)) || "").replace(/\D/g, "");
-    if (!recipientPhone) {
-      res.status(200).json({ success: true, skipped: true, reason: "recipient_phone_missing" });
-      return;
-    }
-    const recipientName = String((recipient && (recipient.name || recipient.display_name)) || "회원").trim() || "회원";
-
-    const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
-      recipientName,
-      itemName: item.title,
-      category: item.category,
-      subCategory: item.sub_category,
-      dealMethod: item.deal_method,
-      negotiable: item.negotiable,
-      progressContent,
-    });
-
-    const db = admin.firestore();
-    const cfg = await marketNegoAlimtalk.loadMarketAlimtalkConfig(db);
-    await sendAlimtalkUnified(cfg, {
-      receiverPhone: recipientPhone,
-      displayName: recipientName,
-      subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO,
-      message,
-      templateKind: "market_progress",
-      logTag,
-    });
-    res.status(200).json({ success: true });
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-    console.error(`${logTag} 알림톡 발송 실패(수동 확인 필요):`, msg);
-    res.status(e && e.status ? e.status : 500).json({ success: false, error: msg });
-  }
-}
-
-/** 가격 조정 요구(네고) — 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 호출 */
-exports.notifyMarketNegoRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
-  await handleMarketProgressAlimtalkNotify(req, res, {
-    requireCallerRole: "buyer",
-    computeProgressContent: (item, body) => {
-      const requestedPrice = Number(body.requestedPrice);
-      if (!requestedPrice || requestedPrice <= 0) {
-        const err = new Error("requestedPrice가 필요합니다.");
-        err.status = 400;
-        throw err;
-      }
-      return marketNegoAlimtalk.buildMarketNegoProgressLine(item.price, requestedPrice);
-    },
-    logTag: "[notifyMarketNegoRequest]",
-  });
-});
-
-/** 직거래 요청 접수 — 구매자가 requestMarketDirectDeal 성공 직후 호출 */
-exports.notifyMarketDirectDealRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
-  await handleMarketProgressAlimtalkNotify(req, res, {
-    requireCallerRole: "buyer",
-    computeProgressContent: () => marketNegoAlimtalk.MARKET_DIRECT_DEAL_PROGRESS_LINE,
-    logTag: "[notifyMarketDirectDealRequest]",
-  });
-});
-
-/** 가격 조정 요구 수락/거절 — 판매자가 decideMarketNegoRequest(Supabase RPC) 성공 직후 호출.
- * 이 알림톡을 트리거하는 사람(판매자, requireCallerRole:'seller')과 받는 사람(가격 조정을 요청한
- * 구매자)이 다르다 — recipientUuid를 buyer_id로 지정해 기본값(판매자) 대신 구매자에게 보낸다.
- * requestId로 실제 최종 상태(ACCEPTED/REJECTED)를 재조회해 사용한다(클라이언트가 보낸 accept 값을
- * 그대로 믿지 않음 — 웹훅 payment.status 재조회와 동일한 관례). */
-exports.notifyMarketNegoDecision = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
-  await handleMarketProgressAlimtalkNotify(req, res, {
-    requireCallerRole: "seller",
-    computeProgressContent: async (item, body, callerUuid, supabase) => {
-      const requestId = String(body.requestId || "").trim();
-      if (!requestId) {
-        const err = new Error("requestId가 필요합니다.");
-        err.status = 400;
-        throw err;
-      }
-      const { data: negoReq } = await supabase
-        .from("market_nego_requests")
-        .select("status, item_id, buyer_id")
-        .eq("id", requestId)
-        .maybeSingle();
-      if (!negoReq || negoReq.item_id !== item.id) {
-        const err = new Error("가격 조정 요청을 찾을 수 없습니다.");
-        err.status = 404;
-        throw err;
-      }
-      if (negoReq.status !== "ACCEPTED" && negoReq.status !== "REJECTED") {
-        const err = new Error("아직 처리되지 않은 요청입니다.");
-        err.status = 409;
-        throw err;
-      }
-      return {
-        progressContent: marketNegoAlimtalk.buildMarketNegoDecisionProgressLine(negoReq.status === "ACCEPTED"),
-        recipientUuid: negoReq.buyer_id,
-      };
-    },
-    logTag: "[notifyMarketNegoDecision]",
-  });
-});
-
-/**
- * tossPaymentWebhook에서 Firestore 대회 신청 컬렉션에 없는 orderId(market_ 접두)를 위임받아 처리 —
- * Toss 콘솔에 등록된 웹훅 URL 하나를 그대로 재사용하기 위해 별도 웹훅 엔드포인트를 새로 등록하지 않는다.
- */
-/**
- * Firebase 인증 컨텍스트가 없는 서버 트리거(결제 웹훅, 배송완료 폴링 등)에서 중고랜드 거래 진행
- * 상황 알림톡(UK_6794)을 보낼 때 공용으로 쓰는 헬퍼 — item·수신자(users)를 조회해 메시지를 조립하고
- * marketAlimtalkHttpsRelay로 전달한다. 실패하면 그대로 throw한다(호출측이 로그만 남기고 무시하는
- * fire-and-forget 관례를 그대로 따르게 하기 위함 — 여기서 삼키지 않는다).
- * @returns {Promise<boolean>} 실제 발송했으면 true, 수신자 전화번호가 없어 건너뛰었으면 false.
- */
-async function sendMarketProgressAlimtalkServerSide({ supabase, itemId, recipientUserId, progressContent }) {
-  const { data: item } = await supabase
-    .from("market_items")
-    .select("title, category, sub_category, deal_method, negotiable")
-    .eq("id", itemId)
-    .maybeSingle();
-  if (!item) return false;
-  const { data: recipient } = await supabase
-    .from("users")
-    .select("name, display_name, phone, contact")
-    .eq("id", recipientUserId)
-    .maybeSingle();
-  const recipientPhone = String((recipient && (recipient.phone || recipient.contact)) || "").replace(/\D/g, "");
-  if (!recipientPhone) return false;
-  const recipientName = String((recipient && (recipient.name || recipient.display_name)) || "회원").trim() || "회원";
-
-  const message = marketNegoAlimtalk.buildMarketAlimtalkMessage({
-    recipientName,
-    itemName: item.title,
-    category: item.category,
-    subCategory: item.sub_category,
-    dealMethod: item.deal_method,
-    negotiable: item.negotiable,
-    progressContent,
-  });
-  const relayUrl =
-    process.env.MARKET_ALIM_RELAY_URL || "https://asia-northeast3-stelvio-ai.cloudfunctions.net/marketAlimtalkHttpsRelay";
-  const ac = new AbortController();
-  const relayTimeout = setTimeout(() => ac.abort(), 10000);
-  try {
-    await fetch(relayUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-market-alim-relay-secret": marketAlimRelaySecret.value() },
-      body: JSON.stringify({ receiverPhone: recipientPhone, displayName: recipientName, subject: marketNegoAlimtalk.MARKET_NEGO_ALIM_SUBJECT_KO, message }),
-      signal: ac.signal,
-    });
-  } finally {
-    clearTimeout(relayTimeout);
-  }
-  return true;
-}
-
-async function handleMarketOrderWebhook(orderId, flat) {
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  if (!supabase) return;
-  const { data: order } = await supabase
-    .from("market_orders")
-    .select("*")
-    .eq("toss_order_id", orderId)
-    .maybeSingle();
-  if (!order) {
-    console.warn("[handleMarketOrderWebhook] 주문 없음:", orderId);
-    return;
-  }
-  const webhookSecret = String(flat.secret || "").trim();
-  if (!webhookSecret || webhookSecret !== String(order.toss_virtual_account_secret || "")) {
-    console.error("[handleMarketOrderWebhook] secret 불일치 — 위조 의심:", orderId);
-    return;
-  }
-  if (order.escrow_status !== "PENDING") {
-    return; // 이미 처리됨(멱등)
-  }
-
-  // authoritative 재조회 — 웹훅 바디의 status를 신뢰하지 않는다.
-  const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), orderId);
-  if (payment.status !== "DONE") {
-    console.log("[handleMarketOrderWebhook] 입금 미완료 상태 — 무시:", orderId, payment.status);
-    return;
-  }
-
-  const nowIso = new Date().toISOString();
-  const { data: updatedOrders } = await supabase
-    .from("market_orders")
-    .update({
-      escrow_status: "PAID",
-      toss_payment_key: payment.paymentKey || order.toss_payment_key,
-      paid_at: nowIso,
-      updated_at: nowIso,
-    })
-    .eq("id", order.id)
-    .eq("escrow_status", "PENDING")
-    .select();
-  if (!updatedOrders || !updatedOrders.length) return; // 동시 웹훅 재시도 등으로 이미 처리됨(멱등)
-
-  // 입금완료 알림톡(UK_6794, 판매자 수신) — 결제 확정 자체는 이미 끝났으므로 실패해도 무시(로그만).
-  try {
-    await sendMarketProgressAlimtalkServerSide({
-      supabase,
-      itemId: order.item_id,
-      recipientUserId: order.seller_id,
-      progressContent: marketNegoAlimtalk.MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
-    });
-  } catch (alimErr) {
-    console.error("[handleMarketOrderWebhook] 입금완료 알림톡 발송 실패(수동 확인 필요):", order.id, alimErr && alimErr.message ? alimErr.message : alimErr);
-  }
-}
-
-const createMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
-exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const itemId = String(body.itemId || "").trim();
-    if (!itemId) {
-      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
-      return;
-    }
-    const deliveryZipCode = String(body.zipCode || "").trim();
-    const deliveryAddress1 = String(body.address1 || "").trim();
-    const deliveryAddress2 = String(body.address2 || "").trim();
-    if (!deliveryZipCode || !deliveryAddress1 || !deliveryAddress2) {
-      res.status(400).json({ success: false, error: "배송받을 주소(우편번호·주소·상세주소)가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-
-    const buyerId = resolveMarketBuyerUuid(uid);
-    if (!buyerId) {
-      res.status(400).json({ success: false, error: "구매자 식별에 실패했습니다." });
-      return;
-    }
-
-    const { data: item, error: itemErr } = await supabase
-      .from("market_items")
-      .select("*")
-      .eq("id", itemId)
-      .maybeSingle();
-    if (itemErr || !item) {
-      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
-      return;
-    }
-    if (item.user_id === buyerId) {
-      res.status(400).json({ success: false, error: "본인이 등록한 상품은 구매할 수 없습니다." });
-      return;
-    }
-    if (item.status !== "ON_SALE") {
-      res.status(409).json({ success: false, error: "이미 예약되었거나 판매 완료된 상품입니다." });
-      return;
-    }
-    if (!item.settlement_account_number || !item.settlement_holder_name) {
-      res.status(409).json({
-        success: false,
-        error: "판매자가 정산 계좌를 등록하지 않은 상품입니다. 판매자에게 상품 정보 수정을 요청해 주세요.",
-      });
-      return;
-    }
-
-    // 멱등성: 동일 구매자가 이 상품에 대해 이미 요청한 결제 대기/완료 주문이 있으면 재사용(중복 결제 방지)
-    const { data: existingOrders } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("item_id", itemId)
-      .eq("buyer_id", buyerId)
-      .in("escrow_status", ["PENDING", "PAID"])
-      .order("created_at", { ascending: false })
-      .limit(1);
-    if (existingOrders && existingOrders.length) {
-      const ex = existingOrders[0];
-      if (ex.escrow_status === "PAID" || (ex.va_due_at && new Date(ex.va_due_at).getTime() > Date.now())) {
-        res.status(200).json({
-          success: true,
-          alreadyRequested: true,
-          orderId: ex.id,
-          escrowStatus: ex.escrow_status,
-          amount: ex.amount,
-        });
-        return;
-      }
-    }
-
-    const db = admin.firestore();
-    const userSnap = await db.collection("users").doc(uid).get();
-    const userData = userSnap.exists ? userSnap.data() || {} : {};
-    const customerName = String(userData.name || userData.displayName || "STELVIO 회원").slice(0, 100);
-
-    // 판매자가 이 구매자의 가격 조정 요청을 수락한 경우, 조정된 금액으로 결제한다.
-    let effectiveItemPrice = Number(item.price);
-    if (item.negotiable) {
-      const { data: acceptedNego } = await supabase
-        .from("market_nego_requests")
-        .select("requested_price")
-        .eq("item_id", itemId)
-        .eq("buyer_id", buyerId)
-        .eq("status", "ACCEPTED")
-        .maybeSingle();
-      if (acceptedNego && Number(acceptedNego.requested_price) > 0) {
-        effectiveItemPrice = Number(acceptedNego.requested_price);
-      }
-    }
-
-    const amount = effectiveItemPrice + MARKET_ORDER_FEE_KRW;
-    const tossOrderId = marketOrderIdFor(itemId, uid);
-
-    const payment = await tossPaymentsClient.issueVirtualAccount(raceTossSecretKey(), {
-      amount,
-      orderId: tossOrderId,
-      orderName: String(item.title || "중고랜드 상품").slice(0, 100),
-      customerName,
-      bank: DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
-      validHours: MARKET_ORDER_VALID_HOURS,
-    });
-    const va = payment.virtualAccount || {};
-    const dueMs = va.dueDate
-      ? new Date(va.dueDate).getTime()
-      : Date.now() + MARKET_ORDER_VALID_HOURS * 3600 * 1000;
-    const bankNameKo = competitionApplyAlimtalk.resolveBankNameKo(va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE);
-    // 판매자 정산 계좌는 주문 시점 스냅샷 — 이후 판매자가 상품을 수정해 계좌를 바꿔도 이미 진행 중인
-    // 거래의 정산지는 바뀌지 않는다(관리자가 adminMarkMarketOrderSettled로 처리할 때 참조).
-    const settlementAccount = {
-      bank: item.settlement_bank || null,
-      bankName: competitionApplyAlimtalk.resolveBankNameKo(item.settlement_bank || ""),
-      accountNumber: item.settlement_account_number,
-      holderName: item.settlement_holder_name,
-    };
-
-    const { data: orderRow, error: insertErr } = await supabase
-      .from("market_orders")
-      .insert({
-        item_id: itemId,
-        buyer_id: buyerId,
-        seller_id: item.user_id,
-        toss_order_id: tossOrderId,
-        toss_payment_key: payment.paymentKey || null,
-        toss_virtual_account_secret: payment.secret || null,
-        item_price: effectiveItemPrice,
-        fee: MARKET_ORDER_FEE_KRW,
-        amount,
-        escrow_status: "PENDING",
-        va_due_at: new Date(dueMs).toISOString(),
-        va_bank_code: va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
-        va_bank_name: bankNameKo,
-        va_account_number: va.accountNumber || null,
-        settlement_account: settlementAccount,
-        delivery_address_zip: deliveryZipCode,
-        delivery_address1: deliveryAddress1,
-        delivery_address2: deliveryAddress2,
-      })
-      .select()
-      .single();
-    if (insertErr) throw insertErr;
-
-    await supabase
-      .from("market_items")
-      .update({ status: "RESERVED", updated_at: new Date().toISOString() })
-      .eq("id", itemId)
-      .eq("status", "ON_SALE"); // 낙관적 잠금 — 동시 구매 요청 경쟁 방지
-
-    res.status(200).json({
-      success: true,
-      orderId: orderRow.id,
-      tossOrderId,
-      amount,
-      virtualAccount: {
-        bankCode: va.bankCode || DEFAULT_VIRTUAL_ACCOUNT_BANK_CODE,
-        bankName: bankNameKo,
-        accountNumber: va.accountNumber || null,
-        customerName,
-        dueDate: va.dueDate || new Date(dueMs).toISOString(),
-      },
-    });
-  } catch (e) {
-    console.error("[createMarketOrder]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 직거래 요청 — 안전결제(Toss 가상계좌)를 거치지 않고 상품을 예약(escrow_status=RESERVED)한다.
- * 거래 방법에 "직거래"가 포함된 상품에서만 가능. 판매자 정산 계좌도 필요 없다(현장에서 직접
- * 주고받으므로). 이후 흐름은 안전결제와 동일한 화면·함수(구매 확정하기/구매 취소)를 공유한다 —
- * confirmMarketPurchase/cancelMarketOrder가 RESERVED 상태도 함께 처리하도록 되어 있다.
- */
-const requestMarketDirectDealOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.requestMarketDirectDeal = onRequest(requestMarketDirectDealOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const itemId = String(body.itemId || "").trim();
-    if (!itemId) {
-      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-
-    const buyerId = resolveMarketBuyerUuid(uid);
-    if (!buyerId) {
-      res.status(400).json({ success: false, error: "구매자 식별에 실패했습니다." });
-      return;
-    }
-
-    const { data: item, error: itemErr } = await supabase
-      .from("market_items")
-      .select("*")
-      .eq("id", itemId)
-      .maybeSingle();
-    if (itemErr || !item) {
-      res.status(404).json({ success: false, error: "존재하지 않는 상품입니다." });
-      return;
-    }
-    if (item.user_id === buyerId) {
-      res.status(400).json({ success: false, error: "본인이 등록한 상품은 예약할 수 없습니다." });
-      return;
-    }
-    if (!Array.isArray(item.deal_method) || item.deal_method.indexOf("직거래") === -1) {
-      res.status(400).json({ success: false, error: "직거래를 지원하지 않는 상품입니다." });
-      return;
-    }
-    if (item.status !== "ON_SALE") {
-      res.status(409).json({ success: false, error: "이미 예약되었거나 판매 완료된 상품입니다." });
-      return;
-    }
-
-    // 멱등성: 동일 구매자가 이미 진행 중인 요청/주문이 있으면 재사용
-    const { data: existingOrders } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("item_id", itemId)
-      .eq("buyer_id", buyerId)
-      .in("escrow_status", ["PENDING", "RESERVED", "PAID"])
-      .order("created_at", { ascending: false })
-      .limit(1);
-    if (existingOrders && existingOrders.length) {
-      const ex = existingOrders[0];
-      res.status(200).json({ success: true, alreadyRequested: true, orderId: ex.id, escrowStatus: ex.escrow_status });
-      return;
-    }
-
-    // 수락된 가격 조정이 있으면 반영(안전결제와 동일 로직)
-    let effectiveItemPrice = Number(item.price);
-    if (item.negotiable) {
-      const { data: acceptedNego } = await supabase
-        .from("market_nego_requests")
-        .select("requested_price")
-        .eq("item_id", itemId)
-        .eq("buyer_id", buyerId)
-        .eq("status", "ACCEPTED")
-        .maybeSingle();
-      if (acceptedNego && Number(acceptedNego.requested_price) > 0) {
-        effectiveItemPrice = Number(acceptedNego.requested_price);
-      }
-    }
-
-    // toss_order_id는 안전결제 전용 컬럼이지만 NOT NULL UNIQUE라 직거래도 고유값을 채워야 한다.
-    const syntheticOrderId = "direct_" + itemId + "_" + buyerId + "_" + Date.now();
-
-    const { data: orderRow, error: insertErr } = await supabase
-      .from("market_orders")
-      .insert({
-        item_id: itemId,
-        buyer_id: buyerId,
-        seller_id: item.user_id,
-        toss_order_id: syntheticOrderId,
-        deal_type: "DIRECT_DEAL",
-        item_price: effectiveItemPrice,
-        fee: 0,
-        amount: effectiveItemPrice,
-        escrow_status: "RESERVED",
-      })
-      .select()
-      .single();
-    if (insertErr) throw insertErr;
-
-    await supabase
-      .from("market_items")
-      .update({ status: "RESERVED", updated_at: new Date().toISOString() })
-      .eq("id", itemId)
-      .eq("status", "ON_SALE"); // 낙관적 잠금 — 동시 요청 경쟁 방지
-
-    res.status(200).json({ success: true, orderId: orderRow.id });
-  } catch (e) {
-    console.error("[requestMarketDirectDeal]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 구매자가 물품 수령 후 [구매 확정]을 누르면 호출 — 입금 확인(PAID) 상태에서만 확정 가능.
- * 판매자 계좌로의 실제 이체는 Toss Payments API에 제3자 지급대행 기능이 없어 자동화할 수 없다.
- * 확정 시점에 정산 대기열(escrow_status=CONFIRMED, settlement_transferred_at=null)로 올라가고,
- * 관리자가 판매자 등록 계좌로 수동 이체한 뒤 adminMarkMarketOrderSettled로 마감 처리한다.
- */
-const confirmMarketPurchaseOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.confirmMarketPurchase = onRequest(confirmMarketPurchaseOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    if (!orderId) {
-      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const buyerId = resolveMarketBuyerUuid(uid);
-
-    const { data: order, error: orderErr } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    // 직거래(RESERVED, 안전결제 없음)는 대면 현장에서 대금·물품을 주고받으므로 구매자뿐 아니라
-    // 판매자도 "거래완료"로 확정할 수 있게 한다. 안전결제(PAID) 주문은 기존과 동일하게
-    // 구매자만 확정할 수 있다(대금이 이미 Toss 에스크로에 있는 상태를 판매자가 임의로 끝낼 수 없음).
-    const isSellerDirectDealConfirm = order.deal_type === "DIRECT_DEAL" && order.seller_id === buyerId;
-    if (order.buyer_id !== buyerId && !isSellerDirectDealConfirm) {
-      res.status(403).json({ success: false, error: "본인 주문만 확정할 수 있습니다." });
-      return;
-    }
-    if (order.escrow_status !== "PAID" && order.escrow_status !== "RESERVED") {
-      res.status(400).json({
-        success: false,
-        error: order.escrow_status === "CONFIRMED" ? "이미 구매 확정된 주문입니다." : "확정할 수 없는 상태입니다.",
-      });
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update({ escrow_status: "CONFIRMED", settled_at: nowIso, updated_at: nowIso })
-      .eq("id", orderId)
-      .in("escrow_status", ["PAID", "RESERVED"]) // 낙관적 잠금 — 동시 확정 방지
-      .select();
-    if (updErr) throw updErr;
-    if (!updated || !updated.length) {
-      res.status(409).json({ success: false, error: "이미 처리된 주문입니다." });
-      return;
-    }
-
-    await supabase.from("market_items").update({ status: "SOLD", updated_at: nowIso }).eq("id", order.item_id);
-
-    res.status(200).json({ success: true });
-  } catch (e) {
-    console.error("[confirmMarketPurchase]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 입금 전(PENDING) 주문 자기 취소 — Toss에 아직 결제 확정 건이 없으므로(가상계좌 발급만 된 상태)
- * 취소 API 호출 없이 DB 상태만 정리하면 된다. 만료 미입금 자동 정리(cancelUnpaidMarketOrdersSchedule)
- * 를 기다리지 않고 구매자가 스스로 즉시 취소해 상품을 다시 판매 가능 상태로 돌릴 수 있게 한다.
- */
-const cancelMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.cancelMarketOrder = onRequest(cancelMarketOrderOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    if (!orderId) {
-      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const buyerId = resolveMarketBuyerUuid(uid);
-
-    const { data: order, error: orderErr } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    // 직거래 예약(RESERVED)은 판매자도 취소할 수 있게 한다 — 입금 대기(PENDING) 취소는
-    // 안전결제 전용 상태라 기존과 동일하게 구매자만 취소할 수 있다.
-    const isSellerDirectDealCancel = order.deal_type === "DIRECT_DEAL" && order.escrow_status === "RESERVED" && order.seller_id === buyerId;
-    if (order.buyer_id !== buyerId && !isSellerDirectDealCancel) {
-      res.status(403).json({ success: false, error: "본인 주문만 취소할 수 있습니다." });
-      return;
-    }
-    if (order.escrow_status !== "PENDING" && order.escrow_status !== "RESERVED") {
-      res.status(400).json({
-        success: false,
-        error: order.escrow_status === "PAID" ? "이미 입금된 주문은 환불 요청으로 취소해 주세요." : "취소할 수 없는 상태입니다.",
-      });
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update({ escrow_status: "CANCELLED", updated_at: nowIso })
-      .eq("id", orderId)
-      .in("escrow_status", ["PENDING", "RESERVED"])
-      .select();
-    if (updErr) throw updErr;
-    if (!updated || !updated.length) {
-      res.status(409).json({ success: false, error: "이미 처리된 주문입니다." });
-      return;
-    }
-
-    await supabase
-      .from("market_items")
-      .update({ status: "ON_SALE", updated_at: nowIso })
-      .eq("id", order.item_id)
-      .eq("status", "RESERVED");
-
-    res.status(200).json({ success: true });
-  } catch (e) {
-    console.error("[cancelMarketOrder]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 입금 완료(PAID, 구매확정 전) 주문의 자기 환불 요청 — requestCompetitionRefund와 동일 패턴:
- * 본인 명의 환불 계좌를 받아 Toss 결제취소 API로 실제 환불한다. 구매확정(CONFIRMED) 이후에는
- * 거래가 완결된 것으로 보고 이 경로로는 환불하지 않는다(관리자 개입 필요).
- * 플랫폼 수수료 1,000원은 안전거래 처리 비용으로 보고 환불 대상에서 제외 — 상품가만 환불한다
- * (대회 환불의 "100% 환불(수수료 440원 차감)" 정책과 동일한 설계 원칙).
- */
-const requestMarketOrderRefundOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.requestMarketOrderRefund = onRequest(requestMarketOrderRefundOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    const refundAccount = body.refundAccount || {};
-    const bank = String(refundAccount.bank || "").trim();
-    const accountNumber = String(refundAccount.accountNumber || "").trim();
-    const holderName = String(refundAccount.holderName || "").trim();
-    if (!orderId || !bank || !accountNumber || !holderName) {
-      res.status(400).json({ success: false, error: "orderId·refundAccount(bank/accountNumber/holderName)가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const buyerId = resolveMarketBuyerUuid(uid);
-
-    const { data: order, error: orderErr } = await supabase
-      .from("market_orders")
-      .select("*")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    if (order.buyer_id !== buyerId) {
-      res.status(403).json({ success: false, error: "본인 주문만 환불 요청할 수 있습니다." });
-      return;
-    }
-    if (order.escrow_status !== "PAID") {
-      res.status(400).json({
-        success: false,
-        error:
-          order.escrow_status === "PENDING"
-            ? "아직 입금이 확인되지 않았습니다. 입금 전이면 바로 취소할 수 있습니다."
-            : order.escrow_status === "CONFIRMED"
-              ? "이미 구매 확정된 거래는 이 방법으로 환불할 수 없습니다. 고객센터로 문의해 주세요."
-              : "환불할 수 없는 상태입니다.",
-      });
-      return;
-    }
-    if (!order.toss_payment_key) {
-      res.status(409).json({ success: false, error: "결제 정보가 없어 환불할 수 없습니다. 관리자에게 문의해 주세요." });
-      return;
-    }
-
-    // authoritative 재조회 — DB에 저장된 status를 신뢰하지 않고 Toss 결제 상태를 직접 확인
-    const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), order.toss_order_id);
-    if (payment.status !== "DONE") {
-      res.status(409).json({ success: false, error: "Toss 결제 상태가 완료(DONE)가 아니어서 환불할 수 없습니다." });
-      return;
-    }
-
-    const cancelAmount = Number(order.item_price) || 0;
-    await tossPaymentsClient.cancelPayment(
-      raceTossSecretKey(),
-      order.toss_payment_key,
-      {
-        cancelReason: "중고랜드 구매자 환불 요청",
-        cancelAmount,
-        refundReceiveAccount: { bank, accountNumber, holderName },
-      },
-      "market-refund-" + order.id
-    );
-
-    const nowIso = new Date().toISOString();
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update({
-        escrow_status: "REFUNDED",
-        settlement_transferred_at: null,
-        updated_at: nowIso,
-      })
-      .eq("id", orderId)
-      .eq("escrow_status", "PAID")
-      .select();
-    if (updErr) throw updErr;
-    if (!updated || !updated.length) {
-      // Toss 취소는 이미 성공했는데 DB 갱신만 실패한 경우 — 재시도 없이 관리자 확인 필요 로그만 남긴다.
-      console.error("[requestMarketOrderRefund] Toss 취소 성공했지만 DB 상태 갱신 실패(수동 확인 필요):", orderId);
-    }
-
-    await supabase
-      .from("market_items")
-      .update({ status: "ON_SALE", updated_at: nowIso })
-      .eq("id", order.item_id)
-      .eq("status", "RESERVED");
-
-    res.status(200).json({ success: true, refundAmount: cancelAmount });
-  } catch (e) {
-    console.error("[requestMarketOrderRefund]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 반품 처리 공통 헬퍼 — Toss 결제취소(cancelPayment)로 구매자에게 실제 환불하고 반품을 종료한다.
- * requestMarketOrderRefund와 동일한 Toss 취소 패턴을 재사용하되, 환불계좌는 반품 신청 시
- * 받아둔 return_refund_account를 사용한다. completeMarketReturn(판매자 수동), 합의완료
- * (양측 합의), 72시간 자동완료(cron) 세 경로 모두 이 헬퍼로 귀결된다.
- */
-async function finalizeMarketReturn(supabase, order) {
-  const account = order.return_refund_account || {};
-  const bank = String(account.bank || "").trim();
-  const accountNumber = String(account.accountNumber || "").trim();
-  const holderName = String(account.holderName || "").trim();
-  if (!bank || !accountNumber || !holderName) {
-    const err = new Error("환불 계좌 정보가 없어 반품 환불을 처리할 수 없습니다.");
-    err.status = 409;
-    throw err;
-  }
-  if (!order.toss_payment_key) {
-    const err = new Error("결제 정보가 없어 환불할 수 없습니다. 관리자에게 문의해 주세요.");
-    err.status = 409;
-    throw err;
-  }
-
-  const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), order.toss_order_id);
-  if (payment.status !== "DONE") {
-    const err = new Error("Toss 결제 상태가 완료(DONE)가 아니어서 환불할 수 없습니다.");
-    err.status = 409;
-    throw err;
-  }
-
-  const cancelAmount = Number(order.item_price) || 0;
-  await tossPaymentsClient.cancelPayment(
-    raceTossSecretKey(),
-    order.toss_payment_key,
-    {
-      cancelReason: "중고랜드 반품 환불",
-      cancelAmount,
-      refundReceiveAccount: { bank, accountNumber, holderName },
-    },
-    "market-return-refund-" + order.id
-  );
-
-  const nowIso = new Date().toISOString();
-  const { data: updated, error: updErr } = await supabase
-    .from("market_orders")
-    .update({
-      escrow_status: "REFUNDED",
-      return_status: "COMPLETED",
-      return_completed_at: nowIso,
-      settlement_transferred_at: null,
-      updated_at: nowIso,
-    })
-    .eq("id", order.id)
-    .eq("escrow_status", "PAID")
-    .select();
-  if (updErr) throw updErr;
-  if (!updated || !updated.length) {
-    console.error("[finalizeMarketReturn] Toss 취소 성공했지만 DB 상태 갱신 실패(수동 확인 필요):", order.id);
-  }
-
-  await supabase
-    .from("market_items")
-    .update({ status: "ON_SALE", updated_at: nowIso })
-    .eq("id", order.item_id)
-    .eq("status", "RESERVED");
-
-  return cancelAmount;
-}
-
-/**
- * 판매자 — 반품 배송완료(return_status=DELIVERED) 상태에서 "반품완료" 클릭 시 즉시 환불 처리.
- */
-const completeMarketReturnOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.completeMarketReturn = onRequest(completeMarketReturnOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const sellerId = resolveMarketBuyerUuid(decoded.uid);
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    if (!orderId) {
-      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    if (order.seller_id !== sellerId) {
-      res.status(403).json({ success: false, error: "본인 상품의 주문만 처리할 수 있습니다." });
-      return;
-    }
-    if (order.return_status !== "DELIVERED") {
-      res.status(400).json({ success: false, error: "반품 배송완료 상태의 주문만 반품완료 처리할 수 있습니다." });
-      return;
-    }
-
-    const refundAmount = await finalizeMarketReturn(supabase, order);
-    res.status(200).json({ success: true, refundAmount });
-  } catch (e) {
-    console.error("[completeMarketReturn]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 판매자 — 반품 배송완료 상태에서 "이의제기" 클릭 시 대금 지급을 정지하고 양측 합의 대기 상태로 전환.
- */
-const disputeMarketReturnOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 30,
-});
-exports.disputeMarketReturn = onRequest(disputeMarketReturnOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const sellerId = resolveMarketBuyerUuid(decoded.uid);
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    if (!orderId) {
-      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    if (order.seller_id !== sellerId) {
-      res.status(403).json({ success: false, error: "본인 상품의 주문만 처리할 수 있습니다." });
-      return;
-    }
-    if (order.return_status !== "DELIVERED") {
-      res.status(400).json({ success: false, error: "반품 배송완료 상태의 주문만 이의제기할 수 있습니다." });
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update({
-        return_status: "DISPUTED",
-        return_dispute_requested_at: nowIso,
-        return_dispute_agreed_by_buyer: false,
-        return_dispute_agreed_by_seller: false,
-        updated_at: nowIso,
-      })
-      .eq("id", orderId)
-      .eq("return_status", "DELIVERED")
-      .select()
-      .single();
-    if (updErr) throw updErr;
-    res.status(200).json({ success: true, order: updated });
-  } catch (e) {
-    console.error("[disputeMarketReturn]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 구매자 또는 판매자 — 이의제기(DISPUTED) 상태에서 "합의완료" 클릭. 양측 모두 합의하면
- * 그 즉시 finalizeMarketReturn으로 환불·반품종료 처리한다.
- */
-const agreeMarketReturnDisputeOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.agreeMarketReturnDispute = onRequest(agreeMarketReturnDisputeOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const callerId = resolveMarketBuyerUuid(decoded.uid);
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const orderId = String(body.orderId || "").trim();
-    if (!orderId) {
-      res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-      return;
-    }
-
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const { data: order, error: orderErr } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
-    if (orderErr || !order) {
-      res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-      return;
-    }
-    const isBuyer = order.buyer_id === callerId;
-    const isSeller = order.seller_id === callerId;
-    if (!isBuyer && !isSeller) {
-      res.status(403).json({ success: false, error: "본인 거래만 처리할 수 있습니다." });
-      return;
-    }
-    if (order.return_status !== "DISPUTED") {
-      res.status(400).json({ success: false, error: "이의제기 상태의 반품만 합의 처리할 수 있습니다." });
-      return;
-    }
-
-    const nowIso = new Date().toISOString();
-    const agreeField = isBuyer ? "return_dispute_agreed_by_buyer" : "return_dispute_agreed_by_seller";
-    const { data: updated, error: updErr } = await supabase
-      .from("market_orders")
-      .update({ [agreeField]: true, updated_at: nowIso })
-      .eq("id", orderId)
-      .eq("return_status", "DISPUTED")
-      .select()
-      .single();
-    if (updErr) throw updErr;
-
-    const bothAgreed = isBuyer ? updated.return_dispute_agreed_by_seller : updated.return_dispute_agreed_by_buyer;
-    if (bothAgreed) {
-      const refundAmount = await finalizeMarketReturn(supabase, updated);
-      res.status(200).json({ success: true, finalized: true, refundAmount });
-      return;
-    }
-    res.status(200).json({ success: true, finalized: false, order: updated });
-  } catch (e) {
-    console.error("[agreeMarketReturnDispute]", e && e.message ? e.message : e);
-    const status = e.status || 500;
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 반품 배송완료(return_status=DELIVERED) 후 판매자가 72시간 동안 반품완료/이의제기 아무 동작도
- * 하지 않으면 반품완료로 간주해 자동 환불 처리한다.
- */
-const autoCompleteReturnedMarketOrdersOptions = appendMarketSecrets({
-  schedule: "every 15 minutes",
-  region: "asia-northeast3",
-});
-exports.autoCompleteReturnedMarketOrdersSchedule = onSchedule(autoCompleteReturnedMarketOrdersOptions, async () => {
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  if (!supabase) return;
-  const cutoffIso = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
-  const { data: due, error } = await supabase
-    .from("market_orders")
-    .select("*")
-    .eq("return_status", "DELIVERED")
-    .lte("return_delivered_at", cutoffIso);
-  if (error || !due || !due.length) return;
-  for (const order of due) {
-    /* eslint-disable no-await-in-loop */
-    try {
-      await finalizeMarketReturn(supabase, order);
-    } catch (e) {
-      console.error(
-        "[autoCompleteReturnedMarketOrdersSchedule] 자동 반품완료 실패:",
-        order.id,
-        e && e.message ? e.message : e
-      );
-    }
-    /* eslint-enable no-await-in-loop */
-  }
-  console.log("[autoCompleteReturnedMarketOrdersSchedule] 자동 반품완료 처리:", due.length);
-});
-
-/**
- * 택배 배송완료 실시간 알림 — Supabase Postgres 트리거(notify_market_order_delivered,
- * market_orders AFTER UPDATE, delivered_at NULL→NOT NULL 순간)가 net.http_post로 직접 호출한다.
- * delivered_at은 market-delivery-webhook(즉시 수신)·market-check-delivery-status(안전망 폴링)·
- * market-set-tracking(등록 시점 즉시확인) 세 Edge Function 중 어디서 UPDATE하든 같은 트리거가
- * 공통으로 감지하므로, 경로별로 따로 연동할 필요가 없다.
- * 인증은 x-market-delivery-trigger-secret 헤더(Supabase Vault의
- * market_delivery_notify_trigger_secret와 동일 값)로 검증한다 — 트리거는 orderId만 넘기고,
- * 이 함수가 authoritative하게 주문을 재조회한다(트리거 payload를 그대로 믿지 않음).
- */
-const notifyMarketOrderDeliveredWebhookOptions = Object.assign(
-  { region: "asia-northeast3", cors: false, timeoutSeconds: 30, memory: "256MiB" },
-  supabaseDualWriteServer.appendServiceRoleSecret({})
-);
-notifyMarketOrderDeliveredWebhookOptions.secrets = notifyMarketOrderDeliveredWebhookOptions.secrets.slice();
-[marketAlimRelaySecret, marketDeliveryTriggerSecret].forEach((s) => {
-  if (!notifyMarketOrderDeliveredWebhookOptions.secrets.includes(s)) notifyMarketOrderDeliveredWebhookOptions.secrets.push(s);
-});
-exports.notifyMarketOrderDeliveredWebhook = onRequest(notifyMarketOrderDeliveredWebhookOptions, async (req, res) => {
-  if (req.method !== "POST") {
-    res.status(405).send("Method Not Allowed");
-    return;
-  }
-  let expectedSecret;
-  try {
-    expectedSecret = scrubAligoCredentialForRace(marketDeliveryTriggerSecret.value());
-  } catch (e) {
-    res.status(500).json({ ok: false, error: "MARKET_DELIVERY_TRIGGER_SECRET 없음" });
-    return;
-  }
-  const gotSecret = String(req.headers["x-market-delivery-trigger-secret"] || "").trim();
-  if (!expectedSecret || gotSecret !== expectedSecret) {
-    res.status(403).json({ ok: false, error: "Forbidden" });
-    return;
-  }
-
-  const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-  const orderId = String(body.orderId || "").trim();
-  if (!orderId) {
-    res.status(400).json({ ok: false, error: "orderId가 필요합니다." });
-    return;
-  }
-
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  if (!supabase) {
-    res.status(503).json({ ok: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-    return;
-  }
-
-  try {
-    // authoritative 재조회 — 트리거가 보낸 payload가 아니라 지금 시점의 실제 행 상태를 신뢰한다.
-    const { data: order } = await supabase
-      .from("market_orders")
-      .select("id, item_id, buyer_id, delivery_status, escrow_status, delivered_at, delivery_notified_at")
-      .eq("id", orderId)
-      .maybeSingle();
-    if (
-      !order ||
-      order.delivery_status !== "DELIVERED" ||
-      order.escrow_status !== "PAID" ||
-      !order.delivered_at ||
-      order.delivery_notified_at
-    ) {
-      res.status(200).json({ ok: true, skipped: true }); // 이미 처리됐거나 조건 불충족 — 정상
-      return;
-    }
-    const sent = await sendMarketProgressAlimtalkServerSide({
-      supabase,
-      itemId: order.item_id,
-      recipientUserId: order.buyer_id,
-      progressContent: marketNegoAlimtalk.MARKET_DELIVERY_COMPLETED_PROGRESS_LINE,
-    });
-    await supabase.from("market_orders").update({ delivery_notified_at: new Date().toISOString() }).eq("id", order.id);
-    res.status(200).json({ ok: true, sent });
-  } catch (e) {
-    const msg = e && e.message ? e.message : String(e);
-    console.error("[notifyMarketOrderDeliveredWebhook] 배송완료 알림톡 발송 실패:", orderId, msg);
-    res.status(500).json({ ok: false, error: msg }); // notified 플래그를 세우지 않아 다음 하루 3회 안전망 폴링이 재시도한다
-  }
-});
-
-/**
- * 택배 배송완료(delivery_status='DELIVERED') 시 구매자에게 구매확정 안내 알림톡(UK_6794)을 보낸다.
- * 위 notifyMarketOrderDeliveredWebhook(Postgres 트리거가 실시간으로 직접 호출)이 주 경로이고,
- * 이 스케줄은 그 실시간 경로가 어떤 이유로든 실패했을 때(트리거 오류·pg_net 장애·Firebase 일시
- * 장애 등)를 대비한 안전망으로 하루 3회(12·15·18시, KST) delivery_notified_at이 비어 있는
- * 배송완료 주문을 폴링해 정확히 한 번만 보낸다.
- */
-const notifyMarketDeliveredOrdersOptions = Object.assign(
-  { schedule: "0 12,15,18 * * *", timeZone: "Asia/Seoul", region: "asia-northeast3", memory: "256MiB" },
-  supabaseDualWriteServer.appendServiceRoleSecret({})
-);
-notifyMarketDeliveredOrdersOptions.secrets = notifyMarketDeliveredOrdersOptions.secrets.slice();
-if (!notifyMarketDeliveredOrdersOptions.secrets.includes(marketAlimRelaySecret)) {
-  notifyMarketDeliveredOrdersOptions.secrets.push(marketAlimRelaySecret);
-}
-exports.notifyMarketDeliveredOrdersSchedule = onSchedule(notifyMarketDeliveredOrdersOptions, async () => {
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  if (!supabase) return;
-  const { data: due, error } = await supabase
-    .from("market_orders")
-    .select("id, item_id, buyer_id")
-    .eq("delivery_status", "DELIVERED")
-    .eq("escrow_status", "PAID")
-    .not("delivered_at", "is", null)
-    .is("delivery_notified_at", null);
-  if (error || !due || !due.length) return;
-  /* eslint-disable no-await-in-loop */
-  for (const order of due) {
-    let sent = false;
-    try {
-      sent = await sendMarketProgressAlimtalkServerSide({
-        supabase,
-        itemId: order.item_id,
-        recipientUserId: order.buyer_id,
-        progressContent: marketNegoAlimtalk.MARKET_DELIVERY_COMPLETED_PROGRESS_LINE,
-      });
-    } catch (e) {
-      console.error(
-        "[notifyMarketDeliveredOrdersSchedule] 배송완료 알림톡 발송 실패(다음 주기에 재시도):",
-        order.id,
-        e && e.message ? e.message : e
-      );
-      continue; // delivery_notified_at을 남기지 않아 다음 주기에 재시도
-    }
-    // sent===false(구매자 전화번호 없음 등)도 재시도해 봐야 계속 실패하므로 완료 처리한다.
-    if (!sent) {
-      console.warn("[notifyMarketDeliveredOrdersSchedule] 구매자 전화번호 없음 — 발송 생략:", order.id);
-    }
-    await supabase
-      .from("market_orders")
-      .update({ delivery_notified_at: new Date().toISOString() })
-      .eq("id", order.id)
-      .catch(() => {});
-  }
-  /* eslint-enable no-await-in-loop */
-  console.log("[notifyMarketDeliveredOrdersSchedule] 배송완료 알림톡 처리:", due.length);
-});
-
-/**
- * 관리자 전용 — 구매확정(CONFIRMED)된 주문의 판매대금을 판매자 등록 계좌로 실제 이체한 뒤 마감 처리한다.
- * (이체 자체는 관리자가 은행 앱/인터넷뱅킹으로 직접 수행 — 이 엔드포인트는 그 사실을 기록만 한다.)
- * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1), body: { orderId }
- */
-const adminMarkMarketOrderSettledOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  cors: true,
-  timeoutSeconds: 30,
-});
-exports.adminMarkMarketOrderSettled = onRequest(adminMarkMarketOrderSettledOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  const db = admin.firestore();
-  const rawSecret =
-    req.query.secret || req.headers["x-internal-secret"] || (req.body && req.body.secret);
-  let authorized = rawSecret === INTERNAL_SYNC_SECRET;
-  if (!authorized) {
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    const grade = await getCachedCallerGrade(db, uid);
-    if (grade !== "1") {
-      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
-      return;
-    }
-    authorized = true;
-  }
-  const orderId = String(req.query.orderId || (req.body && req.body.orderId) || "").trim();
-  if (!orderId) {
-    res.status(400).json({ success: false, error: "orderId가 필요합니다." });
-    return;
-  }
-
-  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  if (!supabase) {
-    res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-    return;
-  }
-  const { data: order } = await supabase.from("market_orders").select("*").eq("id", orderId).maybeSingle();
-  if (!order) {
-    res.status(404).json({ success: false, error: "주문을 찾을 수 없습니다." });
-    return;
-  }
-  if (order.escrow_status !== "CONFIRMED") {
-    res.status(400).json({ success: false, error: "구매확정된 주문만 정산 완료 처리할 수 있습니다." });
-    return;
-  }
-  // 관리자가 미니 달력에서 실제 이체일을 직접 골라 지정할 수 있다(YYYY-MM-DD) — 안 주면 지금
-  // 시각으로 기록한다. 날짜만 주어지면 하루 중 어느 시각에 저장하든 한국 기준 날짜가 밀리지
-  // 않도록 정오(KST)로 고정한다(다른 한글 달력 기능과 동일한 관례).
-  const settlementDateRaw = String(req.query.settlementDate || (req.body && req.body.settlementDate) || "").trim();
-  let settlementIso = new Date().toISOString();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(settlementDateRaw)) {
-    settlementIso = new Date(settlementDateRaw + "T12:00:00+09:00").toISOString();
-  }
-  const nowIso = new Date().toISOString();
-  const { error } = await supabase
-    .from("market_orders")
-    .update({ settlement_transferred_at: settlementIso, updated_at: nowIso })
-    .eq("id", orderId);
-  if (error) {
-    res.status(500).json({ success: false, error: error.message });
-    return;
-  }
-  res.status(200).json({ success: true });
-});
-
-/**
- * 입금 기한이 지난 PENDING 중고랜드 주문 정리 — 상품을 다시 ON_SALE로 되돌린다.
- * Toss 가상계좌는 기한이 지나면 자동 만료되므로 별도 취소 API 호출은 불필요.
- */
-exports.cancelUnpaidMarketOrdersSchedule = onSchedule(
-  {
-    schedule: "every 15 minutes",
-    region: "asia-northeast3",
-    secrets: [supabaseDualWriteServer.supabaseServiceRoleKey],
-  },
-  async () => {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) return;
-    const nowIso = new Date().toISOString();
-    const { data: expired, error } = await supabase
-      .from("market_orders")
-      .select("id, item_id")
-      .eq("escrow_status", "PENDING")
-      .lt("va_due_at", nowIso);
-    if (error || !expired || !expired.length) return;
-    for (const o of expired) {
-      /* eslint-disable no-await-in-loop */
-      await supabase
-        .from("market_orders")
-        .update({ escrow_status: "CANCELLED", updated_at: nowIso })
-        .eq("id", o.id);
-      await supabase
-        .from("market_items")
-        .update({ status: "ON_SALE", updated_at: nowIso })
-        .eq("id", o.item_id)
-        .eq("status", "RESERVED");
-      /* eslint-enable no-await-in-loop */
-    }
-    console.log("[cancelUnpaidMarketOrdersSchedule] 만료 처리:", expired.length);
-  }
-);
-
-/**
- * 중고랜드 이미지 검색 — 상품 등록/수정 직후 첫 번째 이미지로 CLIP 임베딩을 계산해 저장한다.
- * 검색(조회) 자체는 브라우저에서 직접 계산한 임베딩으로 Supabase RPC(match_products_by_image)를
- * 호출하므로(marketScreen.js) 이 함수를 거치지 않는다 — 이 함수는 "색인"만 담당한다.
- * service role로 RLS를 우회해 쓰기 때문에, 호출자가 해당 상품의 실제 소유자인지 직접 검증한다.
- */
-const indexMarketItemEmbeddingOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 60,
-  memory: "1GiB",
-});
-exports.indexMarketItemEmbedding = onRequest(indexMarketItemEmbeddingOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const itemId = String(body.itemId || "").trim();
-    if (!itemId) {
-      res.status(400).json({ success: false, error: "itemId가 필요합니다." });
-      return;
-    }
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const { data: item, error: itemErr } = await supabase
-      .from("market_items")
-      .select("id, user_id, images")
-      .eq("id", itemId)
-      .maybeSingle();
-    if (itemErr || !item) {
-      res.status(404).json({ success: false, error: "상품을 찾을 수 없습니다." });
-      return;
-    }
-    const ownerId = resolveMarketBuyerUuid(uid);
-    if (!ownerId || item.user_id !== ownerId) {
-      res.status(403).json({ success: false, error: "본인 상품만 색인할 수 있습니다." });
-      return;
-    }
-    const imageUrl = Array.isArray(item.images) ? item.images[0] : null;
-    if (!imageUrl) {
-      res.status(400).json({ success: false, error: "색인할 이미지가 없습니다." });
-      return;
-    }
-    const embedding = await marketImageSearch.computeMarketImageEmbeddingFromUrl(imageUrl);
-    const { error: updateErr } = await supabase
-      .from("market_items")
-      .update({ embedding, embedding_updated_at: new Date().toISOString() })
-      .eq("id", itemId);
-    if (updateErr) {
-      res.status(500).json({ success: false, error: updateErr.message || "임베딩 저장 실패" });
-      return;
-    }
-    res.status(200).json({ success: true });
-  } catch (e) {
-    console.error("[indexMarketItemEmbedding]", e);
-    res.status(e.status || 500).json({ success: false, error: e.message || String(e) });
-  }
-});
-
-/**
- * 관리자 전용 — 임베딩이 없는 기존 상품들을 일괄 색인한다(이미지 검색 기능 최초 배포 시 1회
- * 실행 용도). 타임아웃 안에 끝내도록 호출당 최대 BACKFILL_BATCH_LIMIT건만 처리하고, 남은
- * 건수를 응답에 담아 알려준다 — remaining이 0이 될 때까지 같은 요청을 반복 호출하면 된다.
- */
-const BACKFILL_BATCH_LIMIT = 20;
-const backfillMarketItemEmbeddingsOptions = supabaseDualWriteServer.appendServiceRoleSecret({
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 540,
-  memory: "1GiB",
-});
-exports.backfillMarketItemEmbeddings = onRequest(backfillMarketItemEmbeddingsOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  try {
-    const uid = await getUidFromRequest(req, res);
-    if (!uid) return;
-    const db = admin.firestore();
-    const grade = await getCachedCallerGrade(db, uid);
-    if (grade !== "1") {
-      res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
-      return;
-    }
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) {
-      res.status(503).json({ success: false, error: "Supabase 클라이언트를 사용할 수 없습니다." });
-      return;
-    }
-    const { data: rows, error: selectErr } = await supabase
-      .from("market_items")
-      .select("id, images")
-      .is("embedding", null)
-      .limit(BACKFILL_BATCH_LIMIT);
-    if (selectErr) {
-      res.status(500).json({ success: false, error: selectErr.message });
-      return;
-    }
-    const results = { indexed: 0, skipped: 0, failed: 0 };
-    for (const row of rows || []) {
-      /* eslint-disable no-await-in-loop */
-      const imageUrl = Array.isArray(row.images) ? row.images[0] : null;
-      if (!imageUrl) {
-        results.skipped++;
-        continue;
-      }
-      try {
-        const embedding = await marketImageSearch.computeMarketImageEmbeddingFromUrl(imageUrl);
-        await supabase
-          .from("market_items")
-          .update({ embedding, embedding_updated_at: new Date().toISOString() })
-          .eq("id", row.id);
-        results.indexed++;
-      } catch (e) {
-        console.error("[backfillMarketItemEmbeddings] 실패:", row.id, e && e.message);
-        results.failed++;
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-    const { count: remaining } = await supabase
-      .from("market_items")
-      .select("id", { count: "exact", head: true })
-      .is("embedding", null);
-    res.status(200).json({ success: true, indexed: results.indexed, skipped: results.skipped, failed: results.failed, remaining: remaining || 0 });
-  } catch (e) {
-    console.error("[backfillMarketItemEmbeddings]", e);
-    res.status(500).json({ success: false, error: e.message || String(e) });
-  }
-});
-
-/**
- * 관리자 전용 — requestCompetitionRefund가 처리 못 하는 건(예: 웹훅 처리 누락으로 실제로는
- * 입금됐는데 status가 여전히 PAYMENT_WAITING인 건)을 강제로 환불·취소한다. requestCompetitionRefund
- * 에러 메시지의 "관리자에게 문의해 주세요" 안내가 실제로 처리할 수 있는 창구.
- * Toss 결제를 authoritative 재조회해 DONE인 경우에만 취소·환불한다(저장된 status를 신뢰하지 않음).
- * GET/POST ?secret=stelvio-internal-sync-v1 또는 관리자(grade=1)
- */
-const adminForceRefundCompetitionApplicationOptions = appendRaceSecrets({
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 60,
-});
-exports.adminForceRefundCompetitionApplication = onRequest(
-  adminForceRefundCompetitionApplicationOptions,
-  async (req, res) => {
-    setCorsHeaders(req, res);
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    const db = admin.firestore();
-    const rawSecret =
-      req.query.secret ||
-      req.headers["x-internal-secret"] ||
-      req.headers["X-Internal-Secret"] ||
-      (req.body && req.body.secret);
-    let authorized = rawSecret === INTERNAL_SYNC_SECRET;
-    if (!authorized) {
-      const uid = await getUidFromRequest(req, res);
-      if (!uid) return;
-      const grade = await getCachedCallerGrade(db, uid);
-      if (grade !== "1") {
-        res.status(403).json({ success: false, error: "관리자(grade=1) 권한이 필요합니다." });
-        return;
-      }
-      authorized = true;
-    }
-
-    try {
-      const applicationId = String(req.query.applicationId || (req.body && req.body.applicationId) || "").trim();
-      const bank = String(req.query.bank || (req.body && req.body.bank) || "").trim();
-      const accountNumber = String(req.query.accountNumber || (req.body && req.body.accountNumber) || "").trim();
-      const holderName = String(req.query.holderName || (req.body && req.body.holderName) || "").trim();
-      if (!applicationId || !bank || !accountNumber || !holderName) {
-        res.status(400).json({ success: false, error: "applicationId·bank·accountNumber·holderName 필요" });
-        return;
-      }
-      const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
-      const appSnap = await appRef.get();
-      if (!appSnap.exists) {
-        res.status(404).json({ success: false, error: "not_found" });
-        return;
-      }
-      const appData = appSnap.data() || {};
-      if (appData.status === "CANCELED_REFUNDED" || appData.status === "CANCELED_UNPAID") {
-        res.status(200).json({ success: true, alreadyDone: true, status: appData.status });
-        return;
-      }
-      if (!appData.tossOrderId) {
-        res.status(400).json({ success: false, error: "tossOrderId 없음" });
-        return;
-      }
-
-      const payment = await tossPaymentsClient.getPaymentByOrderId(raceTossSecretKey(), appData.tossOrderId);
-      if (payment.status !== "DONE") {
-        res.status(400).json({ success: false, error: "결제가 완료(DONE) 상태가 아닙니다: " + payment.status });
-        return;
-      }
-
-      await tossPaymentsClient.cancelPayment(
-        raceTossSecretKey(),
-        payment.paymentKey || appData.tossPaymentKey,
-        {
-          cancelReason: "관리자 수동 환불(웹훅 처리 누락 건)",
-          refundReceiveAccount: { bank, accountNumber, holderName },
-        },
-        `${applicationId}-admin-refund`
-      );
-
-      await db.runTransaction(async (tx) => {
-        const freshSnap = await tx.get(appRef);
-        const fresh = freshSnap.data() || {};
-        if (fresh.status === "CANCELED_REFUNDED") return; // 멱등
-        tx.update(appRef, {
-          status: "CANCELED_REFUNDED",
-          redisSlotConsumed: false,
-          tossPaymentKey: payment.paymentKey || fresh.tossPaymentKey || null,
-          refundAccount: { bankCode: bank, accountNumber, holderName },
-          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
-      await writeRaceLedgerEntry(db, appRef, { event: "ADMIN_CANCELED_REFUNDED", applicationId });
-
-      if (appData.redisSlotConsumed !== false) {
-        const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
-        await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
-          console.error(
-            "[adminForceRefundCompetitionApplication] slot release 실패(수동 확인 필요):",
-            redisKey,
-            releaseErr.message
-          );
-        });
-        await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
-          console.error(
-            "[adminForceRefundCompetitionApplication] 대기자 초대 실패(수동 확인 필요):",
-            appData.competitionId,
-            waitlistErr.message
-          );
-        });
-      }
-
-      res.status(200).json({ success: true });
-    } catch (e) {
-      console.error("[adminForceRefundCompetitionApplication]", e && e.message ? e.message : e);
-      res.status(500).json({ success: false, error: (e && e.message) || String(e) });
-    }
-  }
-);
-
-/**
- * 입금 전(PAYMENT_WAITING) 신청 취소 — 결제된 돈이 없으므로 환불 계좌 없이 바로 취소·슬롯 반환한다.
- * 이미 입금 완료(PAYMENT_COMPLETED)된 건은 requestCompetitionRefund(환불 계좌 필요)로 안내한다.
- */
-const cancelCompetitionApplicationOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.cancelCompetitionApplication = onRequest(cancelCompetitionApplicationOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  const db = admin.firestore();
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const applicationId = String(body.applicationId || "").trim();
-    if (!applicationId) {
-      res.status(400).json({ success: false, error: "applicationId가 필요합니다." });
-      return;
-    }
-
-    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
-    const appSnap = await appRef.get();
-    if (!appSnap.exists) {
-      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
-      return;
-    }
-    const appData = appSnap.data() || {};
-    if (appData.userId !== uid) {
-      res.status(403).json({ success: false, error: "본인 신청 건만 취소할 수 있습니다." });
-      return;
-    }
-    if (appData.status !== "PAYMENT_WAITING") {
-      res.status(400).json({
-        success: false,
-        error:
-          appData.status === "PAYMENT_COMPLETED"
-            ? "이미 입금이 완료된 신청입니다. 취소 및 환불 절차를 이용해 주세요."
-            : "이미 취소되었거나 취소할 수 없는 상태입니다.",
-      });
-      return;
-    }
-
-    let released = false;
-    await db.runTransaction(async (tx) => {
-      const freshSnap = await tx.get(appRef);
-      const fresh = freshSnap.data() || {};
-      if (fresh.status !== "PAYMENT_WAITING") return; // 이미 처리됨(멱등)
-      tx.update(appRef, {
-        status: "CANCELED_BY_USER",
-        redisSlotConsumed: false,
-        canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      released = fresh.redisSlotConsumed !== false;
-    });
-    await writeRaceLedgerEntry(db, appRef, { event: "CANCELED_BY_USER" });
-    if (released) {
-      const redisKey = appData.redisKey || `race:${appData.competitionId}:count`;
-      await raceRedisClient.releaseSlot(raceRedisConn(), redisKey).catch((releaseErr) => {
-        console.error("[cancelCompetitionApplication] slot release 실패(수동 확인 필요):", redisKey, releaseErr.message);
-      });
-      await inviteNextWaitlistEntryIfClosed(db, appData.competitionId).catch((waitlistErr) => {
-        console.error(
-          "[cancelCompetitionApplication] 대기자 초대 실패(수동 확인 필요):",
-          appData.competitionId,
-          waitlistErr.message
-        );
-      });
-    }
-
-    res.status(200).json({ success: true });
-  } catch (e) {
-    const status = e.status || 500;
-    console.error("[cancelCompetitionApplication]", e && e.message ? e.message : e);
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 신청서 내용 수정 — 가상계좌·결제·Redis 슬롯은 건드리지 않고 applicant 필드만 화이트리스트 재검증 후 갱신한다.
- * 취소된 신청은 수정할 수 없다.
- */
-const updateCompetitionApplicationOptions = appendRaceSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 30 });
-exports.updateCompetitionApplication = onRequest(updateCompetitionApplicationOptions, async (req, res) => {
-  setCorsHeaders(req, res);
-  if (req.method === "OPTIONS") {
-    res.status(204).send("");
-    return;
-  }
-  if (req.method !== "POST") {
-    res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-    return;
-  }
-
-  const db = admin.firestore();
-  try {
-    const decoded = await verifyRaceRequestAuth(req);
-    const uid = decoded.uid;
-    const body = typeof req.body === "object" && req.body !== null ? req.body : {};
-    const applicationId = String(body.applicationId || "").trim();
-    if (!applicationId) {
-      res.status(400).json({ success: false, error: "applicationId가 필요합니다." });
-      return;
-    }
-
-    const appRef = db.collection(RACE_APPLICATIONS_COLLECTION).doc(applicationId);
-    const appSnap = await appRef.get();
-    if (!appSnap.exists) {
-      res.status(404).json({ success: false, error: "신청 내역을 찾을 수 없습니다." });
-      return;
-    }
-    const appData = appSnap.data() || {};
-    if (appData.userId !== uid) {
-      res.status(403).json({ success: false, error: "본인 신청 건만 수정할 수 있습니다." });
-      return;
-    }
-    if (appData.status !== "PAYMENT_WAITING" && appData.status !== "PAYMENT_COMPLETED") {
-      res.status(400).json({ success: false, error: "취소된 신청은 수정할 수 없습니다." });
-      return;
-    }
-
-    const compSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).doc(appData.competitionId).get();
-    const comp = compSnap.exists ? compSnap.data() || {} : {};
-    const applicantResult = validateRaceApplicant(body.applicant, comp.category === "CYCLE" ? "CYCLE" : "RUN");
-    if (applicantResult.error) {
-      res.status(400).json({ success: false, error: applicantResult.error });
-      return;
-    }
-
-    await appRef.update({
-      applicant: applicantResult.data,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
-    await writeRaceLedgerEntry(db, appRef, { event: "APPLICANT_UPDATED" });
-
-    res.status(200).json({ success: true });
-  } catch (e) {
-    const status = e.status || 500;
-    console.error("[updateCompetitionApplication]", e && e.message ? e.message : e);
-    res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-  }
-});
-
-/**
- * 미입금 자동 취소 — 5분마다(서울) paymentDueAt이 지난 PAYMENT_WAITING 건을 CANCELED_UNPAID로 전환하고
- * Redis 슬롯을 반환한다. 토스 가상계좌는 기한 후 자동 소멸하므로 별도 취소 API 호출은 하지 않는다.
- */
-const cancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
-  schedule: "*/5 * * * *",
-  timeZone: "Asia/Seoul",
-  timeoutSeconds: 300,
-  memory: "256MiB",
-});
-/**
- * 미입금 자동 취소 실제 처리 로직 — 스케줄(cancelUnpaidCompetitionApplications)과 관리자 수동 트리거
- * (manualCancelUnpaidCompetitionApplications) 양쪽에서 공유한다. status+paymentDueAt 복합 인덱스가
- * 없으면 이 조회 자체가 FAILED_PRECONDITION으로 실패해 스케줄이 매번 조용히 실패할 수 있으니 주의.
- */
-async function runUnpaidCompetitionApplicationsCleanup(db, conn) {
-  const nowTs = admin.firestore.Timestamp.now();
-  let processed = 0;
-  let released = 0;
-
-  const snap = await db
-    .collection(RACE_APPLICATIONS_COLLECTION)
-    .where("status", "==", "PAYMENT_WAITING")
-    .where("paymentDueAt", "<=", nowTs)
-    .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
-    .get();
-
-  for (const doc of snap.docs) {
-    /* eslint-disable no-await-in-loop */
-    try {
-      const data = doc.data() || {};
-      let shouldRelease = false;
-      await db.runTransaction(async (tx) => {
-        const freshSnap = await tx.get(doc.ref);
-        const fresh = freshSnap.data() || {};
-        if (fresh.status !== "PAYMENT_WAITING") return; // 이미 입금 확인·취소됨(멱등)
-        tx.update(doc.ref, {
-          status: "CANCELED_UNPAID",
-          redisSlotConsumed: false,
-          canceledAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        shouldRelease = fresh.redisSlotConsumed !== false;
-      });
-      await writeRaceLedgerEntry(db, doc.ref, { event: "CANCELED_UNPAID" });
-      processed += 1;
-      if (shouldRelease) {
-        const redisKey = data.redisKey || `race:${data.competitionId}:count`;
-        // releaseSlot 실패(네트워크 오류 등)로 이 건이 다음 배치에서 되풀이 처리되지 않도록 여기서
-        // 흡수한다 — Firestore 상태는 이미 CANCELED_UNPAID로 커밋됐으므로, 남는 드리프트는
-        // scheduledReconcileCompetitionSlots(매시 정각)가 자동으로 바로잡는다.
-        await raceRedisClient.releaseSlot(conn, redisKey)
-          .then(() => {
-            released += 1;
-          })
-          .catch((releaseErr) => {
-            console.error(
-              "[cancelUnpaidCompetitionApplications] slot release 실패(주기적 리컨실로 자동 보정됨):",
-              redisKey,
-              releaseErr.message
-            );
-          });
-        await inviteNextWaitlistEntryIfClosed(db, data.competitionId).catch((waitlistErr) => {
-          console.error(
-            "[cancelUnpaidCompetitionApplications] 대기자 초대 실패(수동 확인 필요):",
-            data.competitionId,
-            waitlistErr.message
-          );
-        });
-      }
-    } catch (e) {
-      console.error("[cancelUnpaidCompetitionApplications]", doc.id, e && e.message ? e.message : e);
-    }
-    /* eslint-enable no-await-in-loop */
-  }
-
-  return { processed, released };
-}
-
-exports.cancelUnpaidCompetitionApplications = onSchedule(
-  cancelUnpaidCompetitionApplicationsOptions,
-  async () => {
-    const db = admin.firestore();
-    const conn = raceRedisConn();
-    const result = await runUnpaidCompetitionApplicationsCleanup(db, conn);
-    console.log("[cancelUnpaidCompetitionApplications] 완료", result);
-  }
-);
-
-/**
- * 관리자 수동 트리거 — status+paymentDueAt 복합 인덱스가 방금 생성되어 아직 스케줄이 돌지 않았거나,
- * 그동안 쌓인 미입금 만료 건을 기다리지 않고 바로 정리하고 싶을 때 사용.
- */
-const manualCancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
-  region: "asia-northeast3",
-  cors: true,
-  timeoutSeconds: 300,
-});
-exports.manualCancelUnpaidCompetitionApplications = onRequest(
-  manualCancelUnpaidCompetitionApplicationsOptions,
-  async (req, res) => {
-    setCorsHeaders(req, res);
-    if (req.method === "OPTIONS") {
-      res.status(204).send("");
-      return;
-    }
-    if (req.method !== "POST") {
-      res.status(405).json({ success: false, error: "POST만 허용됩니다." });
-      return;
-    }
-
-    const db = admin.firestore();
-    try {
-      const decoded = await verifyRaceRequestAuth(req);
-      const userSnap = await db.collection("users").doc(decoded.uid).get();
-      const userData = userSnap.exists ? userSnap.data() || {} : {};
-      if (String(userData.grade) !== "1") {
-        res.status(403).json({ success: false, error: "관리자만 사용할 수 있습니다." });
-        return;
-      }
-
-      const result = await runUnpaidCompetitionApplicationsCleanup(db, raceRedisConn());
-      res.status(200).json(Object.assign({ success: true }, result));
-    } catch (e) {
-      const status = e.status || 500;
-      console.error("[manualCancelUnpaidCompetitionApplications]", e && e.message ? e.message : e);
-      res.status(status).json({ success: false, error: (e && e.message) || String(e) });
-    }
-  }
-);
-
-/**
- * 대기자 초대 만료·순번 승격 — 15분마다(서울) inviteExpiresAt이 지난 INVITED 건을 EXPIRED로 전환하고,
- * 해당 대회에 다음 대기자가 있으면 새로 24시간 초대를 연다(inviteNextWaitlistEntryIfClosed와 동일 규칙).
- */
-const expireCompetitionWaitlistInvitesOptions = appendRaceSecrets({
-  schedule: "*/15 * * * *",
-  timeZone: "Asia/Seoul",
-  timeoutSeconds: 300,
-  memory: "256MiB",
-});
-exports.expireCompetitionWaitlistInvites = onSchedule(
-  expireCompetitionWaitlistInvitesOptions,
-  async () => {
-    const db = admin.firestore();
-    const nowTs = admin.firestore.Timestamp.now();
-    let expired = 0;
-
-    const snap = await db
-      .collection(RACE_WAITLIST_COLLECTION)
-      .where("status", "==", "INVITED")
-      .where("inviteExpiresAt", "<=", nowTs)
-      .limit(RACE_UNPAID_CLEANUP_BATCH_LIMIT)
-      .get();
-
-    const competitionIdsToRecascade = new Set();
-    for (const doc of snap.docs) {
-      /* eslint-disable no-await-in-loop */
-      try {
-        const data = doc.data() || {};
-        let didExpire = false;
-        await db.runTransaction(async (tx) => {
-          const fresh = await tx.get(doc.ref);
-          if (!fresh.exists || (fresh.data() || {}).status !== "INVITED") return; // 이미 처리됨(멱등)
-          tx.update(doc.ref, { status: "EXPIRED" });
-          didExpire = true;
-        });
-        if (didExpire) {
-          expired += 1;
-          competitionIdsToRecascade.add(data.competitionId);
-        }
-      } catch (e) {
-        console.error("[expireCompetitionWaitlistInvites]", doc.id, e && e.message ? e.message : e);
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-
-    for (const competitionId of competitionIdsToRecascade) {
-      /* eslint-disable no-await-in-loop */
-      try {
-        await inviteNextWaitlistEntryIfClosed(db, competitionId);
-      } catch (e) {
-        console.error("[expireCompetitionWaitlistInvites] cascade 실패:", competitionId, e && e.message ? e.message : e);
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-
-    console.log("[expireCompetitionWaitlistInvites] 완료", { expired, recascaded: competitionIdsToRecascade.size });
-  }
-);
-
-/**
- * 대회 잔여 인원 자동 리컨실 — 매시 정각(서울) 전체 대회를 순회하며 Redis 카운트를 Firestore
- * 실제 유효 신청 건수로 다시 맞춘다. releaseSlot 실패 등으로 생긴 드리프트가 최대 1시간 내 자동 해소된다.
- */
-const scheduledReconcileCompetitionSlotsOptions = appendRaceSecrets({
-  schedule: "0 * * * *",
-  timeZone: "Asia/Seoul",
-  timeoutSeconds: 300,
-  memory: "256MiB",
-});
-/** 대회 종료(raceDate) 후 이 기간이 지나면 신청 변동이 더 없다고 보고 매시간 리컨실 대상에서 제외한다 */
-const RECONCILE_SKIP_AFTER_RACE_MS = 7 * 24 * 3600 * 1000;
-
-exports.scheduledReconcileCompetitionSlots = onSchedule(
-  scheduledReconcileCompetitionSlotsOptions,
-  async () => {
-    const db = admin.firestore();
-    const compsSnap = await db.collection(RACE_COMPETITIONS_COLLECTION).get();
-    const nowMs = Date.now();
-    let reconciled = 0;
-    let skipped = 0;
-    let drifted = 0;
-
-    for (const doc of compsSnap.docs) {
-      /* eslint-disable no-await-in-loop */
-      try {
-        const comp = doc.data() || {};
-        const raceMs = comp.raceDate && comp.raceDate.toMillis ? comp.raceDate.toMillis() : null;
-        if (raceMs != null && raceMs < nowMs - RECONCILE_SKIP_AFTER_RACE_MS) {
-          // 대회가 끝난 지 오래돼 더 이상 신청서가 늘거나 취소될 일이 없는 대회는 매시간 전체 신청
-          // 내역을 다시 읽지 않는다 — 대회 수가 쌓일수록 이 부분이 리컨실 비용의 대부분을 차지한다.
-          skipped += 1;
-          continue;
-        }
-        const result = await reconcileCompetitionSlotCount(db, doc.id, comp);
-        if (result) {
-          reconciled += 1;
-          if (Number(result.before) !== result.after) {
-            drifted += 1;
-            console.log(
-              "[scheduledReconcileCompetitionSlots] 드리프트 보정:",
-              doc.id,
-              result.before,
-              "→",
-              result.after
-            );
-          }
-        }
-      } catch (e) {
-        console.error("[scheduledReconcileCompetitionSlots]", doc.id, e && e.message ? e.message : e);
-      }
-      /* eslint-enable no-await-in-loop */
-    }
-
-    console.log("[scheduledReconcileCompetitionSlots] 완료", { reconciled, skipped, drifted });
   }
 );
 
