@@ -283,10 +283,12 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
      * 6·12·18시처럼 3~6시간 간격으로만 값을 제공하는 경우가 있다(실측 확인 — 정확히 이
      * 증상으로 06/08/10/12/14/16/18시 중 06·12·18시만 채워짐). 정확히 그 시각이 없으면
      * 같은 날짜 안에서 가장 가까운 시각의 예보로 대체해 빈 칸("-")이 남지 않게 한다.
+     * 반환값에 실제로 사용한 원본 시각(key)도 함께 담아, 몇 개의 서로 다른 시각으로부터
+     * 대체됐는지(=진짜 시간별 데이터인지) 아래에서 판정할 수 있게 한다.
      */
     const nearestRow = (h) => {
-      const exact = byFcstTime[pad2(h) + "00"];
-      if (exact) return exact;
+      const exactKey = pad2(h) + "00";
+      if (byFcstTime[exactKey]) return { row: byFcstTime[exactKey], key: exactKey };
       const targetMin = h * 60;
       let nearestKey = null;
       let nearestDiff = Infinity;
@@ -298,12 +300,14 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
           nearestKey = t;
         }
       });
-      return nearestKey ? byFcstTime[nearestKey] : null;
+      return nearestKey ? { row: byFcstTime[nearestKey], key: nearestKey } : { row: null, key: null };
     };
 
+    const usedFcstKeys = new Set();
     const kmaHours = TARGET_HOURS.map((h) => {
-      const row = nearestRow(h);
+      const { row, key } = nearestRow(h);
       if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
+      usedFcstKeys.add(key);
       const tempC = row.TMP != null ? Number(row.TMP) : null;
       const meta = iconAndLabelFor(row.SKY, row.PTY);
       return {
@@ -315,7 +319,14 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
         label: meta.label,
       };
     });
-    if (kmaHours.some((h) => h.tempC != null)) {
+    /**
+     * usedFcstKeys가 1개뿐이면(=7개 슬롯 전부가 동일한 원본 시각 1개로 대체된 것) 온도·하늘
+     * 상태가 전부 똑같이 찍히는 버그가 된다(실측 확인 — 예보 지평선 끝자락에서 그 날짜의
+     * fcstTime이 딱 1개만 오는 경우 발생). 이런 경우는 "시간별 데이터"로 볼 수 없으므로
+     * 신뢰하지 않고 Open-Meteo 폴백으로 넘긴다. 2개 이상(예: 06·12·18시만 제공되는 부분
+     * 결측)이면 기존처럼 대체값을 그대로 허용한다.
+     */
+    if (kmaHours.some((h) => h.tempC != null) && usedFcstKeys.size >= 2) {
       hours = kmaHours;
       source = "kma";
     }
