@@ -9261,14 +9261,7 @@ function OpenRidingDetail(props) {
       var uid = String(userId);
       var levelStr = ride.level != null ? String(ride.level) : '';
 
-      function finishWithPeak(peakW, wKg) {
-        var ww =
-          Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
-        var usedPeak = Number(peakW) > 0;
-        var refSoloFn =
-          typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
-            ? window.getFilterInterestReferenceSoloSpeedKmH
-            : null;
+      function applyRefSolo(refSolo, usedPeak, usedFtpFallback) {
         var intClsFn =
           typeof window !== 'undefined' && typeof window.classifyOpenRidingInterestLevelFilter === 'function'
             ? window.classifyOpenRidingInterestLevelFilter
@@ -9277,8 +9270,6 @@ function OpenRidingDetail(props) {
           typeof window !== 'undefined' && typeof window.getOpenRidingSoloTierLevelLabelFromKmH === 'function'
             ? window.getOpenRidingSoloTierLevelLabelFromKmH
             : null;
-        var refSolo =
-          refSoloFn && prof.ok && ww > 0 ? refSoloFn(Number(peakW) > 0 ? Number(peakW) : 0, prof.ftp, ww) : null;
         var part =
           intClsFn && refSolo != null && refSolo > 0 && levelStr
             ? intClsFn(refSolo, levelStr)
@@ -9290,7 +9281,7 @@ function OpenRidingDetail(props) {
           setDetailLevelPeakHint({
             refSoloKmh: refSolo,
             usedPeak: !!usedPeak,
-            usedFtpFallback: !!(prof.ok && !usedPeak && Number(prof.ftp) > 0 && refSolo != null),
+            usedFtpFallback: !!usedFtpFallback,
             myTierLabel: myTier,
             profileOk: prof.ok
           });
@@ -9298,38 +9289,77 @@ function OpenRidingDetail(props) {
         }
       }
 
+      function finishWithPeak(peakW, wKg) {
+        var ww =
+          Number(peakW) > 0 && Number(wKg) > 0 ? Number(wKg) : prof.ok ? prof.weight : 0;
+        var usedPeak = Number(peakW) > 0;
+        var refSoloFn =
+          typeof window !== 'undefined' && typeof window.getFilterInterestReferenceSoloSpeedKmH === 'function'
+            ? window.getFilterInterestReferenceSoloSpeedKmH
+            : null;
+        var refSolo =
+          refSoloFn && prof.ok && ww > 0 ? refSoloFn(Number(peakW) > 0 ? Number(peakW) : 0, prof.ftp, ww) : null;
+        applyRefSolo(refSolo, usedPeak, !!(prof.ok && !usedPeak && Number(prof.ftp) > 0 && refSolo != null));
+      }
+
       /**
-       * 세부 내용의 '나의 평지 항속 능력'은 최근 90일 중 60분 최고 평균 파워(피크)를 투입한 평속으로 표시.
-       * (랭킹보드 6개월 집계 대신 본인 로그에서 90일 윈도로 직접 산출 — 기간 의미가 명확하고 캐시 영향 없음)
+       * 최근 로그를 매번 다시 받아 재계산하는 대신, rides 저장 트리거가 이미 계산해 둔
+       * user_ranking_metrics(=랭킹보드 독주 탭과 동일 90일 60분 MMP 산출)를 먼저 조회한다.
+       * 값이 있으면(90일 내 기록 존재) 그대로 쓰고, 없으면(신규 유저 등) 기존 로그
+       * 재계산 경로로 폴백한다 — 세부 내용의 '나의 평지 항속 능력'은 최근 90일 중 60분
+       * 최고 평균 파워(피크)를 투입한 평속으로 표시.
        */
-      var getLogsFn =
-        typeof window !== 'undefined' && typeof window.getUserTrainingLogs === 'function'
-          ? window.getUserTrainingLogs
+      function recomputeFromLogs() {
+        var getLogsFn =
+          typeof window !== 'undefined' && typeof window.getUserTrainingLogs === 'function'
+            ? window.getUserTrainingLogs
+            : null;
+        var computeAbilityFn =
+          typeof window !== 'undefined' &&
+          typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
+            ? window.stelvioComputeOneHourAbilityFromLogs
+            : null;
+        if (!getLogsFn || !computeAbilityFn) {
+          finishWithPeak(0, 0);
+          return;
+        }
+        getLogsFn(uid, { limit: 400 })
+          .then(function (logs) {
+            if (cancelled) return;
+            var metrics = computeAbilityFn(Array.isArray(logs) ? logs : [], {
+              ftp: prof.ftp,
+              weight: prof.weight,
+              windowDays: 90
+            });
+            var peakW = metrics && Number(metrics.peak60minWatts) > 0 ? Number(metrics.peak60minWatts) : 0;
+            finishWithPeak(peakW, prof.ok ? prof.weight : 0);
+          })
+          .catch(function () {
+            if (!cancelled) finishWithPeak(0, 0);
+          });
+      }
+
+      var getSoloSpeedFn =
+        typeof window !== 'undefined' && typeof window.getUserSoloSpeedMetrics === 'function'
+          ? window.getUserSoloSpeedMetrics
           : null;
-      var computeAbilityFn =
-        typeof window !== 'undefined' &&
-        typeof window.stelvioComputeOneHourAbilityFromLogs === 'function'
-          ? window.stelvioComputeOneHourAbilityFromLogs
-          : null;
-      if (!getLogsFn || !computeAbilityFn) {
-        finishWithPeak(0, 0);
+      if (!getSoloSpeedFn) {
+        recomputeFromLogs();
         return function () {
           cancelled = true;
         };
       }
-      getLogsFn(uid, { limit: 400 })
-        .then(function (logs) {
+      getSoloSpeedFn(uid)
+        .then(function (stored) {
           if (cancelled) return;
-          var metrics = computeAbilityFn(Array.isArray(logs) ? logs : [], {
-            ftp: prof.ftp,
-            weight: prof.weight,
-            windowDays: 90
-          });
-          var peakW = metrics && Number(metrics.peak60minWatts) > 0 ? Number(metrics.peak60minWatts) : 0;
-          finishWithPeak(peakW, prof.ok ? prof.weight : 0);
+          if (stored && Number(stored.speedKmh) > 0) {
+            applyRefSolo(Number(stored.speedKmh), Number(stored.peak60Watts) > 0, false);
+            return;
+          }
+          recomputeFromLogs();
         })
         .catch(function () {
-          if (!cancelled) finishWithPeak(0, 0);
+          if (!cancelled) recomputeFromLogs();
         });
 
       return function () {

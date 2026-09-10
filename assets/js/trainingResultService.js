@@ -1183,9 +1183,28 @@ export async function getTrainingLogsByDateRange(userId, year, month, firestoreI
 }
 
 /**
+ * 라이딩 모임 상세 "레벨"(나의 평지 항속 능력) — 랭킹보드 독주 탭과 동일 산출 로직으로 이미
+ * 계산·저장된 값(user_ranking_metrics)을 단건 조회. 실패 시 null을 반환하므로, 호출부는
+ * null이거나 speedKmh가 0이면(=90일 내 기록 없음) 기존 로그 재계산 경로로 폴백해야 한다.
+ * @param {string} userId Firebase UID
+ * @returns {Promise<{speedKmh:number, peak60Watts:number, peak60Date:string|null, windowStart:string|null, windowEnd:string|null, updatedAt:string|null}|null>}
+ */
+export async function getUserSoloSpeedMetrics(userId) {
+  if (!userId) return null;
+  try {
+    const sbMod = await import('./supabaseRidesReadClient.js');
+    return await sbMod.fetchUserSoloSpeedFromSupabase(userId);
+  } catch (e) {
+    console.warn('[getUserSoloSpeedMetrics] 조회 실패:', e && e.message);
+    return null;
+  }
+}
+
+/**
  * TSS 계산 함수를 전역으로 노출 (디버깅/테스트용)
  */
 if (typeof window !== 'undefined') {
+  window.getUserSoloSpeedMetrics = getUserSoloSpeedMetrics;
   window.calculateTSS = calculateTSS;
   window.calculateMaxAveragePower = calculateMaxAveragePower;
   window.calculateMaxWattsFromPowerStream = calculateMaxWattsFromPowerStream;

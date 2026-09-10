@@ -12,6 +12,9 @@ const TRAINING_LOGS_READ_RELAY_DEFAULT =
 const YEARLY_PEAKS_READ_RELAY_DEFAULT =
   'https://us-central1-stelvio-ai.cloudfunctions.net/getYearlyPeaksForRead';
 
+const SOLO_SPEED_READ_RELAY_DEFAULT =
+  'https://us-central1-stelvio-ai.cloudfunctions.net/getUserSoloSpeedForRead';
+
 function getReadRelayUrl() {
   const c =
     (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
@@ -22,6 +25,12 @@ function getYearlyPeaksReadRelayUrl() {
   const c =
     (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
   return String(c.yearlyPeaksReadUrl || YEARLY_PEAKS_READ_RELAY_DEFAULT).trim();
+}
+
+function getSoloSpeedReadRelayUrl() {
+  const c =
+    (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
+  return String(c.soloSpeedReadUrl || SOLO_SPEED_READ_RELAY_DEFAULT).trim();
 }
 
 async function getFirebaseIdTokenForReadRelay() {
@@ -345,4 +354,41 @@ export async function fetchYearlyPeaksForYearFromSupabase(userId, year) {
     throw new Error(msg);
   }
   return json.peaks || null;
+}
+
+/**
+ * 라이딩 모임 상세 "레벨"(나의 평지 항속 능력) — 랭킹보드 독주 탭과 동일 산출 로직으로
+ * 이미 계산·저장된 user_ranking_metrics.speed_28d_kmh를 단건 조회(Auth Bridge 불필요).
+ * 90일 내 기록이 없어 값이 0이면 호출부가 기존 FTP 폴백 로직으로 대체해야 한다.
+ */
+export async function fetchUserSoloSpeedFromSupabase(userId) {
+  if (!userId) return null;
+  const url = new URL(getSoloSpeedReadRelayUrl());
+  url.searchParams.set('uid', String(userId).trim());
+  const token = await getFirebaseIdTokenForReadRelay();
+  const res = await fetch(url.toString(), {
+    method: 'GET',
+    headers: {
+      Authorization: 'Bearer ' + token,
+      Accept: 'application/json',
+    },
+    cache: 'no-store',
+  });
+  const json = await res.json().catch(function () {
+    return {};
+  });
+  if (!res.ok || !json.success) {
+    const msg =
+      (json.error && (json.error.message || json.error)) ||
+      'Solo speed relay HTTP ' + res.status;
+    throw new Error(msg);
+  }
+  return {
+    speedKmh: Number(json.speedKmh) > 0 ? Number(json.speedKmh) : 0,
+    peak60Watts: Number(json.peak60Watts) > 0 ? Number(json.peak60Watts) : 0,
+    peak60Date: json.peak60Date || null,
+    windowStart: json.windowStart || null,
+    windowEnd: json.windowEnd || null,
+    updatedAt: json.updatedAt || null,
+  };
 }

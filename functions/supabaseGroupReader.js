@@ -941,6 +941,54 @@ async function fetchUserRunWeeklyTss(firebaseUid) {
   };
 }
 
+/**
+ * 라이딩 모임 상세 "레벨"(나의 평지 항속 능력) — 랭킹보드 독주 탭과 동일 산출 로직·기간창
+ * (90일 60분 MMP 기반, supabase/migrations/20260629120000_solo_speed_90d_window.sql)으로
+ * rides insert 트리거(fn_refresh_user_ranking_metrics)가 이미 계산해 저장해 둔
+ * user_ranking_metrics를 단건 조회한다. 클라이언트가 매번 최근 로그 수백 건을 다시 받아
+ * 재계산할 필요가 없다 — 컬럼명은 legacy(speed_28d_kmh)이지만 실제 값은 90일 창 기준.
+ * @param {string} firebaseUid
+ */
+async function fetchUserSoloSpeedMetrics(firebaseUid) {
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const empty = {
+    speedKmh: 0,
+    peak60Watts: 0,
+    peak60Date: null,
+    windowStart: null,
+    windowEnd: null,
+    updatedAt: null,
+  };
+  if (!supabase) return empty;
+  const uid = String(firebaseUid || "").trim();
+  if (!uid) return empty;
+
+  const ns = supabaseDualWriteServer.uidNamespaceParam.value();
+  const mode =
+    supabaseDualWriteServer.uidModeParam.value() === "literal" ? "literal" : "v5";
+  const userUuid = supabaseDualWriteServer.resolveUserUuid(uid, ns, mode);
+  if (!userUuid) return empty;
+
+  const { data, error } = await supabase
+    .from("user_ranking_metrics")
+    .select(
+      "speed_28d_kmh, speed_peak60_watts, speed_peak60_date, speed_window_start, speed_window_end, metrics_updated_at"
+    )
+    .eq("user_id", userUuid)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return empty;
+
+  return {
+    speedKmh: Number(data.speed_28d_kmh) > 0 ? Number(data.speed_28d_kmh) : 0,
+    peak60Watts: Number(data.speed_peak60_watts) > 0 ? Number(data.speed_peak60_watts) : 0,
+    peak60Date: data.speed_peak60_date || null,
+    windowStart: data.speed_window_start || null,
+    windowEnd: data.speed_window_end || null,
+    updatedAt: data.metrics_updated_at || null,
+  };
+}
+
 const RUN_ACTIVITY_LOG_SELECT =
   "activity_id, source, activity_type, title, activity_date, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, avg_hr, max_hr, tss, summary_polyline";
 
@@ -1019,6 +1067,7 @@ module.exports = {
   fetchUserRunEffortsRecent,
   fetchUserRunActivitiesRecent,
   fetchUserRunWeeklyTss,
+  fetchUserSoloSpeedMetrics,
   fetchYearlyPeaksForYear,
   mapYearlyPeaksRowToFirestoreDoc,
   mapRideRowToFirestoreTrainingLog,

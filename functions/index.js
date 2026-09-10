@@ -11923,6 +11923,59 @@ exports.getRunWeeklyTssForRead = onRequest(
   }
 );
 
+/**
+ * 라이딩 모임 상세 "레벨"(나의 평지 항속 능력) — 랭킹보드 독주 탭과 동일 산출 로직으로
+ * rides 저장 트리거가 이미 계산해 둔 user_ranking_metrics를 단건 조회(재계산 없음).
+ * GET ?uid=
+ */
+exports.getUserSoloSpeedForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+
+    const requestedUid = String(req.query.uid || req.query.userId || "").trim();
+    if (!requestedUid) {
+      res.status(400).json({ success: false, error: "uid 필요" });
+      return;
+    }
+
+    const callerUid = await getUidFromRequest(req, res);
+    if (!callerUid) return;
+    if (String(callerUid).trim() !== requestedUid) {
+      res.status(403).json({ success: false, error: "본인 항속 능력만 조회할 수 있습니다." });
+      return;
+    }
+
+    try {
+      const metrics = await supabaseGroupReader.fetchUserSoloSpeedMetrics(requestedUid);
+      res.status(200).json({
+        success: true,
+        speedKmh: metrics.speedKmh,
+        peak60Watts: metrics.peak60Watts,
+        peak60Date: metrics.peak60Date,
+        windowStart: metrics.windowStart,
+        windowEnd: metrics.windowEnd,
+        updatedAt: metrics.updatedAt,
+        readBackend: "supabase",
+        via: "service_role_relay",
+      });
+    } catch (e) {
+      console.warn("[getUserSoloSpeedForRead]", e.message || e);
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 /** 자기 자신의 연간 최고기록 조회 — 같은 화면 재진입/새로고침 시 반복 호출 대비 짧게 캐싱.
  *  본인 데이터만 조회 가능한 엔드포인트라 캐시 키에 uid를 포함해도 다른 사용자와 섞이지 않는다. */
 const YEARLY_PEAKS_CACHE_TTL_MS = 60000;
