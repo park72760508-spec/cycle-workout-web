@@ -2878,6 +2878,9 @@
     } else if (isMine) {
       // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
       var deleteDisabled = item.status === 'RESERVED';
+      // 예약중 상태에서는 끌어올리기·수정이 거래 내용과 어긋날 수 있으므로 비활성화
+      // (판매완료 상태는 이 분기에 도달하지 않음 — 위쪽 SOLD 분기에서 별도 처리).
+      var bumpEditDisabled = item.status === 'RESERVED';
       // 직거래는 안전결제 없이 현장에서 대금·물품을 주고받으므로, 예약(RESERVED) 중인 직거래
       // 건이 있으면 구매자 화면의 "구매 확정하기/예약 취소"와 동일한 디자인의 버튼을
       // 판매자 화면 하단에도 배치해 판매자도 거래완료·예약취소를 처리할 수 있게 한다.
@@ -2886,8 +2889,8 @@
       })[0] || null;
       actionHtml =
         '<div class="market-detail-actions">' +
-          '<button type="button" class="market-btn market-btn--outline" id="marketDetailBumpBtn">끌어올리기</button>' +
-          '<button type="button" class="market-btn market-btn--outline" id="marketDetailEditBtn">수정</button>' +
+          '<button type="button" class="market-btn market-btn--outline' + (bumpEditDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailBumpBtn"' + (bumpEditDisabled ? ' disabled' : '') + '>끌어올리기</button>' +
+          '<button type="button" class="market-btn market-btn--outline' + (bumpEditDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailEditBtn"' + (bumpEditDisabled ? ' disabled' : '') + '>수정</button>' +
           '<button type="button" class="market-btn market-btn--danger' + (deleteDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailDeleteBtn"' + (deleteDisabled ? ' disabled' : '') + '>삭제</button>' +
         '</div>' +
         (activeDirectDealOrder
