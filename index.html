@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260906subTabRotateToggle1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=ranking-display-settings-20260911a" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -8847,6 +8847,7 @@
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
   <script src="assets/js/userManager.js?v=20260904flagCacheClear1"></script>
+  <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
   <!-- 워크아웃 화면 상태 관리: 카테고리(상태A) / 워크아웃 리스트(상태B) 전환 -->
@@ -12248,6 +12249,18 @@
         window.removeEventListener('stelvio-firestoreV9-ready', _onFsReady);
         stelvioSubscribeWithdrawnUserIds();
       }, { once: true });
+    }
+
+    /* 랭킹보드 전체 랭킹 + 펼쳐보기 표시 설정(기본순위 보기/내 순위 위아래) 사전 로드 */
+    if (typeof window.stelvioLoadRankingDisplaySettings === 'function') {
+      if (window.firestoreV9) {
+        window.stelvioLoadRankingDisplaySettings();
+      } else {
+        window.addEventListener('stelvio-firestoreV9-ready', function _onFsReadyRankingCfg() {
+          window.removeEventListener('stelvio-firestoreV9-ready', _onFsReadyRankingCfg);
+          window.stelvioLoadRankingDisplaySettings();
+        }, { once: true });
+      }
     }
 
     /** 탈퇴 랭킹 행 — account_status:'withdrawn' 또는 탈퇴 UID 집합(Firestore·localStorage) */
@@ -16187,6 +16200,15 @@
       btn.textContent = on ? '▲' : '▼';
     }
     window.stelvioSyncGcSegmentToggleUi = stelvioSyncGcSegmentToggleUi;
+    /** GC탭 + 관리자 계정에서만 "전체 랭킹 + 펼쳐보기" 표시 설정 톱니바퀴 노출 */
+    function stelvioSyncRankingDisplaySettingsBtnUi() {
+      var btn = document.getElementById('stelvioRankingDisplaySettingsBtn');
+      if (!btn) return;
+      var isGcTab = stelvioRankingState && stelvioRankingState.duration === 'gc';
+      var isAdmin = typeof stelvioRankingLoginIsAdmin === 'function' && stelvioRankingLoginIsAdmin();
+      btn.classList.toggle('hidden', !(isGcTab && isAdmin));
+    }
+    window.stelvioSyncRankingDisplaySettingsBtnUi = stelvioSyncRankingDisplaySettingsBtnUi;
     /** 랭킹 목록 재렌더 시 스크롤 위치 유지 (관심 필터 전환 등) */
     function stelvioWithRankingListScrollPreserved(renderFn) {
       var scrollEl = document.getElementById('stelvioRankingScrollArea');
@@ -18189,6 +18211,7 @@
       stelvioRankingGapState = {};
       stelvioGcSegmentsOn = false;
       stelvioSyncGcSegmentToggleUi();
+      if (typeof stelvioSyncRankingDisplaySettingsBtnUi === 'function') stelvioSyncRankingDisplaySettingsBtnUi();
       if (typeof stelvioGroupTabExpandedId !== 'undefined') stelvioGroupTabExpandedId = null;
       if (typeof stelvioGroupTabCachedMembers !== 'undefined') stelvioGroupTabCachedMembers = [];
       if (typeof stelvioStopGroupTabMembersOnly === 'function') stelvioStopGroupTabMembersOnly();
@@ -18241,6 +18264,7 @@
       }
       stelvioSyncPeakSegmentFilterUi();
       stelvioSyncGcSegmentToggleUi();
+      if (typeof stelvioSyncRankingDisplaySettingsBtnUi === 'function') stelvioSyncRankingDisplaySettingsBtnUi();
     }
     window.stelvioSyncDurationTabActiveUi = stelvioSyncDurationTabActiveUi;
 
@@ -25946,6 +25970,11 @@
         var htmlS = '';
         var TOP_N = STELVIO_RANKING_LIST_TOP_N;
         var NEIGH = STELVIO_RANKING_LIST_NEIGH;
+        var stelvioRestrictedCfg = typeof window.stelvioGetRankingDisplaySettings === 'function'
+          ? window.stelvioGetRankingDisplaySettings('cycle')
+          : { topN: 100, neigh: 50 };
+        var RESTRICTED_TOP_N = stelvioRestrictedCfg.topN;
+        var RESTRICTED_NEIGH = stelvioRestrictedCfg.neigh;
         var lastIdx = arr.length - 1;
         var supremoExpanded = !!(stelvioRankingGapState.Supremo || {}).expanded;
         if (stelvioRankingState.listFilter === 'interest') supremoExpanded = true;
@@ -26197,7 +26226,7 @@
             } else {
               if (stelvioIsSupremoTrafficLimitedGrade()) {
                 var idxNz = {};
-                var capNz = Math.min(99, lastIdx);
+                var capNz = Math.min(RESTRICTED_TOP_N - 1, lastIdx);
                 for (var e0 = topEnd0 + 1; e0 <= capNz; e0++) idxNz[e0] = true;
                 renderSupremoRunsFromIdxSet(idxNz);
                 if (lastIdx > capNz) htmlS += dotsRowS();
@@ -26227,15 +26256,15 @@
             htmlS += supremoExpandControlRow(false);
           } else {
             var idxLim = {};
-            var top100End = Math.min(99, lastIdx);
+            var top100End = Math.min(RESTRICTED_TOP_N - 1, lastIdx);
             for (var ti = 0; ti <= top100End; ti++) idxLim[ti] = true;
             if (userIdxS >= 0) {
-              var loNx = Math.max(0, userIdxS - 20);
-              var hiNx = Math.min(lastIdx, userIdxS + 20);
+              var loNx = Math.max(0, userIdxS - RESTRICTED_NEIGH);
+              var hiNx = Math.min(lastIdx, userIdxS + RESTRICTED_NEIGH);
               for (var nix = loNx; nix <= hiNx; nix++) idxLim[nix] = true;
             } else if (myRank1s > 0) {
               for (var nri = 0; nri <= lastIdx; nri++) {
-                if (Math.abs(stelvioRankingRowListRank(arr[nri], nri) - myRank1s) <= 20) idxLim[nri] = true;
+                if (Math.abs(stelvioRankingRowListRank(arr[nri], nri) - myRank1s) <= RESTRICTED_NEIGH) idxLim[nri] = true;
               }
             }
             renderSupremoRunsFromIdxSet(idxLim);
@@ -26686,6 +26715,62 @@
       if (showRankingBoard !== false && typeof openStelvioRankingBoardModal === 'function') openStelvioRankingBoardModal();
     }
     window.closeStelvioOvertakeReportModal = closeStelvioOvertakeReportModal;
+
+    /** 랭킹보드 "전체 랭킹 + 펼쳐보기" 표시 설정 모달 — CYCLE(GC)·RUN(종합) 관리자 전용, 설정값은 platform별 독립 */
+    function openStelvioRankingDisplaySettingsModal(platform) {
+      var p = platform === 'run' ? 'run' : 'cycle';
+      var m = document.getElementById('stelvioRankingDisplaySettingsModal');
+      if (!m) return;
+      m.setAttribute('data-platform', p);
+      var titleEl = document.getElementById('stelvioRankingDisplaySettingsTitle');
+      if (titleEl) titleEl.textContent = (p === 'run' ? 'RUN' : 'CYCLE') + ' 랭킹 표시 설정';
+      var cfg = typeof window.stelvioGetRankingDisplaySettings === 'function'
+        ? window.stelvioGetRankingDisplaySettings(p)
+        : { topN: 100, neigh: 50 };
+      var topNInput = document.getElementById('stelvioRankingSettingsTopN');
+      var neighInput = document.getElementById('stelvioRankingSettingsNeigh');
+      if (topNInput) topNInput.value = cfg.topN;
+      if (neighInput) neighInput.value = cfg.neigh;
+      m.classList.remove('hidden');
+    }
+    window.openStelvioRankingDisplaySettingsModal = openStelvioRankingDisplaySettingsModal;
+
+    function closeStelvioRankingDisplaySettingsModal() {
+      var m = document.getElementById('stelvioRankingDisplaySettingsModal');
+      if (m) m.classList.add('hidden');
+    }
+    window.closeStelvioRankingDisplaySettingsModal = closeStelvioRankingDisplaySettingsModal;
+
+    function applyStelvioRankingDisplaySettings() {
+      var m = document.getElementById('stelvioRankingDisplaySettingsModal');
+      var p = (m && m.getAttribute('data-platform')) === 'run' ? 'run' : 'cycle';
+      var topNInput = document.getElementById('stelvioRankingSettingsTopN');
+      var neighInput = document.getElementById('stelvioRankingSettingsNeigh');
+      var topN = parseInt(topNInput && topNInput.value, 10);
+      var neigh = parseInt(neighInput && neighInput.value, 10);
+      if (!isFinite(topN) || topN < 1) {
+        if (typeof showToast === 'function') showToast('기본순위 보기 값을 1 이상으로 입력해 주세요.', 'error');
+        return;
+      }
+      if (!isFinite(neigh) || neigh < 0) {
+        if (typeof showToast === 'function') showToast('내 순위 기준 위아래 값을 0 이상으로 입력해 주세요.', 'error');
+        return;
+      }
+      if (typeof window.stelvioSaveRankingDisplaySettings !== 'function') return;
+      window.stelvioSaveRankingDisplaySettings(p, topN, neigh)
+        .then(function () {
+          if (typeof showToast === 'function') showToast('랭킹 표시 설정이 적용되었습니다.', 'success');
+          closeStelvioRankingDisplaySettingsModal();
+          if (p === 'cycle' && typeof stelvioWithRankingListScrollPreserved === 'function' &&
+              typeof renderStelvioActiveCategory === 'function') {
+            stelvioWithRankingListScrollPreserved(function () { renderStelvioActiveCategory(); });
+          }
+        })
+        .catch(function (e) {
+          if (typeof showToast === 'function') showToast('설정 저장에 실패했습니다. ' + (e && e.message ? e.message : ''), 'error');
+        });
+    }
+    window.applyStelvioRankingDisplaySettings = applyStelvioRankingDisplaySettings;
 
     function handleStelvioOvertakeRecommendClick() {
       closeStelvioOvertakeReportModal(false);
@@ -28758,7 +28843,7 @@
   <script defer src="assets/js/runningRanking/runningRankingCrewTab.js?v=20260808globalSegRank1"></script>
   <script defer src="assets/js/runningRanking/runningRankingRoutes.js"></script>
   <script defer src="assets/js/runningRanking/runWeeklyTop10.js?v=run-weekly-top10-rankmv-consistency-20260706e"></script>
-  <script defer src="assets/js/runningRanking/runningRankingListView.js"></script>
+  <script defer src="assets/js/runningRanking/runningRankingListView.js?v=ranking-display-settings-20260911a"></script>
   <script defer src="assets/js/runningRanking/runningRankingSearch.js"></script>
   <script src="assets/js/runningRanking/components/RunningRankingSkeleton.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingRow.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
@@ -28767,7 +28852,7 @@
   <script src="assets/js/runningRanking/components/RunningRankingVirtualList.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningHexagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runningRanking/components/RunningRankingCrewTab.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/runningRanking/components/RunningRankingScreen.jsx?v=run-ranking-heat-opt-20260803" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/runningRanking/components/RunningRankingScreen.jsx?v=ranking-display-settings-20260911a" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script>
     (function () {
       function runningRankingScreenElement() {
@@ -42551,6 +42636,9 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                   <button type="button" id="stelvioRankingListFilterStar" class="stelvio-ranking-list-filter-star stelvio-rank-star-btn" aria-pressed="false" aria-label="관심만 보기" title="관심만 보기"><svg class="stelvio-rank-star-svg stelvio-rank-star-svg--outline" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="1.12em" height="1.12em" aria-hidden="true" focusable="false"><path fill="none" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" stroke-linecap="round" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg></button>
                 </span>
                 <button type="button" id="stelvioGcSegmentToggleBtn" class="running-ranking-segment-toggle-btn hidden" aria-pressed="false" aria-label="구간 W/kg 펼치기" title="구간 W/kg 펼치기">▼</button>
+                <button type="button" id="stelvioRankingDisplaySettingsBtn" class="stelvio-rank-settings-gear-btn hidden" aria-label="랭킹 표시 설정" title="랭킹 표시 설정" onclick="if(typeof openStelvioRankingDisplaySettingsModal==='function')openStelvioRankingDisplaySettingsModal('cycle');">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                </button>
               </span>
               <span class="stelvio-category-header-unit">W/kg</span>
             </div>
@@ -43433,6 +43521,38 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
       <div class="stelvio-overtake-report-footer">
         <button type="button" class="stelvio-overtake-recommend-btn stelvio-orange-btn" onclick="handleStelvioOvertakeRecommendClick();">
           추월하기 훈련 추천
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 랭킹보드 "전체 랭킹 + 펼쳐보기" 표시 설정 (관리자 전용) -->
+  <div id="stelvioRankingDisplaySettingsModal" class="training-detail-modal stelvio-ios-popup hidden" onclick="if(event.target === this) closeStelvioRankingDisplaySettingsModal();">
+    <div class="training-detail-modal-content stelvio-ranking-modal-content" onclick="event.stopPropagation();" style="max-width: 400px;">
+      <div class="training-detail-header">
+        <h3 class="training-detail-title" id="stelvioRankingDisplaySettingsTitle">랭킹 표시 설정</h3>
+        <button class="training-detail-close" onclick="closeStelvioRankingDisplaySettingsModal()" aria-label="닫기">&times;</button>
+      </div>
+      <div class="stelvio-ranking-display-settings-body">
+        <p class="stelvio-ranking-display-settings-desc">전체 랭킹 + 펼쳐보기 시 일반 사용자에게 표시되는 범위를 설정합니다.</p>
+        <div class="stelvio-ranking-display-settings-field">
+          <label for="stelvioRankingSettingsTopN">기본순위 보기</label>
+          <div class="stelvio-ranking-display-settings-input-wrap">
+            <input type="number" id="stelvioRankingSettingsTopN" min="1" step="1" inputmode="numeric" />
+            <span class="stelvio-ranking-display-settings-unit">위</span>
+          </div>
+        </div>
+        <div class="stelvio-ranking-display-settings-field">
+          <label for="stelvioRankingSettingsNeigh">내 순위 기준 위아래</label>
+          <div class="stelvio-ranking-display-settings-input-wrap">
+            <input type="number" id="stelvioRankingSettingsNeigh" min="0" step="1" inputmode="numeric" />
+            <span class="stelvio-ranking-display-settings-unit">위</span>
+          </div>
+        </div>
+      </div>
+      <div class="stelvio-overtake-report-footer">
+        <button type="button" class="stelvio-overtake-recommend-btn stelvio-orange-btn" onclick="if(typeof applyStelvioRankingDisplaySettings==='function')applyStelvioRankingDisplaySettings();">
+          적용하기
         </button>
       </div>
     </div>

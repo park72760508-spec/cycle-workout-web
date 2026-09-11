@@ -30210,6 +30210,71 @@ html.global-hub-glass-nav-ios-phone #affiliateScreen .open-riding-group-form-foo
   color: #7c3aed;
   border-color: #ddd6fe;
 }
+
+/* 랭킹보드 "전체 랭킹 + 펼쳐보기" 표시 설정 톱니바퀴 (관리자 전용) */
+.stelvio-rank-settings-gear-btn {
+  min-width: 22px;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.stelvio-rank-settings-gear-btn:hover {
+  border-color: #fdba74;
+  color: #ea580c;
+}
+
+/* 랭킹 표시 설정 모달 폼 */
+.stelvio-ranking-display-settings-body {
+  padding: 16px;
+}
+.stelvio-ranking-display-settings-desc {
+  margin: 0 0 16px;
+  font-size: 12.8px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+.stelvio-ranking-display-settings-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.stelvio-ranking-display-settings-field label {
+  font-size: 14.4px;
+  font-weight: 600;
+  color: #1f2937;
+}
+.stelvio-ranking-display-settings-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.stelvio-ranking-display-settings-input-wrap input[type="number"] {
+  width: 76px;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14.4px;
+  text-align: right;
+}
+.stelvio-ranking-display-settings-unit {
+  font-size: 13.6px;
+  color: #6b7280;
+}
 #runningRankingScreen .running-ranking-list-body--segments-off .stelvio-rank-row.running-ranking-row {
   flex-wrap: nowrap;
   padding: 3px 0;

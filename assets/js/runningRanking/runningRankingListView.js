@@ -31,6 +31,14 @@
     return !Number.isNaN(n) && (n === 2 || n === 3);
   }
 
+  /** 관리자 설정(전체 랭킹 + 펼쳐보기 표시 범위) — 미로드 시 기본값 100/50 (CYCLE와 독립) */
+  function getRestrictedConfig() {
+    if (typeof window.stelvioGetRankingDisplaySettings === 'function') {
+      return window.stelvioGetRankingDisplaySettings('run');
+    }
+    return { topN: 100, neigh: 50 };
+  }
+
   function rowListRank(item, idx0) {
     if (item && item.rank != null && isFinite(Number(item.rank))) return Number(item.rank);
     return idx0 + 1;
@@ -155,8 +163,9 @@
       }
       if (expanded && lastIdx > topEnd0 && canGap) {
         if (limited) {
+          var restrictedCfg0 = getRestrictedConfig();
           var limNz = [];
-          var capNz = Math.min(99, lastIdx);
+          var capNz = Math.min(restrictedCfg0.topN - 1, lastIdx);
           for (var e0 = 0; e0 <= capNz; e0++) limNz.push(e0);
           return {
             mode: 'indices',
@@ -199,17 +208,18 @@
           expandCollapsed: false
         };
       }
+      var restrictedCfg1 = getRestrictedConfig();
       var idxLim = {};
-      var top100End = Math.min(99, lastIdx);
+      var top100End = Math.min(restrictedCfg1.topN - 1, lastIdx);
       var ti;
       for (ti = 0; ti <= top100End; ti++) idxLim[ti] = true;
       if (userIdx >= 0) {
-        var loNx = Math.max(0, userIdx - 20);
-        var hiNx = Math.min(lastIdx, userIdx + 20);
+        var loNx = Math.max(0, userIdx - restrictedCfg1.neigh);
+        var hiNx = Math.min(lastIdx, userIdx + restrictedCfg1.neigh);
         for (var nix = loNx; nix <= hiNx; nix++) idxLim[nix] = true;
       } else if (myRank1s > 0) {
         for (var nri = 0; nri <= lastIdx; nri++) {
-          if (Math.abs(rowListRank(arr[nri], nri) - myRank1s) <= 20) idxLim[nri] = true;
+          if (Math.abs(rowListRank(arr[nri], nri) - myRank1s) <= restrictedCfg1.neigh) idxLim[nri] = true;
         }
       }
       var limSorted = Object.keys(idxLim).map(Number).sort(function (a, b) { return a - b; });
