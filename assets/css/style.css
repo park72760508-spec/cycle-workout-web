@@ -30972,6 +30972,10 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   display: flex;
   gap: 6px;
   overflow-x: auto;
+  /* overflow-x:auto는 overflow-y도 암묵적으로 auto가 되어(visible 불가) 세로로 살짝 튀어나온
+     내용을 잘라낸다 — 찜 탭 아이콘의 숫자 배지(top:-4px)가 위쪽이 잘려 보이던 원인.
+     배지가 들어갈 여유만큼 위쪽 패딩을 둬서 잘리지 않게 한다. */
+  padding-top: 6px;
   padding-bottom: 10px;
   flex-shrink: 0;
   -ms-overflow-style: none;
