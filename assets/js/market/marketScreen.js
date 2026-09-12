@@ -5258,10 +5258,8 @@
     if (keyword.length < 2) { toast('키워드를 2글자 이상 입력해 주세요.'); return; }
     var priceMinInput = document.getElementById('marketAlertSettingsPriceMin');
     var priceMaxInput = document.getElementById('marketAlertSettingsPriceMax');
-    var priceMinRaw = (priceMinInput && priceMinInput.value || '').trim();
-    var priceMaxRaw = (priceMaxInput && priceMaxInput.value || '').trim();
-    var priceMin = priceMinRaw ? Number(priceMinRaw) : null;
-    var priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
+    var priceMin = priceMinInput && priceMinInput.value ? getMarketFormPriceRaw(priceMinInput) : null;
+    var priceMax = priceMaxInput && priceMaxInput.value ? getMarketFormPriceRaw(priceMaxInput) : null;
     if (priceMin != null && priceMax != null && priceMin > priceMax) {
       toast('최소 금액이 최대 금액보다 클 수 없습니다.');
       return;
@@ -5297,8 +5295,20 @@
     renderMarketAlertSettingsSubCategoryChips();
     var priceMinInput = document.getElementById('marketAlertSettingsPriceMin');
     var priceMaxInput = document.getElementById('marketAlertSettingsPriceMax');
-    if (priceMinInput) priceMinInput.value = st.priceMin != null ? st.priceMin : '';
-    if (priceMaxInput) priceMaxInput.value = st.priceMax != null ? st.priceMax : '';
+    if (priceMinInput) {
+      priceMinInput.value = st.priceMin != null ? Number(st.priceMin).toLocaleString('ko-KR') : '';
+      priceMinInput.oninput = function () {
+        var digits = priceMinInput.value.replace(/[^0-9]/g, '');
+        priceMinInput.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+      };
+    }
+    if (priceMaxInput) {
+      priceMaxInput.value = st.priceMax != null ? Number(st.priceMax).toLocaleString('ko-KR') : '';
+      priceMaxInput.oninput = function () {
+        var digits = priceMaxInput.value.replace(/[^0-9]/g, '');
+        priceMaxInput.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
+      };
+    }
     var doneBtn = document.getElementById('marketAlertKeywordSettingsDoneBtn');
     if (doneBtn) doneBtn.onclick = handleMarketAlertKeywordSettingsSubmit;
   };
