@@ -30794,6 +30794,109 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-header-icon-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
 .market-header-icon-btn:disabled img { opacity: 0.35; }
 
+/* 헤더 우측 텍스트 액션 버튼(알림 조건 설정 화면의 "완료" 등) */
+.market-header-text-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #c2410c;
+  font-size: 14.4px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 8px 4px;
+}
+.market-header-text-btn:active { opacity: 0.7; }
+
+/* 마이페이지 서브탭 아이콘 위 숫자 배지(찜 탭의 알림 매칭 건수) — 하단 네비 점 배지와 같은
+   오렌지 톤이지만 숫자가 들어가야 해서 폭을 내용에 맞춰 늘린다. */
+.market-subtab__badge {
+  position: absolute;
+  top: -4px;
+  right: -6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #ea580c;
+  border: 1.5px solid #fff;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+.market-subtab__icon-wrap { position: relative; }
+
+/* 알림 탭 — 키워드 빠른 등록 폼 + 목록 */
+.market-alert-keyword-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+}
+.market-alert-keyword-form .market-form-input { flex: 1; min-width: 0; }
+.market-alert-keyword-list { padding: 0 12px 12px; }
+.market-alert-keyword-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 4px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.market-alert-keyword-row__text {
+  flex: 1;
+  min-width: 0;
+  font-size: 14.4px;
+  font-weight: 600;
+  color: #1f2937;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.market-alert-keyword-row__icon-btn {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.market-alert-keyword-row__icon-btn:active { background: #f1f5f9; }
+
+/* 알림 조건 설정 화면 — 카테고리 토글 / 서브 카테고리 칩 */
+.market-alert-settings-category-tabs,
+.market-alert-settings-subcategory-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.market-alert-settings-category-btn,
+.market-alert-settings-subcategory-chip {
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.market-alert-settings-category-btn.active,
+.market-alert-settings-subcategory-chip.active {
+  background: rgba(234, 88, 12, 0.12);
+  border-color: #fdba74;
+  color: #c2410c;
+}
+.market-alert-settings-price-row { align-items: center; }
+.market-alert-settings-price-sep { flex: 0 0 auto; color: #94a3b8; }
+
 /* 서브 카테고리 순환 선택 ON/OFF 토글 — 원 모양, 다른 활성 탭(카테고리 탭·서브탭)과
    동일한 흐릿한 오렌지 톤으로 ON 상태를 표시한다. */
 .market-subcategory-rotate-toggle {

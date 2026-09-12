@@ -489,6 +489,77 @@ export async function getMyFavoriteItemIds() {
   });
 }
 
+/** 원하는 물건 키워드 알림 — 빠른 등록은 키워드만 채워 넣고(카테고리·서브카테고리·가격 무관),
+ * "설정" 화면에서 나머지 필드를 좁힐 수 있다. */
+export async function getMyMarketAlertKeywords() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const userId = await getMySupabaseUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from('market_alert_keywords')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  });
+}
+
+export async function createMarketAlertKeyword(keyword) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const userId = await getMySupabaseUserId();
+    if (!userId) throw new Error('로그인이 필요합니다.');
+    const { data, error } = await supabase
+      .from('market_alert_keywords')
+      .insert({ user_id: userId, keyword: String(keyword || '').trim() })
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  });
+}
+
+export async function updateMarketAlertKeyword(id, fields) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const patch = { updated_at: new Date().toISOString() };
+    if (fields.keyword != null) patch.keyword = String(fields.keyword).trim();
+    if ('category' in fields) patch.category = fields.category || null;
+    if ('subCategory' in fields) patch.sub_category = fields.subCategory || null;
+    if ('priceMin' in fields) patch.price_min = fields.priceMin != null ? Number(fields.priceMin) : null;
+    if ('priceMax' in fields) patch.price_max = fields.priceMax != null ? Number(fields.priceMax) : null;
+    const { data, error } = await supabase
+      .from('market_alert_keywords')
+      .update(patch)
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  });
+}
+
+export async function deleteMarketAlertKeyword(id) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.from('market_alert_keywords').delete().eq('id', id);
+    if (error) throw error;
+  });
+}
+
+/** 내 키워드 조건에 맞는 활성 매물 — Postgres 함수(get_my_market_alert_matches)가 auth.uid()
+ * 기준으로 카테고리·서브카테고리·가격·제목 ILIKE 매칭을 서버에서 직접 처리한다. */
+export async function getMyMarketAlertMatches() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('get_my_market_alert_matches');
+    if (error) throw error;
+    return data || [];
+  });
+}
+
 export async function getMyMarketItems() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();

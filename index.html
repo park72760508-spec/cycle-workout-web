@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260913manualSoldDeleteMove1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260913marketAlertKeywords1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -5036,6 +5036,34 @@
         <div class="market-settlement-date-picker__weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
         <div id="marketSettlementDatePickerGrid" class="market-settlement-date-picker__grid"></div>
         <button type="button" class="market-settlement-date-picker__close-footer" id="marketSettlementDatePickerCloseBtn">닫기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 중고랜드 — 알림 조건 설정 -->
+  <div id="marketAlertKeywordSettingsScreen" class="screen market-screen" style="display: none;">
+    <div class="market-header">
+      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketMyPageScreen');" aria-label="뒤로 가기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
+      </button>
+      <h2 class="market-header__title">알림 조건 설정</h2>
+      <button type="button" class="market-header-text-btn" id="marketAlertKeywordSettingsDoneBtn">완료</button>
+    </div>
+    <div class="market-scroll-area market-form">
+      <label class="market-form-label" for="marketAlertSettingsKeywordInput">키워드</label>
+      <input type="text" id="marketAlertSettingsKeywordInput" class="market-form-input" maxlength="40" />
+
+      <label class="market-form-label">카테고리 설정</label>
+      <div class="market-alert-settings-category-tabs" id="marketAlertSettingsCategoryTabs"></div>
+
+      <label class="market-form-label">서브 카테고리 설정</label>
+      <div class="market-alert-settings-subcategory-chips" id="marketAlertSettingsSubCategoryChips"></div>
+
+      <label class="market-form-label">가격</label>
+      <div class="market-form-row market-alert-settings-price-row">
+        <input type="number" id="marketAlertSettingsPriceMin" class="market-form-input" placeholder="최소 금액" inputmode="numeric" min="0" />
+        <span class="market-alert-settings-price-sep">~</span>
+        <input type="number" id="marketAlertSettingsPriceMax" class="market-form-input" placeholder="최대 금액" inputmode="numeric" min="0" />
       </div>
     </div>
   </div>
@@ -33818,7 +33846,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/app.js?v=20260830badgeLeftRight1"></script>
+  <script src="assets/js/app.js?v=20260913marketAlertKeywords1"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
@@ -43758,7 +43786,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script defer src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script defer src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script defer src="assets/js/market/marketScreen.js?v=20260913manualSoldDeleteMove1"></script>
+  <script defer src="assets/js/market/marketScreen.js?v=20260913marketAlertKeywords1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

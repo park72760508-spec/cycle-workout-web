@@ -129,6 +129,29 @@
       .finally(function () { marketMyPageBadgeRefreshing = false; });
   }
 
+  /** 마이페이지 찜 서브탭 아이콘의 키워드 알림 매칭 건수 배지(오렌지 원형 숫자) — renderMyPageTabs가
+   * 탭을 다시 그릴 때마다(탭 전환 포함) 호출된다. */
+  var marketFavoritesAlertBadgeRefreshing = false;
+  function refreshMarketFavoritesAlertBadge() {
+    if (marketFavoritesAlertBadgeRefreshing) return;
+    marketFavoritesAlertBadgeRefreshing = true;
+    loadMarketService()
+      .then(function (s) { return s.getMyMarketAlertMatches(); })
+      .then(function (rows) {
+        var badge = document.getElementById('marketFavoritesAlertBadge');
+        if (!badge) return;
+        var count = (rows || []).length;
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : String(count);
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      })
+      .catch(function () {})
+      .finally(function () { marketFavoritesAlertBadgeRefreshing = false; });
+  }
+
   /** competitionBottomSheet.js의 BANK_OPTIONS와 동일 목록(모듈이 분리돼 있어 값만 그대로 복사) */
   var MARKET_BANK_OPTIONS = [
     { code: '20', name: '우리은행' },
@@ -4580,12 +4603,16 @@
 
   var myPageState = { tab: 'selling' };
 
+  // 알림 조건 설정 화면(#marketAlertKeywordSettingsScreen)이 편집 중인 키워드 상태
+  var alertKeywordSettingsState = { id: null, category: null, subCategory: '' };
+
   function renderMyPageTabs() {
     var wrap = document.getElementById('marketMyPageTabs');
     if (!wrap) return;
     var tabs = [
       { key: 'selling', label: '판매', icon: 'my' },
       { key: 'favorites', label: '찜', icon: 'heart' },
+      { key: 'alerts', label: '알림', icon: 'notification' },
       { key: 'deals', label: '구매', icon: 'deal' },
     ];
     // 정산 탭은 관리자에게만 노출 — 실제 계좌 이체 여부(settlement_transferred_at)를
@@ -4598,10 +4625,15 @@
     tabs.push({ key: 'reports', label: '신고', icon: 'problem' });
     wrap.innerHTML = tabs.map(function (t) {
       var iconUrl = 'assets/img/' + t.icon + '.svg';
+      // 찜 탭에만 키워드 알림 매칭 건수 배지(오렌지 원형 숫자)를 얹는다 — refreshMarketFavoritesAlertBadge가 채운다.
+      var badgeHtml = t.key === 'favorites'
+        ? '<span class="market-subtab__badge" id="marketFavoritesAlertBadge" style="display:none;"></span>'
+        : '';
       return '<button type="button" class="market-subtab' + (myPageState.tab === t.key ? ' active' : '') +
         '" data-tab="' + t.key + '" aria-label="' + t.label + '" title="' + t.label + '">' +
         '<span class="market-subtab__icon-wrap">' +
           '<span class="market-subtab__icon market-subtab__icon--masked" style="-webkit-mask-image:url(\'' + iconUrl + '\');mask-image:url(\'' + iconUrl + '\');"></span>' +
+          badgeHtml +
         '</span>' +
         '<span class="market-subtab__label">' + escapeHtml(t.label) + '</span>' +
       '</button>';
@@ -4623,6 +4655,7 @@
         fieldSlot.innerHTML = '';
       }
     }
+    refreshMarketFavoritesAlertBadge();
   }
 
   var MARKET_DEALS_RESERVED_STATUSES = ['PENDING', 'PAID'];
@@ -4630,8 +4663,8 @@
   function loadMyPageContent() {
     var grid = document.getElementById('marketMyPageGrid');
     if (!grid) return;
-    grid.className = myPageState.tab === 'deals' ? 'market-deals-list'
-      : (myPageState.tab === 'settlement' || myPageState.tab === 'reports') ? 'market-settlement-wrap'
+    grid.className = (myPageState.tab === 'deals' || myPageState.tab === 'favorites') ? 'market-deals-list'
+      : (myPageState.tab === 'settlement' || myPageState.tab === 'reports' || myPageState.tab === 'alerts') ? 'market-settlement-wrap'
       : 'market-grid';
     grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
@@ -4639,11 +4672,13 @@
         if (myPageState.tab === 'settlement') return renderMySettlementTable(s, grid);
         if (myPageState.tab === 'reports') return renderMarketReportsTable(s, grid);
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
+        if (myPageState.tab === 'alerts') return renderMarketAlertKeywords(s, grid);
         if (myPageState.tab === 'favorites') {
-          return s.getMyFavoriteItemIds().then(function (ids) {
-            return s.getMarketItemsByIds(Array.from(ids));
-          }).then(function (rows) {
-            renderMyPageItemGrid(grid, rows, '찜한 상품이 없습니다.');
+          return Promise.all([
+            s.getMyFavoriteItemIds().then(function (ids) { return s.getMarketItemsByIds(Array.from(ids)); }),
+            s.getMyMarketAlertMatches().catch(function () { return []; }),
+          ]).then(function (res) {
+            renderMyFavoritesWithAlerts(grid, res[0], res[1]);
           });
         }
         return Promise.all([s.getMyMarketItems(), s.getSellerActiveOrderItemIds().catch(function () { return new Set(); })]).then(function (res) {
@@ -5064,6 +5099,209 @@
       wireMarketGridEvents(grid);
     });
   }
+
+  /** 찜 탭 — 실제 찜한 상품 + 키워드 알림 조건에 맞는 상품(이미 찜한 상품과 중복 제외)을
+   * "예약중/거래완료"와 동일한 2단 섹션으로 나눠 보여준다. */
+  function renderMyFavoritesWithAlerts(grid, favoriteRows, alertMatchRows) {
+    favoriteRows = (favoriteRows || []).filter(Boolean);
+    var favoriteIds = {};
+    favoriteRows.forEach(function (it) { favoriteIds[it.id] = true; });
+    var alertOnlyRows = (alertMatchRows || []).filter(function (it) { return it && !favoriteIds[it.id]; });
+    function sectionHtml(title, list, emptyMessage) {
+      var cardsHtml = list.length
+        ? '<div class="market-grid">' + list.map(function (item) { return marketItemCardHtml(item); }).join('') + '</div>'
+        : '<div class="market-empty">' + emptyMessage + '</div>';
+      return '<p class="market-order-history__title">' + title + '</p>' + cardsHtml;
+    }
+    grid.innerHTML =
+      sectionHtml('찜한 상품', favoriteRows, '찜한 상품이 없습니다.') +
+      sectionHtml('알림 등록 상품', alertOnlyRows, '알림 조건에 맞는 새 상품이 없습니다.');
+    wireMarketGridEvents(grid);
+  }
+
+  // "설정" 화면 진입 시 재조회 없이 현재 값을 바로 프리필하기 위한 캐시(알림 탭 렌더할 때마다 갱신)
+  var marketAlertKeywordsCache = [];
+
+  /** 알림 탭 — 키워드 빠른 등록(2글자 이상) + 등록된 키워드 목록(설정/삭제) */
+  function renderMarketAlertKeywords(s, grid) {
+    return s.getMyMarketAlertKeywords().then(function (rows) {
+      rows = rows || [];
+      marketAlertKeywordsCache = rows;
+      var rowsHtml = rows.length
+        ? rows.map(function (k) {
+            return '<div class="market-alert-keyword-row" data-keyword-id="' + k.id + '">' +
+              '<span class="market-alert-keyword-row__text">' + escapeHtml(k.keyword) + '</span>' +
+              '<button type="button" class="market-alert-keyword-row__icon-btn market-alert-keyword-settings-btn" data-keyword-id="' + k.id + '" aria-label="설정" title="설정">' +
+                '<img src="assets/img/setting1.png" alt="설정" width="18" height="18" loading="lazy" decoding="async" style="width:18px;height:18px;display:block;" />' +
+              '</button>' +
+              '<button type="button" class="market-alert-keyword-row__icon-btn market-alert-keyword-delete-btn" data-keyword-id="' + k.id + '" aria-label="삭제" title="삭제">' +
+                '<img src="assets/img/delete2.png" alt="삭제" width="18" height="18" loading="lazy" decoding="async" style="width:18px;height:18px;display:block;" />' +
+              '</button>' +
+            '</div>';
+          }).join('')
+        : '<div class="market-empty">등록된 알림 키워드가 없습니다.</div>';
+      grid.innerHTML =
+        '<div class="market-alert-keyword-form">' +
+          '<input type="text" id="marketAlertKeywordInput" class="market-form-input" placeholder="알림 받을 키워드를 입력해주세요." maxlength="40" />' +
+          '<button type="button" class="market-btn market-btn--primary" id="marketAlertKeywordSubmitBtn">등록</button>' +
+        '</div>' +
+        '<div class="market-alert-keyword-list">' + rowsHtml + '</div>';
+      var input = document.getElementById('marketAlertKeywordInput');
+      var submitBtn = document.getElementById('marketAlertKeywordSubmitBtn');
+      function submit() { handleMarketAlertKeywordCreate(input); }
+      if (submitBtn) submitBtn.onclick = submit;
+      if (input) {
+        input.onkeydown = function (e) { if (e.key === 'Enter') submit(); };
+      }
+      Array.prototype.forEach.call(grid.querySelectorAll('.market-alert-keyword-settings-btn'), function (btn) {
+        btn.onclick = function () { openMarketAlertKeywordSettings(btn.getAttribute('data-keyword-id')); };
+      });
+      Array.prototype.forEach.call(grid.querySelectorAll('.market-alert-keyword-delete-btn'), function (btn) {
+        btn.onclick = function () { handleMarketAlertKeywordDelete(btn.getAttribute('data-keyword-id')); };
+      });
+    });
+  }
+
+  function handleMarketAlertKeywordCreate(input) {
+    var keyword = (input && input.value || '').trim();
+    if (keyword.length < 2) { toast('키워드를 2글자 이상 입력해 주세요.'); return; }
+    loadMarketService()
+      .then(function (s) { return s.createMarketAlertKeyword(keyword); })
+      .then(function () {
+        toast('키워드가 등록되었습니다.');
+        loadMyPageContent();
+      })
+      .catch(function (err) {
+        toast('등록 실패: ' + (err && err.message ? err.message : err));
+      });
+  }
+
+  function handleMarketAlertKeywordDelete(id) {
+    showMarketConfirmPopup(
+      '이 알림 키워드를 삭제할까요?',
+      function () {
+        loadMarketService()
+          .then(function (s) { return s.deleteMarketAlertKeyword(id); })
+          .then(function () {
+            toast('삭제되었습니다.');
+            loadMyPageContent();
+          })
+          .catch(function (err) {
+            toast('삭제 실패: ' + (err && err.message ? err.message : err));
+          });
+      },
+      { okText: '삭제' }
+    );
+  }
+
+  /** "설정" 클릭 — 캐시된 현재 값을 상태에 담아 알림 조건 설정 화면으로 이동 */
+  function openMarketAlertKeywordSettings(id) {
+    var row = marketAlertKeywordsCache.filter(function (k) { return k.id === id; })[0] || null;
+    alertKeywordSettingsState = {
+      id: id,
+      keyword: row ? row.keyword : '',
+      category: row ? (row.category || null) : null,
+      subCategory: row ? (row.sub_category || '') : '',
+      priceMin: row && row.price_min != null ? row.price_min : null,
+      priceMax: row && row.price_max != null ? row.price_max : null,
+    };
+    if (typeof window.showScreen === 'function') window.showScreen('marketAlertKeywordSettingsScreen');
+  }
+
+  function renderMarketAlertSettingsCategoryTabs() {
+    var wrap = document.getElementById('marketAlertSettingsCategoryTabs');
+    if (!wrap) return;
+    var cats = ['CYCLE', 'RUN'];
+    wrap.innerHTML = cats.map(function (c) {
+      return '<button type="button" class="market-alert-settings-category-btn' +
+        (alertKeywordSettingsState.category === c ? ' active' : '') + '" data-category="' + c + '">' + c + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(wrap.querySelectorAll('[data-category]'), function (btn) {
+      btn.onclick = function () {
+        var c = btn.getAttribute('data-category');
+        // 이미 선택된 카테고리를 다시 누르면 "카테고리 무관"으로 해제
+        alertKeywordSettingsState.category = alertKeywordSettingsState.category === c ? null : c;
+        alertKeywordSettingsState.subCategory = '';
+        renderMarketAlertSettingsCategoryTabs();
+        renderMarketAlertSettingsSubCategoryChips();
+      };
+    });
+  }
+
+  function renderMarketAlertSettingsSubCategoryChips() {
+    var wrap = document.getElementById('marketAlertSettingsSubCategoryChips');
+    if (!wrap) return;
+    var cat = alertKeywordSettingsState.category;
+    if (!cat) {
+      wrap.innerHTML = '<p class="market-form-hint">카테고리를 먼저 선택해 주세요.</p>';
+      return;
+    }
+    var keys = getCanonicalSubCategoryKeys(cat);
+    wrap.innerHTML = keys.map(function (label) {
+      var display = label || '전체';
+      var isActive = (alertKeywordSettingsState.subCategory || '') === label;
+      return '<button type="button" class="market-alert-settings-subcategory-chip' + (isActive ? ' active' : '') +
+        '" data-value="' + escapeHtml(label) + '">' + escapeHtml(display) + '</button>';
+    }).join('');
+    Array.prototype.forEach.call(wrap.querySelectorAll('[data-value]'), function (btn) {
+      btn.onclick = function () {
+        alertKeywordSettingsState.subCategory = btn.getAttribute('data-value');
+        renderMarketAlertSettingsSubCategoryChips();
+      };
+    });
+  }
+
+  function handleMarketAlertKeywordSettingsSubmit() {
+    var st = alertKeywordSettingsState;
+    var keywordInput = document.getElementById('marketAlertSettingsKeywordInput');
+    var keyword = (keywordInput && keywordInput.value || '').trim();
+    if (keyword.length < 2) { toast('키워드를 2글자 이상 입력해 주세요.'); return; }
+    var priceMinInput = document.getElementById('marketAlertSettingsPriceMin');
+    var priceMaxInput = document.getElementById('marketAlertSettingsPriceMax');
+    var priceMinRaw = (priceMinInput && priceMinInput.value || '').trim();
+    var priceMaxRaw = (priceMaxInput && priceMaxInput.value || '').trim();
+    var priceMin = priceMinRaw ? Number(priceMinRaw) : null;
+    var priceMax = priceMaxRaw ? Number(priceMaxRaw) : null;
+    if (priceMin != null && priceMax != null && priceMin > priceMax) {
+      toast('최소 금액이 최대 금액보다 클 수 없습니다.');
+      return;
+    }
+    loadMarketService()
+      .then(function (s) {
+        return s.updateMarketAlertKeyword(st.id, {
+          keyword: keyword,
+          category: st.category || null,
+          subCategory: st.category ? (st.subCategory || null) : null,
+          priceMin: priceMin,
+          priceMax: priceMax,
+        });
+      })
+      .then(function () {
+        toast('알림 조건이 저장되었습니다.');
+        if (typeof window.showScreen === 'function') window.showScreen('marketMyPageScreen');
+        // marketMyPageScreenInit이 탭을 '판매'로 되돌리므로, 알림 탭으로 온 흐름을 그대로 이어간다.
+        myPageState.tab = 'alerts';
+        renderMyPageTabs();
+        loadMyPageContent();
+      })
+      .catch(function (err) {
+        toast('저장 실패: ' + (err && err.message ? err.message : err));
+      });
+  }
+
+  window.marketAlertKeywordSettingsScreenInit = function () {
+    var st = alertKeywordSettingsState;
+    var keywordInput = document.getElementById('marketAlertSettingsKeywordInput');
+    if (keywordInput) keywordInput.value = st.keyword || '';
+    renderMarketAlertSettingsCategoryTabs();
+    renderMarketAlertSettingsSubCategoryChips();
+    var priceMinInput = document.getElementById('marketAlertSettingsPriceMin');
+    var priceMaxInput = document.getElementById('marketAlertSettingsPriceMax');
+    if (priceMinInput) priceMinInput.value = st.priceMin != null ? st.priceMin : '';
+    if (priceMaxInput) priceMaxInput.value = st.priceMax != null ? st.priceMax : '';
+    var doneBtn = document.getElementById('marketAlertKeywordSettingsDoneBtn');
+    if (doneBtn) doneBtn.onclick = handleMarketAlertKeywordSettingsSubmit;
+  };
 
   window.marketMyPageScreenInit = function () {
     syncMarketBottomNav('mypage');

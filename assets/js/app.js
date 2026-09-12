@@ -7378,6 +7378,10 @@ function initializeCurrentScreen(screenId) {
       if (typeof window.marketMyPageScreenInit === 'function') window.marketMyPageScreenInit();
       break;
 
+    case 'marketAlertKeywordSettingsScreen':
+      if (typeof window.marketAlertKeywordSettingsScreenInit === 'function') window.marketAlertKeywordSettingsScreenInit();
+      break;
+
     case 'affiliateScreen':
       setTimeout(function () {
         if (typeof window.initAffiliateReact === 'function') {
