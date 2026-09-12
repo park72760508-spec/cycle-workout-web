@@ -109,6 +109,7 @@
       if (btn) btn.classList.toggle('active', key === activeKey);
     });
     refreshMarketMyPageBadge();
+    refreshMarketNavAlertBadge();
   }
 
   /** 하단 네비 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이
@@ -127,6 +128,29 @@
       })
       .catch(function () {})
       .finally(function () { marketMyPageBadgeRefreshing = false; });
+  }
+
+  /** 하단 네비 마이페이지 아이콘 좌측 상단 — 마이페이지 찜 탭과 동일한 오렌지 원형 숫자 배지로
+   * 키워드 알림 매칭 건수를 표시. 중고랜드 어느 화면에서든(syncMarketBottomNav) 갱신. */
+  var marketNavAlertBadgeRefreshing = false;
+  function refreshMarketNavAlertBadge() {
+    if (marketNavAlertBadgeRefreshing) return;
+    marketNavAlertBadgeRefreshing = true;
+    loadMarketService()
+      .then(function (s) { return s.getMyMarketAlertMatches(); })
+      .then(function (rows) {
+        var badge = document.getElementById('marketNavMyPageAlertBadge');
+        if (!badge) return;
+        var count = (rows || []).length;
+        if (count > 0) {
+          badge.textContent = count > 99 ? '99+' : String(count);
+          badge.style.display = 'flex';
+        } else {
+          badge.style.display = 'none';
+        }
+      })
+      .catch(function () {})
+      .finally(function () { marketNavAlertBadgeRefreshing = false; });
   }
 
   /** 마이페이지 찜 서브탭 아이콘의 키워드 알림 매칭 건수 배지(오렌지 원형 숫자) — renderMyPageTabs가

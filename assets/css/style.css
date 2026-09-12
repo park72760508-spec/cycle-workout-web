@@ -31743,6 +31743,13 @@ html.market-bottom-nav-glass-v2 .market-bottom-nav__pill {
   border: 1.5px solid #fff;
   animation: marketRequestDotPulse 1.6s ease-in-out infinite;
 }
+/* 마이페이지 아이콘 좌측 상단 — 찜 탭과 동일한 오렌지 원형 숫자 배지(.market-subtab__badge)를
+   재사용하되, 기존 우측 상단 점 배지(위 .market-bottom-nav__badge)와 겹치지 않게 좌측에 둔다. */
+.market-bottom-nav__alert-badge {
+  top: -4px;
+  left: -6px;
+  right: auto;
+}
 .market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
 .market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }
 /* 라이딩 모임 글래스 네비와 동일: 버튼 내부 아이콘·라벨이 클릭을 가로채지 않도록 항상 버튼 자체가 받는다. */
