@@ -2835,6 +2835,8 @@
     // 열람을 안내 문구로 대체한다(목록에는 "사기 피해 접수" 배지와 함께 계속 노출됨).
     if (homeState.blockedSellerIds.has(item.user_id) && !isMine && !marketIsAdminUser()) {
       body.innerHTML = '<div class="market-empty market-report-blocked-notice">신고 누적으로 열람이 제한된 상품입니다.</div>';
+      var headerDeleteBtnBlocked = document.getElementById('marketDetailHeaderDeleteBtn');
+      if (headerDeleteBtnBlocked) headerDeleteBtnBlocked.classList.add('hidden');
       return;
     }
 
@@ -2876,7 +2878,9 @@
       // 하단 버튼 블록 자체를 표시하지 않는다(그 외 상태에서는 버튼 블록 유지).
       actionHtml = '';
     } else if (isMine) {
-      // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제할 수 없다.
+      // 예약중(거래 진행 중)인 상품은 구매자와의 거래가 완결되기 전까지 삭제·수동 거래완료를 할 수 없다.
+      // 삭제는 상단 헤더의 휴지통 아이콘으로 이관됐고(renderMarketDetail 참고), 이 값은 그 아이콘의
+      // 비활성 상태에도 그대로 재사용된다.
       var deleteDisabled = item.status === 'RESERVED';
       // 예약중 상태에서는 끌어올리기·수정이 거래 내용과 어긋날 수 있으므로 비활성화
       // (판매완료 상태는 이 분기에 도달하지 않음 — 위쪽 SOLD 분기에서 별도 처리).
@@ -2891,7 +2895,7 @@
         '<div class="market-detail-actions">' +
           '<button type="button" class="market-btn market-btn--outline' + (bumpEditDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailBumpBtn"' + (bumpEditDisabled ? ' disabled' : '') + '>끌어올리기</button>' +
           '<button type="button" class="market-btn market-btn--outline' + (bumpEditDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailEditBtn"' + (bumpEditDisabled ? ' disabled' : '') + '>수정</button>' +
-          '<button type="button" class="market-btn market-btn--danger' + (deleteDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailDeleteBtn"' + (deleteDisabled ? ' disabled' : '') + '>삭제</button>' +
+          '<button type="button" class="market-btn market-btn--primary' + (deleteDisabled ? ' market-btn--disabled' : '') + '" id="marketDetailManualSoldBtn"' + (deleteDisabled ? ' disabled' : '') + '>거래완료</button>' +
         '</div>' +
         (activeDirectDealOrder
           ? '<div class="market-detail-actions">' +
@@ -3314,8 +3318,17 @@
     if (bumpBtn) bumpBtn.onclick = function () { handleBump(item.id, bumpBtn); };
     var editBtn = document.getElementById('marketDetailEditBtn');
     if (editBtn) editBtn.onclick = function () { window.navigateToMarketFormForEdit(item); };
-    var deleteBtn = document.getElementById('marketDetailDeleteBtn');
-    if (deleteBtn) deleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    var manualSoldBtn = document.getElementById('marketDetailManualSoldBtn');
+    if (manualSoldBtn) manualSoldBtn.onclick = function () { handleMarketManualSoldComplete(item.id); };
+    // 삭제는 상단 헤더의 휴지통 아이콘으로 이관 — 판매완료(SOLD) 상품은 원래도 삭제 불가라 숨기고,
+    // 예약중(RESERVED)은 하단 끌어올리기·수정과 동일하게 비활성 처리한다(deleteDisabled 재사용).
+    var headerDeleteBtn = document.getElementById('marketDetailHeaderDeleteBtn');
+    if (headerDeleteBtn) {
+      var showHeaderDelete = isMine && item.status !== 'SOLD';
+      headerDeleteBtn.classList.toggle('hidden', !showHeaderDelete);
+      headerDeleteBtn.disabled = showHeaderDelete && item.status === 'RESERVED';
+      headerDeleteBtn.onclick = function () { handleMarketDelete(item.id); };
+    }
     var hideToggleBtn = document.getElementById('marketDetailHideToggleBtn');
     if (hideToggleBtn) hideToggleBtn.onclick = function () { handleMarketHideToggle(item.id, !item.hidden); };
     var sellerCompleteBtn = document.getElementById('marketDetailSellerCompleteBtn');
@@ -3855,6 +3868,27 @@
       window.navigateToMarketLand();
     } catch (err) {
       toast('삭제 실패: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  /** 수동 거래완료 — 여러 사이트에 동시 등록해 다른 곳에서 먼저 판매완료된 경우처럼, 앱 내
+   * 안전결제·직거래 주문 없이도 판매자가 직접 판매완료 처리할 수 있게 한다. */
+  function handleMarketManualSoldComplete(itemId) {
+    showMarketConfirmPopup(
+      '이 상품의 거래를 완료 할까요?',
+      function () { doMarketManualSoldComplete(itemId); },
+      { okText: '완료' }
+    );
+  }
+
+  async function doMarketManualSoldComplete(itemId) {
+    try {
+      var s = await loadMarketService();
+      await s.manualCompleteMarketSale(itemId);
+      toast('판매완료로 처리되었습니다.');
+      openMarketItemDetail(itemId);
+    } catch (err) {
+      toast('처리 실패: ' + (err && err.message ? err.message : err));
     }
   }
 

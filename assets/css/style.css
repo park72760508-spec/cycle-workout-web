@@ -30792,6 +30792,7 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
 .market-header-icon-btn:active { background: #f1f5f9; }
 .market-header-icon-btn svg { width: 20px; height: 20px; }
 .market-header-icon-btn:disabled { color: #cbd5e1; cursor: not-allowed; }
+.market-header-icon-btn:disabled img { opacity: 0.35; }
 
 /* 서브 카테고리 순환 선택 ON/OFF 토글 — 원 모양, 다른 활성 탭(카테고리 탭·서브탭)과
    동일한 흐릿한 오렌지 톤으로 ON 상태를 표시한다. */

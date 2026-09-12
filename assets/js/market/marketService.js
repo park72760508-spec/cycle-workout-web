@@ -410,6 +410,19 @@ export async function setMarketItemHidden(id, hidden) {
   });
 }
 
+/** 수동 거래완료 — 앱 내 주문(안전결제·직거래) 없이 판매자가 직접 판매완료 상태로 전환한다.
+ * (여러 사이트에 동시 등록해 다른 곳에서 먼저 판매된 경우 등을 위한 수동 보정 기능) */
+export async function manualCompleteMarketSale(id) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase
+      .from('market_items')
+      .update({ status: 'SOLD', updated_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) throw error;
+  });
+}
+
 /** 끌어올리기 — 최근 24시간 이내에 이미 끌어올렸으면 남은 시간을 담아 거절 */
 export async function bumpMarketItem(id) {
   return withMarketAuthRetry(async () => {
