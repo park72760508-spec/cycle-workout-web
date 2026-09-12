@@ -30836,7 +30836,8 @@ body > #runningRankAvatarZoomBackdrop.stelvio-rank-avatar-zoom-backdrop {
   gap: 8px;
   padding: 12px;
 }
-.market-alert-keyword-form .market-form-input { flex: 1; min-width: 0; }
+.market-alert-keyword-form .market-form-input { flex: 8; min-width: 0; }
+.market-alert-keyword-form .market-btn { flex: 2; width: auto; min-width: 0; padding-left: 0; padding-right: 0; }
 .market-alert-keyword-list { padding: 0 12px 12px; }
 .market-alert-keyword-row {
   display: flex;
