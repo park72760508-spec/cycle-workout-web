@@ -550,7 +550,8 @@ export async function deleteMarketAlertKeyword(id) {
 }
 
 /** 내 키워드 조건에 맞는 활성 매물 — Postgres 함수(get_my_market_alert_matches)가 auth.uid()
- * 기준으로 카테고리·서브카테고리·가격·제목 ILIKE 매칭을 서버에서 직접 처리한다. */
+ * 기준으로 카테고리·서브카테고리·가격 조건을 모두 동시에 만족하면서, 상품명·상품 설명 중
+ * 어느 한쪽에라도 키워드가 포함되는 매물을 서버에서 직접 ILIKE 매칭으로 찾는다. */
 export async function getMyMarketAlertMatches() {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
