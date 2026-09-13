@@ -2266,6 +2266,55 @@
     if (stage) stage.classList.remove('market-photo-crop-stage--dragging');
   }
 
+  // 크롭 작업용으로 화면에 띄우는 이미지의 최대 변 길이 — 최종 출력(OUTPUT_SIZE=1080, 아래
+  // confirmBtn 참고)보다 충분히 크면서도 최근 스마트폰 카메라 원본(12~50MP, 종종 4000px 이상)
+  // 보다는 훨씬 작다.
+  var MARKET_PHOTO_CROP_WORKING_MAX_DIM = 2000;
+  var marketPhotoCropOpenGen = 0;
+
+  /**
+   * 원본 사진을 그대로 <img>에 물려두고 확대·축소마다 CSS transform을 다시 계산하면, 최근
+   * 스마트폰 카메라 원본(가로·세로 4000~8000px, 디코딩 시 수백MB 메모리)을 붙잡은 채로 매
+   * pointermove·oninput마다 리컴포지트가 일어나 모바일 브라우저 메모리 압박으로 탭이
+   * 죽고 흰 화면(먹통)으로 남는 사례가 있었다. 크롭 결과물은 1080px로 저장되므로, 편집
+   * 중에는 이보다 훨씬 작지 않은 선에서 미리 축소한 사본을 대신 사용해 화질 손실 없이
+   * 인터랙션 부하를 크게 줄인다.
+   */
+  function marketPhotoCropDownscaleForEditing(file, maxDim) {
+    return new Promise(function (resolve) {
+      var probeUrl = URL.createObjectURL(file);
+      var probeImg = new Image();
+      probeImg.onload = function () {
+        var nw = probeImg.naturalWidth;
+        var nh = probeImg.naturalHeight;
+        if (!nw || !nh || Math.max(nw, nh) <= maxDim) {
+          resolve(probeUrl);
+          return;
+        }
+        try {
+          var scale = maxDim / Math.max(nw, nh);
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(nw * scale));
+          canvas.height = Math.max(1, Math.round(nh * scale));
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(probeImg, 0, 0, canvas.width, canvas.height);
+          canvas.toBlob(function (blob) {
+            if (blob) {
+              URL.revokeObjectURL(probeUrl);
+              resolve(URL.createObjectURL(blob));
+            } else {
+              resolve(probeUrl);
+            }
+          }, 'image/jpeg', 0.92);
+        } catch (eDownscale) {
+          resolve(probeUrl);
+        }
+      };
+      probeImg.onerror = function () { resolve(probeUrl); };
+      probeImg.src = probeUrl;
+    });
+  }
+
   function openMarketPhotoCropModal(idx, file) {
     var modal = document.getElementById('marketPhotoCropModal');
     var img = document.getElementById('marketPhotoCropImg');
@@ -2275,7 +2324,7 @@
     if (st.objectUrl) URL.revokeObjectURL(st.objectUrl);
     st.idx = idx;
     st.loaded = false;
-    st.objectUrl = URL.createObjectURL(file);
+    st.objectUrl = null;
     st.x = 0;
     st.y = 0;
     // 이전 사진에서 비정상 종료된 제스처(예: pointerup 유실)가 다음 사진에 섞이지 않도록
@@ -2289,60 +2338,71 @@
     marketPhotoCropSetLoadingUi(true);
     modal.classList.remove('hidden');
     modal.style.display = 'flex';
-    var sessionToken = st.objectUrl;
-    img.onload = function () {
-      // 모달이 열리는 도중(레이아웃 전) 로드가 끝나 stage 크기를 0으로 읽는 경쟁 상태를 막기
-      // 위해 다음 프레임에 크기를 다시 읽는다. 고해상도 카메라 사진(수천만 화소)은 onload
-      // 시점에 디코딩이 아직 끝나지 않아 naturalWidth/Height가 한두 프레임 동안 0으로
-      // 읽히는 브라우저가 있어, 유효한 값이 나올 때까지 몇 프레임 더 재시도한다(과거 이때
-      // 1×1로 잘못 확정되면 배율이 극단적으로 커져 사실상 백색에 가까운 확대 화면에 갇혔다).
-      var initAttemptsLeft = 20;
-      function initCropSizingWhenReady() {
-        // 재시도 대기 중 사용자가 취소하거나 다른 사진으로 넘어갔다면 낡은 결과를 덮어쓰지 않는다.
-        if (st.objectUrl !== sessionToken) return;
-        var nw = img.naturalWidth;
-        var nh = img.naturalHeight;
-        if ((!nw || !nh) && initAttemptsLeft > 0) {
-          initAttemptsLeft -= 1;
-          requestAnimationFrame(initCropSizingWhenReady);
-          return;
+    marketPhotoCropOpenGen += 1;
+    var myGen = marketPhotoCropOpenGen;
+
+    marketPhotoCropDownscaleForEditing(file, MARKET_PHOTO_CROP_WORKING_MAX_DIM).then(function (workingUrl) {
+      // 축소 처리 중 취소되거나 다른 사진으로 넘어갔다면 낡은 결과를 반영하지 않고 정리한다.
+      if (myGen !== marketPhotoCropOpenGen) { URL.revokeObjectURL(workingUrl); return; }
+      st.objectUrl = workingUrl;
+      var sessionToken = workingUrl;
+      img.onload = function () {
+        // 모달이 열리는 도중(레이아웃 전) 로드가 끝나 stage 크기를 0으로 읽는 경쟁 상태를 막기
+        // 위해 다음 프레임에 크기를 다시 읽는다. 축소본이라도 onload 시점에 디코딩이 아직
+        // 끝나지 않아 naturalWidth/Height가 한두 프레임 동안 0으로 읽히는 브라우저가 있어,
+        // 유효한 값이 나올 때까지 몇 프레임 더 재시도한다(과거 이때 1×1로 잘못 확정되면
+        // 배율이 극단적으로 커져 사실상 백색에 가까운 확대 화면에 갇혔다).
+        var initAttemptsLeft = 20;
+        function initCropSizingWhenReady() {
+          // 재시도 대기 중 사용자가 취소하거나 다른 사진으로 넘어갔다면 낡은 결과를 덮어쓰지 않는다.
+          if (myGen !== marketPhotoCropOpenGen || st.objectUrl !== sessionToken) return;
+          var nw = img.naturalWidth;
+          var nh = img.naturalHeight;
+          if ((!nw || !nh) && initAttemptsLeft > 0) {
+            initAttemptsLeft -= 1;
+            requestAnimationFrame(initCropSizingWhenReady);
+            return;
+          }
+          st.naturalWidth = nw || 1;
+          st.naturalHeight = nh || 1;
+          var stageSize = stage.clientWidth || 300;
+          var coverScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
+          var containScale = stageSize / Math.max(st.naturalWidth, st.naturalHeight);
+          st.coverScale = marketPhotoCropIsFiniteNum(coverScale) && coverScale > 0 ? coverScale : 1;
+          // 최소 배율을 "정사각형을 꽉 채우는 값(cover)"이 아니라 "사진 전체가 다 들어오는
+          // 값(contain)"까지 낮춰, 원하는 만큼 더 축소해서 여백을 두고 첨부할 수 있게 한다.
+          st.minScale = marketPhotoCropIsFiniteNum(containScale) && containScale > 0 ? containScale : st.coverScale;
+          st.maxScale = st.coverScale * 3;
+          st.scale = st.coverScale;
+          st.x = 0;
+          st.y = 0;
+          var range = document.getElementById('marketPhotoCropZoomRange');
+          if (range) {
+            range.min = String(st.minScale);
+            range.max = String(st.maxScale);
+            range.step = String(Math.max(0.0001, (st.maxScale - st.minScale) / 200));
+            range.value = String(st.scale);
+          }
+          st.loaded = true;
+          marketPhotoCropSetLoadingUi(false);
+          marketPhotoCropClampAndApply();
         }
-        st.naturalWidth = nw || 1;
-        st.naturalHeight = nh || 1;
-        var stageSize = stage.clientWidth || 300;
-        var coverScale = stageSize / Math.min(st.naturalWidth, st.naturalHeight);
-        var containScale = stageSize / Math.max(st.naturalWidth, st.naturalHeight);
-        st.coverScale = marketPhotoCropIsFiniteNum(coverScale) && coverScale > 0 ? coverScale : 1;
-        // 최소 배율을 "정사각형을 꽉 채우는 값(cover)"이 아니라 "사진 전체가 다 들어오는
-        // 값(contain)"까지 낮춰, 원하는 만큼 더 축소해서 여백을 두고 첨부할 수 있게 한다.
-        st.minScale = marketPhotoCropIsFiniteNum(containScale) && containScale > 0 ? containScale : st.coverScale;
-        st.maxScale = st.coverScale * 3;
-        st.scale = st.coverScale;
-        st.x = 0;
-        st.y = 0;
-        var range = document.getElementById('marketPhotoCropZoomRange');
-        if (range) {
-          range.min = String(st.minScale);
-          range.max = String(st.maxScale);
-          range.step = String(Math.max(0.0001, (st.maxScale - st.minScale) / 200));
-          range.value = String(st.scale);
-        }
-        st.loaded = true;
+        requestAnimationFrame(initCropSizingWhenReady);
+      };
+      img.onerror = function () {
+        if (myGen !== marketPhotoCropOpenGen) return;
+        st.loaded = false;
         marketPhotoCropSetLoadingUi(false);
-        marketPhotoCropClampAndApply();
-      }
-      requestAnimationFrame(initCropSizingWhenReady);
-    };
-    img.onerror = function () {
-      st.loaded = false;
-      marketPhotoCropSetLoadingUi(false);
-      toast('사진을 불러오지 못했습니다. 다른 사진을 선택해 주세요.');
-      window.closeMarketPhotoCropModal();
-    };
-    img.src = st.objectUrl;
+        toast('사진을 불러오지 못했습니다. 다른 사진을 선택해 주세요.');
+        window.closeMarketPhotoCropModal();
+      };
+      img.src = workingUrl;
+    });
   }
 
   window.closeMarketPhotoCropModal = function () {
+    // 진행 중이던 축소(다운스케일) 작업이 있었다면 그 결과가 뒤늦게 반영되지 않게 세대를 올린다.
+    marketPhotoCropOpenGen += 1;
     var modal = document.getElementById('marketPhotoCropModal');
     if (modal) { modal.classList.add('hidden'); modal.style.display = 'none'; }
     var st = marketPhotoCropState;
