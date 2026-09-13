@@ -5043,7 +5043,7 @@
   <!-- 중고랜드 — 알림 조건 설정 -->
   <div id="marketAlertKeywordSettingsScreen" class="screen market-screen" style="display: none;">
     <div class="market-header">
-      <button type="button" class="market-back-btn" onclick="if(typeof showScreen==='function')showScreen('marketMyPageScreen');" aria-label="뒤로 가기">
+      <button type="button" class="market-back-btn" onclick="if(typeof window.marketAlertKeywordSettingsGoBack==='function')window.marketAlertKeywordSettingsGoBack();" aria-label="뒤로 가기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="22" height="22" aria-hidden="true"><path d="M15 19l-7-7 7-7"></path></svg>
       </button>
       <h2 class="market-header__title">알림 조건 설정</h2>
@@ -43787,7 +43787,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script defer src="assets/js/competition/competitionApplicationForm.js?v=refund-policy-section-20260818a"></script>
   <script src="assets/js/basecampIconWatchdog.js?v=20260820-4screens"></script>
   <script defer src="assets/js/competition/competitionScreen.js?v=applicants-popup-20260906"></script>
-  <script defer src="assets/js/market/marketScreen.js?v=20260913alertKeywordSettingsCreate1"></script>
+  <script defer src="assets/js/market/marketScreen.js?v=20260913alertKeywordSettingsBackTab1"></script>
   <script>
   (function() {
     function wrapShowScreenForAuthRemember() {

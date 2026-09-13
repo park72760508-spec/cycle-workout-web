@@ -5363,16 +5363,23 @@
       })
       .then(function () {
         toast(st.id ? '알림 조건이 저장되었습니다.' : '키워드가 등록되었습니다.');
-        if (typeof window.showScreen === 'function') window.showScreen('marketMyPageScreen');
-        // marketMyPageScreenInit이 탭을 '판매'로 되돌리므로, 알림 탭으로 온 흐름을 그대로 이어간다.
-        myPageState.tab = 'alerts';
-        renderMyPageTabs();
-        loadMyPageContent();
+        goToMarketMyPageAlertsTab();
       })
       .catch(function (err) {
         toast('저장 실패: ' + (err && err.message ? err.message : err));
       });
   }
+
+  /** 마이페이지 알림 탭으로 이동 — 설정 화면의 "완료"/"뒤로 가기" 공용. */
+  function goToMarketMyPageAlertsTab() {
+    if (typeof window.showScreen === 'function') window.showScreen('marketMyPageScreen');
+    // marketMyPageScreenInit이 탭을 '판매'로 되돌리므로, 알림 탭으로 온 흐름을 그대로 이어간다.
+    myPageState.tab = 'alerts';
+    renderMyPageTabs();
+    loadMyPageContent();
+  }
+
+  window.marketAlertKeywordSettingsGoBack = goToMarketMyPageAlertsTab;
 
   window.marketAlertKeywordSettingsScreenInit = function () {
     var st = alertKeywordSettingsState;
