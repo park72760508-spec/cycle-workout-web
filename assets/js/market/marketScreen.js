@@ -5216,7 +5216,7 @@
             return '<div class="market-alert-keyword-row" data-keyword-id="' + k.id + '">' +
               '<span class="market-alert-keyword-row__text">' + escapeHtml(k.keyword) + '</span>' +
               '<button type="button" class="market-alert-keyword-row__icon-btn market-alert-keyword-settings-btn" data-keyword-id="' + k.id + '" aria-label="설정" title="설정">' +
-                '<img src="assets/img/setting1.png" alt="설정" width="18" height="18" loading="lazy" decoding="async" style="width:18px;height:18px;display:block;" />' +
+                '<img src="assets/img/preferences.svg" alt="설정" width="18" height="18" loading="lazy" decoding="async" style="width:18px;height:18px;display:block;" />' +
               '</button>' +
               '<button type="button" class="market-alert-keyword-row__icon-btn market-alert-keyword-delete-btn" data-keyword-id="' + k.id + '" aria-label="삭제" title="삭제">' +
                 '<img src="assets/img/delete2.png" alt="삭제" width="18" height="18" loading="lazy" decoding="async" style="width:18px;height:18px;display:block;" />' +
@@ -5246,18 +5246,20 @@
     });
   }
 
+  /** 키워드 입력 후 "등록" — 바로 만들지 않고 알림 조건 설정 화면으로 넘어가 세부 조건을
+   * 마저 채우게 한다. 실제 등록은 그 화면의 "완료"(handleMarketAlertKeywordSettingsSubmit)에서 일어난다. */
   function handleMarketAlertKeywordCreate(input) {
     var keyword = (input && input.value || '').trim();
     if (keyword.length < 2) { toast('키워드를 2글자 이상 입력해 주세요.'); return; }
-    loadMarketService()
-      .then(function (s) { return s.createMarketAlertKeyword(keyword); })
-      .then(function () {
-        toast('키워드가 등록되었습니다.');
-        loadMyPageContent();
-      })
-      .catch(function (err) {
-        toast('등록 실패: ' + (err && err.message ? err.message : err));
-      });
+    alertKeywordSettingsState = {
+      id: null,
+      keyword: keyword,
+      category: null,
+      subCategory: '',
+      priceMin: null,
+      priceMax: null,
+    };
+    if (typeof window.showScreen === 'function') window.showScreen('marketAlertKeywordSettingsScreen');
   }
 
   function handleMarketAlertKeywordDelete(id) {
@@ -5348,18 +5350,19 @@
       toast('최소 금액이 최대 금액보다 클 수 없습니다.');
       return;
     }
+    var fields = {
+      keyword: keyword,
+      category: st.category || null,
+      subCategory: st.category ? (st.subCategory || null) : null,
+      priceMin: priceMin,
+      priceMax: priceMax,
+    };
     loadMarketService()
       .then(function (s) {
-        return s.updateMarketAlertKeyword(st.id, {
-          keyword: keyword,
-          category: st.category || null,
-          subCategory: st.category ? (st.subCategory || null) : null,
-          priceMin: priceMin,
-          priceMax: priceMax,
-        });
+        return st.id ? s.updateMarketAlertKeyword(st.id, fields) : s.createMarketAlertKeyword(fields);
       })
       .then(function () {
-        toast('알림 조건이 저장되었습니다.');
+        toast(st.id ? '알림 조건이 저장되었습니다.' : '키워드가 등록되었습니다.');
         if (typeof window.showScreen === 'function') window.showScreen('marketMyPageScreen');
         // marketMyPageScreenInit이 탭을 '판매'로 되돌리므로, 알림 탭으로 온 흐름을 그대로 이어간다.
         myPageState.tab = 'alerts';

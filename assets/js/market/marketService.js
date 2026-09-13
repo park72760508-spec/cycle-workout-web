@@ -506,14 +506,24 @@ export async function getMyMarketAlertKeywords() {
   });
 }
 
-export async function createMarketAlertKeyword(keyword) {
+/** fields: { keyword, category?, subCategory?, priceMin?, priceMax? } — 문자열 하나만
+ * 넘기던 예전 빠른 등록 호출부와도 호환되도록 string도 받는다. */
+export async function createMarketAlertKeyword(fields) {
   return withMarketAuthRetry(async () => {
     const supabase = await ensureMarketSupabaseSession();
     const userId = await getMySupabaseUserId();
     if (!userId) throw new Error('로그인이 필요합니다.');
+    const f = typeof fields === 'string' ? { keyword: fields } : (fields || {});
     const { data, error } = await supabase
       .from('market_alert_keywords')
-      .insert({ user_id: userId, keyword: String(keyword || '').trim() })
+      .insert({
+        user_id: userId,
+        keyword: String(f.keyword || '').trim(),
+        category: f.category || null,
+        sub_category: f.subCategory || null,
+        price_min: f.priceMin != null ? Number(f.priceMin) : null,
+        price_max: f.priceMax != null ? Number(f.priceMax) : null,
+      })
       .select()
       .single();
     if (error) throw error;
