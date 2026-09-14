@@ -9609,8 +9609,8 @@ button.stelvio-rank-avatar-btn:focus-visible {
    원본 색상 그대로(회색 마스크·회전·투명도 없음). */
 #stelvioRankingScreen .stelvio-period-day-icon {
   display: inline-block;
-  width: 19.5px;
-  height: 19.5px;
+  width: 25.35px;
+  height: 25.35px;
   flex-shrink: 0;
   object-fit: contain;
 }
