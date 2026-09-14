@@ -790,6 +790,21 @@
       return fallback || '';
     }
 
+    /* 로그 수집적용일 아이콘(성별 필터 좌측) — CYCLE 랭킹보드와 동일 배치·매핑.
+       종합·구간(페이스): 90일, TSS: 7일(주간), 거리: 30일. */
+    var periodDayIconKey = (isOverallTab || isPaceTab)
+      ? '90day'
+      : (isTssTab ? '7day' : (isDistanceTab ? '30day' : null));
+    var periodDayIconEl = periodDayIconKey
+      ? React.createElement('img', {
+          key: 'periodDayIcon',
+          className: 'stelvio-period-day-icon',
+          src: 'assets/img/' + periodDayIconKey + '.svg',
+          alt: '',
+          'aria-hidden': true
+        })
+      : null;
+
     var genderSelect = React.createElement('div', { className: 'stelvio-gender-dropdown' },
           React.createElement('span', { className: 'stelvio-dropdown-caption' }, '성별'),
           React.createElement('span', { className: 'stelvio-dropdown-label' },
@@ -993,6 +1008,7 @@
         React.createElement('div', { className: 'stelvio-filter-bar-wrap running-ranking-filter-wrap' },
           React.createElement('div', { className: 'stelvio-filter-bar' },
             crewMetricSelect,
+            periodDayIconEl,
             genderSelect,
             categorySelect
           )
