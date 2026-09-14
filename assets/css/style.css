@@ -9609,10 +9609,10 @@ button.stelvio-rank-avatar-btn:focus-visible {
    회색 background-color로 원본 색과 무관하게 항상 회색으로 보이게 한다. */
 #stelvioRankingScreen .stelvio-period-day-icon {
   display: inline-block;
-  width: 15px;
-  height: 15px;
+  width: 19.5px;
+  height: 19.5px;
   flex-shrink: 0;
-  background-color: #9ca3af;
+  background-color: #4b5563;
   -webkit-mask-size: contain;
   mask-size: contain;
   -webkit-mask-repeat: no-repeat;
