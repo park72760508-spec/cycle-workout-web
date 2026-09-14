@@ -9605,6 +9605,22 @@ button.stelvio-rank-avatar-btn:focus-visible {
   color: #9ca3af;
   margin-left: 1px;
 }
+/* 기간 라벨(월간·최근 90일 등) 대신 표시하는 로그 수집적용일 아이콘 — 실루엣 마스크 +
+   회색 background-color로 원본 색과 무관하게 항상 회색으로 보이게 한다. */
+#stelvioRankingScreen .stelvio-period-day-icon {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  background-color: #9ca3af;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  transform: rotate(-45deg);
+}
 #stelvioRankingScreen .stelvio-overtake-btn {
   flex-shrink: 0;
   padding: 4px 10px;

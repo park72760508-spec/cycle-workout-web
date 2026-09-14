@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260914navAlertBadge1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260914rankingPeriodDayIcon1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -17383,6 +17383,28 @@
         stelvioUpdateWeeklyTssWeekCaption(null);
       }
     }
+    /** 기간 드롭다운 라벨 자리에 대신 넣는 로그 수집적용일 아이콘(성별 필터 바로 왼쪽) —
+     * key는 assets/img/{key}.svg 파일명("7day"·"30day"·"90day"), null이면 숨김. */
+    function stelvioSetPeriodDayIcon(key) {
+      var icon = document.getElementById('stelvioPeriodDayIcon');
+      if (!icon) return;
+      if (!key) {
+        icon.classList.add('hidden');
+        return;
+      }
+      var url = "url('assets/img/" + key + ".svg')";
+      icon.style.setProperty('-webkit-mask-image', url);
+      icon.style.setProperty('mask-image', url);
+      icon.classList.remove('hidden');
+    }
+    /** 구간 탭 최근 응답의 실제 창 일수(startStr~endStr) — 최초 표시(응답 도착 전)엔 null */
+    var stelvioPeakSegmentLastWindowDays = null;
+    /** 30일↔90일 중 실제 응답 창에 가까운 쪽 — 응답 전엔 현재 서버 설정(90일 창)을 기본값으로 사용 */
+    function stelvioResolvePeakSegmentDayIconKey() {
+      var days = stelvioPeakSegmentLastWindowDays;
+      if (!(days > 0)) return '90day';
+      return days <= 60 ? '30day' : '90day';
+    }
     function stelvioApplyDurationModeUi() {
       var label = document.getElementById('stelvioPeriodLabel');
       var sel = document.getElementById('stelvioPeriodSelect');
@@ -17393,25 +17415,39 @@
           else if (stelvioGroupTabMetric === 'personal_speed') label.textContent = '최근 90일';
           else if (stelvioGroupTabMetric === 'personal_dist') label.textContent = '최근 30일';
           else label.textContent = '월간';
+          stelvioSetPeriodDayIcon(null);
         } else if (stelvioIsTssRankingMode()) {
-          label.textContent = '주간';
+          label.textContent = '';
+          stelvioSetPeriodDayIcon('7day');
           if (stelvioTssBoardWeekMeta) {
             stelvioUpdateWeeklyTssWeekCaption(stelvioTssBoardWeekMeta);
           }
         } else if (stelvioIsKmDistanceRanking()) {
-          label.textContent = '최근 30일';
+          label.textContent = '';
+          stelvioSetPeriodDayIcon('30day');
         } else if (stelvioIsPersonalSpeedRanking()) {
-          label.textContent = '최근 90일';
+          label.textContent = '';
+          stelvioSetPeriodDayIcon('90day');
         } else if (stelvioIsGcRankingMode()) {
-          label.textContent = '최근 90일';
+          label.textContent = '';
+          stelvioSetPeriodDayIcon('90day');
         } else {
           label.textContent = '월간';
+          stelvioSetPeriodDayIcon(null);
         }
         sel.disabled = true;
+      } else if (typeof stelvioIsPeakPowerDurationRankingMode === 'function' && stelvioIsPeakPowerDurationRankingMode()) {
+        /* 구간 탭(Max·1분·…·60분) — CYCLE 피크 집계는 90일 창(fn_refresh_user_ranking_metrics
+           r90)으로 이관됐지만 실제 응답 startStr~endStr 일수로 재확인해 라벨 왜곡을 방지한다. */
+        sel.disabled = false;
+        sel.value = stelvioRankingState.period;
+        label.textContent = '';
+        stelvioSetPeriodDayIcon(stelvioResolvePeakSegmentDayIconKey());
       } else {
         sel.disabled = false;
         label.textContent = stelvioRankingState.period === 'yearly' ? '명예의 전당' : '월간';
         sel.value = stelvioRankingState.period;
+        stelvioSetPeriodDayIcon(null);
       }
       /* 항목 드롭다운 라벨/select 동기화 */
       var mSelD = document.getElementById('stelvioGroupMetricSelect');
@@ -22884,6 +22920,23 @@
       stelvioPublishRankingByCategory(data.byCategory, data.durationType || '');
       stelvioRankingApiStartStr = typeof data.startStr === 'string' ? data.startStr : '';
       stelvioRankingApiEndStr = typeof data.endStr === 'string' ? data.endStr : '';
+      if (
+        typeof stelvioIsPeakPowerDurationForRankChange === 'function' &&
+        stelvioIsPeakPowerDurationForRankChange(data.durationType) &&
+        stelvioRankingApiStartStr &&
+        stelvioRankingApiEndStr
+      ) {
+        var peakWinDays = Math.round(
+          (new Date(stelvioRankingApiEndStr + 'T00:00:00Z') - new Date(stelvioRankingApiStartStr + 'T00:00:00Z')) /
+            86400000
+        ) + 1;
+        if (peakWinDays > 0) {
+          stelvioPeakSegmentLastWindowDays = peakWinDays;
+          if (typeof stelvioIsPeakPowerDurationRankingMode === 'function' && stelvioIsPeakPowerDurationRankingMode()) {
+            stelvioSetPeriodDayIcon(stelvioResolvePeakSegmentDayIconKey());
+          }
+        }
+      }
       if (data.durationType === 'gc') {
         if (data.gcSnapshotAsOf) window.stelvioLastGcSnapshotAsOf = String(data.gcSnapshotAsOf).slice(0, 10);
         if (data.gcMonthKey) window.stelvioLastGcMonthKey = String(data.gcMonthKey);
@@ -42601,6 +42654,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <option value="60min">60분</option>
               </select>
             </div>
+            <span id="stelvioPeriodDayIcon" class="stelvio-period-day-icon hidden" aria-hidden="true"></span>
             <div class="stelvio-gender-dropdown">
               <span class="stelvio-dropdown-caption">성별</span>
               <span id="stelvioGenderLabel" class="stelvio-dropdown-label">전체</span>
