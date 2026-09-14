@@ -9605,21 +9605,24 @@ button.stelvio-rank-avatar-btn:focus-visible {
   color: #9ca3af;
   margin-left: 1px;
 }
-/* 기간 라벨(월간·최근 90일 등) 대신 표시하는 로그 수집적용일 아이콘 — 실루엣 마스크 +
-   회색 background-color로 원본 색과 무관하게 항상 회색으로 보이게 한다. */
+/* 기간 라벨(월간·최근 90일 등) 대신 표시하는 로그 수집적용일 배지 — 순위표시 블럭
+   (Supremo 문구가 있는 카드)의 좌측 위쪽 테두리에 걸치도록 오버레이. 카드 자체는
+   overflow:hidden이라 그 안에 넣으면 위로 튀어나온 절반이 잘리므로, 카드의 부모인
+   .stelvio-ranking-content 기준으로 절대 위치를 잡는 형제 요소로 둔다. */
+#stelvioRankingScreen .stelvio-ranking-content {
+  position: relative;
+}
 #stelvioRankingScreen .stelvio-period-day-icon {
-  display: inline-block;
+  position: absolute;
+  top: 0;
+  left: 16px;
   width: 19.5px;
   height: 19.5px;
-  flex-shrink: 0;
-  background-color: #4b5563;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  transform: rotate(-45deg);
+  object-fit: contain;
+  opacity: 0.7;
+  transform: translateY(-50%) rotate(-45deg);
+  z-index: 2;
+  pointer-events: none;
 }
 #stelvioRankingScreen .stelvio-overtake-btn {
   flex-shrink: 0;
