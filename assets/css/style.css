@@ -9606,19 +9606,13 @@ button.stelvio-rank-avatar-btn:focus-visible {
   margin-left: 1px;
 }
 /* 기간 라벨(월간·최근 90일 등) 대신 성별 필터 좌측에 표시하는 로그 수집적용일 아이콘 —
-   실루엣 마스크 + 검정 background-color로 검정색 표시. */
+   원본 이미지 색상 그대로 표시. */
 #stelvioRankingScreen .stelvio-period-day-icon {
   display: inline-block;
   width: 25.35px;
   height: 25.35px;
   flex-shrink: 0;
-  background-color: #000;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
+  object-fit: contain;
 }
 #stelvioRankingScreen .stelvio-overtake-btn {
   flex-shrink: 0;

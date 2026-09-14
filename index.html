@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260914rankingPeriodDayIcon6" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260914rankingPeriodDayIcon7" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -17394,9 +17394,9 @@
         stelvioUpdateWeeklyTssWeekCaption(null);
       }
     }
-    /** 기간 드롭다운 라벨 자리에 대신 넣는 로그 수집적용일 아이콘(성별 필터 좌측) — 실루엣
-     * 마스크 + 검정 background-color로 검정색 표시. key는 assets/img/{key}.svg 파일명
-     * ("7day"·"30day"·"90day"), null이면 숨김. */
+    /** 기간 드롭다운 라벨 자리에 대신 넣는 로그 수집적용일 아이콘(성별 필터 좌측) — 원본
+     * 이미지 색상 그대로 표시. key는 assets/img/{key}.svg 파일명("7day"·"30day"·"90day"),
+     * null이면 숨김. */
     function stelvioSetPeriodDayIcon(key) {
       var icon = document.getElementById('stelvioPeriodDayIcon');
       if (!icon) return;
@@ -17404,9 +17404,8 @@
         icon.classList.add('hidden');
         return;
       }
-      var url = "url('assets/img/" + key + ".svg')";
-      icon.style.setProperty('-webkit-mask-image', url);
-      icon.style.setProperty('mask-image', url);
+      var src = 'assets/img/' + key + '.svg';
+      if (icon.getAttribute('src') !== src) icon.setAttribute('src', src);
       icon.classList.remove('hidden');
     }
     /** 구간 탭 최근 응답의 실제 창 일수(startStr~endStr) — 최초 표시(응답 도착 전)엔 null */
@@ -42666,7 +42665,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
                 <option value="60min">60분</option>
               </select>
             </div>
-            <span id="stelvioPeriodDayIcon" class="stelvio-period-day-icon hidden" aria-hidden="true"></span>
+            <img id="stelvioPeriodDayIcon" class="stelvio-period-day-icon hidden" alt="" aria-hidden="true" />
             <div class="stelvio-gender-dropdown">
               <span class="stelvio-dropdown-caption">성별</span>
               <span id="stelvioGenderLabel" class="stelvio-dropdown-label">전체</span>
