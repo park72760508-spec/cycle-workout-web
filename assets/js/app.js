@@ -13187,6 +13187,41 @@ function stelvioSortWorkoutsByTssAsc(list) {
   });
 }
 
+/**
+ * TSS 오름차순 풀에서 count개를 "난이도 구간(버킷)"별로 무작위 선택 — pool[0], pool[1]...처럼
+ * 항상 같은 항목을 뽑던 결정론적 방식 대신, 같은 30일 데이터로 하루에 여러 번 추천받아도
+ * 매번 다른 특정 워크아웃이 나오게 한다. 버킷 순서(쉬움→어려움)는 유지해 1순위<2순위<3순위
+ * 난이도 상승 흐름은 그대로 보존한다.
+ */
+function stelvioPickVariedFromSortedPool(sortedPool, count, excludeIds) {
+  var pool = (sortedPool || []).filter(function (w) {
+    var id = Number(w && w.id);
+    return id > 0 && (!excludeIds || !excludeIds.has(id));
+  });
+  var n = Math.min(count || 0, pool.length);
+  if (n <= 0) return [];
+  var bucketSize = Math.max(1, Math.ceil(pool.length / n));
+  var picks = [];
+  var used = new Set();
+  for (var b = 0; b < n; b++) {
+    var start = b * bucketSize;
+    var end = b === n - 1 ? pool.length : Math.min(start + bucketSize, pool.length);
+    var candidates = [];
+    for (var i = start; i < end; i++) {
+      var w = pool[i];
+      if (!used.has(Number(w.id))) candidates.push(w);
+    }
+    if (!candidates.length) {
+      candidates = pool.filter(function (w) { return !used.has(Number(w.id)); });
+    }
+    if (!candidates.length) break;
+    var pick = candidates[Math.floor(Math.random() * candidates.length)];
+    used.add(Number(pick.id));
+    picks.push(pick);
+  }
+  return picks;
+}
+
 function stelvioFilterWorkoutPool(workoutDetails, usedIds, targetCategory, targetZone, mode) {
   var zone =
     String(targetZone || '').trim() ||
@@ -13213,8 +13248,11 @@ function stelvioAppendFromPool(out, pool, targetCategory, targetZone, reasonPref
     if (id > 0) used.add(id);
   }
   pool = stelvioSortWorkoutsByTssAsc(pool);
-  for (i = 0; i < pool.length && out.length < 3; i++) {
-    var w = pool[i];
+  // 항상 pool[0], pool[1]...만 뽑던 결정론적 방식 대신 난이도 버킷별 무작위 선택 —
+  // 같은 후보 풀이라도 호출할 때마다 다른 특정 워크아웃이 채워지게 한다.
+  var picks = stelvioPickVariedFromSortedPool(pool, 3 - out.length, used);
+  for (i = 0; i < picks.length && out.length < 3; i++) {
+    var w = picks[i];
     var wid = Number(w.id);
     if (!wid || used.has(wid)) continue;
     used.add(wid);
@@ -13270,13 +13308,19 @@ function stelvioRemapInvalidRecommendationIds(recs, workoutDetails, targetCatego
       out.push({ rank: slot, workoutId: rid, reason: r.reason || '' });
       continue;
     }
+    // 항상 strictPool의 첫 미사용 항목(최저 TSS)만 골라 매번 같은 워크아웃으로 치환되던
+    // 문제를 없애기 위해, rank 슬롯에 대응하는 난이도 구간 안에서 무작위로 고른다.
     var pick = null;
-    for (var pi = 0; pi < strictPool.length; pi++) {
-      var pwid = Number(strictPool[pi].id);
-      if (pwid > 0 && !used.has(pwid)) {
-        pick = strictPool[pi];
-        break;
-      }
+    var unusedInPool = strictPool.filter(function (w) { return !used.has(Number(w.id)); });
+    if (unusedInPool.length) {
+      var tierCount = Math.min(3, unusedInPool.length);
+      var tierIdx = Math.max(0, Math.min(tierCount - 1, slot - 1));
+      var tierSize = Math.max(1, Math.ceil(unusedInPool.length / tierCount));
+      var tStart = tierIdx * tierSize;
+      var tEnd = tierIdx === tierCount - 1 ? unusedInPool.length : Math.min(tStart + tierSize, unusedInPool.length);
+      var tierCandidates = unusedInPool.slice(tStart, tEnd);
+      if (!tierCandidates.length) tierCandidates = unusedInPool;
+      pick = tierCandidates[Math.floor(Math.random() * tierCandidates.length)];
     }
     if (pick) {
       used.add(Number(pick.id));
@@ -13430,8 +13474,7 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
     }
   }
   if (!recs.length && (workoutDetails || []).length && !resolved.zone) {
-    recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
-      .slice(0, 3)
+    recs = stelvioPickVariedFromSortedPool(stelvioSortWorkoutsByTssAsc(workoutDetails), 3)
       .map(function (w, idx) {
         return {
           rank: idx + 1,
@@ -13441,8 +13484,7 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
       });
   }
   if (!recs.length && (workoutDetails || []).length) {
-    recs = stelvioSortWorkoutsByTssAsc(workoutDetails)
-      .slice(0, 3)
+    recs = stelvioPickVariedFromSortedPool(stelvioSortWorkoutsByTssAsc(workoutDetails), 3)
       .map(function (w, idx) {
         return {
           rank: idx + 1,
@@ -13472,6 +13514,60 @@ function stelvioBuildDeterministicRecommendationData(workoutDetails, ctx) {
         : resolved.category + ' 기준 자동 추천'),
     recommendations: recs,
   };
+}
+
+/**
+ * 캐시 히트(같은 날짜·같은 30일 로그·같은 컨디션) 시 카테고리·Zone·코치 코멘트는 그대로 두고
+ * 1~3순위 "특정 워크아웃"만 새로 무작위 선정한다 — 준수조건: 같은 30일 데이터로 하루에
+ * 여러 번 추천받아도 AI 추천 카테고리(예: Tempo)는 유지되되 세부 워크아웃은 달라져야 함.
+ * @returns {object|null} 재선정 실패 시 null(호출부는 캐시 원본을 그대로 표시)
+ */
+function stelvioRerollCachedWorkoutRecommendation(recommendationData, workoutDetails, challenge) {
+  try {
+    var zone = recommendationData && recommendationData.target_zone || '';
+    var basisCat = recommendationData && recommendationData.selectedCategory || '';
+    var pool = zone
+      ? stelvioCollectWorkoutsForTargetZone(workoutDetails, zone, basisCat)
+      : stelvioSortWorkoutsByTssAsc(workoutDetails || []);
+    if (!pool.length) return null;
+
+    var getTitle = function (w) {
+      return String(w.title != null ? w.title : (w.name || w.workout_title || w.workout_name || '')).trim();
+    };
+    var isLite = function (w) { return /\(lite\)/i.test(getTitle(w)); };
+    var isFitness = String(challenge || '').trim() === 'Fitness';
+
+    var recs = [];
+    if (isFitness) {
+      var liteCandidates = pool.filter(function (w) { return isLite(w); });
+      if (liteCandidates.length) {
+        var liteChoice = liteCandidates[Math.floor(Math.random() * liteCandidates.length)];
+        recs.push({
+          rank: 1,
+          workoutId: Number(liteChoice.id),
+          reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + getTitle(liteChoice),
+        });
+      }
+    }
+
+    var used = new Set(recs.map(function (r) { return Number(r.workoutId); }));
+    var restPool = pool.filter(function (w) { return !used.has(Number(w.id)) && !(isFitness && isLite(w)); });
+    var picks = stelvioPickVariedFromSortedPool(restPool, 3 - recs.length, used);
+    picks.forEach(function (w) {
+      recs.push({
+        rank: recs.length + 1,
+        workoutId: Number(w.id),
+        reason:
+          (basisCat ? basisCat + ' ' : '') + (zone ? '(' + zone + ') ' : '') + '오늘의 추천: ' + (getTitle(w) || '워크아웃'),
+      });
+    });
+
+    if (!recs.length) return null;
+    return Object.assign({}, recommendationData, { recommendations: recs });
+  } catch (e) {
+    console.warn('[AI 추천] 캐시 재선정 실패, 캐시 원본 사용:', e && e.message);
+    return null;
+  }
 }
 
 /**
@@ -13743,7 +13839,10 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
     if (typeof window.getDashboardWorkoutRecommendationCache === 'function') {
       const cached = window.getDashboardWorkoutRecommendationCache(user.id, date, workoutCacheKey);
       if (cached && cached.recommendationData && Array.isArray(cached.workoutDetails)) {
-        displayWorkoutRecommendations(cached.recommendationData, cached.workoutDetails, date);
+        // 같은 날 재추천 시 카테고리·Zone·코멘트는 캐시를 그대로 쓰되, 1~3순위 특정
+        // 워크아웃은 매번 새로 무작위 선정한다(준수조건: 카테고리 유지·세부 워크아웃은 변화).
+        const reRolled = stelvioRerollCachedWorkoutRecommendation(cached.recommendationData, cached.workoutDetails, challenge);
+        displayWorkoutRecommendations(reRolled || cached.recommendationData, cached.workoutDetails, date);
         return;
       }
     }
@@ -14770,13 +14869,12 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
       const liteIds = new Set(liteWorkouts.map(function (w) { return Number(w.id); }).filter(function (id) { return !isNaN(id) && id > 0; }));
 
       if (liteIds.size > 0) {
-        // 1순위: 항상 (Lite) 1개 고정 (AI 1순위가 이미 Lite여도 이 블록은 항상 실행)
+        // 1순위: 항상 (Lite) 1개 고정 (AI 1순위가 이미 Lite여도 이 블록은 항상 실행) — 다만
+        // 후보가 여럿이면 항상 같은 것(Set 삽입 순 첫 항목)이 아니라 무작위로 골라 매번 다르게 한다.
         const usedIds = new Set(deduped.map(function (r) { return Number(r.workoutId); }));
-        let liteId = null;
-        liteIds.forEach(function (id) {
-          if (liteId == null && !usedIds.has(id)) liteId = id;
-        });
-        if (liteId == null) liteId = liteIds.values().next().value;
+        const unusedLiteIds = Array.from(liteIds).filter(function (id) { return !usedIds.has(id); });
+        const litePickPool = unusedLiteIds.length ? unusedLiteIds : Array.from(liteIds);
+        let liteId = litePickPool[Math.floor(Math.random() * litePickPool.length)];
         const liteWorkout = liteWorkouts.find(function (w) { return Number(w.id) === liteId; });
         const liteTitle = liteWorkout ? getTitle(liteWorkout) || '(Lite)' : '(Lite)';
         const newFirst = { rank: 1, workoutId: liteId, reason: '입문자 접근성을 위해 (Lite) 워크아웃을 1순위로 추천합니다. ' + liteTitle };
@@ -14804,11 +14902,18 @@ ${hasBasis ? `고정: 표시 카테고리 ${promptCategoryLabel}, 필터 Zone "$
             }
             return false;
           });
-          for (var i = slot2and3.length; i < 2 && pool.length > 0; i++) {
-            const w = pool.shift();
+          // 매번 pool[0]부터 순서대로만 채우면 같은 조건일 때 항상 같은 워크아웃으로 고정되므로,
+          // 난이도(TSS) 오름차순으로 정렬한 뒤 버킷별 무작위 선택으로 채운다.
+          const sortedPool = stelvioSortWorkoutsByTssAsc(pool);
+          const extraPicks = stelvioPickVariedFromSortedPool(sortedPool, 2 - slot2and3.length, usedFor2and3);
+          extraPicks.forEach(function (w) {
             usedFor2and3.add(Number(w.id));
-            slot2and3.push({ rank: i + 2, workoutId: Number(w.id), reason: getTitle(w) ? '강도 업 선택: ' + getTitle(w) : '추가 추천 워크아웃' });
-          }
+            slot2and3.push({
+              rank: slot2and3.length + 2,
+              workoutId: Number(w.id),
+              reason: getTitle(w) ? '강도 업 선택: ' + getTitle(w) : '추가 추천 워크아웃',
+            });
+          });
         }
         deduped = [newFirst].concat(slot2and3.map(function (r, i) { return { rank: i + 2, workoutId: r.workoutId, reason: r.reason || '' }; }));
       }
