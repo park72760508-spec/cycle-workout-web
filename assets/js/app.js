@@ -14124,14 +14124,19 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
       // 직접 진입: dashboardCoach.js와 동일한 규칙 기반 카테고리 선결정
       if (typeof window.determineDeterministicWorkoutCategory === 'function') {
         deterministicDecision = window.determineDeterministicWorkoutCategory(
-          effectiveConditionScore, last7DaysTSS, weeklyTSS, recentHistory
+          effectiveConditionScore, last7DaysTSS, weeklyTSS, recentHistory,
+          { ftp: Number(ftp) || 0, challenge: challenge }
         );
         // deterministicDecision.category → basisCategory 매핑
         const catMap = {
+          'overreaching':   'Recovery',
           'recovery':       'Recovery',
           'endurance':      'Endurance',
+          'sweet_spot':     'SweetSpot',
           'tempo':          'Tempo',
-          'high_intensity': 'VO2Max'
+          'threshold':      'Threshold',
+          'vo2max':         'VO2Max',
+          'high_intensity': 'VO2Max' // @deprecated 더 이상 반환되지 않음(호환용 유지)
         };
         basisCategory = catMap[deterministicDecision.category] || 'Endurance';
       }

@@ -45,19 +45,47 @@ function oneLogPerDayPreferStravaForCoach(logs) {
 }
 
 /**
- * conditionScore + TSS 부하율 + 최근 고강도 빈도를 기반으로
+ * conditionScore + ACWR(급성:만성 부하비) + 최근 강도존 이력을 기반으로
  * 워크아웃 카테고리를 결정론적으로 선결정합니다.
  * AI가 자유롭게 카테고리를 선택하지 못하도록 범위를 좁히는 역할.
+ *
+ * 사이클 체육학 근거:
+ * - Coggan & Allen, "Training and Racing with a Power Meter" — %FTP 기반 7단계 파워존, TSS/ACWR.
+ * - Gabbett(2016) 등 스포츠과학 문헌 — ACWR 0.8~1.3을 부상·과훈련 위험이 가장 낮은 "sweet spot",
+ *   1.5 초과를 급성 과부하(overreaching) 위험 구간으로 봄. 예전 로직은 "이번 주 부하가 평균보다
+ *   낮을 때만"(tssLoadRatio<=0.80) 고강도를 허용해, 부하가 안정적(≈평균)인 — 오히려 이상적인 —
+ *   사용자가 영원히 고강도에 도달하지 못하고 Tempo 기본값에 갇히는 구조적 결함이 있었다.
+ * - Friel, "The Cyclist's Training Bible" — hard/easy 원칙(고강도 다음날 저강도), 특이성·다양성.
+ * - Seiler의 양극화(polarized) 훈련 연구 — 경쟁 지향(Racing/Elite/PRO)일수록 Tempo/Sweet Spot 같은
+ *   "회색지대" 비중을 줄이고 완전히 쉬거나 확실히 강하게(양극화)를 권장. Fitness/GranFondo는
+ *   시간 효율이 높은 Sweet Spot/Tempo 비중을 유지(Coggan의 Sweet Spot Training 철학과 일치).
  *
  * @param {number} conditionScore - 0~100
  * @param {number} last7DaysTSS  - 최근 7일 TSS 합계
  * @param {number} weeklyTSS     - 주간 평균 TSS (30일 기준)
  * @param {Array}  recentLogs    - 중복 제거된 훈련 로그
+ * @param {{ftp?: number, challenge?: string}} [opts] - FTP(최근 강도존 추정용)·훈련 목적(양극화 가중용)
  * @returns {{ category: string, allowedWorkouts: string[], reason: string }}
  */
-function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, weeklyTSS, recentLogs) {
-  // 최근 2일 내 고강도 훈련 횟수 (TSS 80 이상)
+function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, weeklyTSS, recentLogs, opts) {
+  opts = opts || {};
+  var ftp = Number(opts.ftp) || 0;
+  var challenge = String(opts.challenge || '').trim();
+  var isPolarizedChallenge = challenge === 'Racing' || challenge === 'Elite' || challenge === 'PRO';
+
+  function logDateStr(log) {
+    if (log.completed_at) return String(log.completed_at).split('T')[0];
+    if (log.date) {
+      var ld = log.date;
+      if (ld && typeof ld.toDate === 'function') ld = ld.toDate();
+      return ld ? String(ld instanceof Date ? ld.toISOString() : ld).split('T')[0] : '';
+    }
+    return '';
+  }
+
+  // 최근 2일 내 고강도 훈련 횟수 (TSS 80 이상) — hard/easy 원칙의 "연속 고강도" 감지
   var recentHighIntensityCount = 0;
+  var daysSinceZone = { tempo: 99, threshold: 99, vo2: 99 };
   if (recentLogs && recentLogs.length > 0) {
     var now = new Date();
     var cutoffDates = [];
@@ -72,52 +100,111 @@ function determineDeterministicWorkoutCategory(conditionScore, last7DaysTSS, wee
     }
     for (var li = 0; li < recentLogs.length; li++) {
       var log = recentLogs[li];
-      var logDate = '';
-      if (log.completed_at) logDate = String(log.completed_at).split('T')[0];
-      else if (log.date) {
-        var ld = log.date;
-        if (ld && typeof ld.toDate === 'function') ld = ld.toDate();
-        logDate = ld ? String(ld instanceof Date ? ld.toISOString() : ld).split('T')[0] : '';
-      }
+      var logDate = logDateStr(log);
       if (cutoffDates.indexOf(logDate) !== -1 && (Number(log.tss) || 0) >= 80) {
         recentHighIntensityCount++;
+      }
+      // 최근 강도존 이력 — Coggan %FTP 구간(최근 14일, FTP 정보가 있을 때만) — 다양성·hard/easy 판단용
+      if (ftp > 0 && logDate) {
+        var pw = Number(log.np || log.avg_power || log.avg_watts || 0);
+        if (pw > 0) {
+          var logD = new Date(logDate + 'T12:00:00');
+          var daysAgo = Math.floor((now - logD) / 86400000);
+          if (daysAgo >= 0 && daysAgo <= 14) {
+            var pct = pw / ftp;
+            if (pct >= 1.06 && daysAgo < daysSinceZone.vo2) daysSinceZone.vo2 = daysAgo;
+            else if (pct >= 0.91 && daysAgo < daysSinceZone.threshold) daysSinceZone.threshold = daysAgo;
+            else if (pct >= 0.76 && daysAgo < daysSinceZone.tempo) daysSinceZone.tempo = daysAgo;
+          }
+        }
       }
     }
   }
 
-  // TSS 부하율: 최근 7일 / 주간 평균. 주간 평균이 0이면 1.0으로 처리
-  var tssLoadRatio = (weeklyTSS > 0) ? (last7DaysTSS / weeklyTSS) : 1.0;
+  // ACWR(급성:만성 부하비) — conditionScoreModule.computeConditionScore와 동일 산식으로 재계산해
+  // 두 모듈이 서로 다른 "부하 신호"를 쓰지 않도록 일관성을 맞춘다.
+  var totalTSS30 = weeklyTSS * 4.3;
+  var chronic28 = Math.max(0, totalTSS30 - last7DaysTSS);
+  var chronicWeekly = (chronic28 / 23) * 7;
+  var acwr = chronicWeekly >= 1 ? last7DaysTSS / chronicWeekly : (last7DaysTSS > 0 ? 1.5 : 1.0);
 
   // ── 규칙 기반 카테고리 결정 ──────────────────────────────────────
-  // 회복 우선: 컨디션 낮거나 / 부하 과다 / 연속 고강도
-  if (conditionScore < 62 || tssLoadRatio > 1.35 || recentHighIntensityCount >= 2) {
+  // 1) 급성 과부하(overreaching): ACWR 1.5 초과 — 컨디션 점수와 무관하게 최우선 회복 신호
+  if (acwr > 1.5) {
+    return {
+      category: 'overreaching',
+      allowedWorkouts: ['Active Recovery (Z1)', 'Easy Endurance (Z2)'],
+      reason: '급성:만성 부하비(ACWR ' + acwr.toFixed(2) + ')가 위험 구간(1.5 초과)이라 과사용 위험을 낮추기 위한 회복 훈련을 권장합니다.'
+    };
+  }
+  // 2) 회복: 컨디션 낮거나 / 부하 다소 높음 / 연속 고강도
+  if (conditionScore < 62 || acwr > 1.3 || recentHighIntensityCount >= 2) {
     return {
       category: 'recovery',
       allowedWorkouts: ['Active Recovery (Z1)', 'Easy Endurance (Z2)'],
-      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 훈련 부하(7일 TSS ' + last7DaysTSS + '점)를 고려해 회복 훈련을 권장합니다.'
+      reason: '컨디션 점수(' + conditionScore + '점) 또는 최근 훈련 부하(ACWR ' + acwr.toFixed(2) + ')를 고려해 회복 훈련을 권장합니다.'
     };
   }
-  // 지구력: 컨디션 보통 또는 부하가 약간 높음
-  if (conditionScore < 73 || tssLoadRatio > 1.10) {
+
+  // 고강도 준비도: ACWR 0.8~1.3(Gabbett의 부상·과훈련 위험 최저 구간)이면서 최근 2일 연속
+  // 고강도가 없었다면 "부하가 평균 수준(안정적)"이라는 이유만으로 고강도를 막지 않는다 —
+  // 예전 로직의 핵심 결함(꾸준한 훈련=Tempo 영구 고정) 수정.
+  var isFreshEnoughForQuality = acwr >= 0.8 && acwr <= 1.3 && recentHighIntensityCount === 0;
+
+  // 3) 퀄리티(Threshold/VO2 Max): 컨디션 우수 + 준비됨 — 최근에 덜 한 존을 우선해 다양성·특이성 확보
+  if (conditionScore >= 78 && isFreshEnoughForQuality) {
+    var preferVo2 =
+      ftp > 0
+        ? daysSinceZone.vo2 >= daysSinceZone.threshold
+        : conditionScore >= 85 || isPolarizedChallenge;
+    if (preferVo2) {
+      return {
+        category: 'vo2max',
+        allowedWorkouts: ['VO2 Max (Z5)', 'VO2max Intervals (Z5)', 'Threshold Intervals (Z4)'],
+        reason: '컨디션이 우수(' + conditionScore + '점)하고 부하가 안정적(ACWR ' + acwr.toFixed(2) + ')이며 최근 VO2Max 훈련이 뜸해 고강도 인터벌을 권장합니다.'
+      };
+    }
     return {
-      category: 'endurance',
-      allowedWorkouts: ['Endurance (Z2)', 'Sweet Spot (Low)', 'Tempo (Z3)'],
-      reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 지구력 훈련을 권장합니다.'
+      category: 'threshold',
+      allowedWorkouts: ['Threshold Intervals (Z4)', 'VO2 Max (Z5)', 'Sweet Spot (Z3-Z4)'],
+      reason: '컨디션이 우수(' + conditionScore + '점)하고 부하가 안정적(ACWR ' + acwr.toFixed(2) + ')이며 최근 Threshold 훈련이 뜸해 역치 훈련을 권장합니다.'
     };
   }
-  // 고강도: 컨디션 우수 + 부하 여유 있음
-  if (conditionScore >= 82 && tssLoadRatio <= 0.80) {
+
+  // 4) 중간 강도(Sweet Spot/Tempo): 컨디션 양호 + 준비됨 — 경쟁 지향(Racing/Elite/PRO)은 양극화
+  // 원칙에 따라 "회색지대" 대신 지구력으로 유도하고, 어제·그제 이미 같은 강도존을 했다면
+  // (hard/easy·다양성 원칙) 지구력으로 완화한다.
+  if (conditionScore >= 66 && (isFreshEnoughForQuality || recentHighIntensityCount <= 1)) {
+    var didModerateRecently = ftp > 0 && daysSinceZone.tempo <= 1;
+    if (isPolarizedChallenge || didModerateRecently) {
+      return {
+        category: 'endurance',
+        allowedWorkouts: ['Endurance (Z2)', 'Active Recovery (Z1)'],
+        reason: isPolarizedChallenge
+          ? '훈련 목적(' + challenge + ')상 회색지대(Tempo/Sweet Spot) 비중을 줄이고 명확한 저강도 지구력을 권장합니다(양극화 훈련 원칙).'
+          : '최근 Tempo·Sweet Spot 강도 훈련이 있어 다양성·회복을 위해 지구력 훈련을 권장합니다.'
+      };
+    }
+    var challengeFavorsSweetSpot = challenge === 'Fitness' || challenge === 'GranFondo' || challenge === 'IronMan';
+    if (challengeFavorsSweetSpot || conditionScore >= 71) {
+      return {
+        category: 'sweet_spot',
+        allowedWorkouts: ['Sweet Spot (Z3-Z4)', 'Tempo (Z3)', 'Threshold (Low, Z4)'],
+        reason: '양호한 컨디션(' + conditionScore + '점)에 시간 대비 효율이 높은 Sweet Spot 훈련을 권장합니다.'
+      };
+    }
     return {
-      category: 'high_intensity',
-      allowedWorkouts: ['VO2 Max (Z5)', 'Threshold (Z4)', 'Anaerobic Capacity (Z6)'],
-      reason: '컨디션이 우수(' + conditionScore + '점)하고 훈련 부하에 여유가 있어 고강도 훈련을 권장합니다.'
+      category: 'tempo',
+      allowedWorkouts: ['Tempo (Z3)', 'Sweet Spot (Z3-Z4)', 'Endurance (Z2)'],
+      reason: '안정적인 컨디션(' + conditionScore + '점)으로 템포 훈련이 적합합니다.'
     };
   }
-  // 템포: 그 외 (일반적인 상태)
+
+  // 5) 그 외(컨디션 보통 이하 또는 부하 여유 부족) → 지구력 기본
   return {
-    category: 'tempo',
-    allowedWorkouts: ['Sweet Spot (Z3-Z4)', 'Threshold (Low, Z4)', 'Tempo Training (Z3)'],
-    reason: '안정적인 컨디션(' + conditionScore + '점)으로 템포/스위트스팟 훈련이 적합합니다.'
+    category: 'endurance',
+    allowedWorkouts: ['Endurance (Z2)', 'Sweet Spot (Low)', 'Active Recovery (Z1)'],
+    reason: '중간 수준의 컨디션(' + conditionScore + '점)에 알맞은 지구력 훈련을 권장합니다.'
   };
 }
 
@@ -388,10 +475,14 @@ function parseGeminiApiError(text, httpStatus) {
 
 function trainingStatusFromWorkoutCategory(category) {
   var map = {
+    overreaching: 'Overreaching',
     recovery: 'Recovery Needed',
     endurance: 'Building Base',
+    sweet_spot: 'Building Base',
     tempo: 'Ready to Race',
-    high_intensity: 'Peaking',
+    threshold: 'Ready to Race',
+    high_intensity: 'Peaking', // @deprecated determineDeterministicWorkoutCategory가 더 이상 반환하지 않음(호환용 유지)
+    vo2max: 'Peaking',
   };
   return map[category] || 'Building Base';
 }
@@ -632,7 +723,8 @@ async function callGeminiCoach(userProfile, recentLogs, last7DaysTSSFromDashboar
       );
     } else {
       workoutDecision = determineDeterministicWorkoutCategory(
-        conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs
+        conditionScoreForPrompt, last7DaysTSS, weeklyTSS, recentLogs,
+        { ftp: Number(userProfile && userProfile.ftp) || 0, challenge: activeChallenge }
       );
     }
   } catch (wdErr) {
