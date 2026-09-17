@@ -3748,7 +3748,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260918marketNavBadgeRevert1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260918workoutBuilderSaveBtnMove1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -6853,9 +6853,6 @@
         <h1 class="workout-builder-title">워크아웃 작성</h1>
         <p class="subtitle workout-builder-subtitle">세그먼트를 추가/수정하고 저장하세요</p>
       </div>
-      <button type="button" class="workout-builder-save-btn" id="btnSaveWorkout" aria-label="저장" title="저장">
-        <img src="assets/img/save2.png" alt="저장" class="workout-builder-save-icon" />
-      </button>
     </div>
   
     <div class="card">
@@ -6937,7 +6934,10 @@
     </div>
   </div>
   <div class="builder-actions" style="margin-top: 12px;">
-    <button type="button" class="btn btn-secondary btn-default-style btn-with-icon" id="btnCancelBuilder" aria-label="취소" title="취소"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
+    <div class="btn-row">
+      <button type="button" class="btn btn-secondary btn-default-style btn-with-icon" id="btnCancelBuilder" aria-label="취소" title="취소"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
+      <button type="button" class="btn btn-success btn-default-style btn-with-icon" id="btnSaveWorkout" aria-label="저장" title="저장"><img src="assets/img/save2.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
+    </div>
   </div>
 </div>
 

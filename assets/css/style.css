@@ -11814,30 +11814,6 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   font-size: 0.9em;
   color: var(--text-secondary, #666);
 }
-.workout-builder-save-btn {
-  position: absolute;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 40px;
-  min-height: 40px;
-  padding: 8px;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  border-radius: 8px;
-  color: var(--text-primary, #333);
-  transition: background 0.2s;
-}
-.workout-builder-save-btn:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.workout-builder-save-icon {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
-}
 
 /* 워크아웃 작성 화면 - 휴대폰에서 게시날짜 텍스트박스 넓이 = 카테고리 선택목록 상자 넓이
    현재 넓이: 둘 다 자신의 form-group(그리드 1fr 컬럼) 너비의 100%.
