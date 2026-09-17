@@ -31740,7 +31740,11 @@ html.market-bottom-nav-glass-v2 .market-bottom-nav__pill {
   -webkit-tap-highlight-color: transparent;
   transition: transform 0.14s cubic-bezier(0.25, 0.46, 0.45, 0.94), background-color 0.14s ease, color 0.14s ease;
 }
-/* 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이 있을 때 표시 */
+/* 마이페이지 아이콘 배지 — 내가 판매자인 상품에 완결되지 않은 거래 요청이 있을 때 표시.
+   모바일 훈련 화면 워크아웃 그래프의 마스코트(빨간 원 + 퍼져나가는 다중 링 펄스, canvas
+   구현은 workoutManager.js drawSegmentGraph 참고)와 동일한 톤·리듬으로 맞춘다:
+   빨간 원(#ef4444) + 2.3초 주기로 스케일 3.8배까지 퍼지며 사라지는 링을 절반 주기씩
+   어긋나게(pseudo-element 2개) 반복해 다중 링처럼 보이게 한다. */
 .market-bottom-nav__icon-wrap { position: relative; display: flex; }
 .market-bottom-nav__badge {
   position: absolute;
@@ -31749,23 +31753,31 @@ html.market-bottom-nav-glass-v2 .market-bottom-nav__pill {
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  background: #ea580c;
+  background: #ef4444;
   border: 1.5px solid #fff;
-  animation: marketRequestDotPulse 1.6s ease-in-out infinite;
 }
-/* 마이페이지 아이콘 좌측 상단 — 찜 탭과 동일한 원형 숫자 배지(.market-subtab__badge) 위치만
-   재사용하되, 기존 우측 상단 점 배지(위 .market-bottom-nav__badge)와 겹치지 않게 좌측에 두고
-   빨간색 + 펄스 애니메이션으로 시선을 더 끌게 한다(찜 탭 안의 오렌지 정적 배지와는 구분). */
+.market-bottom-nav__badge::before,
+.market-bottom-nav__badge::after {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(239, 68, 68, 0.85);
+  animation: marketNavBadgeRingPulse 2.3s ease-out infinite;
+}
+.market-bottom-nav__badge::after {
+  animation-delay: 1.15s;
+}
+@keyframes marketNavBadgeRingPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(3.8); opacity: 0; }
+}
+/* 마이페이지 아이콘 좌측 상단 — 찜 탭과 동일한 오렌지 원형 숫자 배지(.market-subtab__badge)를
+   재사용하되, 기존 우측 상단 점 배지(위 .market-bottom-nav__badge)와 겹치지 않게 좌측에 둔다. */
 .market-bottom-nav__alert-badge {
   top: -4px;
   left: -6px;
   right: auto;
-  background: #dc2626;
-  animation: marketAlertBadgeRedPulse 1.6s ease-in-out infinite;
-}
-@keyframes marketAlertBadgeRedPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55); }
-  50% { box-shadow: 0 0 0 5px rgba(220, 38, 38, 0.18); }
 }
 .market-bottom-nav__btn:active { transform: scale(0.93); background-color: rgba(15, 23, 42, 0.08); }
 .market-bottom-nav__btn.active { color: #c2410c; background-color: rgba(234, 88, 12, 0.12); }
