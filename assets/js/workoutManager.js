@@ -693,6 +693,20 @@ function createSegmentGraph(segments) {
   `;
 }
 
+/** 워크아웃 총시간 배지 아이콘(runtime1.svg) — 최초 호출 시 1회만 로드해 캐시.
+ * 로드 전에는 null을 반환하므로 호출부는 아이콘 없이(텍스트만) 그리고, 다음 재호출(주기적
+ * 갱신·화면 재진입) 때 자연스럽게 아이콘이 포함된다. */
+var __stelvioRuntimeBadgeIconImg = null;
+var __stelvioRuntimeBadgeIconReady = false;
+function getStelvioRuntimeBadgeIcon() {
+  if (!__stelvioRuntimeBadgeIconImg) {
+    __stelvioRuntimeBadgeIconImg = new Image();
+    __stelvioRuntimeBadgeIconImg.onload = function () { __stelvioRuntimeBadgeIconReady = true; };
+    __stelvioRuntimeBadgeIconImg.src = 'assets/img/runtime1.svg';
+  }
+  return __stelvioRuntimeBadgeIconReady ? __stelvioRuntimeBadgeIconImg : null;
+}
+
 /**
  * 세그먼트 그래프 그리기 (Canvas 기반)
  * @param {Array} segments - 세그먼트 배열
@@ -1971,40 +1985,44 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
   }
   
-  // 개인 대시보드 및 모바일 대시보드, 블루투스 개인훈련 통합, 훈련 준비 화면: Y축 120%와 150% 중간 위치에 민트색 둥근네모 상자에 워크아웃 총시간 표기
+  // 개인 대시보드 및 모바일 대시보드, 블루투스 개인훈련 통합, 훈련 준비 화면: Y축 120%와 150% 중간 위치에
+  // runtime1.svg 아이콘 + 시간 숫자로 구성된 배지에 워크아웃 총시간 표기 (기존 민트색 상자 디자인 교체)
   if (isIndividualDashboardCanvas || canvasId === 'bluetoothCoachSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
     const totalMinutes = Math.round(totalSeconds / 60);
     const totalTimeText = `${totalMinutes}m`;
-    
+
     // Y축 120%와 150% 중간 위치 계산 (135%)
     const targetFtpPercent = 135; // 120%와 150%의 중간
     const targetPower = ftp * (targetFtpPercent / 100); // FTP의 135%
     const targetY = padding.top + chartHeight - (chartHeight * (targetPower / maxTargetPower));
-    
-    // 크기와 폰트 30% 증가
+
+    // 크기와 폰트 30% 증가(기존 배지와 동일 스케일 유지)
     const baseFontSize = 12;
     const baseBoxHeight = 24;
     const baseBoxPadding = 8;
     const fontSize = Math.round(baseFontSize * 1.3); // 30% 증가: 15.6px → 16px
     const boxHeight = Math.round(baseBoxHeight * 1.3); // 30% 증가: 31.2px → 31px
     const boxPadding = Math.round(baseBoxPadding * 1.3); // 30% 증가: 10.4px → 10px
-    
+
     // 위아래 여백 30% 감소
     const currentVerticalPadding = (boxHeight - fontSize) / 2; // 현재 위아래 여백
     const newVerticalPadding = currentVerticalPadding * 0.7; // 30% 감소
     const adjustedBoxHeight = fontSize + (newVerticalPadding * 2); // 조정된 상자 높이
-    
-    // 텍스트 크기 측정 (한글 폰트 통일)
-    ctx.font = `bold ${fontSize}px ${textFontFamily}`;
+
+    // runtime0.svg 숫자 스타일(굵고 각진 지오메트릭 폰트)과 일체감을 주기 위해 900(black) 굵기 사용
+    ctx.font = `900 ${fontSize}px ${textFontFamily}`;
     const textMetrics = ctx.measureText(totalTimeText);
     const textWidth = textMetrics.width;
-    const boxWidth = textWidth + boxPadding * 2;
+    const runtimeIcon = getStelvioRuntimeBadgeIcon();
+    const iconSize = Math.round(adjustedBoxHeight * 0.72); // runtime1.svg 아이콘 — 흰색 라인아트, 배지 높이에 비례
+    const iconGap = runtimeIcon ? Math.round(boxPadding * 0.6) : 0;
+    const boxWidth = textWidth + boxPadding * 2 + (runtimeIcon ? iconSize + iconGap : 0);
     const boxX = padding.left + chartWidth / 2 - boxWidth / 2; // 그래프 중간
     const boxY = targetY - adjustedBoxHeight / 2; // Y축 135% 위치 (120%와 150% 중간)
-    
-    // 민트색 둥근네모 상자 그리기
+
+    // 배지 배경 — 흰색 라인아트 아이콘이 선명히 보이도록 짙은 배지(다크 차콜)로 교체
     const borderRadius = Math.round(6 * 1.3); // 30% 증가: 7.8px → 8px
-    ctx.fillStyle = 'rgba(0, 212, 170, 0.9)'; // 민트색 (#00d4aa)
+    ctx.fillStyle = 'rgba(17, 24, 39, 0.88)'; // 다크 차콜 배지
     ctx.beginPath();
     ctx.moveTo(boxX + borderRadius, boxY);
     ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
@@ -2017,13 +2035,20 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.quadraticCurveTo(boxX, boxY, boxX + borderRadius, boxY);
     ctx.closePath();
     ctx.fill();
-    
-    // 텍스트 표시 (한글 폰트 통일)
-    ctx.fillStyle = '#000'; // 검정색 텍스트
-    ctx.font = `bold ${fontSize}px ${textFontFamily}`;
+
+    // 아이콘(runtime1.svg, 흰색 라인아트) + 시간 숫자를 좌우로 배치
+    const contentStartX = boxX + boxPadding;
+    let textCenterX = boxX + boxWidth / 2;
+    if (runtimeIcon) {
+      const iconY = boxY + (adjustedBoxHeight - iconSize) / 2;
+      ctx.drawImage(runtimeIcon, contentStartX, iconY, iconSize, iconSize);
+      textCenterX = contentStartX + iconSize + iconGap + textWidth / 2;
+    }
+    ctx.fillStyle = '#fff'; // 흰색 텍스트 (다크 배지 위 시인성)
+    ctx.font = `900 ${fontSize}px ${textFontFamily}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(totalTimeText, padding.left + chartWidth / 2, targetY);
+    ctx.fillText(totalTimeText, textCenterX, targetY);
   }
 }
 
