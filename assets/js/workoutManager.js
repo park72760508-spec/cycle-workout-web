@@ -754,23 +754,33 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     graphWidth = Math.max(320, Math.min(500, totalSeconds * 2));
     padding = { top: 16, right: 20, bottom: 24, left: 35 };
   } else if (isIndividualDashboardCanvas) {
-    // 개인 대시보드용: 컨테이너 높이에 맞춰 동적으로 설정 (모바일 대시보드도 동일)
+    // 개인 대시보드용: 컨테이너 크기에 맞춰 동적으로 설정 (모바일 대시보드도 동일)
     const container = canvas.parentElement;
     let containerHeight = 100; // 기본값
-    
+    let containerWidth = 0;
+
     if (container) {
-      // 컨테이너의 실제 높이 측정 (여러 시도로 정확도 향상)
+      // 컨테이너의 실제 높이·너비 측정 (여러 시도로 정확도 향상)
       containerHeight = container.clientHeight || container.offsetHeight || 100;
-      
+      containerWidth = container.clientWidth || container.offsetWidth || 0;
+
       // 만약 높이가 0이면 부모 요소에서 측정 시도
       if (containerHeight === 0 && container.parentElement) {
         containerHeight = container.parentElement.clientHeight || 100;
       }
+      if (containerWidth === 0 && container.parentElement) {
+        containerWidth = container.parentElement.clientWidth || 0;
+      }
     }
-    
+
     // 컨테이너 높이를 활용 (최소 100px, 최대 400px로 제한하여 적절한 크기 유지)
     graphHeight = Math.max(100, Math.min(400, containerHeight));
-    graphWidth = Math.max(400, Math.min(600, totalSeconds * 2)); // 가로축 너비 (시간에 비례, 최소 400px, 최대 600px)
+    // 캔버스 내부 해상도(버퍼)의 가로:세로 비율이 실제 표시 크기(CSS width:100%)와 어긋나면
+    // 배지·아이콘·텍스트가 가로/세로로 다른 배율로 늘어나 찌그러져 보인다. 훈련 시간(totalSeconds)
+    // 기반 추정치 대신, 측정 가능하면 실제 컨테이너 너비를 그대로 버퍼 너비로 사용해 비율 불일치를 없앤다.
+    graphWidth = containerWidth > 0
+      ? Math.max(280, Math.min(600, containerWidth))
+      : Math.max(400, Math.min(600, totalSeconds * 2)); // 가로축 너비 (시간에 비례, 최소 400px, 최대 600px)
     padding = { 
       top: Math.max(8, Math.floor(graphHeight * 0.08)), // 높이에 비례한 패딩
       right: 20, 
@@ -798,9 +808,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   canvas.width = graphWidth;
   canvas.height = graphHeight;
   
-  // CSS 크기 설정 (컨테이너에 맞춤)
+  // CSS 크기 설정 (컨테이너에 맞춤) — height를 100%로 강제하면 버퍼(graphWidth×graphHeight)
+  // 비율과 무관하게 늘어나 배지·아이콘·텍스트가 가로세로로 다르게 찌그러진다. width만 맞추고
+  // height는 auto로 두어 버퍼 원본 비율 그대로 축소·확대되게 한다(왜곡 없는 반응형 크기 조절).
   canvas.style.width = '100%';
-  canvas.style.height = '100%';
+  canvas.style.height = 'auto';
   canvas.style.maxWidth = '100%';
   
   const ctx = canvas.getContext('2d');
@@ -2014,9 +2026,16 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const textMetrics = ctx.measureText(totalTimeText);
     const textWidth = textMetrics.width;
     const runtimeIcon = getStelvioRuntimeBadgeIcon();
-    const iconSize = Math.round(adjustedBoxHeight * 0.72); // runtime1.svg 아이콘 — 흰색 라인아트, 배지 높이에 비례
+    // runtime1.svg 원본 가로:세로 비율을 그대로 유지 — 높이만 배지 높이에 맞추고 너비는 비율대로
+    // 계산해서 정사각형으로 강제 축소/확대하며 찌그러지는 것을 방지한다.
+    const iconNaturalRatio =
+      runtimeIcon && runtimeIcon.naturalWidth > 0 && runtimeIcon.naturalHeight > 0
+        ? runtimeIcon.naturalWidth / runtimeIcon.naturalHeight
+        : 1;
+    const iconDrawHeight = Math.round(adjustedBoxHeight * 0.72);
+    const iconDrawWidth = Math.round(iconDrawHeight * iconNaturalRatio);
     const iconGap = runtimeIcon ? Math.round(boxPadding * 0.6) : 0;
-    const boxWidth = textWidth + boxPadding * 2 + (runtimeIcon ? iconSize + iconGap : 0);
+    const boxWidth = textWidth + boxPadding * 2 + (runtimeIcon ? iconDrawWidth + iconGap : 0);
     const boxX = padding.left + chartWidth / 2 - boxWidth / 2; // 그래프 중간
     const boxY = targetY - adjustedBoxHeight / 2; // Y축 135% 위치 (120%와 150% 중간)
 
@@ -2040,9 +2059,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const contentStartX = boxX + boxPadding;
     let textCenterX = boxX + boxWidth / 2;
     if (runtimeIcon) {
-      const iconY = boxY + (adjustedBoxHeight - iconSize) / 2;
-      ctx.drawImage(runtimeIcon, contentStartX, iconY, iconSize, iconSize);
-      textCenterX = contentStartX + iconSize + iconGap + textWidth / 2;
+      const iconY = boxY + (adjustedBoxHeight - iconDrawHeight) / 2;
+      ctx.drawImage(runtimeIcon, contentStartX, iconY, iconDrawWidth, iconDrawHeight);
+      textCenterX = contentStartX + iconDrawWidth + iconGap + textWidth / 2;
     }
     ctx.fillStyle = '#fff'; // 흰색 텍스트 (다크 배지 위 시인성)
     ctx.font = `900 ${fontSize}px ${textFontFamily}`;
