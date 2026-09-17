@@ -14198,10 +14198,16 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
         return detail && stelvioWorkoutMatchesTargetZoneRelaxed(detail, finalPromptZone, basisCategory);
       });
       if (promptWorkoutPool.length < 3 && availableWorkouts.length) {
+        // 프롬프트 후보 풀은 여기서 늘려도, 검증·백필에 실제로 쓰이는 workoutDetails에는
+        // 반영되지 않으면 AI가 이 후보(Zone에 정말 맞는 워크아웃)를 선택해도 뒤에서
+        // "workoutDetails에 없는 id(=invalid)"로 오인해 엉뚱한 Zone으로 대체해버린다
+        // (예: VO2Max/Z5 카테고리인데 Tempo/Endurance가 추천되던 원인). 반드시 함께 채운다.
+        var existingDetailIdsForZone = new Set(
+          workoutDetails.map(function (wd) { return Number(wd.id); })
+        );
         stelvioCollectWorkoutsForTargetZone(availableWorkouts, finalPromptZone, basisCategory).forEach(function (ew) {
-          if (promptWorkoutPool.length >= 10) return;
           var ewId = stelvioWorkoutListId(ew);
-          if (!promptWorkoutPool.some(function (p) { return Number(p.id) === ewId; })) {
+          if (promptWorkoutPool.length < 10 && !promptWorkoutPool.some(function (p) { return Number(p.id) === ewId; })) {
             promptWorkoutPool.push({
               id: ewId,
               title: ew.title,
@@ -14209,6 +14215,13 @@ async function analyzeAndRecommendWorkouts(date, user, apiKey, options) {
               totalSeconds: ew.total_seconds || 0,
               segments: [],
             });
+          }
+          if (!existingDetailIdsForZone.has(ewId)) {
+            var detailStub = stelvioListItemAsWorkoutDetail(ew);
+            if (detailStub) {
+              workoutDetails.push(detailStub);
+              existingDetailIdsForZone.add(ewId);
+            }
           }
         });
       }
