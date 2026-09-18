@@ -12267,7 +12267,7 @@ function OpenRidingGroupsList(props) {
                       {g.isPaid ? (
                         <>
                           <span className="text-slate-300 mx-1">·</span>
-                          <span className="text-amber-600 font-semibold">유료</span>
+                          <span className="text-amber-600 font-semibold">멤버쉽</span>
                         </>
                       ) : null}
                     </span>
@@ -12725,7 +12725,7 @@ function OpenRidingGroupForm(props) {
         />
       </div>
       <div className="flex items-center gap-2">
-        <label className="text-sm text-slate-800">유료 그룹</label>
+        <label className="text-sm text-slate-800">멤버쉽 그룹</label>
         <input
           type="checkbox"
           className="h-4 w-4 accent-violet-600"
@@ -12737,7 +12737,7 @@ function OpenRidingGroupForm(props) {
       </div>
       {isPaid ? (
         <p className="text-[11px] text-slate-500 -mt-2">
-          유료 그룹으로 설정하면 가입 승인 시 만료일(가입 기간)을 지정해야 하며, 기간이 지난 회원은
+          멤버쉽 그룹으로 설정하면 가입 승인 시 만료일(가입 기간)을 지정해야 하며, 기간이 지난 회원은
           모임 생성 등 클럽 콘텐츠 이용이 제한됩니다. 체크하지 않으면 기간 제한 없는 자유로운 클럽으로
           동작합니다.
         </p>
@@ -13114,7 +13114,7 @@ function OpenRidingGroupDetailView(props) {
     },
     [members, userId]
   );
-  /** 무료(공개) 클럽은 기간 개념이 없는 자유로운 클럽 — 유료 그룹만 만료일로 게이팅한다. */
+  /** 무료(공개) 클럽은 기간 개념이 없는 자유로운 클럽 — 멤버쉽 그룹만 만료일로 게이팅한다. */
   var isGroupPaid = !!(grp && grp.isPaid);
   var isMembershipActive = !!(
     !isGroupPaid ||
@@ -14006,7 +14006,7 @@ function OpenRidingGroupDetailView(props) {
                   <span className="ml-2 rounded-full bg-emerald-50 text-emerald-800 text-[10px] px-2 py-0.5 border border-emerald-200">공개</span>
                 )}
                 {grp.isPaid ? (
-                  <span className="ml-1 rounded-full bg-amber-50 text-amber-800 text-[10px] px-2 py-0.5 border border-amber-200">유료</span>
+                  <span className="ml-1 rounded-full bg-amber-50 text-amber-800 text-[10px] px-2 py-0.5 border border-amber-200">멤버쉽</span>
                 ) : null}
               </p>
               {pending && (isAdmin || isOwner) ? (
