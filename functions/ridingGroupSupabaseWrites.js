@@ -12,8 +12,24 @@
  */
 const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
+const { deleteComputeCache } = require("./httpComputeCache");
 
 const RIDING_GROUP_COLLECTION = "stelvio_riding_groups";
+
+/**
+ * getRidingGroupForRead(functions/index.js)는 8초 TTL의 짧은 캐시(withComputeCache)를 쓴다.
+ * 가입 승인/거절·기간 설정처럼 members/joinRequests를 바꾸는 쓰기 직후 같은 그룹을 다시 읽으면
+ * 캐시가 아직 만료 전이라 방금 반영한 변경(예: 만료일)이 안 보이는 버그가 있었다(2026-09) —
+ * 쓰기 성공 시 해당 그룹의 캐시 키를 즉시 지워 다음 읽기가 항상 최신 데이터를 계산하게 한다.
+ */
+async function invalidateGroupReadCache(admin, firestoreGroupId) {
+  const gid = String(firestoreGroupId || "").trim();
+  if (!gid) return;
+  await Promise.all([
+    deleteComputeCache(admin, "riding_group_read_v1__" + gid + "__0"),
+    deleteComputeCache(admin, "riding_group_read_v1__" + gid + "__1"),
+  ]);
+}
 
 class WriteError extends Error {
   constructor(status, message) {
@@ -178,6 +194,7 @@ async function handleJoinRidingGroup(admin, uid, body) {
     warnMirrorFailed("join", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true };
 }
 
@@ -277,6 +294,7 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     warnMirrorFailed("approve", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true };
 }
 
@@ -328,6 +346,7 @@ async function handleSetJoinRequestExpiry(admin, moderatorUid, body) {
     warnMirrorFailed("setJoinRequestExpiry", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true, expiresAt };
 }
 
@@ -382,6 +401,7 @@ async function handleUpdateMemberExpiry(admin, moderatorUid, body) {
     warnMirrorFailed("updateMemberExpiry", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true, expiresAt };
 }
 
@@ -426,6 +446,7 @@ async function handleRejectJoinRequest(admin, moderatorUid, body) {
     warnMirrorFailed("reject", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true };
 }
 
@@ -475,6 +496,7 @@ async function handleLeaveRidingGroup(admin, uid, body) {
     warnMirrorFailed("leave", err);
   }
 
+  await invalidateGroupReadCache(admin, gid);
   return { success: true };
 }
 

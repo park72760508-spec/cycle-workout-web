@@ -13730,6 +13730,17 @@ function OpenRidingGroupDetailView(props) {
     svc2
       .updateRidingGroupMemberExpiry(firestore, String(userId), String(groupId), uid, ymd)
       .then(function () {
+        /* 서버(getRidingGroupForRead)에는 8초 TTL 캐시가 있어 방금 쓴 값이 재조회에 바로 안 보일
+           수 있음(2026-09 버그) — 재조회 결과를 기다리지 않고 로컬 members를 즉시 갱신해 아바타
+           팝업의 만료일 라벨이 지연 없이 반영되게 한다. 재조회는 다른 필드 동기화를 위해 계속 진행. */
+        setMembers(function (prev) {
+          return (prev || []).map(function (m) {
+            if (String((m && m.userId) || (m && m.id) || '') !== uid) return m;
+            var next = Object.assign({}, m);
+            next.membershipExpiresAt = ymd;
+            return next;
+          });
+        });
         if (typeof gs.fetchRidingGroupMembersList === 'function') {
           return gs.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
             setMembers(Array.isArray(list) ? list : []);

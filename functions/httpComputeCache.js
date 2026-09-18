@@ -20,6 +20,14 @@ async function readComputeCache(admin, cacheKey, ttlMs) {
   }
 }
 
+async function deleteComputeCache(admin, cacheKey) {
+  try {
+    await admin.firestore().collection(CACHE_COLLECTION).doc(cacheKey).delete();
+  } catch (err) {
+    console.warn("[httpComputeCache] delete failed:", cacheKey, err && err.message ? err.message : err);
+  }
+}
+
 async function writeComputeCache(admin, cacheKey, payload) {
   try {
     let serialized;
@@ -68,5 +76,6 @@ async function withComputeCache(admin, cacheKey, ttlMs, computeFn, logLabel) {
 module.exports = {
   readComputeCache,
   writeComputeCache,
+  deleteComputeCache,
   withComputeCache,
 };
