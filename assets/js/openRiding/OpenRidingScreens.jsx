@@ -14817,16 +14817,26 @@ function OpenRidingGroupDetailView(props) {
             : '';
         return (
           <div
-            className="fixed inset-0 z-[200080] flex items-end sm:items-center justify-center bg-black/45 p-3"
+            className="fixed inset-0 flex items-end sm:items-center justify-center bg-black/45 p-3"
+            style={{ zIndex: 2147483001 }}
             role="dialog"
             aria-modal="true"
             aria-label="가입 기간(만료일) 선택"
             onClick={closeExpiryModal}
           >
             <div
-              className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden"
+              className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden relative"
               onClick={function (e) { e.stopPropagation(); }}
             >
+              <button
+                type="button"
+                className="absolute top-2 right-2 w-7 h-7 inline-flex items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-800 text-base leading-none disabled:opacity-40"
+                aria-label="닫기"
+                disabled={expiryModalBusy}
+                onClick={closeExpiryModal}
+              >
+                ✕
+              </button>
               <div className="px-3 pt-3 text-center text-sm font-semibold text-slate-700">
                 {expiryModalTarget.mode === 'joinRequest' ? '가입 기간(만료일) 선택' : '가입 기간(만료일) 수정'}
               </div>
