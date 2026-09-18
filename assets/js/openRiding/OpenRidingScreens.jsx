@@ -12264,6 +12264,12 @@ function OpenRidingGroupsList(props) {
                       <span className={groupIsPublic ? 'text-emerald-600' : 'text-slate-400'}>
                         {groupIsPublic ? '공개' : '비공개'}
                       </span>
+                      {g.isPaid ? (
+                        <>
+                          <span className="text-slate-300 mx-1">·</span>
+                          <span className="text-amber-600 font-semibold">유료</span>
+                        </>
+                      ) : null}
                     </span>
                   </span>
                 </button>
@@ -13681,12 +13687,6 @@ function OpenRidingGroupDetailView(props) {
     else doApproveJoinRequest(pending.uid);
   }
 
-  function shiftExpiryModalMonth(delta) {
-    var total = expiryModalYear * 12 + (expiryModalMonth - 1) + delta;
-    setExpiryModalYear(Math.floor(total / 12));
-    setExpiryModalMonth((total % 12) + 1);
-  }
-
   /** "기간" 버튼(가입 신청)·아바타 팝업 아이콘(기존 멤버) 공용 — 캘린더 모달을 연다 */
   function openExpiryModalFor(mode, uid, currentYmd) {
     var base = currentYmd ? new Date(String(currentYmd).slice(0, 10) + 'T12:00:00') : new Date();
@@ -14005,6 +14005,9 @@ function OpenRidingGroupDetailView(props) {
                 ) : (
                   <span className="ml-2 rounded-full bg-emerald-50 text-emerald-800 text-[10px] px-2 py-0.5 border border-emerald-200">공개</span>
                 )}
+                {grp.isPaid ? (
+                  <span className="ml-1 rounded-full bg-amber-50 text-amber-800 text-[10px] px-2 py-0.5 border border-amber-200">유료</span>
+                ) : null}
               </p>
               {pending && (isAdmin || isOwner) ? (
                 <span className="inline-block mt-2 text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-200">
@@ -14899,10 +14902,46 @@ function OpenRidingGroupDetailView(props) {
               <div className="px-3 pt-3 text-center text-sm font-semibold text-slate-700">
                 {expiryModalTarget.mode === 'joinRequest' ? '가입 기간(만료일) 선택' : '가입 기간(만료일) 수정'}
               </div>
-              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50 mt-2">
-                <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftExpiryModalMonth(-1); }} aria-label="이전 달">‹</button>
-                <span className="font-semibold text-slate-800 text-sm">{expiryModalYear}년 {expiryModalMonth}월</span>
-                <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftExpiryModalMonth(1); }} aria-label="다음 달">›</button>
+              <div className="flex items-center justify-center gap-2 px-3 py-2 border-b border-slate-200 bg-slate-50 mt-2">
+                <select
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800"
+                  aria-label="연도 선택"
+                  value={expiryModalYear}
+                  onChange={function (e) {
+                    setExpiryModalYear(Number(e.target.value));
+                  }}
+                >
+                  {(function () {
+                    var baseYear = Number(seoulTodayYmd.slice(0, 4));
+                    var opts = [];
+                    var y;
+                    for (y = baseYear; y <= baseYear + 3; y++) opts.push(y);
+                    if (opts.indexOf(expiryModalYear) < 0) opts.push(expiryModalYear);
+                    return opts.map(function (y2) {
+                      return (
+                        <option key={y2} value={y2}>
+                          {y2}년
+                        </option>
+                      );
+                    });
+                  })()}
+                </select>
+                <select
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-semibold text-slate-800"
+                  aria-label="월 선택"
+                  value={expiryModalMonth}
+                  onChange={function (e) {
+                    setExpiryModalMonth(Number(e.target.value));
+                  }}
+                >
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(function (m) {
+                    return (
+                      <option key={m} value={m}>
+                        {m}월
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
               <div className="p-3">
                 <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-500 mb-1">
