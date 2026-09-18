@@ -302,12 +302,16 @@ service cloud.firestore {
     // ===== stelvio_riding_groups (라이딩 모임 소모임 / 관리자 승인) =====
     // 클라이언트: openRidingGroupService.js
     match /stelvio_riding_groups/{groupId} {
+      // grade=1(사이트 관리자) 또는 grade=3(클럽 부관리자) 모두 클럽 관리자로 인정 — 클라이언트
+      // openRidingGroupsIsAdminGrade()·functions/ridingGroupSupabaseWrites.js isRidingGroupAdminGrade()와 동일 기준.
       function stelvioGroupIsAdmin() {
         return request.auth != null &&
           exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           (
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1' ||
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1 ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '3' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 3
           );
       }
       allow read: if request.auth != null && (

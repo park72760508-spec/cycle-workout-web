@@ -11854,10 +11854,16 @@ function OpenRidingFriendsManage(props) {
   );
 }
 
+/** 클럽(그룹) 관리자 판정 — grade=1(사이트 관리자) 또는 grade=3(클럽 부관리자) 모두 관리자로
+ * 취급한다. isStelvioOpenRidingRoomAdminGrade는 정확히 이 용도로 준비돼 있던 함수. */
 function openRidingGroupsIsAdminGrade() {
   var g =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
-  return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
+  return !!(
+    typeof window !== 'undefined' &&
+    typeof window.isStelvioOpenRidingRoomAdminGrade === 'function' &&
+    window.isStelvioOpenRidingRoomAdminGrade(g)
+  );
 }
 
 /** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 bottom, 항상 표시) */
