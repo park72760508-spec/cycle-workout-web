@@ -14803,6 +14803,16 @@ function OpenRidingGroupDetailView(props) {
               e.stopPropagation();
             }}
           >
+            <button
+              type="button"
+              className="stelvio-rank-avatar-zoom-close"
+              aria-label="닫기"
+              onClick={function () {
+                setAvatarZoom(null);
+              }}
+            >
+              ✕
+            </button>
             <div className="stelvio-rank-avatar-zoom-photo-wrap">
               <div className="stelvio-rank-avatar-zoom-inner">
                 <img
@@ -14817,6 +14827,20 @@ function OpenRidingGroupDetailView(props) {
                   }}
                 />
               </div>
+              {avatarZoom.uid && String(avatarZoom.uid) === String(userId) ? (
+                <button
+                  type="button"
+                  className="stelvio-rank-avatar-zoom-camera-btn"
+                  aria-label="프로필 사진 변경"
+                  onClick={function () {
+                    var targetUid = avatarZoom.uid;
+                    setAvatarZoom(null);
+                    if (typeof window.stelvioOpenProfilePhotoPicker === 'function') {
+                      window.stelvioOpenProfilePhotoPicker(targetUid);
+                    }
+                  }}
+                />
+              ) : null}
             </div>
             {avatarZoom.rank ? (function () {
               var avatarZoomMember = avatarZoom.uid
