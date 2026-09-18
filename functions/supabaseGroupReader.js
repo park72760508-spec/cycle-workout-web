@@ -208,6 +208,7 @@ function mapAdaptedGroupToMyGroupsListRow(doc) {
     categoryExplicit: doc.category != null,
     regions: doc.regions != null ? doc.regions : null,
     isPublic: doc.isPublic !== false,
+    isPaid: doc.isPaid === true,
     rankingNotice: doc.rankingNotice || null,
     readBackend: doc.readBackend || "supabase",
   };

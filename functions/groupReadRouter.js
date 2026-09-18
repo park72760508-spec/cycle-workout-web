@@ -206,6 +206,7 @@ async function fetchMyRidingGroupsFromFirebase(db, firebaseUid) {
         categoryExplicit: catRaw != null,
         regions: gd.regions != null ? gd.regions : null,
         isPublic: gd.isPublic !== false,
+        isPaid: gd.isPaid === true,
         rankingNotice,
         readBackend: "firebase",
       });

@@ -12356,6 +12356,9 @@ function OpenRidingGroupForm(props) {
   var _pub = useState(true);
   var isPublic = _pub[0];
   var setPublic = _pub[1];
+  var _paid = useState(false);
+  var isPaid = _paid[0];
+  var setPaid = _paid[1];
   var _pw = useState('');
   var joinPw = _pw[0];
   var setJoinPw = _pw[1];
@@ -12432,6 +12435,7 @@ function OpenRidingGroupForm(props) {
           setName(doc.name != null ? String(doc.name) : '');
           setIntro(doc.intro != null ? String(doc.intro) : '');
           setPublic(doc.isPublic !== false);
+          setPaid(doc.isPaid === true);
           setJoinPw(doc.joinPassword != null ? String(doc.joinPassword) : '');
           setRegions(Array.isArray(doc.regions) ? doc.regions.map(function (x) { return String(x); }) : []);
           setPhotoUrl(doc.photoUrl != null ? String(doc.photoUrl) : '');
@@ -12482,6 +12486,7 @@ function OpenRidingGroupForm(props) {
       regions: regions,
       intro: intro.trim(),
       isPublic: isPublic,
+      isPaid: isPaid,
       joinPassword: joinPw,
       photoUrl: url || null,
       category:
@@ -12713,6 +12718,24 @@ function OpenRidingGroupForm(props) {
           }}
         />
       </div>
+      <div className="flex items-center gap-2">
+        <label className="text-sm text-slate-800">유료 그룹</label>
+        <input
+          type="checkbox"
+          className="h-4 w-4 accent-violet-600"
+          checked={isPaid}
+          onChange={function (e) {
+            setPaid(e.target.checked);
+          }}
+        />
+      </div>
+      {isPaid ? (
+        <p className="text-[11px] text-slate-500 -mt-2">
+          유료 그룹으로 설정하면 가입 승인 시 만료일(가입 기간)을 지정해야 하며, 기간이 지난 회원은
+          모임 생성 등 클럽 콘텐츠 이용이 제한됩니다. 체크하지 않으면 기간 제한 없는 자유로운 클럽으로
+          동작합니다.
+        </p>
+      ) : null}
       {!isPublic ? (
         <div>
           <label className="text-xs text-slate-500 block mb-1">가입 비밀번호 (4자 이상)</label>
@@ -13085,7 +13108,10 @@ function OpenRidingGroupDetailView(props) {
     },
     [members, userId]
   );
+  /** 무료(공개) 클럽은 기간 개념이 없는 자유로운 클럽 — 유료 그룹만 만료일로 게이팅한다. */
+  var isGroupPaid = !!(grp && grp.isPaid);
   var isMembershipActive = !!(
+    !isGroupPaid ||
     !myMembership ||
     !myMembership.membershipExpiresAt ||
     String(myMembership.membershipExpiresAt).slice(0, 10) >= getTodaySeoulYmd()
@@ -14498,29 +14524,31 @@ function OpenRidingGroupDetailView(props) {
                         </span>
                       </span>
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions open-riding-group-join-request-actions inline-flex flex-row flex-nowrap items-center justify-end gap-1.5 shrink-0 whitespace-nowrap">
+                        {isGroupPaid ? (
+                          <button
+                            type="button"
+                            title={pickedExpiry ? '기간: ' + pickedExpiry : '가입 기간(만료일)을 먼저 설정하세요'}
+                            className={
+                              'open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border disabled:opacity-40 ' +
+                              (pickedExpiry
+                                ? 'border-violet-500 bg-violet-50 text-violet-900 hover:bg-violet-100'
+                                : 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100')
+                            }
+                            disabled={busy || !uid}
+                            onClick={function (ev) {
+                              ev.preventDefault();
+                              ev.stopPropagation();
+                              openExpiryModalFor('joinRequest', uid, pickedExpiry);
+                            }}
+                          >
+                            {pickedExpiry ? formatKoreanDateLabelFromYmd(pickedExpiry) || pickedExpiry : '기간'}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
-                          title={pickedExpiry ? '기간: ' + pickedExpiry : '가입 기간(만료일)을 먼저 설정하세요'}
-                          className={
-                            'open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border disabled:opacity-40 ' +
-                            (pickedExpiry
-                              ? 'border-violet-500 bg-violet-50 text-violet-900 hover:bg-violet-100'
-                              : 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100')
-                          }
-                          disabled={busy || !uid}
-                          onClick={function (ev) {
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            openExpiryModalFor('joinRequest', uid, pickedExpiry);
-                          }}
-                        >
-                          {pickedExpiry ? formatKoreanDateLabelFromYmd(pickedExpiry) || pickedExpiry : '기간'}
-                        </button>
-                        <button
-                          type="button"
-                          title={pickedExpiry ? '' : '기간을 먼저 설정하세요'}
+                          title={isGroupPaid && !pickedExpiry ? '기간을 먼저 설정하세요' : ''}
                           className="open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
-                          disabled={busy || !uid || !pickedExpiry}
+                          disabled={busy || !uid || (isGroupPaid && !pickedExpiry)}
                           onClick={function (ev) {
                             ev.preventDefault();
                             ev.stopPropagation();
@@ -14792,7 +14820,7 @@ function OpenRidingGroupDetailView(props) {
                       ' 순위 ' +
                       (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
                   </span>
-                  {isAdmin && avatarZoom.uid ? (
+                  {isAdmin && avatarZoom.uid && isGroupPaid ? (
                     <span className="stelvio-rank-avatar-zoom-period-wrap">
                       {avatarZoomExpiry ? (
                         <span className="stelvio-rank-avatar-zoom-expiry-label">

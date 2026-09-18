@@ -135,6 +135,7 @@ function adaptRidingGroupToFirestoreDoc(row, members, joinRequests) {
     regions: asStringArray(row.regions),
     intro: str(row.intro) || "",
     isPublic: Boolean(row.is_public),
+    isPaid: Boolean(row.is_paid),
     joinPassword: str(row.join_password) || "",
     photoUrl: str(row.photo_url),
     category,

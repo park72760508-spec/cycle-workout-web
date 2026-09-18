@@ -211,9 +211,10 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     .eq("user_id", applicantUuid)
     .maybeSingle();
   if (!joinReq) throw new WriteError(404, "가입 신청을 찾을 수 없습니다.");
-  // 승인 시 항상 가입 기간(만료일)이 함께 들어가도록 강제 — "기간" 버튼으로 미리 지정해야 함.
+  // 유료 그룹만 승인 시 가입 기간(만료일)을 강제 — "기간" 버튼으로 미리 지정해야 함.
+  // 무료(공개) 그룹은 기간 개념이 없는 자유로운 클럽이라 만료일 없이 바로 승인 가능.
   const expiresAt = joinReq.requested_expires_at || null;
-  if (!expiresAt) throw new WriteError(400, "가입 기간(만료일)을 먼저 설정해주세요.");
+  if (group.is_paid && !expiresAt) throw new WriteError(400, "가입 기간(만료일)을 먼저 설정해주세요.");
 
   const { data: existingMember } = await supabase
     .from("riding_group_members")

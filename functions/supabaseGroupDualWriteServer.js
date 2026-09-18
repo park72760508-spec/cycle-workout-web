@@ -335,6 +335,7 @@ function mapFirestoreRidingGroupToRow(firestoreDocId, d) {
     regions: asStringArray(d.regions),
     intro: str(d.intro) || "",
     is_public: Boolean(d.isPublic),
+    is_paid: Boolean(d.isPaid),
     join_password: str(d.joinPassword) || "",
     photo_url: str(d.photoUrl),
     category: (function () {
