@@ -536,6 +536,10 @@
       '    <option value="closed"' + (comp.status === 'closed' ? ' selected' : '') + '>마감(closed)</option>' +
       '  </select>' +
       '</div>' +
+      '<div class="competition-form-field">' +
+      '  <label class="competition-form-label" for="cAdminRestrictedGroupId">클럽 전용 제한(선택) — 클럽 문서 ID</label>' +
+      '  <input class="competition-form-input" id="cAdminRestrictedGroupId" type="text" placeholder="비워두면 전체 공개. 특정 클럽 회원(가입 기간 유효)만 신청 가능하게 하려면 클럽 문서 ID 입력" value="' + escapeHtml(comp.restrictedToGroupId || '') + '" />' +
+      '</div>' +
       '<div class="competition-form-error" id="cAdminError"></div>'
     );
   }
@@ -574,6 +578,7 @@
         validHours: Number(q('cAdminValidHours').value) || 1,
         bankAllowlist: [bank],
         status: q('cAdminStatus').value === 'closed' ? 'closed' : 'open',
+        restrictedToGroupId: q('cAdminRestrictedGroupId').value.trim() || null,
       },
     };
   }

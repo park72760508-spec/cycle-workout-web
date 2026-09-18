@@ -345,6 +345,12 @@
       } else if (result && result.reason === 'CLOSED') {
         window.competitionBottomSheet.showSoldOutFeedback();
         applyBtn.textContent = '접수 기간이 아닙니다';
+      } else if (result && result.reason === 'NOT_ELIGIBLE') {
+        if (!opts.silentAlert) {
+          alert((result && result.error) || '이 대회는 클럽 회원(가입 기간 유효)만 신청할 수 있습니다.');
+        }
+        applyBtn.disabled = true;
+        applyBtn.textContent = '클럽 회원 전용';
       } else {
         haptic(10);
         if (!opts.silentAlert) alert((result && result.error) || '신청에 실패했습니다. 잠시 후 다시 시도해 주세요.');

@@ -17877,6 +17877,40 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
       return;
     }
 
+    // 클럽 전용 제한(restrictedToGroupId) — 해당 클럽 멤버이면서 가입 기간(membership_expires_at)이
+    // 유효한 경우에만 신청 허용. 클럽 자체는 Supabase riding_group_members가 정본(functions/ridingGroupSupabaseWrites.js 참고).
+    if (comp.restrictedToGroupId) {
+      let eligible = false;
+      try {
+        const groupUuid = supabaseGroupDualWrite.resolveRidingGroupUuid(String(comp.restrictedToGroupId));
+        const userUuid = groupUuid ? supabaseGroupDualWrite.resolveUserUuid(uid) : null;
+        if (groupUuid && userUuid) {
+          const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+          const { data: memberRow } = await supabase
+            .from("riding_group_members")
+            .select("membership_expires_at")
+            .eq("group_id", groupUuid)
+            .eq("user_id", userUuid)
+            .maybeSingle();
+          if (memberRow) {
+            const exp = memberRow.membership_expires_at;
+            const todayYmd = new Date().toISOString().slice(0, 10);
+            eligible = !exp || String(exp).slice(0, 10) >= todayYmd;
+          }
+        }
+      } catch (eligErr) {
+        console.warn("[applyForCompetition] 클럽 제한 확인 실패:", eligErr.message || eligErr);
+      }
+      if (!eligible) {
+        res.status(200).json({
+          success: false,
+          reason: "NOT_ELIGIBLE",
+          error: "이 대회는 클럽 회원(가입 기간 유효)만 신청할 수 있습니다.",
+        });
+        return;
+      }
+    }
+
     const applicantResult = validateRaceApplicant(body.applicant, comp.category === "CYCLE" ? "CYCLE" : "RUN");
     if (applicantResult.error) {
       res.status(400).json({ success: false, error: applicantResult.error });
