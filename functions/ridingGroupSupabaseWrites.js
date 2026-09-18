@@ -88,17 +88,18 @@ function warnMirrorFailed(op, err) {
 /**
  * @param {import('firebase-admin')} admin
  * @param {string} uid 신청자
- * @param {{ groupId: string, passwordGuess?: string, displayName?: string, profileImageUrl?: string|null }} body
+ * @param {{ groupId: string, passwordGuess?: string, displayName?: string, profileImageUrl?: string|null, renewal?: boolean }} body
  */
 async function handleJoinRidingGroup(admin, uid, body) {
   const gid = String((body && body.groupId) || "").trim();
   if (!uid || !gid) throw new WriteError(400, "요청이 올바르지 않습니다.");
+  const isRenewal = !!(body && body.renewal);
 
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const group = await fetchOrBackfillGroupRow(admin, supabase, gid);
   if (!group) throw new WriteError(404, "그룹을 찾을 수 없습니다.");
   if (String(group.status || "") !== "APPROVED") throw new WriteError(400, "가입할 수 없는 그룹입니다.");
-  if (!group.is_public) {
+  if (!isRenewal && !group.is_public) {
     const need = String(group.join_password || "");
     if (!need || String((body && body.passwordGuess) || "") !== need) {
       throw new WriteError(400, "비밀번호가 일치하지 않습니다.");
@@ -114,7 +115,10 @@ async function handleJoinRidingGroup(admin, uid, body) {
     .eq("group_id", group.id)
     .eq("user_id", userUuid)
     .maybeSingle();
-  if (existingMember) throw new WriteError(400, "이미 이 그룹 멤버입니다.");
+  // 연장 신청(renewal)은 "이미 멤버"인 상태에서 다시 기간을 정하는 것이므로 기존 멤버여야 하고,
+  // 신규 가입 신청(renewal=false)은 아직 멤버가 아니어야 한다.
+  if (isRenewal && !existingMember) throw new WriteError(400, "이 그룹의 멤버가 아닙니다.");
+  if (!isRenewal && existingMember) throw new WriteError(400, "이미 이 그룹 멤버입니다.");
 
   const { data: existingReq } = await supabase
     .from("riding_group_join_requests")
@@ -134,6 +138,7 @@ async function handleJoinRidingGroup(admin, uid, body) {
     display_name: displayName,
     profile_image_url: profileImageUrl,
     requested_at: requestedAtIso,
+    is_renewal: isRenewal,
   });
   if (insErr) {
     if (insErr.code === "23505") throw new WriteError(400, "이미 가입 신청이 접수되었습니다.");
@@ -151,6 +156,7 @@ async function handleJoinRidingGroup(admin, uid, body) {
         requestedAt: admin.firestore.FieldValue.serverTimestamp(),
         displayName,
         profileImageUrl,
+        isRenewal,
       });
   } catch (err) {
     warnMirrorFailed("join", err);
@@ -189,6 +195,9 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     .eq("user_id", applicantUuid)
     .maybeSingle();
   if (!joinReq) throw new WriteError(404, "가입 신청을 찾을 수 없습니다.");
+  // 승인 시 항상 가입 기간(만료일)이 함께 들어가도록 강제 — "기간" 버튼으로 미리 지정해야 함.
+  const expiresAt = joinReq.requested_expires_at || null;
+  if (!expiresAt) throw new WriteError(400, "가입 기간(만료일)을 먼저 설정해주세요.");
 
   const { data: existingMember } = await supabase
     .from("riding_group_members")
@@ -196,7 +205,9 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     .eq("group_id", group.id)
     .eq("user_id", applicantUuid)
     .maybeSingle();
-  if (existingMember) throw new WriteError(400, "이미 멤버입니다.");
+  const isRenewal = !!joinReq.is_renewal;
+  if (existingMember && !isRenewal) throw new WriteError(400, "이미 멤버입니다.");
+  if (!existingMember && isRenewal) throw new WriteError(400, "갱신 대상 멤버를 찾을 수 없습니다.");
 
   const joinedAtIso = new Date().toISOString();
   const { error: delErr } = await supabase
@@ -206,15 +217,26 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     .eq("user_id", applicantUuid);
   if (delErr) throw delErr;
 
-  const { error: memErr } = await supabase.from("riding_group_members").insert({
-    group_id: group.id,
-    user_id: applicantUuid,
-    role: "member",
-    display_name: joinReq.display_name || "",
-    profile_image_url: joinReq.profile_image_url || null,
-    joined_at: joinedAtIso,
-  });
-  if (memErr) throw memErr;
+  if (isRenewal) {
+    // 연장: 기존 멤버 행의 만료일만 갱신(신규 삽입이 아님 — PK 중복 방지).
+    const { error: renewErr } = await supabase
+      .from("riding_group_members")
+      .update({ membership_expires_at: expiresAt })
+      .eq("group_id", group.id)
+      .eq("user_id", applicantUuid);
+    if (renewErr) throw renewErr;
+  } else {
+    const { error: memErr } = await supabase.from("riding_group_members").insert({
+      group_id: group.id,
+      user_id: applicantUuid,
+      role: "member",
+      display_name: joinReq.display_name || "",
+      profile_image_url: joinReq.profile_image_url || null,
+      joined_at: joinedAtIso,
+      membership_expires_at: expiresAt,
+    });
+    if (memErr) throw memErr;
+  }
 
   const newCount = await recomputeMemberCount(supabase, group.id);
 
@@ -224,12 +246,14 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
     const mRef = gRef.collection("members").doc(appUid);
     const batch = admin.firestore().batch();
     batch.delete(jRef);
-    batch.set(mRef, {
-      joinedAt: admin.firestore.FieldValue.serverTimestamp(),
+    const memberMirror = {
       displayName: joinReq.display_name || "",
       profileImageUrl: joinReq.profile_image_url || null,
       role: "member",
-    });
+      membershipExpiresAt: expiresAt,
+    };
+    if (!isRenewal) memberMirror.joinedAt = admin.firestore.FieldValue.serverTimestamp();
+    batch.set(mRef, memberMirror, { merge: true });
     batch.update(gRef, { memberCount: newCount, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
     await batch.commit();
   } catch (err) {
@@ -237,6 +261,111 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
   }
 
   return { success: true };
+}
+
+/**
+ * "기간" 버튼 — 가입 신청을 수락하기 전에 관리자/부관리자가 만료일을 미리 지정한다.
+ * 수락(handleApproveJoinRequest)은 이 값이 없으면 거부된다.
+ * @param {import('firebase-admin')} admin
+ * @param {string} moderatorUid
+ * @param {{ groupId: string, applicantUid: string, expiresAt: string }} body
+ */
+async function handleSetJoinRequestExpiry(admin, moderatorUid, body) {
+  const gid = String((body && body.groupId) || "").trim();
+  const appUid = String((body && body.applicantUid) || "").trim();
+  const expiresAt = String((body && body.expiresAt) || "").trim();
+  if (!moderatorUid || !gid || !appUid || !expiresAt) throw new WriteError(400, "요청이 올바르지 않습니다.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresAt)) throw new WriteError(400, "날짜 형식이 올바르지 않습니다.");
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const group = await fetchOrBackfillGroupRow(admin, supabase, gid);
+  if (!group) throw new WriteError(404, "그룹을 찾을 수 없습니다.");
+
+  const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
+  const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
+
+  const applicantUuid = supabaseGroupDualWrite.resolveUserUuid(appUid);
+  if (!applicantUuid) throw new WriteError(400, "신청자 정보를 확인할 수 없습니다.");
+
+  const { data: updated, error: updErr } = await supabase
+    .from("riding_group_join_requests")
+    .update({ requested_expires_at: expiresAt })
+    .eq("group_id", group.id)
+    .eq("user_id", applicantUuid)
+    .select("user_id")
+    .maybeSingle();
+  if (updErr) throw updErr;
+  if (!updated) throw new WriteError(404, "가입 신청을 찾을 수 없습니다.");
+
+  try {
+    await admin
+      .firestore()
+      .collection(RIDING_GROUP_COLLECTION)
+      .doc(gid)
+      .collection("joinRequests")
+      .doc(appUid)
+      .set({ requestedExpiresAt: expiresAt }, { merge: true });
+  } catch (err) {
+    warnMirrorFailed("setJoinRequestExpiry", err);
+  }
+
+  return { success: true, expiresAt };
+}
+
+/**
+ * 아바타 팝업의 기간 설정 아이콘 — 이미 승인된 기존 멤버의 만료일을 가입 신청 절차 없이
+ * 관리자/부관리자가 바로 수정한다.
+ * @param {import('firebase-admin')} admin
+ * @param {string} moderatorUid
+ * @param {{ groupId: string, memberUid: string, expiresAt: string|null }} body
+ */
+async function handleUpdateMemberExpiry(admin, moderatorUid, body) {
+  const gid = String((body && body.groupId) || "").trim();
+  const memberUid = String((body && body.memberUid) || "").trim();
+  const expiresAtRaw = body && body.expiresAt != null ? String(body.expiresAt).trim() : "";
+  if (!moderatorUid || !gid || !memberUid) throw new WriteError(400, "요청이 올바르지 않습니다.");
+  if (expiresAtRaw && !/^\d{4}-\d{2}-\d{2}$/.test(expiresAtRaw)) {
+    throw new WriteError(400, "날짜 형식이 올바르지 않습니다.");
+  }
+  const expiresAt = expiresAtRaw || null;
+
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  const group = await fetchOrBackfillGroupRow(admin, supabase, gid);
+  if (!group) throw new WriteError(404, "그룹을 찾을 수 없습니다.");
+
+  const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
+  const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
+
+  const memberUuid = supabaseGroupDualWrite.resolveUserUuid(memberUid);
+  if (!memberUuid) throw new WriteError(400, "회원 정보를 확인할 수 없습니다.");
+
+  const { data: updated, error: updErr } = await supabase
+    .from("riding_group_members")
+    .update({ membership_expires_at: expiresAt })
+    .eq("group_id", group.id)
+    .eq("user_id", memberUuid)
+    .select("user_id")
+    .maybeSingle();
+  if (updErr) throw updErr;
+  if (!updated) throw new WriteError(404, "멤버를 찾을 수 없습니다.");
+
+  try {
+    await admin
+      .firestore()
+      .collection(RIDING_GROUP_COLLECTION)
+      .doc(gid)
+      .collection("members")
+      .doc(memberUid)
+      .set({ membershipExpiresAt: expiresAt }, { merge: true });
+  } catch (err) {
+    warnMirrorFailed("updateMemberExpiry", err);
+  }
+
+  return { success: true, expiresAt };
 }
 
 /**
@@ -404,4 +533,6 @@ module.exports = {
   handleRejectJoinRequest,
   handleLeaveRidingGroup,
   handleBackfillRidingGroupMembers,
+  handleSetJoinRequestExpiry,
+  handleUpdateMemberExpiry,
 };

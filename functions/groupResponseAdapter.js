@@ -166,6 +166,7 @@ function adaptRidingGroupMemberToFirestoreDoc(m) {
     displayName: str(m.display_name) || "",
     profileImageUrl: str(m.profile_image_url),
     role: str(m.role) || "member",
+    membershipExpiresAt: m.membership_expires_at || null,
   };
 }
 
@@ -176,6 +177,8 @@ function adaptJoinRequestToFirestoreDoc(r) {
     requestedAt: tsFromIso(r.requested_at),
     displayName: str(r.display_name) || "",
     profileImageUrl: str(r.profile_image_url),
+    requestedExpiresAt: r.requested_expires_at || null,
+    isRenewal: !!r.is_renewal,
   };
 }
 

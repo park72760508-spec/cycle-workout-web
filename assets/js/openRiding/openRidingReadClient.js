@@ -155,8 +155,8 @@ async function httpPostJsonAuthed(path, body) {
 }
 
 /**
- * 가입/승인/거절/탈퇴 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
- * @param {'join'|'approve'|'reject'|'leave'} action
+ * 가입/승인/거절/탈퇴/기간설정 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
+ * @param {'join'|'approve'|'reject'|'leave'|'setJoinRequestExpiry'|'updateMemberExpiry'} action
  * @param {object} body
  */
 export async function postRidingGroupWriteRouted(action, body) {
@@ -165,6 +165,8 @@ export async function postRidingGroupWriteRouted(action, body) {
     approve: API_BASE + '/approveRidingGroupJoinRequestSupabase',
     reject: API_BASE + '/rejectRidingGroupJoinRequestSupabase',
     leave: API_BASE + '/leaveRidingGroupSupabase',
+    setJoinRequestExpiry: API_BASE + '/setRidingGroupJoinRequestExpirySupabase',
+    updateMemberExpiry: API_BASE + '/updateRidingGroupMemberExpirySupabase',
   };
   const url = endpoints[action];
   if (!url) throw new Error('알 수 없는 요청입니다.');
@@ -224,6 +226,7 @@ function membersFromGroupPayload(group) {
       displayName: m.displayName || '',
       profileImageUrl: m.profileImageUrl != null ? m.profileImageUrl : null,
       role: m.role || 'member',
+      membershipExpiresAt: m.membershipExpiresAt || null,
     };
   }).filter(Boolean);
 }
@@ -238,6 +241,8 @@ function joinRequestsFromGroupPayload(group) {
       requestedAt: r.requestedAt,
       displayName: r.displayName || '',
       profileImageUrl: r.profileImageUrl != null ? r.profileImageUrl : null,
+      requestedExpiresAt: r.requestedExpiresAt || null,
+      isRenewal: !!r.isRenewal,
     };
   }).filter(Boolean);
 }

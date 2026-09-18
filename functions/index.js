@@ -12930,6 +12930,14 @@ registerRidingGroupSupabaseWriteEndpoint(
   "leaveRidingGroupSupabase",
   ridingGroupSupabaseWrites.handleLeaveRidingGroup
 );
+registerRidingGroupSupabaseWriteEndpoint(
+  "setRidingGroupJoinRequestExpirySupabase",
+  ridingGroupSupabaseWrites.handleSetJoinRequestExpiry
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "updateRidingGroupMemberExpirySupabase",
+  ridingGroupSupabaseWrites.handleUpdateMemberExpiry
+);
 
 /**
  * 운영 도구(관리자 grade=1 전용) — 전체 크루/클럽의 Firestore↔Supabase 멤버·가입신청 드리프트

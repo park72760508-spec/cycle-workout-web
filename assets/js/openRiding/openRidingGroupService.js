@@ -344,21 +344,23 @@ export async function setRidingGroupStatusByAdmin(db, adminUid, groupId, nextSta
  * @param {string} groupId
  * @param {string} [passwordGuess]
  * @param {{ displayName?: string; profileImageUrl?: string|null }} [profileHints]
+ * @param {boolean} [renewal] — 이미 멤버인 사용자가 만료된 가입 기간을 "연장하기"로 재신청하는 경우 true
  */
-export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHints) {
+export async function joinRidingGroup(db, uid, groupId, passwordGuess, profileHints, renewal) {
   if (!uid || !groupId) throw new Error('로그인이 필요합니다.');
   var ph = profileHints || {};
   await postRidingGroupWriteRouted('join', {
     groupId: String(groupId).trim(),
     passwordGuess: passwordGuess != null ? String(passwordGuess) : '',
     displayName: ph.displayName != null ? String(ph.displayName) : '',
-    profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null
+    profileImageUrl: ph.profileImageUrl != null ? ph.profileImageUrl : null,
+    renewal: !!renewal
   });
 }
 
 /**
  * @param {import('firebase/firestore').Firestore} db
- * @param {string} moderatorUid — 방장 또는 grade=1 (규칙과 일치해야 함)
+ * @param {string} moderatorUid — 방장 또는 grade=1|3(규칙과 일치해야 함)
  * @param {string} groupId
  * @param {string} applicantUid
  */
@@ -367,6 +369,40 @@ export async function approveRidingGroupJoinRequest(db, moderatorUid, groupId, a
   await postRidingGroupWriteRouted('approve', {
     groupId: String(groupId).trim(),
     applicantUid: String(applicantUid).trim()
+  });
+}
+
+/**
+ * "기간" 버튼 — 가입 신청 수락 전 만료일을 미리 지정(수락은 이 값이 있어야 가능).
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} moderatorUid
+ * @param {string} groupId
+ * @param {string} applicantUid
+ * @param {string} expiresAt — YYYY-MM-DD
+ */
+export async function setRidingGroupJoinRequestExpiry(db, moderatorUid, groupId, applicantUid, expiresAt) {
+  if (!moderatorUid || !groupId || !applicantUid || !expiresAt) throw new Error('요청이 올바르지 않습니다.');
+  return postRidingGroupWriteRouted('setJoinRequestExpiry', {
+    groupId: String(groupId).trim(),
+    applicantUid: String(applicantUid).trim(),
+    expiresAt: String(expiresAt).trim()
+  });
+}
+
+/**
+ * 아바타 팝업 기간 설정 아이콘 — 기존 멤버의 만료일을 가입 신청 절차 없이 바로 수정.
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} moderatorUid
+ * @param {string} groupId
+ * @param {string} memberUid
+ * @param {string|null} expiresAt — YYYY-MM-DD, null이면 무기한으로 해제
+ */
+export async function updateRidingGroupMemberExpiry(db, moderatorUid, groupId, memberUid, expiresAt) {
+  if (!moderatorUid || !groupId || !memberUid) throw new Error('요청이 올바르지 않습니다.');
+  return postRidingGroupWriteRouted('updateMemberExpiry', {
+    groupId: String(groupId).trim(),
+    memberUid: String(memberUid).trim(),
+    expiresAt: expiresAt != null ? String(expiresAt).trim() : null
   });
 }
 
