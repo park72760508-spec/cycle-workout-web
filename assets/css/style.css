@@ -9208,6 +9208,20 @@ button.stelvio-rank-avatar-btn:focus-visible {
   justify-content: space-between;
   gap: 8px;
 }
+/* 클럽 상세 아바타 팝업 — 가입 기간 설정 아이콘 + 만료일 텍스트를 묶는 래퍼(순위 라인 우측 끝) */
+.stelvio-rank-avatar-zoom-period-wrap {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.stelvio-rank-avatar-zoom-expiry-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.72);
+  white-space: nowrap;
+  letter-spacing: -0.01em;
+}
 /* 클럽 상세 아바타 팝업 — 관리자/부관리자 전용 가입 기간 설정 아이콘(순위 라인 우측 끝) */
 .stelvio-rank-avatar-zoom-period-btn {
   flex-shrink: 0;

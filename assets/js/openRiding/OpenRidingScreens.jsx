@@ -14776,7 +14776,14 @@ function OpenRidingGroupDetailView(props) {
                 />
               </div>
             </div>
-            {avatarZoom.rank ? (
+            {avatarZoom.rank ? (function () {
+              var avatarZoomMember = avatarZoom.uid
+                ? (members || []).find(function (mm2) {
+                    return String((mm2 && (mm2.userId || mm2.id)) || '') === avatarZoom.uid;
+                  })
+                : null;
+              var avatarZoomExpiry = avatarZoomMember && avatarZoomMember.membershipExpiresAt;
+              return (
               <div className="stelvio-rank-avatar-zoom-profile">
                 <p className="stelvio-rank-avatar-zoom-line1">
                   <span>
@@ -14786,22 +14793,26 @@ function OpenRidingGroupDetailView(props) {
                       (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
                   </span>
                   {isAdmin && avatarZoom.uid ? (
-                    <button
-                      type="button"
-                      className="stelvio-rank-avatar-zoom-period-btn"
-                      aria-label="가입 기간 설정"
-                      title="가입 기간(만료일) 설정"
-                      onClick={function (e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        var mm = (members || []).find(function (mm2) {
-                          return String((mm2 && (mm2.userId || mm2.id)) || '') === avatarZoom.uid;
-                        });
-                        openExpiryModalFor('directEdit', avatarZoom.uid, mm && mm.membershipExpiresAt);
-                      }}
-                    >
-                      <img src="assets/img/event.svg" alt="" width="14" height="14" />
-                    </button>
+                    <span className="stelvio-rank-avatar-zoom-period-wrap">
+                      {avatarZoomExpiry ? (
+                        <span className="stelvio-rank-avatar-zoom-expiry-label">
+                          {(formatKoreanDateLabelFromYmd(avatarZoomExpiry) || avatarZoomExpiry) + '까지'}
+                        </span>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="stelvio-rank-avatar-zoom-period-btn"
+                        aria-label="가입 기간 설정"
+                        title="가입 기간(만료일) 설정"
+                        onClick={function (e) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          openExpiryModalFor('directEdit', avatarZoom.uid, avatarZoomExpiry);
+                        }}
+                      >
+                        <img src="assets/img/event.svg" alt="" width="14" height="14" />
+                      </button>
+                    </span>
                   ) : null}
                 </p>
                 <p className="stelvio-rank-avatar-zoom-line2">
@@ -14817,7 +14828,8 @@ function OpenRidingGroupDetailView(props) {
                 ) : null}
                 <p className="stelvio-rank-avatar-zoom-line3">{avatarZoom.rank.bottomLine || null}</p>
               </div>
-            ) : null}
+              );
+            })() : null}
           </div>
         </div>
       ) : null}
