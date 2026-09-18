@@ -778,6 +778,8 @@ if (typeof window !== 'undefined') {
     fetchRidingGroupById,
     fetchRidingGroupMembersList,
     fetchRidingGroupJoinRequestsList,
+    setRidingGroupJoinRequestExpiry,
+    updateRidingGroupMemberExpiry,
     uploadRidingGroupCover,
     subscribeMyManagedGroupsJoinRequestCounts,
     subscribeUserGroupMemberships,
