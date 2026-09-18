@@ -14192,7 +14192,15 @@ function OpenRidingGroupDetailView(props) {
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card">
         <div className="bg-violet-100 border-b border-violet-200/60 px-2 sm:px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
           <span className="flex items-center">
-            <h3 className="text-sm font-semibold text-slate-800 m-0">멤버</h3>
+            <h3 className="text-sm font-semibold text-slate-800 m-0 inline-flex items-center gap-1">
+              멤버
+              {isGroupPaid && isMember && myMembership && myMembership.membershipExpiresAt ? (
+                <span className="inline-flex items-center gap-0.5 text-[11px] font-medium text-amber-700">
+                  <img src="assets/img/event1.svg" alt="" width="12" height="12" />
+                  {String(myMembership.membershipExpiresAt).slice(0, 10)}
+                </span>
+              ) : null}
+            </h3>
             {isRunGroup && rankMetric === 'overall' ? (
               <button
                 type="button"
