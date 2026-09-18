@@ -22,13 +22,29 @@ class WriteError extends Error {
   }
 }
 
-/** 그룹(클럽) 관리자 판정 — grade=1(사이트 관리자) 또는 grade=3(클럽 부관리자) 모두 인정.
- * 클라이언트 openRidingGroupsIsAdminGrade()와 동일 기준으로 맞춘다(둘 다 grade 1|3). */
-async function isRidingGroupAdminGrade(admin, uid) {
+/** 그룹(클럽) 관리자 판정 — grade=1(사이트 관리자)은 모든 클럽에서 관리자.
+ * grade=3(클럽 부관리자)은 해당 클럽(groupUuid)의 riding_group_members에 본인이
+ * 가입돼 있을 때만 관리자로 인정 — 가입하지 않은 클럽에서는 비활성.
+ * Firestore 보안 규칙 stelvioGroupIsSiteAdmin/stelvioGroupIsSubAdminMember와 동일 기준.
+ * @param {import('@supabase/supabase-js').SupabaseClient} [supabase] grade=3 검증에 필요(없으면 grade=3은 거부)
+ * @param {string} [groupUuid] grade=3 검증에 필요(riding_groups.id, Firestore groupId 아님)
+ */
+async function isRidingGroupAdminGrade(admin, uid, supabase, groupUuid) {
   const snap = await admin.firestore().collection("users").doc(uid).get();
   if (!snap.exists) return false;
   const grade = String((snap.data() || {}).grade ?? "2");
-  return grade === "1" || grade === "3";
+  if (grade === "1") return true;
+  if (grade !== "3") return false;
+  if (!supabase || !groupUuid) return false;
+  const userUuid = supabaseGroupDualWrite.resolveUserUuid(uid);
+  if (!userUuid) return false;
+  const { data: memberRow } = await supabase
+    .from("riding_group_members")
+    .select("user_id")
+    .eq("group_id", groupUuid)
+    .eq("user_id", userUuid)
+    .maybeSingle();
+  return !!memberRow;
 }
 
 /** 그룹 조회 — Supabase에 없으면(한 번도 미러링 안 된 구그룹) Firestore에서 1회 백필 후 재조회. */
@@ -181,7 +197,7 @@ async function handleApproveJoinRequest(admin, moderatorUid, body) {
 
   const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
   const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
-  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid, supabase, group.id);
   if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
   if (String(group.status || "") !== "APPROVED") throw new WriteError(400, "이 그룹은 가입을 수락할 수 없습니다.");
 
@@ -283,7 +299,7 @@ async function handleSetJoinRequestExpiry(admin, moderatorUid, body) {
 
   const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
   const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
-  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid, supabase, group.id);
   if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
 
   const applicantUuid = supabaseGroupDualWrite.resolveUserUuid(appUid);
@@ -337,7 +353,7 @@ async function handleUpdateMemberExpiry(admin, moderatorUid, body) {
 
   const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
   const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
-  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid, supabase, group.id);
   if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
 
   const memberUuid = supabaseGroupDualWrite.resolveUserUuid(memberUid);
@@ -384,7 +400,7 @@ async function handleRejectJoinRequest(admin, moderatorUid, body) {
 
   const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
   const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
-  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid);
+  const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid, supabase, group.id);
   if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
 
   const applicantUuid = supabaseGroupDualWrite.resolveUserUuid(appUid);

@@ -11854,16 +11854,34 @@ function OpenRidingFriendsManage(props) {
   );
 }
 
-/** 클럽(그룹) 관리자 판정 — grade=1(사이트 관리자) 또는 grade=3(클럽 부관리자) 모두 관리자로
- * 취급한다. isStelvioOpenRidingRoomAdminGrade는 정확히 이 용도로 준비돼 있던 함수. */
+/** 사이트 전체 관리자(grade=1) 판정 — 모든 클럽에서 블랭킷으로 관리자. 클럽 목록 화면처럼
+ * 특정 클럽 하나로 좁힐 수 없는 컨텍스트(전체 대기 목록 노출 등)는 이 판정만 쓴다. */
 function openRidingGroupsIsAdminGrade() {
   var g =
     typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
-  return !!(
-    typeof window !== 'undefined' &&
-    typeof window.isStelvioOpenRidingRoomAdminGrade === 'function' &&
-    window.isStelvioOpenRidingRoomAdminGrade(g)
-  );
+  return !!(typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g));
+}
+
+/** 클럽 부관리자(grade=3) 판정 — 해당 클럽에 본인이 가입(members에 존재)돼 있을 때만 관리자로
+ * 취급한다(가입하지 않은 클럽에서는 비활성). members 배열이 있는 클럽 상세 화면 전용 헬퍼.
+ * @param {Array} members 클럽 members 목록
+ * @param {string} userId 현재 로그인 uid
+ */
+function openRidingGroupsIsSubAdminForMembers(members, userId) {
+  var uid = String(userId || '').trim();
+  if (!uid) return false;
+  var g =
+    typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
+  if (String(g == null ? '' : g).trim() !== '3') return false;
+  return (members || []).some(function (m) {
+    return String((m && m.userId) || '') === uid;
+  });
+}
+
+/** 클럽 상세 화면에서 쓰는 관리자 판정 — 사이트 관리자(grade=1, 모든 클럽) 또는 클럽 부관리자
+ * (grade=3, 본인이 가입된 클럽에 한함) 둘 중 하나면 관리자로 취급. */
+function openRidingGroupsIsAdminForGroup(members, userId) {
+  return openRidingGroupsIsAdminGrade() || openRidingGroupsIsSubAdminForMembers(members, userId);
 }
 
 /** 소모임(그룹) 목록 — 승인/대기 필터·좌측 생성 FAB(맨 위로 버튼과 동일 bottom, 항상 표시) */
@@ -12901,7 +12919,8 @@ function OpenRidingGroupDetailView(props) {
     return Promise.all(tasks);
   }
   var GROUP_ST = gs.GROUP_STATUS || { PENDING: 'PENDING', APPROVED: 'APPROVED', REJECTED: 'REJECTED' };
-  var isAdmin = openRidingGroupsIsAdminGrade();
+  // 사이트 관리자(grade=1)는 모든 클럽에서, 클럽 부관리자(grade=3)는 본인이 가입된 이 클럽에서만 관리자.
+  var isAdmin = openRidingGroupsIsAdminForGroup(members, userId);
 
   var memberUidsKey = useMemo(
     function () {
