@@ -14850,7 +14850,13 @@ function OpenRidingGroupDetailView(props) {
                 />
               ) : null}
             </div>
-            {avatarZoom.rank ? (function () {
+            {/* 가입 기간(멤버쉽) 설정 아이콘은 랭킹 데이터(avatarZoom.rank) 로딩 여부와 무관하게
+                항상 열려야 한다 — 예전엔 avatarZoom.rank가 없으면(랭킹 미로딩·API 실패 등) 이
+                블록 자체가 렌더되지 않아 관리자가 "기간" 아이콘을 아예 클릭할 수 없었다(2026-09
+                버그: 만료일이 한 번도 저장되지 않는 원인이었음). 이제 랭킹 정보가 없어도 관리자
+                +유료(멤버쉽) 그룹이면 이 블록이 렌더되고, 랭킹 관련 줄(순위·랭킹보드 등)만
+                avatarZoom.rank가 있을 때 추가로 표시한다. */}
+            {avatarZoom.rank || ((isOwner || isAdmin) && avatarZoom.uid && isGroupPaid) ? (function () {
               var avatarZoomMember = avatarZoom.uid
                 ? (members || []).find(function (mm2) {
                     return String((mm2 && (mm2.userId || mm2.id)) || '') === avatarZoom.uid;
@@ -14861,16 +14867,18 @@ function OpenRidingGroupDetailView(props) {
               <div className="stelvio-rank-avatar-zoom-profile">
                 <p className="stelvio-rank-avatar-zoom-line1">
                   <span>
-                    {(avatarZoom.name ? avatarZoom.name + ' · ' : '') +
-                      avatarZoom.rank.groupLabel +
-                      ' 순위 ' +
-                      (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
+                    {avatarZoom.rank
+                      ? (avatarZoom.name ? avatarZoom.name + ' · ' : '') +
+                        avatarZoom.rank.groupLabel +
+                        ' 순위 ' +
+                        (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')
+                      : avatarZoom.name || ''}
                   </span>
-                  {isAdmin && avatarZoom.uid && isGroupPaid ? (
+                  {(isOwner || isAdmin) && avatarZoom.uid && isGroupPaid ? (
                     <span className="stelvio-rank-avatar-zoom-period-wrap">
                       {avatarZoomExpiry ? (
                         <span className="stelvio-rank-avatar-zoom-expiry-label">
-                          {(formatKoreanDateLabelFromYmd(avatarZoomExpiry) || avatarZoomExpiry) + '까지'}
+                          {String(avatarZoomExpiry).slice(0, 10)}까지
                         </span>
                       ) : null}
                       <button
@@ -14889,18 +14897,22 @@ function OpenRidingGroupDetailView(props) {
                     </span>
                   ) : null}
                 </p>
-                <p className="stelvio-rank-avatar-zoom-line2">
-                  전체 랭킹보드{' '}
-                  {avatarZoom.rank.metaHtml ? (
-                    <span dangerouslySetInnerHTML={{ __html: avatarZoom.rank.metaHtml }} />
-                  ) : (
-                    '-'
-                  )}
-                </p>
-                {avatarZoom.rank.segmentsLine ? (
-                  <p className="stelvio-rank-avatar-zoom-line2">{avatarZoom.rank.segmentsLine}</p>
+                {avatarZoom.rank ? (
+                  <>
+                    <p className="stelvio-rank-avatar-zoom-line2">
+                      전체 랭킹보드{' '}
+                      {avatarZoom.rank.metaHtml ? (
+                        <span dangerouslySetInnerHTML={{ __html: avatarZoom.rank.metaHtml }} />
+                      ) : (
+                        '-'
+                      )}
+                    </p>
+                    {avatarZoom.rank.segmentsLine ? (
+                      <p className="stelvio-rank-avatar-zoom-line2">{avatarZoom.rank.segmentsLine}</p>
+                    ) : null}
+                    <p className="stelvio-rank-avatar-zoom-line3">{avatarZoom.rank.bottomLine || null}</p>
+                  </>
                 ) : null}
-                <p className="stelvio-rank-avatar-zoom-line3">{avatarZoom.rank.bottomLine || null}</p>
               </div>
               );
             })() : null}
