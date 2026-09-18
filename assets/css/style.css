@@ -9203,7 +9203,27 @@ button.stelvio-rank-avatar-btn:focus-visible {
   text-shadow:
     0 0 1px rgba(0, 0, 0, 1),
     0 2px 12px rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
+/* 클럽 상세 아바타 팝업 — 관리자/부관리자 전용 가입 기간 설정 아이콘(순위 라인 우측 끝) */
+.stelvio-rank-avatar-zoom-period-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+}
+.stelvio-rank-avatar-zoom-period-btn:active { background: rgba(255, 255, 255, 0.24); }
+.stelvio-rank-avatar-zoom-period-btn img { width: 14px; height: 14px; filter: brightness(0) invert(1); }
 .stelvio-rank-avatar-zoom-line2 {
   margin-bottom: 11px;
   padding: 10px 4px;

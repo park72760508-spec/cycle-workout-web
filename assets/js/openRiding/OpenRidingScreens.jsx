@@ -12847,6 +12847,23 @@ function OpenRidingGroupDetailView(props) {
   var _avatarZoom = useState(null);
   var avatarZoom = _avatarZoom[0];
   var setAvatarZoom = _avatarZoom[1];
+  /** 가입 기간(만료일) 설정 캘린더 모달 — target: {mode:'joinRequest'|'directEdit', uid} */
+  var _expModal = useState(null);
+  var expiryModalTarget = _expModal[0];
+  var setExpiryModalTarget = _expModal[1];
+  var _expY = useState(function () { return new Date().getFullYear(); });
+  var expiryModalYear = _expY[0];
+  var setExpiryModalYear = _expY[1];
+  var _expM = useState(function () { return new Date().getMonth() + 1; });
+  var expiryModalMonth = _expM[0];
+  var setExpiryModalMonth = _expM[1];
+  /** 가입 신청별로 "기간" 버튼에서 미리 골라둔 만료일(수락 시 서버가 이 값을 요구) */
+  var _jrExp = useState({});
+  var joinRequestExpiryPick = _jrExp[0];
+  var setJoinRequestExpiryPick = _jrExp[1];
+  var _expBusy = useState(false);
+  var expiryModalBusy = _expBusy[0];
+  var setExpiryModalBusy = _expBusy[1];
   var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
 
   function joinRequestApplicantUid(j) {
@@ -13037,6 +13054,23 @@ function OpenRidingGroupDetailView(props) {
     })
   );
 
+  /** 가입 기간(만료일) 게이팅 — 만료된 회원은 모임 생성 등 클럽 콘텐츠 이용 제한, 하단에 "연장하기" 노출 */
+  var myMembership = useMemo(
+    function () {
+      if (!userId) return null;
+      return (
+        members.find(function (m) {
+          return String((m && m.userId) || '') === String(userId);
+        }) || null
+      );
+    },
+    [members, userId]
+  );
+  var isMembershipActive = !!(
+    !myMembership ||
+    !myMembership.membershipExpiresAt ||
+    String(myMembership.membershipExpiresAt).slice(0, 10) >= getTodaySeoulYmd()
+  );
   var createdByUid = grp ? String(grp.createdBy || '') : '';
   var nonOwnerMemberCount = useMemo(
     function () {
@@ -13333,13 +13367,18 @@ function OpenRidingGroupDetailView(props) {
     ]
   );
 
-  function openGroupDetailAvatarZoom(src, name, rankInfo) {
+  function openGroupDetailAvatarZoom(src, name, rankInfo, memberUid) {
     var s = src != null ? String(src).trim() : '';
     if (!s) return;
-    setAvatarZoom({ src: s, name: name != null ? String(name).trim() : '', rank: rankInfo || null });
+    setAvatarZoom({
+      src: s,
+      name: name != null ? String(name).trim() : '',
+      rank: rankInfo || null,
+      uid: memberUid ? String(memberUid).trim() : ''
+    });
   }
 
-  function renderGroupDetailClickableAvatar(photo, displayName, btnClass, rankInfo) {
+  function renderGroupDetailClickableAvatar(photo, displayName, btnClass, rankInfo, memberUid) {
     var src = photo != null ? String(photo).trim() : '';
     if (!src) return null;
     var nm = displayName != null ? String(displayName).trim() : '';
@@ -13357,7 +13396,7 @@ function OpenRidingGroupDetailView(props) {
         onClick={function (e) {
           e.preventDefault();
           e.stopPropagation();
-          openGroupDetailAvatarZoom(src, nm, rankInfo);
+          openGroupDetailAvatarZoom(src, nm, rankInfo, memberUid);
         }}
       >
         <img
@@ -13595,6 +13634,70 @@ function OpenRidingGroupDetailView(props) {
     setJoinActionConfirm(null);
     if (pending.action === 'reject') doRejectJoinRequest(pending.uid);
     else doApproveJoinRequest(pending.uid);
+  }
+
+  function shiftExpiryModalMonth(delta) {
+    var total = expiryModalYear * 12 + (expiryModalMonth - 1) + delta;
+    setExpiryModalYear(Math.floor(total / 12));
+    setExpiryModalMonth((total % 12) + 1);
+  }
+
+  /** "기간" 버튼(가입 신청)·아바타 팝업 아이콘(기존 멤버) 공용 — 캘린더 모달을 연다 */
+  function openExpiryModalFor(mode, uid, currentYmd) {
+    var base = currentYmd ? new Date(String(currentYmd).slice(0, 10) + 'T12:00:00') : new Date();
+    if (isNaN(base.getTime())) base = new Date();
+    setExpiryModalYear(base.getFullYear());
+    setExpiryModalMonth(base.getMonth() + 1);
+    setExpiryModalTarget({ mode: mode, uid: uid });
+  }
+
+  function closeExpiryModal() {
+    if (expiryModalBusy) return;
+    setExpiryModalTarget(null);
+  }
+
+  /** 캘린더에서 날짜 선택 — mode에 따라 "가입 신청 기간 미리 지정" 또는 "기존 멤버 기간 즉시 수정" */
+  function handleExpiryDateSelect(ymd) {
+    if (!expiryModalTarget) return;
+    var mode = expiryModalTarget.mode;
+    var uid = expiryModalTarget.uid;
+    if (mode === 'joinRequest') {
+      setJoinRequestExpiryPick(function (prev) {
+        var next = Object.assign({}, prev);
+        next[uid] = ymd;
+        return next;
+      });
+      setExpiryModalTarget(null);
+      var svc = getGroupService();
+      if (typeof svc.setRidingGroupJoinRequestExpiry === 'function' && firestore && userId && groupId) {
+        // 새로고침해도 유지되도록 서버에도 즉시 반영 — 실패해도 로컬 상태로 수락 진행은 가능.
+        svc.setRidingGroupJoinRequestExpiry(firestore, String(userId), String(groupId), uid, ymd).catch(function () {});
+      }
+      return;
+    }
+    setExpiryModalBusy(true);
+    var svc2 = getGroupService();
+    if (typeof svc2.updateRidingGroupMemberExpiry !== 'function' || !firestore || !userId || !groupId) {
+      setExpiryModalBusy(false);
+      setExpiryModalTarget(null);
+      return;
+    }
+    svc2
+      .updateRidingGroupMemberExpiry(firestore, String(userId), String(groupId), uid, ymd)
+      .then(function () {
+        if (typeof gs.fetchRidingGroupMembersList === 'function') {
+          return gs.fetchRidingGroupMembersList(firestore, groupId).then(function (list) {
+            setMembers(Array.isArray(list) ? list : []);
+          });
+        }
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '기간 저장에 실패했습니다.');
+      })
+      .finally(function () {
+        setExpiryModalBusy(false);
+        setExpiryModalTarget(null);
+      });
   }
 
   function doApproveJoinRequest(applicantUid) {
@@ -13892,13 +13995,42 @@ function OpenRidingGroupDetailView(props) {
           userId={userId}
           groupId={groupId}
           moimCopy={moimCopy}
-          canCreate={isMember}
+          canCreate={isMember && isMembershipActive}
           createBusy={busy}
           onCreateClick={handleCreateRideFromGroup}
           onSelectRide={function (rideId) {
             if (typeof props.onSelectGroupRide === 'function') props.onSelectGroupRide(rideId);
           }}
         />
+      ) : null}
+      {approved && isMember && !isMembershipActive ? (
+        <div className="mx-3 mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-center">
+          <p className="m-0 mb-2 text-[13px] font-semibold text-amber-900">
+            가입 기간이 만료되어 모임 생성 등 클럽 콘텐츠 이용이 제한됩니다.
+          </p>
+          <button
+            type="button"
+            className="open-riding-action-btn w-full py-2 rounded-lg font-semibold text-sm text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50"
+            disabled={busy}
+            onClick={function () {
+              if (!firestore || !userId || !groupId || typeof gs.joinRidingGroup !== 'function') return;
+              setBusy(true);
+              gs
+                .joinRidingGroup(firestore, userId, groupId, '', profileHintsForJoin(), true)
+                .then(function () {
+                  alert('연장 신청이 접수되었습니다. 관리자 승인 후 반영됩니다.');
+                })
+                .catch(function (e) {
+                  alert(e && e.message ? e.message : '연장 신청에 실패했습니다.');
+                })
+                .finally(function () {
+                  setBusy(false);
+                });
+            }}
+          >
+            {busy ? '처리 중…' : '연장하기'}
+          </button>
+        </div>
       ) : null}
 
       {showRankFilter ? (
@@ -14184,7 +14316,8 @@ function OpenRidingGroupDetailView(props) {
                                   segmentsLine: overlaySegmentsLine,
                                   bottomLine: overlayBottomLine
                                 }
-                              : null
+                              : null,
+                            uid
                           )
                         ) : (
                           <span className="open-riding-group-member-avatar-fallback inline-flex shrink-0 items-center justify-center rounded-full ring-1 ring-indigo-300/90 bg-gradient-to-br from-violet-50 to-slate-100 text-[10px] font-bold text-violet-800">
@@ -14329,6 +14462,7 @@ function OpenRidingGroupDetailView(props) {
                   var nm = displayNameForJoinRequest(j);
                   var photo = photoForJoinRequest(j);
                   var initial = nm.charAt(0) || '·';
+                  var pickedExpiry = joinRequestExpiryPick[uid] || j.requestedExpiresAt || '';
                   return (
                     <div key={uid || idx} className="stelvio-rank-row open-riding-group-rank-row open-riding-group-join-request-row">
                       <span className="stelvio-rank-pos open-riding-group-seq tabular-nums">{rank}</span>
@@ -14347,8 +14481,27 @@ function OpenRidingGroupDetailView(props) {
                       <span className="stelvio-rank-wkg open-riding-group-rank-actions open-riding-group-join-request-actions inline-flex flex-row flex-nowrap items-center justify-end gap-1.5 shrink-0 whitespace-nowrap">
                         <button
                           type="button"
-                          className="open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          title={pickedExpiry ? '기간: ' + pickedExpiry : '가입 기간(만료일)을 먼저 설정하세요'}
+                          className={
+                            'open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border disabled:opacity-40 ' +
+                            (pickedExpiry
+                              ? 'border-violet-500 bg-violet-50 text-violet-900 hover:bg-violet-100'
+                              : 'border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100')
+                          }
                           disabled={busy || !uid}
+                          onClick={function (ev) {
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            openExpiryModalFor('joinRequest', uid, pickedExpiry);
+                          }}
+                        >
+                          {pickedExpiry ? formatKoreanDateLabelFromYmd(pickedExpiry) || pickedExpiry : '기간'}
+                        </button>
+                        <button
+                          type="button"
+                          title={pickedExpiry ? '' : '기간을 먼저 설정하세요'}
+                          className="open-riding-action-btn open-riding-group-join-request-btn shrink-0 text-[11px] font-semibold px-2.5 py-1.5 rounded-md border border-emerald-500 bg-emerald-50 text-emerald-900 hover:bg-emerald-100 disabled:opacity-40"
+                          disabled={busy || !uid || !pickedExpiry}
                           onClick={function (ev) {
                             ev.preventDefault();
                             ev.stopPropagation();
@@ -14607,10 +14760,30 @@ function OpenRidingGroupDetailView(props) {
             {avatarZoom.rank ? (
               <div className="stelvio-rank-avatar-zoom-profile">
                 <p className="stelvio-rank-avatar-zoom-line1">
-                  {(avatarZoom.name ? avatarZoom.name + ' · ' : '') +
-                    avatarZoom.rank.groupLabel +
-                    ' 순위 ' +
-                    (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
+                  <span>
+                    {(avatarZoom.name ? avatarZoom.name + ' · ' : '') +
+                      avatarZoom.rank.groupLabel +
+                      ' 순위 ' +
+                      (avatarZoom.rank.rank ? avatarZoom.rank.rank + '위' : '-')}
+                  </span>
+                  {isAdmin && avatarZoom.uid ? (
+                    <button
+                      type="button"
+                      className="stelvio-rank-avatar-zoom-period-btn"
+                      aria-label="가입 기간 설정"
+                      title="가입 기간(만료일) 설정"
+                      onClick={function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        var mm = (members || []).find(function (mm2) {
+                          return String((mm2 && (mm2.userId || mm2.id)) || '') === avatarZoom.uid;
+                        });
+                        openExpiryModalFor('directEdit', avatarZoom.uid, mm && mm.membershipExpiresAt);
+                      }}
+                    >
+                      <img src="assets/img/event.svg" alt="" width="14" height="14" />
+                    </button>
+                  ) : null}
                 </p>
                 <p className="stelvio-rank-avatar-zoom-line2">
                   전체 랭킹보드{' '}
@@ -14629,6 +14802,79 @@ function OpenRidingGroupDetailView(props) {
           </div>
         </div>
       ) : null}
+      {expiryModalTarget ? (function () {
+        var firstDow = seoulFirstDayOfWeekSun0(expiryModalYear, expiryModalMonth);
+        var dim = daysInGregorianMonth(expiryModalYear, expiryModalMonth);
+        var cells = [];
+        var ci;
+        for (ci = 0; ci < firstDow; ci++) cells.push(null);
+        for (ci = 1; ci <= dim; ci++) cells.push(ci);
+        while (cells.length % 7 !== 0) cells.push(null);
+        var seoulTodayYmd = getTodaySeoulYmd();
+        var selectedYmd =
+          expiryModalTarget.mode === 'joinRequest'
+            ? joinRequestExpiryPick[expiryModalTarget.uid] || ''
+            : '';
+        return (
+          <div
+            className="fixed inset-0 z-[200080] flex items-end sm:items-center justify-center bg-black/45 p-3"
+            role="dialog"
+            aria-modal="true"
+            aria-label="가입 기간(만료일) 선택"
+            onClick={closeExpiryModal}
+          >
+            <div
+              className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden"
+              onClick={function (e) { e.stopPropagation(); }}
+            >
+              <div className="px-3 pt-3 text-center text-sm font-semibold text-slate-700">
+                {expiryModalTarget.mode === 'joinRequest' ? '가입 기간(만료일) 선택' : '가입 기간(만료일) 수정'}
+              </div>
+              <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50 mt-2">
+                <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftExpiryModalMonth(-1); }} aria-label="이전 달">‹</button>
+                <span className="font-semibold text-slate-800 text-sm">{expiryModalYear}년 {expiryModalMonth}월</span>
+                <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftExpiryModalMonth(1); }} aria-label="다음 달">›</button>
+              </div>
+              <div className="p-3">
+                <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-500 mb-1">
+                  {['일', '월', '화', '수', '목', '금', '토'].map(function (w) { return <div key={w}>{w}</div>; })}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {cells.map(function (cell, idx) {
+                    if (cell == null) return <div key={'e' + idx} className="h-9" />;
+                    var cellKey = dateKey(expiryModalYear, expiryModalMonth - 1, cell);
+                    var isToday = cellKey === seoulTodayYmd;
+                    var isSel = selectedYmd === cellKey;
+                    return (
+                      <button
+                        key={cellKey}
+                        type="button"
+                        disabled={expiryModalBusy}
+                        onClick={function () { handleExpiryDateSelect(cellKey); }}
+                        className={
+                          'h-9 rounded-lg text-sm disabled:opacity-40 ' +
+                          (isSel ? 'bg-violet-600 text-white font-semibold ' : 'hover:bg-violet-50 text-slate-800 ') +
+                          (isToday && !isSel ? ' ring-2 ring-violet-400 ring-inset ' : '')
+                        }
+                      >
+                        {cell}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  type="button"
+                  className="mt-3 w-full py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 mb-3 disabled:opacity-40"
+                  disabled={expiryModalBusy}
+                  onClick={closeExpiryModal}
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
     </div>
   );
 }
