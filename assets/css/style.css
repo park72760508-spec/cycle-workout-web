@@ -13563,6 +13563,12 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 }
 
 .modal-content {
+  /* position 없이는 z-index가 무시돼(static 요소) .modal-overlay가 별도 형제
+     엘리먼트로 쓰이는 모달(예: 훈련 스케줄 상세)에서 흐림 배경이 내용 위에 그려지는
+     버그가 있었다. 게다가 .modal-overlay의 z-index(10100200)가 이 값(100000)보다
+     훨씬 커서, position만 고쳐도 여전히 오버레이가 위에 그려지므로 z-index도 함께
+     올린다(2026-09). */
+  position: relative;
   background: white;
   border-radius: 12px;
   width: 90%;
@@ -13570,7 +13576,7 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  z-index: 100000;
+  z-index: 10100300;
   /* Pull-to-refresh 방지 (모달 콘텐츠, 스크롤은 유지) */
   overscroll-behavior-y: contain;
   overscroll-behavior: contain;
