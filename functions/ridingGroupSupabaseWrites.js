@@ -419,10 +419,12 @@ async function handleRejectJoinRequest(admin, moderatorUid, body) {
   const group = await fetchOrBackfillGroupRow(admin, supabase, gid);
   if (!group) throw new WriteError(404, "그룹을 찾을 수 없습니다.");
 
+  const isSelfCancel = String(moderatorUid) === String(appUid);
   const moderatorUuid = supabaseGroupDualWrite.resolveUserUuid(moderatorUid);
   const isOwner = moderatorUuid && String(group.created_by || "") === String(moderatorUuid);
   const isAdmin = await isRidingGroupAdminGrade(admin, moderatorUid, supabase, group.id);
-  if (!isOwner && !isAdmin) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
+  // 방장/관리자의 "거절"뿐 아니라, 신청 당사자 본인이 승인 전 신청을 "취소"하는 경우도 이 경로를 탄다.
+  if (!isOwner && !isAdmin && !isSelfCancel) throw new WriteError(403, "이 작업을 수행할 권한이 없습니다.");
 
   const applicantUuid = supabaseGroupDualWrite.resolveUserUuid(appUid);
   if (!applicantUuid) throw new WriteError(400, "신청자 정보를 확인할 수 없습니다.");

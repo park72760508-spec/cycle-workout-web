@@ -13808,6 +13808,33 @@ function OpenRidingGroupDetailView(props) {
       });
   }
 
+  /** 승인 대기 중인 내 가입 신청을 방장 승인 전에 스스로 취소 — 거절과 동일한 삭제 경로를
+   * 재사용하되, 신청 당사자 본인이 호출하면 서버가 권한을 허용한다(reject 핸들러 참고). */
+  function doCancelMyJoinRequest() {
+    if (!firestore || !userId || !groupId) {
+      alert('취소할 수 없습니다. 로그인·연결 상태를 확인해 주세요.');
+      return;
+    }
+    if (!window.confirm('가입 신청을 취소할까요?')) return;
+    var svc = getGroupService();
+    if (typeof svc.rejectRidingGroupJoinRequest !== 'function') {
+      alert('가입 신청 취소 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+      return;
+    }
+    setBusy(true);
+    svc
+      .rejectRidingGroupJoinRequest(firestore, String(userId), String(groupId), String(userId))
+      .then(function () {
+        setMyJoinRequest(null);
+      })
+      .catch(function (e) {
+        alert(e && e.message ? e.message : '가입 신청 취소에 실패했습니다.');
+      })
+      .finally(function () {
+        setBusy(false);
+      });
+  }
+
   function doApprove() {
     if (!firestore || !userId || !groupId) return;
     if (!window.confirm('이 그룹을 승인하고 목록에 공개할까요?')) return;
@@ -14450,7 +14477,17 @@ function OpenRidingGroupDetailView(props) {
           <div className="open-riding-group-member-cta-slot open-riding-bottom-actions border-t border-slate-200/90 bg-[rgba(255,255,255,0.98)] px-3 pt-2 pb-3 space-y-2 box-border">
             {approved && !isMember ? (
               myJoinRequest ? (
-                <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
+                <>
+                  <p className="text-sm text-center text-slate-600 m-0 py-2 font-medium">가입 신청이 접수되었습니다. 방장 승인을 기다려 주세요.</p>
+                  <button
+                    type="button"
+                    className="open-riding-action-btn w-full min-h-[2.75rem] rounded-xl border border-slate-300 bg-white text-slate-700 font-medium hover:bg-slate-50 disabled:opacity-50"
+                    disabled={busy}
+                    onClick={doCancelMyJoinRequest}
+                  >
+                    {busy ? '처리 중…' : '가입 신청 취소'}
+                  </button>
+                </>
               ) : (
                 <>
                   {grp.isPublic === false ? (
