@@ -155,8 +155,8 @@ async function httpPostJsonAuthed(path, body) {
 }
 
 /**
- * 가입/승인/거절/탈퇴/기간설정 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
- * @param {'join'|'approve'|'reject'|'leave'|'setJoinRequestExpiry'|'updateMemberExpiry'} action
+ * 가입/승인/거절/탈퇴/기간설정/클럽워크아웃 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
+ * @param {'join'|'approve'|'reject'|'leave'|'setJoinRequestExpiry'|'updateMemberExpiry'|'createClubWorkout'|'deleteClubWorkout'} action
  * @param {object} body
  */
 export async function postRidingGroupWriteRouted(action, body) {
@@ -167,10 +167,23 @@ export async function postRidingGroupWriteRouted(action, body) {
     leave: API_BASE + '/leaveRidingGroupSupabase',
     setJoinRequestExpiry: API_BASE + '/setRidingGroupJoinRequestExpirySupabase',
     updateMemberExpiry: API_BASE + '/updateRidingGroupMemberExpirySupabase',
+    createClubWorkout: API_BASE + '/createClubWorkoutSupabase',
+    deleteClubWorkout: API_BASE + '/deleteClubWorkoutSupabase',
   };
   const url = endpoints[action];
   if (!url) throw new Error('알 수 없는 요청입니다.');
   return httpPostJsonAuthed(url, body);
+}
+
+/**
+ * 클럽 전용 워크아웃 목록 조회 — 그룹세션 생성 화면의 워크아웃 선택기용.
+ * @param {string} groupId
+ */
+export async function fetchClubWorkoutsRouted(groupId) {
+  const gid = String(groupId || '').trim();
+  if (!gid) return [];
+  const json = await httpGetJson(API_BASE + '/getClubWorkoutsForRead', { groupId: gid });
+  return json && json.success && Array.isArray(json.items) ? json.items : [];
 }
 
 /**

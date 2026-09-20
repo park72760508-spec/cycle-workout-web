@@ -237,6 +237,10 @@ function mapFirestoreOpenRideToRows(firestoreDocId, d) {
     is_contact_public: Boolean(d.isContactPublic),
     /* 클럽/크루 상세에서 "모임 생성"으로 만든 라이딩만 채워짐 — 일반 생성은 null(2026-08) */
     group_firestore_doc_id: str(d.groupId) || null,
+    /* 그룹세션(인도어 훈련 모임) — 클럽 상세 "그룹세션" 토글로 생성된 라이딩(2026-09) */
+    is_group_session: Boolean(d.isGroupSession),
+    workout_id: str(d.workoutId) || null,
+    workout_source: str(d.workoutSource) || null,
     gpx_url: str(d.gpxUrl),
     region: str(d.region) || "",
     status,

@@ -4712,8 +4712,11 @@ function OpenRidingCalendarMain(props) {
   var loadingRides = hook.loadingRides;
   var ridesMonth = useMemo(
     function () {
+      /* 그룹세션(인도어 훈련 모임)은 클럽 상세의 라이딩 모임 캘린더에만 표시되고, 일반(공개)
+         라이딩 모임 캘린더에는 노출되지 않는다(2026-09) — OpenRidingGroupCalendarSection은
+         이 컴포넌트를 거치지 않고 useOpenRiding을 직접 호출해 별도로 groupId 필터링한다. */
       return (ridesMonthRaw || []).filter(function (r) {
-        return openRidingRideMatchesMoimCategory(r, moimCategory);
+        return !r.isGroupSession && openRidingRideMatchesMoimCategory(r, moimCategory);
       });
     },
     [ridesMonthRaw, moimCategory]
@@ -4721,7 +4724,7 @@ function OpenRidingCalendarMain(props) {
   var ridesMyList = useMemo(
     function () {
       return (ridesMyListRaw || []).filter(function (r) {
-        return openRidingRideMatchesMoimCategory(r, moimCategory);
+        return !r.isGroupSession && openRidingRideMatchesMoimCategory(r, moimCategory);
       });
     },
     [ridesMyListRaw, moimCategory]
@@ -6674,7 +6677,12 @@ function OpenRidingCreateForm(props) {
         isPrivate: false,
         invitePending: [],
         inviteSelected: [],
-        rideJoinPassword: ''
+        rideJoinPassword: '',
+        /** 그룹세션(인도어 훈련 모임) — CYCLE 클럽 상세에서 생성할 때만 선택 가능 */
+        isGroupSession: false,
+        sessionTimes: ['07:00'],
+        workoutId: '',
+        workoutSource: ''
       },
       openRidingPackRulesFormDefaults(),
       runPack
@@ -6682,6 +6690,46 @@ function OpenRidingCreateForm(props) {
   });
   var form = st[0];
   var setForm = st[1];
+  var _workoutPicker = useState({ tab: 'gas', gas: [], club: [], loading: false, showNewClubForm: false });
+  var workoutPicker = _workoutPicker[0];
+  var setWorkoutPicker = _workoutPicker[1];
+  var _newClubWorkout = useState({ title: '', segments: [{ label: '', duration_min: 5, target_value: 70 }] });
+  var newClubWorkout = _newClubWorkout[0];
+  var setNewClubWorkout = _newClubWorkout[1];
+  var _clubWorkoutBusy = useState(false);
+  var clubWorkoutBusy = _clubWorkoutBusy[0];
+  var setClubWorkoutBusy = _clubWorkoutBusy[1];
+
+  /** 그룹세션 모드 진입 시 워크아웃 선택기용 목록(기존/클럽 전용)을 로드 */
+  useEffect(
+    function () {
+      if (!form.isGroupSession) return undefined;
+      var cancelled = false;
+      setWorkoutPicker(function (prev) { return Object.assign({}, prev, { loading: true }); });
+      var gasPromise =
+        typeof window !== 'undefined' && typeof window.apiGetWorkouts === 'function'
+          ? window.apiGetWorkouts().then(function (r) {
+              return r && r.success && Array.isArray(r.items) ? r.items : [];
+            }).catch(function () { return []; })
+          : Promise.resolve([]);
+      var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      var clubPromise =
+        presetGroupId && typeof svcGroup.fetchClubWorkouts === 'function'
+          ? svcGroup.fetchClubWorkouts(presetGroupId).catch(function () { return []; })
+          : Promise.resolve([]);
+      Promise.all([gasPromise, clubPromise]).then(function (results) {
+        if (cancelled) return;
+        setWorkoutPicker(function (prev) {
+          return Object.assign({}, prev, { gas: results[0] || [], club: results[1] || [], loading: false });
+        });
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [form.isGroupSession, presetGroupId]
+  );
+
   var formCategory =
     typeof moimCatApi.normalizeMoimCategory === 'function'
       ? moimCatApi.normalizeMoimCategory(form.category)
@@ -7411,8 +7459,75 @@ function OpenRidingCreateForm(props) {
     }
   }
 
+  /** 그룹세션(인도어 훈련 모임) 생성 — 일반 라이딩 생성과 달리 지역·GPX·초대·운영방식 등은
+   * 관여하지 않고, 추가된 시간대 개수만큼 라이딩을 각각 생성한다(기존 createRide 재사용,
+   * 그룹세션은 방장 SP 차감 없음 — createRide 내부에서 isGroupSession 플래그로 분기). */
+  async function submitGroupSessionCore() {
+    var checkList = [];
+    if (!firestore || !hostUserId) checkList.push('그룹세션을 저장할 수 없습니다. 로그인 상태와 네트워크를 확인해 주세요.');
+    if (!presetGroupId) checkList.push('클럽 상세 화면에서만 그룹세션을 만들 수 있습니다.');
+    if (!String(form.title || '').trim()) checkList.push('세션명을 입력해 주세요.');
+    if (!String(form.date || '').trim() || String(form.date).length < 10) checkList.push('날짜를 선택해 주세요.');
+    var times = (form.sessionTimes || []).map(function (t) { return String(t || '').trim(); }).filter(Boolean);
+    if (!times.length) checkList.push('시간을 1개 이상 추가해 주세요.');
+    var maxParsed =
+      form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
+        ? NaN
+        : Number(form.maxParticipants);
+    if (!Number.isFinite(maxParsed) || maxParsed < 1) checkList.push('참가 인원을 1 이상 입력해 주세요.');
+    if (!form.workoutId) checkList.push('워크아웃을 선택해 주세요.');
+    if (checkList.length) {
+      showFormValidationMessages(checkList);
+      return;
+    }
+    setBusy(true);
+    try {
+      var d = new Date(form.date + 'T12:00:00+09:00');
+      var lastRideId = null;
+      for (var i = 0; i < times.length; i++) {
+        lastRideId = await createRide(firestore, hostUserId, {
+          title: form.title,
+          date: d,
+          departureTime: times[i],
+          departureLocation: '',
+          distance: 0,
+          course: '',
+          level: '',
+          maxParticipants: Math.max(1, Math.floor(maxParsed)),
+          hostName: form.hostName,
+          contactInfo: form.contactInfo,
+          isContactPublic: false,
+          groupId: presetGroupId,
+          region: '',
+          gpxUrl: null,
+          isPrivate: false,
+          invitedList: [],
+          inviteDisplayByPhone: {},
+          inviteFriendUidByPhone: {},
+          rideJoinPassword: '',
+          packRidingRules: {},
+          category: 'CYCLE',
+          participants: hostUserId ? [String(hostUserId).trim()] : [],
+          isGroupSession: true,
+          workoutId: form.workoutId,
+          workoutSource: form.workoutSource || 'gas'
+        });
+      }
+      onCreated(lastRideId);
+    } catch (err) {
+      var rawMsg = err && err.message ? String(err.message) : '';
+      showFormValidationMessages([rawMsg || '그룹세션 생성 처리 중 오류가 발생했습니다.']);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
+    if (form.isGroupSession) {
+      await submitGroupSessionCore();
+      return;
+    }
     await submitCore(false);
   }
 
@@ -7462,8 +7577,6 @@ function OpenRidingCreateForm(props) {
           {moimCopy.groupMembersInvitedNote.replace('{count}', String(initialInviteSelected.length))}
         </p>
       ) : null}
-      <label className="block font-medium text-slate-700">모임명<input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} /></label>
-
       <fieldset className="border border-slate-200 rounded-xl p-3 space-y-2" disabled={!!editRideId}>
         <legend className="text-sm font-semibold text-slate-800 px-1">카테고리 *</legend>
         <div className="flex flex-wrap gap-2">
@@ -7493,7 +7606,7 @@ function OpenRidingCreateForm(props) {
               onChange={function () {
                 if (editRideId) return;
                 setForm(function (prev) {
-                  return Object.assign({}, prev, { category: 'RUN', level: '중급' });
+                  return Object.assign({}, prev, { category: 'RUN', level: '중급', isGroupSession: false });
                 });
               }}
             />
@@ -7503,8 +7616,28 @@ function OpenRidingCreateForm(props) {
         {editRideId ? (
           <p className="text-[11px] text-slate-500 m-0 leading-snug">저장된 모임 카테고리는 수정할 수 없습니다.</p>
         ) : null}
+        {formCategory === 'CYCLE' && !editRideId && presetGroupId ? (
+          <label className="flex items-center gap-2 pt-1 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-violet-600"
+              checked={!!form.isGroupSession}
+              onChange={function (e) {
+                set('isGroupSession', e.target.checked);
+              }}
+            />
+            <span className="text-sm text-slate-800">그룹세션 (인도어 훈련 모임)</span>
+          </label>
+        ) : null}
       </fieldset>
 
+      <label className="block font-medium text-slate-700">
+        {form.isGroupSession ? '세션명' : '모임명'}
+        <input className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm" value={form.title} onChange={function (e) { set('title', e.target.value); }} />
+      </label>
+
+      {form.isGroupSession ? null : (
+      <>
       <div className="block font-medium text-slate-700">
         <span className="block mb-1">지역</span>
         <span className="text-xs font-normal text-slate-500 block mb-1">
@@ -8303,6 +8436,277 @@ function OpenRidingCreateForm(props) {
           ? '연락처는 참석 신청 후 확정된 참가자에게 공개됩니다.'
           : '비공개로 설정하면 정원 목록·연락처 항목에 전화번호가 표시되지 않습니다.'}
       </p>
+      </>
+      )}
+
+      {form.isGroupSession ? (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0">
+              <span className="block font-medium text-slate-700 mb-1">날짜</span>
+              <button
+                type="button"
+                className="w-full text-left border border-slate-300 rounded-lg px-2 py-1.5 bg-white hover:bg-slate-50 text-sm text-slate-800 inline-flex items-center"
+                onClick={openKoreanDateModal}
+              >
+                {formatKoreanDateLabelFromYmd(form.date) || '날짜 선택'}
+              </button>
+            </div>
+            <div className="min-w-0">
+              <span className="block font-medium text-slate-700 mb-1">참가 인원</span>
+              <input
+                type="number"
+                min="1"
+                className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                value={form.maxParticipants}
+                onChange={function (e) { set('maxParticipants', e.target.value); }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <span className="block font-medium text-slate-700 mb-1">시간대</span>
+            <div className="space-y-2">
+              {(form.sessionTimes || []).map(function (t, idx) {
+                return (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="time"
+                      className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                      value={t}
+                      onChange={function (e) {
+                        var next = (form.sessionTimes || []).slice();
+                        next[idx] = e.target.value;
+                        set('sessionTimes', next);
+                      }}
+                    />
+                    {(form.sessionTimes || []).length > 1 ? (
+                      <button
+                        type="button"
+                        className="shrink-0 w-8 h-8 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-50"
+                        aria-label="시간 삭제"
+                        onClick={function () {
+                          var next = (form.sessionTimes || []).slice();
+                          next.splice(idx, 1);
+                          set('sessionTimes', next);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+              <button
+                type="button"
+                className="w-full py-2 rounded-lg border border-dashed border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
+                onClick={function () {
+                  var next = (form.sessionTimes || []).slice();
+                  next.push('19:00');
+                  set('sessionTimes', next);
+                }}
+              >
+                + 시간 추가
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1 m-0 leading-snug">
+              추가한 시간대마다 별도의 그룹세션이 각각 생성됩니다.
+            </p>
+          </div>
+
+          <div>
+            <span className="block font-medium text-slate-700 mb-1">워크아웃 선택 *</span>
+            <div className="flex gap-2 mb-2">
+              <button
+                type="button"
+                className={'flex-1 px-3 py-2 rounded-xl border text-sm font-semibold ' + (workoutPicker.tab === 'gas' ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-slate-200 bg-white text-slate-600')}
+                onClick={function () { setWorkoutPicker(function (prev) { return Object.assign({}, prev, { tab: 'gas' }); }); }}
+              >
+                기존 워크아웃
+              </button>
+              <button
+                type="button"
+                className={'flex-1 px-3 py-2 rounded-xl border text-sm font-semibold ' + (workoutPicker.tab === 'club' ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-slate-200 bg-white text-slate-600')}
+                onClick={function () { setWorkoutPicker(function (prev) { return Object.assign({}, prev, { tab: 'club' }); }); }}
+              >
+                클럽 전용 워크아웃
+              </button>
+            </div>
+            {workoutPicker.loading ? (
+              <p className="text-sm text-slate-500 text-center py-4 m-0">불러오는 중…</p>
+            ) : (
+              <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2">
+                {(workoutPicker.tab === 'gas' ? workoutPicker.gas : workoutPicker.club).length === 0 ? (
+                  <p className="text-sm text-slate-500 text-center py-3 m-0">
+                    {workoutPicker.tab === 'gas' ? '등록된 워크아웃이 없습니다.' : '이 클럽에 등록된 전용 워크아웃이 없습니다.'}
+                  </p>
+                ) : (
+                  (workoutPicker.tab === 'gas' ? workoutPicker.gas : workoutPicker.club).map(function (w) {
+                    var wid = String(w.id);
+                    var selected = form.workoutId === wid && form.workoutSource === workoutPicker.tab;
+                    var mins = Math.round((Number(w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60)) || 0) / 60);
+                    return (
+                      <button
+                        key={wid}
+                        type="button"
+                        className={'w-full text-left px-3 py-2 rounded-lg border text-sm flex items-center justify-between gap-2 ' + (selected ? 'border-violet-500 bg-violet-50 text-violet-900 font-semibold' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}
+                        onClick={function () {
+                          set('workoutId', wid);
+                          set('workoutSource', workoutPicker.tab);
+                        }}
+                      >
+                        <span className="truncate">{w.title}</span>
+                        <span className="shrink-0 text-xs text-slate-500">{mins}분</span>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+            {workoutPicker.tab === 'club' ? (
+              <button
+                type="button"
+                className="mt-2 w-full py-2 rounded-lg border border-dashed border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
+                onClick={function () {
+                  setWorkoutPicker(function (prev) { return Object.assign({}, prev, { showNewClubForm: !prev.showNewClubForm }); });
+                }}
+              >
+                + 새 클럽 전용 워크아웃 만들기
+              </button>
+            ) : null}
+            {workoutPicker.tab === 'club' && workoutPicker.showNewClubForm ? (
+              <div className="mt-2 p-3 border border-violet-200 rounded-xl bg-violet-50/60 space-y-2">
+                <input
+                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                  placeholder="워크아웃 제목"
+                  value={newClubWorkout.title}
+                  onChange={function (e) {
+                    setNewClubWorkout(function (prev) { return Object.assign({}, prev, { title: e.target.value }); });
+                  }}
+                />
+                {newClubWorkout.segments.map(function (seg, idx) {
+                  return (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input
+                        className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                        placeholder={'구간 ' + (idx + 1) + ' 이름'}
+                        value={seg.label}
+                        onChange={function (e) {
+                          var next = newClubWorkout.segments.slice();
+                          next[idx] = Object.assign({}, next[idx], { label: e.target.value });
+                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-16 shrink-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                        title="시간(분)"
+                        placeholder="분"
+                        value={seg.duration_min}
+                        onChange={function (e) {
+                          var next = newClubWorkout.segments.slice();
+                          next[idx] = Object.assign({}, next[idx], { duration_min: e.target.value });
+                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-16 shrink-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
+                        title="FTP %"
+                        placeholder="FTP%"
+                        value={seg.target_value}
+                        onChange={function (e) {
+                          var next = newClubWorkout.segments.slice();
+                          next[idx] = Object.assign({}, next[idx], { target_value: e.target.value });
+                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
+                        }}
+                      />
+                      {newClubWorkout.segments.length > 1 ? (
+                        <button
+                          type="button"
+                          className="shrink-0 w-8 h-8 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-50"
+                          aria-label="구간 삭제"
+                          onClick={function () {
+                            var next = newClubWorkout.segments.slice();
+                            next.splice(idx, 1);
+                            setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
+                          }}
+                        >
+                          ✕
+                        </button>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                <button
+                  type="button"
+                  className="text-xs font-semibold text-violet-700"
+                  onClick={function () {
+                    var next = newClubWorkout.segments.concat([{ label: '', duration_min: 5, target_value: 70 }]);
+                    setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
+                  }}
+                >
+                  + 구간 추가
+                </button>
+                <button
+                  type="button"
+                  className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
+                  disabled={clubWorkoutBusy || !String(newClubWorkout.title || '').trim()}
+                  onClick={function () {
+                    if (!presetGroupId) return;
+                    var segmentsPayload = newClubWorkout.segments.map(function (seg, idx) {
+                      return {
+                        ord: idx,
+                        label: String(seg.label || '').trim() || ('구간 ' + (idx + 1)),
+                        segment_type: 'steady',
+                        duration_sec: Math.max(1, Math.round(Number(seg.duration_min) || 0)) * 60,
+                        target_type: 'ftp_pct',
+                        target_value: String(Number(seg.target_value) || 0),
+                        ramp: 'none',
+                        ramp_to_value: null
+                      };
+                    });
+                    setClubWorkoutBusy(true);
+                    var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+                    if (typeof svcGroup.createClubWorkout !== 'function') {
+                      setClubWorkoutBusy(false);
+                      showFormValidationMessages(['워크아웃 저장 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.']);
+                      return;
+                    }
+                    svcGroup
+                      .createClubWorkout(hostUserId, presetGroupId, {
+                        title: newClubWorkout.title,
+                        segments: segmentsPayload
+                      })
+                      .then(function (res) {
+                        setNewClubWorkout({ title: '', segments: [{ label: '', duration_min: 5, target_value: 70 }] });
+                        setWorkoutPicker(function (prev) { return Object.assign({}, prev, { showNewClubForm: false, loading: true }); });
+                        return typeof svcGroup.fetchClubWorkouts === 'function' ? svcGroup.fetchClubWorkouts(presetGroupId) : [];
+                      })
+                      .then(function (list) {
+                        setWorkoutPicker(function (prev) { return Object.assign({}, prev, { club: list || [], loading: false }); });
+                        if (list && list.length) {
+                          set('workoutId', String(list[0].id));
+                          set('workoutSource', 'club');
+                        }
+                      })
+                      .catch(function (e) {
+                        showFormValidationMessages([e && e.message ? e.message : '워크아웃 저장에 실패했습니다.']);
+                      })
+                      .finally(function () {
+                        setClubWorkoutBusy(false);
+                      });
+                  }}
+                >
+                  {clubWorkoutBusy ? '저장 중…' : '워크아웃 저장'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {!editRideId ? (
         <div className="open-riding-bottom-actions">

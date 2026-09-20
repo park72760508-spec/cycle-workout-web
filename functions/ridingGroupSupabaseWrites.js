@@ -576,4 +576,6 @@ module.exports = {
   handleBackfillRidingGroupMembers,
   handleSetJoinRequestExpiry,
   handleUpdateMemberExpiry,
+  fetchOrBackfillGroupRow,
+  isRidingGroupAdminGrade,
 };

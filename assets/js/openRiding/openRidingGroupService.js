@@ -36,7 +36,8 @@ import {
   subscribeRidingGroupMyJoinRequestRouted,
   postRidingGroupWriteRouted,
   subscribeMyInvitedRidesCountRouted,
-} from './openRidingReadClient.js?v=hosted-cat-split-20260816v1';
+  fetchClubWorkoutsRouted,
+} from './openRidingReadClient.js?v=club-workouts-20260920a';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
@@ -411,6 +412,41 @@ export async function updateRidingGroupMemberExpiry(db, moderatorUid, groupId, m
 }
 
 /**
+ * 클럽 전용 워크아웃 목록 조회 — 그룹세션 생성 화면의 워크아웃 선택기용.
+ * @param {string} groupId
+ */
+export async function fetchClubWorkouts(groupId) {
+  return fetchClubWorkoutsRouted(groupId);
+}
+
+/**
+ * 클럽 전용 워크아웃 등록 — 방장/관리자(grade=1|3, 가입된 클럽 한정)만 가능.
+ * @param {string} moderatorUid
+ * @param {string} groupId
+ * @param {{ title: string, description?: string, author?: string, segments: object[] }} payload
+ */
+export async function createClubWorkout(moderatorUid, groupId, payload) {
+  if (!moderatorUid || !groupId) throw new Error('요청이 올바르지 않습니다.');
+  return postRidingGroupWriteRouted('createClubWorkout', Object.assign({}, payload, {
+    groupId: String(groupId).trim()
+  }));
+}
+
+/**
+ * 클럽 전용 워크아웃 삭제.
+ * @param {string} moderatorUid
+ * @param {string} groupId
+ * @param {string} workoutId
+ */
+export async function deleteClubWorkout(moderatorUid, groupId, workoutId) {
+  if (!moderatorUid || !groupId || !workoutId) throw new Error('요청이 올바르지 않습니다.');
+  return postRidingGroupWriteRouted('deleteClubWorkout', {
+    groupId: String(groupId).trim(),
+    workoutId: String(workoutId).trim()
+  });
+}
+
+/**
  * @param {import('firebase/firestore').Firestore} db
  * @param {string} moderatorUid
  * @param {string} groupId
@@ -780,6 +816,9 @@ if (typeof window !== 'undefined') {
     fetchRidingGroupJoinRequestsList,
     setRidingGroupJoinRequestExpiry,
     updateRidingGroupMemberExpiry,
+    fetchClubWorkouts,
+    createClubWorkout,
+    deleteClubWorkout,
     uploadRidingGroupCover,
     subscribeMyManagedGroupsJoinRequestCounts,
     subscribeUserGroupMemberships,

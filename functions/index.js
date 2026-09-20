@@ -124,6 +124,7 @@ const logsReadRoutingPublic = require("./logsReadRoutingPublic");
 const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
+const clubWorkoutWrites = require("./clubWorkoutWrites");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 const tossPaymentsClient = require("./tossPaymentsClient");
 const raceRedisClient = require("./raceRedisClient");
@@ -12237,6 +12238,36 @@ exports.getRidingGroupForRead = onRequest(
 );
 
 /**
+ * 클럽 전용 워크아웃 목록 Read — 그룹세션(인도어 훈련 모임) 생성 화면의 워크아웃 선택기용.
+ * 기존 워크아웃(GAS listWorkouts) 응답과 동일한 {success, items:[{...,segments:[]}]} shape.
+ */
+exports.getClubWorkoutsForRead = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "GET") {
+      res.status(405).json({ success: false, error: "GET만 지원합니다." });
+      return;
+    }
+    const groupId = String(req.query.groupId || "").trim();
+    if (!groupId) {
+      res.status(400).json({ success: false, error: "groupId 필요" });
+      return;
+    }
+    try {
+      const items = await clubWorkoutWrites.fetchClubWorkoutsForRead(admin, groupId);
+      res.status(200).json({ success: true, items });
+    } catch (e) {
+      res.status(500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
+/**
  * 승인된 소모임 목록 Read — Supabase Canary → Firebase 폴백.
  */
 exports.getApprovedRidingGroupsForRead = onRequest(
@@ -12937,6 +12968,14 @@ registerRidingGroupSupabaseWriteEndpoint(
 registerRidingGroupSupabaseWriteEndpoint(
   "updateRidingGroupMemberExpirySupabase",
   ridingGroupSupabaseWrites.handleUpdateMemberExpiry
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "createClubWorkoutSupabase",
+  clubWorkoutWrites.handleCreateClubWorkout
+);
+registerRidingGroupSupabaseWriteEndpoint(
+  "deleteClubWorkoutSupabase",
+  clubWorkoutWrites.handleDeleteClubWorkout
 );
 
 /**

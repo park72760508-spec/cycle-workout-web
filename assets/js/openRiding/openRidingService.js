@@ -733,15 +733,24 @@ export async function createRide(db, hostUserId, input) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     rideStatus: 'active',
-    hostPointChargeSp: HOST_CREATE_CHARGE_SP,
-    hostPointCharged: true,
+    /* 그룹세션(인도어 훈련 모임)은 클럽 운영진이 만드는 훈련 일정이라 일반 라이딩 생성과 달리
+       방장 SP 차감을 적용하지 않는다(2026-09). */
+    hostPointChargeSp: input.isGroupSession ? 0 : HOST_CREATE_CHARGE_SP,
+    hostPointCharged: !input.isGroupSession,
     hostPointRefunded: false,
-    participantJoinChargeSp: JOIN_CHARGE_SP
+    participantJoinChargeSp: JOIN_CHARGE_SP,
+    isGroupSession: !!input.isGroupSession,
+    workoutId: input.workoutId != null ? String(input.workoutId) : null,
+    workoutSource: input.workoutSource != null ? String(input.workoutSource) : null
   };
   const ridesCol = collection(db, 'rides');
   const rideRef = doc(ridesCol);
   const hostRef = doc(db, 'users', hostKey || String(hostUserId || '').trim());
   await runTransaction(db, async (transaction) => {
+    if (input.isGroupSession) {
+      transaction.set(rideRef, payload);
+      return;
+    }
     const hostSnap = await transaction.get(hostRef);
     if (!hostSnap.exists()) throw new Error('HOST_USER_NOT_FOUND');
     const hostData = hostSnap.data() || {};
