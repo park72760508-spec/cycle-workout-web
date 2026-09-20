@@ -3915,6 +3915,29 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
             </span>
           ) : null}
         </div>
+        {r.isGroupSession ? (
+        <div
+          className={
+            'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' +
+            (isCancelled ? 'text-slate-400' : 'text-slate-600')
+          }
+        >
+          <span className="shrink-0 min-w-0 truncate max-w-[min(100%,12rem)]">
+            {(function () {
+              var w = ctx.workoutInfoById ? ctx.workoutInfoById[String(r.workoutId)] : null;
+              if (!w) return '워크아웃 정보 없음';
+              var mins = Math.round((Number(w.total_seconds) || 0) / 60) || 0;
+              return (w.title || '워크아웃') + '(' + mins + '분)';
+            })()}
+          </span>
+          {openRidingMetaSep()}
+          <span className="shrink-0">{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
+          {openRidingMetaSep()}
+          <span className={'font-semibold tabular-nums shrink-0 ' + (isCancelled ? 'text-slate-400' : 'text-emerald-700')}>
+            {openRidingRideParticipantRatioShared(r)}
+          </span>
+        </div>
+        ) : (
         <div
           className={
             'text-xs mt-1 flex flex-wrap items-center gap-y-0.5 ' +
@@ -3953,6 +3976,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
             {openRidingRideParticipantRatioShared(r)}
           </span>
         </div>
+        )}
       </button>
     </li>
   );
@@ -6387,6 +6411,21 @@ function OpenRidingGroupCalendarSection(props) {
     },
     [groupRides]
   );
+  /** 그룹세션(인도어 훈련 모임)이 있는 날짜 — 캘린더에 녹색으로 표시(2026-09) */
+  var groupSessionDateKeys = useMemo(
+    function () {
+      var s = new Set();
+      groupRides.forEach(function (r) {
+        if (!r.isGroupSession) return;
+        var ts = r.date;
+        var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
+        if (!d) return;
+        s.add(dateKey(d.getFullYear(), d.getMonth(), d.getDate()));
+      });
+      return s;
+    },
+    [groupRides]
+  );
   var participantConfirmedDateKeys = useMemo(
     function () {
       var uid = String(userId || '');
@@ -6420,6 +6459,47 @@ function OpenRidingGroupCalendarSection(props) {
       });
     },
     [groupRides, selectedKey]
+  );
+
+  /** 그룹세션 목록 행에 "워크아웃명(훈련시간)"을 표시하기 위한 워크아웃 정보 조회 —
+   * 이번 달에 로드된 그룹세션들의 workoutId를 모아 한 번에 조회한다(2026-09). */
+  var _workoutInfoById = useState({});
+  var workoutInfoById = _workoutInfoById[0];
+  var setWorkoutInfoById = _workoutInfoById[1];
+  useEffect(
+    function () {
+      var sessions = groupRides.filter(function (r) { return r.isGroupSession && r.workoutId; });
+      if (!sessions.length) return undefined;
+      var cancelled = false;
+      var clubIds = [];
+      var gasIds = [];
+      sessions.forEach(function (r) {
+        if (r.workoutSource === 'club') clubIds.push(String(r.workoutId));
+        else gasIds.push(String(r.workoutId));
+      });
+      var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      var clubPromise =
+        clubIds.length && typeof svcGroup.fetchClubWorkouts === 'function' && groupId
+          ? svcGroup.fetchClubWorkouts(groupId).catch(function () { return []; })
+          : Promise.resolve([]);
+      var gasPromise =
+        gasIds.length && typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function'
+          ? Promise.all(gasIds.map(function (id) {
+              return window.apiGetWorkout(id).then(function (r) { return r && r.success && r.item ? r.item : null; }).catch(function () { return null; });
+            }))
+          : Promise.resolve([]);
+      Promise.all([clubPromise, gasPromise]).then(function (results) {
+        if (cancelled) return;
+        var map = {};
+        (results[0] || []).forEach(function (w) { if (w && w.id != null) map[String(w.id)] = w; });
+        (results[1] || []).forEach(function (w) { if (w && w.id != null) map[String(w.id)] = w; });
+        setWorkoutInfoById(map);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [groupRides, groupId]
   );
 
   return (
@@ -6494,15 +6574,20 @@ function OpenRidingGroupCalendarSection(props) {
             var hasMatch = matchingDateKeys.has(key);
             var hasAnyRide = allRideDateKeys.has(key);
             var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
+            var hasGroupSession = groupSessionDateKeys.has(key);
             var isConfirmedDay = participantConfirmedDateKeys.has(key);
             var isTodayCell = key === todayYmd;
-            var isTodayWithRide = isTodayCell && (isHostDay || hasMatch || showOtherOnly);
+            var isTodayWithRide = isTodayCell && (hasGroupSession || isHostDay || hasMatch || showOtherOnly);
             var isSel = selectedKey === key;
             var isOutside = cell.adjacent != null;
             var isPastCell = key < todayYmd;
             var dayNumClass = 'relative z-10 tabular-nums ';
             if (isOutside) {
               dayNumClass += 'text-slate-400 opacity-40';
+            } else if (hasGroupSession) {
+              /* 그룹세션(인도어 훈련 모임)이 있는 날 — 방장·매칭 여부와 무관하게 항상 녹색으로
+                 우선 표시(2026-09 요청). */
+              dayNumClass += isPastCell ? 'text-emerald-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
             } else if (isHostDay) {
               dayNumClass += isPastCell ? 'text-violet-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
             } else if (hasMatch) {
@@ -6537,7 +6622,17 @@ function OpenRidingGroupCalendarSection(props) {
                     aria-hidden
                   />
                 ) : null}
-                {isOutside ? null : isHostDay ? (
+                {isOutside ? null : hasGroupSession ? (
+                  <span
+                    className={
+                      'absolute z-[1] rounded-full pointer-events-none border ' +
+                      (isPastCell ? 'bg-emerald-300/55 border-emerald-400/40' : 'bg-emerald-600 border-emerald-700/45')
+                    }
+                    style={openRidingCalBadgeCircleStyle}
+                    title="그룹세션 있음"
+                    aria-hidden
+                  />
+                ) : isHostDay ? (
                   <span
                     className={
                       'absolute z-[1] rounded-full pointer-events-none border ' +
@@ -6598,7 +6693,7 @@ function OpenRidingGroupCalendarSection(props) {
                 return openRidingRenderMonthRideListRowShared(
                   r,
                   { selectedDayListPanel: true },
-                  { userId: userId, onSelectRide: onSelectRide, inviteCheckPhone: inviteCheckPhone }
+                  { userId: userId, onSelectRide: onSelectRide, inviteCheckPhone: inviteCheckPhone, workoutInfoById: workoutInfoById }
                 );
               })}
             </ul>
