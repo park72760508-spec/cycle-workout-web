@@ -28,7 +28,7 @@ import {
   fetchRidesInDateRangeRouted,
   fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
-} from './openRidingReadClient.js?v=hosted-cat-split-20260816v1';
+} from './openRidingReadClient.js?v=heat-reduction-bundle-20260921a';
 import {
   scheduleOpenRideDualWriteFromFirestore,
   runSecondaryAfterOpenRideDelete,

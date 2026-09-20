@@ -13766,47 +13766,38 @@ function OpenRidingGroupDetailView(props) {
     [memberUidsKey]
   );
 
+  /* 상세 문서·멤버·가입신청은 예전엔 각각 독립된 15초 폴링이었다 — 셋 다 사실상
+   * getRidingGroupForRead 한 응답 안의 필드일 뿐이라, 매 tick마다 같은 데이터를 최대 3번
+   * 중복 요청하고 있었다(휴대폰 발열 점검, 2026-09). 그룹ID가 바뀔 때만 화면을 초기화하고,
+   * 실제 폴링은 하나로 합친 subscribeRidingGroupDetailBundle 한 곳에서만 수행한다. */
   useEffect(
     function () {
-      if (!firestore || !groupId || typeof gs.subscribeRidingGroupDetail !== 'function') return;
       setDetailReady(false);
       setGrp(null);
-      return gs.subscribeRidingGroupDetail(firestore, groupId, function (doc) {
-        setGrp(doc);
-        setDetailReady(true);
-      });
+      setMembers([]);
+      setJoinRequests([]);
     },
-    [firestore, groupId]
-  );
-
-  useEffect(
-    function () {
-      if (!firestore || !groupId || typeof gs.subscribeRidingGroupMembers !== 'function') return;
-      return gs.subscribeRidingGroupMembers(firestore, groupId, function (list) {
-        setMembers(Array.isArray(list) ? list : []);
-      });
-    },
-    [firestore, groupId]
+    [groupId]
   );
 
   var grpJoinReqSig = grp ? String(grp.status || '') + ':' + String(grp.createdBy || '') : '';
+  var wantGroupJoinRequestsInBundle = !!(
+    grp &&
+    String(grp.status || '') === GROUP_ST.APPROVED &&
+    (String(grp.createdBy || '') === String(userId) || isAdmin)
+  );
 
   useEffect(
     function () {
-      if (!firestore || !groupId || typeof gs.subscribeRidingGroupJoinRequests !== 'function') return undefined;
-      if (!grp || String(grp.status || '') !== GROUP_ST.APPROVED) {
-        setJoinRequests([]);
-        return undefined;
-      }
-      if (!(String(grp.createdBy || '') === String(userId) || isAdmin)) {
-        setJoinRequests([]);
-        return undefined;
-      }
-      return gs.subscribeRidingGroupJoinRequests(firestore, groupId, function (list) {
-        setJoinRequests(Array.isArray(list) ? list : []);
+      if (!firestore || !groupId || typeof gs.subscribeRidingGroupDetailBundle !== 'function') return undefined;
+      return gs.subscribeRidingGroupDetailBundle(firestore, groupId, wantGroupJoinRequestsInBundle, function (payload) {
+        setGrp(payload && payload.group != null ? payload.group : null);
+        setMembers(payload && Array.isArray(payload.members) ? payload.members : []);
+        setJoinRequests(payload && Array.isArray(payload.joinRequests) ? payload.joinRequests : []);
+        setDetailReady(true);
       });
     },
-    [firestore, groupId, grpJoinReqSig, userId, isAdmin]
+    [firestore, groupId, wantGroupJoinRequestsInBundle]
   );
 
   useEffect(

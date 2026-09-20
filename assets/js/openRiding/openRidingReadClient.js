@@ -602,6 +602,107 @@ export function subscribeRidingGroupJoinRequestsRouted(db, groupId, cb) {
 }
 
 /**
+ * 클럽 상세 화면 전용 — 그룹 문서 + 멤버 + (선택) 가입신청을 하나의 폴링/구독으로 묶어서
+ * 전달한다. 예전에는 상세 화면이 이 3가지를 각자 독립된 15초 폴링으로 구독해서 매 15초마다
+ * 동일한 getRidingGroupForRead 엔드포인트를 최대 3번 중복 호출했다(멤버·가입신청 모두 그룹
+ * 문서 응답의 _members/_joinRequests에서 뽑아 쓰는 필드라 사실상 같은 데이터를 3번 받아온
+ * 것). 휴대폰 발열 점검(2026-09)에서 확인된 낭비라 하나의 폴링으로 합쳐 요청 수를 최대
+ * 1/3로 줄인다. cb(payload)의 payload = { group, members, joinRequests }.
+ * @param {boolean} includeJoinRequests 방장/관리자가 아닌 뷰어는 false로 호출해 가입신청
+ *   목록을 아예 응답에 싣지 않는다(기존 클라이언트 측 권한 게이팅과 동일하게 유지).
+ */
+export function subscribeRidingGroupDetailBundleRouted(db, groupId, includeJoinRequests, cb) {
+  const gid = String(groupId || '').trim();
+  if (!db || !gid || typeof cb !== 'function') return function () {};
+
+  var stopped = false;
+  var pollTimer = null;
+  var fsUnsubDoc = null;
+  var fsUnsubMembers = null;
+  var fsUnsubJoinReq = null;
+  var latest = { group: null, members: [], joinRequests: [] };
+
+  function emit() {
+    if (!stopped) cb(latest);
+  }
+
+  stelvioEnsureGroupsReadSource().then(function () {
+    if (stopped) return;
+
+    if (stelvioGetGroupsReadSourceSync() === 'supabase') {
+      function poll() {
+        httpGetJson(API_BASE + '/getRidingGroupForRead', {
+          groupId: gid,
+          includeJoinRequests: includeJoinRequests ? '1' : '0',
+        }).then(function (json) {
+          if (stopped || !json || !json.success || !json.group) return;
+          var g = json.group;
+          var members = membersFromGroupPayload(g);
+          var joinRequests = includeJoinRequests ? joinRequestsFromGroupPayload(g) : [];
+          delete g._members;
+          delete g._joinRequests;
+          if (members.length === 0) {
+            /* 기존 fetchRidingGroupMembersListRouted와 동일한 parity fallback 유지 */
+            if (typeof console !== 'undefined' && console.warn) {
+              console.warn('[openRidingRead] Supabase 멤버 0건 → Firestore parity fallback', gid);
+            }
+            fetchRidingGroupMembersFromFirestore(db, gid).then(function (fbMembers) {
+              if (stopped) return;
+              latest = { group: g, members: fbMembers, joinRequests: joinRequests };
+              emit();
+            });
+            return;
+          }
+          latest = { group: g, members: members, joinRequests: joinRequests };
+          emit();
+        });
+      }
+      poll();
+      pollTimer = setInterval(stelvioVisibilityGatedPoll(poll), SUPABASE_POLL_MS);
+      return;
+    }
+
+    fsUnsubDoc = onSnapshot(doc(db, 'stelvio_riding_groups', gid), function (snap) {
+      latest.group = snap.exists() ? { id: snap.id, ...snap.data() } : null;
+      emit();
+    });
+    fsUnsubMembers = onSnapshot(collection(db, 'stelvio_riding_groups', gid, 'members'), function (snap) {
+      var list = [];
+      snap.forEach(function (d) {
+        list.push({ id: d.id, userId: d.id, ...d.data() });
+      });
+      latest.members = list;
+      emit();
+    });
+    if (includeJoinRequests) {
+      fsUnsubJoinReq = onSnapshot(
+        collection(db, 'stelvio_riding_groups', gid, 'joinRequests'),
+        function (snap) {
+          var list = [];
+          snap.forEach(function (d) {
+            list.push({ id: d.id, ...d.data() });
+          });
+          latest.joinRequests = list;
+          emit();
+        }
+      );
+    }
+  });
+
+  return function () {
+    stopped = true;
+    if (pollTimer) clearInterval(pollTimer);
+    [fsUnsubDoc, fsUnsubMembers, fsUnsubJoinReq].forEach(function (u) {
+      if (u) {
+        try {
+          u();
+        } catch (e) {}
+      }
+    });
+  };
+}
+
+/**
  * 승인된 소모임 목록 — Supabase HTTP 또는 Firestore onSnapshot.
  * 관리자 PENDING 목록은 Firestore 유지(복합 쿼리).
  */
@@ -1065,6 +1166,7 @@ if (typeof window !== 'undefined') {
     subscribeRidingGroupDetailRouted,
     subscribeRidingGroupMembersRouted,
     subscribeRidingGroupJoinRequestsRouted,
+    subscribeRidingGroupDetailBundleRouted,
     subscribeRidingGroupsRouted,
     subscribeMyRidingGroupsAsMemberRouted,
     subscribeUserGroupMembershipsRouted,

@@ -26,6 +26,7 @@ import {
   subscribeRidingGroupDetailRouted,
   subscribeRidingGroupMembersRouted,
   subscribeRidingGroupJoinRequestsRouted,
+  subscribeRidingGroupDetailBundleRouted,
   fetchRidingGroupByIdRouted,
   fetchRidingGroupMembersListRouted,
   fetchRidingGroupJoinRequestsListRouted,
@@ -37,7 +38,7 @@ import {
   postRidingGroupWriteRouted,
   subscribeMyInvitedRidesCountRouted,
   fetchClubWorkoutsRouted,
-} from './openRidingReadClient.js?v=club-workouts-20260920a';
+} from './openRidingReadClient.js?v=heat-reduction-bundle-20260921a';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
@@ -192,6 +193,20 @@ export function subscribeRidingGroupMembers(db, groupId, cb) {
 
 export function subscribeRidingGroupJoinRequests(db, groupId, cb) {
   return subscribeRidingGroupJoinRequestsRouted(db, groupId, cb);
+}
+
+/**
+ * 클럽 상세 화면 전용 — 그룹 문서·멤버·(선택) 가입신청을 하나의 폴링으로 묶어서 전달.
+ * 발열 점검(2026-09): 상세 화면이 이 3가지를 각자 15초 폴링으로 구독하면 매 tick마다
+ * 동일한 getRidingGroupForRead를 최대 3번 중복 호출했다 — 하나로 합쳐 네트워크 요청을
+ * 최대 1/3로 줄인다. includeJoinRequests=false면 응답의 joinRequests는 항상 [].
+ * @param {import('firebase/firestore').Firestore} db
+ * @param {string} groupId
+ * @param {boolean} includeJoinRequests
+ * @param {function({group:any, members:any[], joinRequests:any[]}): void} cb
+ */
+export function subscribeRidingGroupDetailBundle(db, groupId, includeJoinRequests, cb) {
+  return subscribeRidingGroupDetailBundleRouted(db, groupId, includeJoinRequests, cb);
 }
 
 /**
@@ -809,6 +824,7 @@ if (typeof window !== 'undefined') {
     subscribeRidingGroupDetail,
     subscribeRidingGroupMembers,
     subscribeRidingGroupJoinRequests,
+    subscribeRidingGroupDetailBundle,
     subscribeRidingGroupMyJoinRequest,
     createRidingGroupPending,
     updateRidingGroupByOwner,
