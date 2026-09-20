@@ -7602,7 +7602,9 @@ function OpenRidingCreateForm(props) {
           rideJoinPassword: '',
           packRidingRules: {},
           category: 'CYCLE',
-          participants: hostUserId ? [String(hostUserId).trim()] : [],
+          /* 그룹세션은 생성자(코치 등)를 1번 참석자로 자동 확정하지 않는다 — 본인도 참가하려면
+             일반 참석자와 동일하게 "참석 신청" 버튼으로 직접 신청해야 한다(2026-09 요청). */
+          participants: [],
           isGroupSession: true,
           workoutId: form.workoutId,
           workoutSource: form.workoutSource || 'gas'
@@ -11224,7 +11226,9 @@ function OpenRidingDetail(props) {
           {!maskContacts ? (
             <div className="open-riding-bottom-actions">
               <div className="open-riding-bottom-actions-row flex gap-2">
-                {role && !isHost ? (
+                {/* 그룹세션은 생성자를 참석 확정 처리하지 않으므로, 방장이어도 일반 참석자와
+                   동일하게 참석 신청/취소 버튼을 볼 수 있어야 한다(2026-09 요청). */}
+                {role && !(isHost && !ride.isGroupSession) ? (
                   <button
                     type="button"
                     className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 border border-red-200 text-red-700 rounded-xl font-medium leading-none disabled:opacity-50"
@@ -11241,7 +11245,7 @@ function OpenRidingDetail(props) {
                   >
                     {joinApplyClosedBySchedule ? '참석 변경 마감' : '참석 취소'}
                   </button>
-                ) : !role && !isHost ? (
+                ) : !role && !(isHost && !ride.isGroupSession) ? (
                   <button
                     type="button"
                     className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"

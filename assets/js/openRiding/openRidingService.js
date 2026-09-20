@@ -673,9 +673,12 @@ export async function createRide(db, hostUserId, input) {
   const hostPhone = String(input.contactInfo || '').trim().slice(0, 80);
   const participantDisplay = {};
   if (hostKey && hostLabel) participantDisplay[hostKey] = hostLabel;
-  /** 방장 기본값: 1번 참석 확정 + 참석자 간 연락처 공개(신청 시 공개와 동일 정책) */
+  /** 방장 기본값: 1번 참석 확정 + 참석자 간 연락처 공개(신청 시 공개와 동일 정책).
+   * 단, 그룹세션(인도어 훈련 모임)은 생성자가 코치 등 훈련을 진행만 하고 본인은 참석하지
+   * 않는 경우가 있어 기본 참석 확정을 적용하지 않는다 — 일반 참석자와 동일하게 "참석 신청"
+   * 버튼으로 본인이 직접 신청해야 한다(2026-09). */
   let participants = asStringArray(input.participants).map((id) => String(id).trim()).filter(Boolean);
-  if (hostKey) {
+  if (hostKey && !input.isGroupSession) {
     participants = [hostKey, ...participants.filter((id) => id !== hostKey)];
   }
   const participantContact = {};

@@ -17,7 +17,7 @@ import {
   writeBatch,
   serverTimestamp
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
-import { normalizePhoneDigits } from './openRidingService.js?v=group-session-20260920a';
+import { normalizePhoneDigits } from './openRidingService.js?v=group-session-no-autojoin-20260920d';
 
 /** @param {string} a @param {string} b */
 export function friendRequestDocId(fromUid, toUid) {
