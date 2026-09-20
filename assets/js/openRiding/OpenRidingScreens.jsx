@@ -8997,6 +8997,61 @@ function OpenRidingDetail(props) {
   );
   var hostIdpSyncTmRef = useRef(null);
 
+  /** 그룹세션(인도어 훈련 모임) 상세 — 워크아웃 정보(제목·세그먼트)를 workoutId/workoutSource로
+   * 조회해 "등록된 코스가 없습니다" 대신 워크아웃 그래프·시간·TSS·카테고리를 표시한다. */
+  var _gsWorkout = useState(null);
+  var groupSessionWorkout = _gsWorkout[0];
+  var setGroupSessionWorkout = _gsWorkout[1];
+  var _gsWorkoutLoading = useState(false);
+  var groupSessionWorkoutLoading = _gsWorkoutLoading[0];
+  var setGroupSessionWorkoutLoading = _gsWorkoutLoading[1];
+  var groupSessionGraphRef = useRef(null);
+
+  useEffect(
+    function () {
+      if (!ride || !ride.isGroupSession || !ride.workoutId) {
+        setGroupSessionWorkout(null);
+        return undefined;
+      }
+      var cancelled = false;
+      setGroupSessionWorkoutLoading(true);
+      var lookup =
+        ride.workoutSource === 'club'
+          ? (function () {
+              var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+              if (typeof svcGroup.fetchClubWorkouts !== 'function' || !ride.groupId) return Promise.resolve(null);
+              return svcGroup.fetchClubWorkouts(ride.groupId).then(function (list) {
+                return (list || []).find(function (w) { return String(w.id) === String(ride.workoutId); }) || null;
+              }).catch(function () { return null; });
+            })()
+          : (typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function'
+              ? window.apiGetWorkout(ride.workoutId).then(function (r) {
+                  return r && r.success && r.item ? r.item : null;
+                }).catch(function () { return null; })
+              : Promise.resolve(null));
+      lookup.then(function (w) {
+        if (!cancelled) setGroupSessionWorkout(w);
+      }).finally(function () {
+        if (!cancelled) setGroupSessionWorkoutLoading(false);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [ride && ride.isGroupSession, ride && ride.workoutId, ride && ride.workoutSource, ride && ride.groupId]
+  );
+
+  useEffect(
+    function () {
+      if (!groupSessionWorkout || !groupSessionGraphRef.current) return undefined;
+      if (typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
+        window.renderSegmentedWorkoutGraph(groupSessionGraphRef.current, groupSessionWorkout.segments || [], { maxHeight: 200 });
+      }
+      return undefined;
+    },
+    [groupSessionWorkout]
+  );
+
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
   var setBusy = _actBusy[1];
@@ -10308,7 +10363,7 @@ function OpenRidingDetail(props) {
           </div>
         ) : null}
         {statRow(
-          '모임명',
+          ride.isGroupSession ? '세션명' : '모임명',
           <span className={'font-bold text-slate-900 block min-w-0 break-words text-sm leading-[1.25rem] text-left ' + (isCancelled ? 'open-riding-detail-title-cancelled' : '')}>
             {ride.title}
           </span>
@@ -10318,6 +10373,13 @@ function OpenRidingDetail(props) {
             {dateStr} {ride.departureTime != null ? ride.departureTime : ''}
           </span>
         ))}
+        {ride.isGroupSession ? (
+          statRow(
+            '워크아웃명',
+            groupSessionWorkoutLoading ? '불러오는 중…' : (groupSessionWorkout && groupSessionWorkout.title) || '-'
+          )
+        ) : (
+        <>
         {statRow('출발 지역', formatOpenRidingDepartureRegionDisplay(ride))}
         <div className="open-riding-detail-stat-row open-riding-detail-stat-row--weather">
           <span className="open-riding-detail-stat-label">날씨 정보</span>
@@ -10469,6 +10531,41 @@ function OpenRidingDetail(props) {
               })()
             : '-'
         )}
+        </>
+        )}
+        {ride.isGroupSession ? (
+          <div
+            className={
+              'w-full border-t border-slate-100/90 border-b border-slate-300/90 px-3 py-3 space-y-2 bg-violet-50/25' +
+              detailMuted
+            }
+          >
+            {groupSessionWorkoutLoading ? (
+              <p className="text-sm text-slate-500 text-center py-4 m-0">워크아웃 불러오는 중…</p>
+            ) : groupSessionWorkout ? (
+              <>
+                <div className="workout-card__graph" ref={groupSessionGraphRef} />
+                <div className="workout-card__footer">
+                  <span className="workout-card__meta">
+                    <span className="workout-card__meta-icon">⏱</span>{' '}
+                    {Math.round((Number(groupSessionWorkout.total_seconds) || 0) / 60) || 0}분
+                  </span>
+                  <span className="workout-card__meta">
+                    <img src="assets/img/tss.png" alt="TSS" className="workout-card__meta-icon-img" /> TSS{' '}
+                    {typeof window !== 'undefined' && typeof window.estimateWorkoutTSS === 'function'
+                      ? window.estimateWorkoutTSS(groupSessionWorkout)
+                      : 0}
+                  </span>
+                  {typeof window !== 'undefined' && typeof window.getWorkoutCategoryId === 'function' && window.getWorkoutCategoryId(groupSessionWorkout) ? (
+                    <span className="workout-card__category">{window.getWorkoutCategoryId(groupSessionWorkout)}</span>
+                  ) : null}
+                </div>
+              </>
+            ) : (
+              <p className="m-0">등록된 워크아웃 정보를 불러올 수 없습니다.</p>
+            )}
+          </div>
+        ) : (
         <div
           className={
             'w-full border-t border-slate-100/90 border-b border-slate-300/90 px-3 py-3 space-y-3 bg-violet-50/25' +
@@ -10492,6 +10589,7 @@ function OpenRidingDetail(props) {
             </a>
           ) : null}
         </div>
+        )}
         <div className="open-riding-detail-participant-fold open-riding-detail-invite-fold--block w-full min-w-0">
           <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2 px-3 py-2">
             <span className="open-riding-detail-stat-label shrink-0 pt-0.5">
@@ -10598,6 +10696,8 @@ function OpenRidingDetail(props) {
             </div>
           ) : null}
         </div>
+        {ride.isGroupSession ? null : (
+        <>
         {viewerCanSeeInviteFold && (isHost || inviteRows.length > 0) ? (
           <div className="open-riding-detail-invite-fold open-riding-detail-invite-fold--block w-full min-w-0">
             <div className="open-riding-detail-stat-row open-riding-detail-stat-row--invite items-start gap-2">
@@ -10991,6 +11091,8 @@ function OpenRidingDetail(props) {
             </div>
           ) : null}
         </div>
+        </>
+        )}
       </div>
       {maskContacts ? (
         <p className="text-xs text-slate-500 px-1 leading-snug">
