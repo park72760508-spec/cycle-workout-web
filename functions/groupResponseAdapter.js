@@ -139,6 +139,8 @@ function adaptRidingGroupToFirestoreDoc(row, members, joinRequests) {
     intro: str(row.intro) || "",
     isPublic: Boolean(row.is_public),
     isPaid: Boolean(row.is_paid),
+    liveTrainingRoomCode: str(row.live_training_room_code) || "",
+    liveTrainingRoomName: str(row.live_training_room_name) || "",
     joinPassword: str(row.join_password) || "",
     photoUrl: str(row.photo_url),
     category,

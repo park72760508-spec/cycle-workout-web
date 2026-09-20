@@ -4,7 +4,7 @@
  */
 import { refreshDualRunFromRemoteConfig } from '../supabaseDualWrite.js';
 import './openRidingService.js?v=group-session-no-autojoin-20260920d';
-import './openRidingGroupService.js?v=hosted-cat-split-20260816v1';
+import './openRidingGroupService.js?v=club-live-training-room-20260921a';
 
 refreshDualRunFromRemoteConfig(true).catch(function (err) {
   if (typeof console !== 'undefined' && console.warn) {

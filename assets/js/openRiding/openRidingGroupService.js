@@ -220,6 +220,8 @@ export async function createRidingGroupPending(db, uid, payload) {
   var joinPassword = isPublic ? '' : trimLen(payload.joinPassword, 32);
   if (!isPublic && (!joinPassword || joinPassword.length < 4)) throw new Error('비공개 그룹은 비밀번호(4자 이상)를 설정해 주세요.');
   var isPaid = !!payload.isPaid;
+  var liveTrainingRoomCode = trimLen(payload.liveTrainingRoomCode, 20);
+  var liveTrainingRoomName = trimLen(payload.liveTrainingRoomName, 100);
 
   var col = collection(db, RIDING_GROUP_COLLECTION);
   var ref = doc(col);
@@ -231,6 +233,8 @@ export async function createRidingGroupPending(db, uid, payload) {
     intro,
     isPublic,
     isPaid,
+    liveTrainingRoomCode,
+    liveTrainingRoomName,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
     category: normalizeRidingGroupCategory(payload.category),
@@ -280,12 +284,16 @@ export async function updateRidingGroupByOwner(db, uid, groupId, payload) {
     if (!joinPassword || joinPassword.length < 4) throw new Error('비공개 그룹은 비밀번호(4자 이상)가 필요합니다.');
   }
   var isPaid = !!payload.isPaid;
+  var liveTrainingRoomCode = trimLen(payload.liveTrainingRoomCode, 20);
+  var liveTrainingRoomName = trimLen(payload.liveTrainingRoomName, 100);
   await updateDoc(ref, {
     name,
     regions,
     intro,
     isPublic,
     isPaid,
+    liveTrainingRoomCode,
+    liveTrainingRoomName,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
     category: normalizeRidingGroupCategory(payload.category),
@@ -537,12 +545,16 @@ export async function updateRidingGroupByAdmin(db, adminUid, groupId, payload) {
     if (!joinPassword || joinPassword.length < 4) throw new Error('비공개 그룹은 비밀번호(4자 이상)가 필요합니다.');
   }
   var isPaid = !!payload.isPaid;
+  var liveTrainingRoomCode = trimLen(payload.liveTrainingRoomCode, 20);
+  var liveTrainingRoomName = trimLen(payload.liveTrainingRoomName, 100);
   await updateDoc(ref, {
     name,
     regions,
     intro,
     isPublic,
     isPaid,
+    liveTrainingRoomCode,
+    liveTrainingRoomName,
     joinPassword: isPublic ? '' : joinPassword,
     photoUrl: payload.photoUrl != null ? String(payload.photoUrl) : null,
     category: normalizeRidingGroupCategory(payload.category),

@@ -9149,6 +9149,31 @@ function OpenRidingDetail(props) {
     [groupSessionWorkout]
   );
 
+  /** 그룹세션이 속한 클럽에 연결된 Live Training Room 코드 — 워크아웃 그래프 클릭 시
+   * 바로 입장하기 위해 필요(2026-09). */
+  var _liveRoomCodeDetail = useState('');
+  var groupSessionLiveRoomCode = _liveRoomCodeDetail[0];
+  var setGroupSessionLiveRoomCode = _liveRoomCodeDetail[1];
+  useEffect(
+    function () {
+      if (!ride || !ride.isGroupSession || !ride.groupId) {
+        setGroupSessionLiveRoomCode('');
+        return undefined;
+      }
+      var cancelled = false;
+      var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      if (typeof svcGroup.fetchRidingGroupById !== 'function') return undefined;
+      svcGroup.fetchRidingGroupById(firestore, ride.groupId).then(function (grp) {
+        if (cancelled || !grp) return;
+        setGroupSessionLiveRoomCode(grp.liveTrainingRoomCode != null ? String(grp.liveTrainingRoomCode) : '');
+      }).catch(function () {});
+      return function () {
+        cancelled = true;
+      };
+    },
+    [ride && ride.isGroupSession, ride && ride.groupId, firestore]
+  );
+
   var _actBusy = useState(false);
   var isActionBusy = _actBusy[0];
   var setBusy = _actBusy[1];
@@ -10381,6 +10406,11 @@ function OpenRidingDetail(props) {
   /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
   var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
   var rideYmdHint = getRideDateSeoulYmd(ride);
+  /** 그룹세션 워크아웃 그래프 클릭(Live Training Room 바로 입장) 활성화 조건 —
+   * 참석 확정 + 오늘 날짜인 경우에만(2026-09 요청). */
+  var isConfirmedParticipant = !!(userId && parts.some(function (p) { return String(p) === String(userId); }));
+  var isGroupSessionLiveClickable =
+    !!(ride.isGroupSession && isConfirmedParticipant && rideYmdHint && rideYmdHint === getTodaySeoulYmd() && groupSessionLiveRoomCode);
   var guestHostSummaryOnRide =
     role !== 'participant' &&
     !!rideYmdHint &&
@@ -10641,7 +10671,24 @@ function OpenRidingDetail(props) {
               <p className="text-sm text-slate-500 text-center py-4 m-0">워크아웃 불러오는 중…</p>
             ) : groupSessionWorkout ? (
               <>
-                <div className="workout-card__graph" ref={groupSessionGraphRef} />
+                <div
+                  className={'workout-card__graph' + (isGroupSessionLiveClickable ? ' cursor-pointer ring-2 ring-emerald-400 rounded-lg' : '')}
+                  ref={groupSessionGraphRef}
+                  role={isGroupSessionLiveClickable ? 'button' : undefined}
+                  tabIndex={isGroupSessionLiveClickable ? 0 : undefined}
+                  title={isGroupSessionLiveClickable ? 'Live Training Room 입장하기' : undefined}
+                  onClick={function () {
+                    if (!isGroupSessionLiveClickable) return;
+                    if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
+                      window.joinRoomByCode(groupSessionLiveRoomCode);
+                    }
+                  }}
+                />
+                {isGroupSessionLiveClickable ? (
+                  <p className="text-xs font-semibold text-emerald-700 text-center m-0">
+                    그래프를 클릭하면 Live Training Room에 바로 입장합니다
+                  </p>
+                ) : null}
                 <div className="workout-card__footer">
                   <span className="workout-card__meta">
                     <span className="workout-card__meta-icon">⏱</span>{' '}
@@ -12970,6 +13017,15 @@ function OpenRidingGroupForm(props) {
   var _paid = useState(false);
   var isPaid = _paid[0];
   var setPaid = _paid[1];
+  var _liveRoomCode = useState('');
+  var liveTrainingRoomCode = _liveRoomCode[0];
+  var setLiveTrainingRoomCode = _liveRoomCode[1];
+  var _liveRoomName = useState('');
+  var liveTrainingRoomName = _liveRoomName[0];
+  var setLiveTrainingRoomName = _liveRoomName[1];
+  var _liveRoomList = useState({ items: [], loading: false, loaded: false });
+  var liveRoomList = _liveRoomList[0];
+  var setLiveRoomList = _liveRoomList[1];
   var _pw = useState('');
   var joinPw = _pw[0];
   var setJoinPw = _pw[1];
@@ -13047,6 +13103,8 @@ function OpenRidingGroupForm(props) {
           setIntro(doc.intro != null ? String(doc.intro) : '');
           setPublic(doc.isPublic !== false);
           setPaid(doc.isPaid === true);
+          setLiveTrainingRoomCode(doc.liveTrainingRoomCode != null ? String(doc.liveTrainingRoomCode) : '');
+          setLiveTrainingRoomName(doc.liveTrainingRoomName != null ? String(doc.liveTrainingRoomName) : '');
           setJoinPw(doc.joinPassword != null ? String(doc.joinPassword) : '');
           setRegions(Array.isArray(doc.regions) ? doc.regions.map(function (x) { return String(x); }) : []);
           setPhotoUrl(doc.photoUrl != null ? String(doc.photoUrl) : '');
@@ -13069,6 +13127,25 @@ function OpenRidingGroupForm(props) {
       };
     },
     [firestore, editGroupId, isEdit]
+  );
+
+  /** Live Training Room 목록(그룹 훈련 > 대기 중인 방) — 클럽에 연결할 방을 고를 때 사용.
+   * 기존 groupTrainingManager.js의 전역 함수를 그대로 재사용(별도 API 없음). */
+  function loadLiveTrainingRoomList() {
+    if (typeof window === 'undefined' || typeof window.getAllWaitingRooms !== 'function') return;
+    setLiveRoomList(function (prev) { return Object.assign({}, prev, { loading: true }); });
+    window.getAllWaitingRooms().then(function (rooms) {
+      setLiveRoomList({ items: Array.isArray(rooms) ? rooms : [], loading: false, loaded: true });
+    }).catch(function () {
+      setLiveRoomList({ items: [], loading: false, loaded: true });
+    });
+  }
+
+  useEffect(
+    function () {
+      loadLiveTrainingRoomList();
+    },
+    []
   );
 
   function addRegion() {
@@ -13098,6 +13175,8 @@ function OpenRidingGroupForm(props) {
       intro: intro.trim(),
       isPublic: isPublic,
       isPaid: isPaid,
+      liveTrainingRoomCode: liveTrainingRoomCode,
+      liveTrainingRoomName: liveTrainingRoomName,
       joinPassword: joinPw,
       photoUrl: url || null,
       category:
@@ -13347,6 +13426,63 @@ function OpenRidingGroupForm(props) {
           동작합니다.
         </p>
       ) : null}
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="text-xs text-slate-500">Live Training Room 선택</label>
+          <button
+            type="button"
+            className="text-[11px] font-semibold text-violet-700 disabled:opacity-40"
+            disabled={liveRoomList.loading}
+            onClick={loadLiveTrainingRoomList}
+          >
+            {liveRoomList.loading ? '불러오는 중…' : '목록 새로고침'}
+          </button>
+        </div>
+        <select
+          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white"
+          value={liveTrainingRoomCode}
+          onChange={function (e) {
+            var code = e.target.value;
+            setLiveTrainingRoomCode(code);
+            var picked = liveRoomList.items.find(function (r) {
+              return String(r.Code || r.code || r.roomCode || '') === code;
+            });
+            setLiveTrainingRoomName(picked ? String(picked.Name || picked.name || picked.roomName || '') : '');
+          }}
+        >
+          <option value="">선택 안 함</option>
+          {liveRoomList.items.map(function (r) {
+            var code = String(r.Code || r.code || r.roomCode || '');
+            var rname = String(r.Name || r.name || r.roomName || '(이름 없음)');
+            if (!code) return null;
+            return (
+              <option key={code} value={code}>
+                {rname} ({code})
+              </option>
+            );
+          })}
+        </select>
+        {liveRoomList.loaded && liveRoomList.items.length === 0 ? (
+          <p className="text-[11px] text-slate-400 mt-1 m-0">현재 대기 중인 Live Training Room이 없습니다.</p>
+        ) : null}
+        {liveTrainingRoomCode ? (
+          <button
+            type="button"
+            className="mt-2 w-full py-2 rounded-lg border border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
+            onClick={function () {
+              if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
+                window.joinRoomByCode(liveTrainingRoomCode);
+              }
+            }}
+          >
+            지금 입장하기 — {liveTrainingRoomName || liveTrainingRoomCode}
+          </button>
+        ) : null}
+        <p className="text-[11px] text-slate-500 mt-1 m-0 leading-snug">
+          선택한 방은 이 클럽의 그룹세션 상세 화면에서 워크아웃 그래프를 클릭했을 때(참석자·오늘
+          날짜인 경우) 바로 연결됩니다.
+        </p>
+      </div>
       {!isPublic ? (
         <div>
           <label className="text-xs text-slate-500 block mb-1">가입 비밀번호 (4자 이상)</label>

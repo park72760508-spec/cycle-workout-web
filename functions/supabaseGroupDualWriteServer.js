@@ -340,6 +340,8 @@ function mapFirestoreRidingGroupToRow(firestoreDocId, d) {
     intro: str(d.intro) || "",
     is_public: Boolean(d.isPublic),
     is_paid: Boolean(d.isPaid),
+    live_training_room_code: str(d.liveTrainingRoomCode) || null,
+    live_training_room_name: str(d.liveTrainingRoomName) || null,
     join_password: str(d.joinPassword) || "",
     photo_url: str(d.photoUrl),
     category: (function () {
