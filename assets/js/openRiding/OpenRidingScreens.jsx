@@ -10406,11 +10406,18 @@ function OpenRidingDetail(props) {
   /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
   var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
   var rideYmdHint = getRideDateSeoulYmd(ride);
-  /** 그룹세션 워크아웃 그래프 클릭(Live Training Room 바로 입장) 활성화 조건 —
-   * 참석 확정 + 오늘 날짜인 경우에만(2026-09 요청). */
+  /** 그룹세션 START 버튼(Live Training Room 바로 입장) 활성화 조건 —
+   * 참석 확정 + 훈련 당일. 단, 사이트 관리자(grade=1)는 일자·참석 여부와 무관하게 상시 활성(2026-09 요청).
+   * 연결된 Live Training Room이 없으면 누구에게나 비활성. */
   var isConfirmedParticipant = !!(userId && parts.some(function (p) { return String(p) === String(userId); }));
+  var isGroupSessionAdminGrade1 = openRidingGroupsIsAdminGrade();
   var isGroupSessionLiveClickable =
-    !!(ride.isGroupSession && isConfirmedParticipant && rideYmdHint && rideYmdHint === getTodaySeoulYmd() && groupSessionLiveRoomCode);
+    !!(
+      ride.isGroupSession &&
+      groupSessionLiveRoomCode &&
+      (isGroupSessionAdminGrade1 ||
+        (isConfirmedParticipant && rideYmdHint && rideYmdHint === getTodaySeoulYmd()))
+    );
   var guestHostSummaryOnRide =
     role !== 'participant' &&
     !!rideYmdHint &&
@@ -10671,24 +10678,29 @@ function OpenRidingDetail(props) {
               <p className="text-sm text-slate-500 text-center py-4 m-0">워크아웃 불러오는 중…</p>
             ) : groupSessionWorkout ? (
               <>
-                <div
-                  className={'workout-card__graph' + (isGroupSessionLiveClickable ? ' cursor-pointer ring-2 ring-emerald-400 rounded-lg' : '')}
-                  ref={groupSessionGraphRef}
-                  role={isGroupSessionLiveClickable ? 'button' : undefined}
-                  tabIndex={isGroupSessionLiveClickable ? 0 : undefined}
-                  title={isGroupSessionLiveClickable ? 'Live Training Room 입장하기' : undefined}
-                  onClick={function () {
-                    if (!isGroupSessionLiveClickable) return;
-                    if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
-                      window.joinRoomByCode(groupSessionLiveRoomCode);
+                <div className="schedule-detail-graph-with-start">
+                  <button
+                    type="button"
+                    className="btn btn-schedule-start btn-schedule-start-on-graph"
+                    disabled={!isGroupSessionLiveClickable}
+                    title={
+                      isGroupSessionLiveClickable
+                        ? 'Live Training Room 입장'
+                        : !groupSessionLiveRoomCode
+                          ? '연결된 Live Training Room이 없습니다'
+                          : '훈련 당일 참석자만 입장할 수 있습니다'
                     }
-                  }}
-                />
-                {isGroupSessionLiveClickable ? (
-                  <p className="text-xs font-semibold text-emerald-700 text-center m-0">
-                    그래프를 클릭하면 Live Training Room에 바로 입장합니다
-                  </p>
-                ) : null}
+                    onClick={function () {
+                      if (!isGroupSessionLiveClickable) return;
+                      if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
+                        window.joinRoomByCode(groupSessionLiveRoomCode);
+                      }
+                    }}
+                  >
+                    <img src="assets/img/start.png" alt="훈련 시작" />
+                  </button>
+                  <div className="workout-card__graph" ref={groupSessionGraphRef} />
+                </div>
                 <div className="workout-card__footer">
                   <span className="workout-card__meta">
                     <span className="workout-card__meta-icon">⏱</span>{' '}
