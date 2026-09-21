@@ -10692,8 +10692,8 @@ function OpenRidingDetail(props) {
                     }
                     onClick={function () {
                       if (!isGroupSessionLiveClickable) return;
-                      if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
-                        window.joinRoomByCode(groupSessionLiveRoomCode);
+                      if (typeof window !== 'undefined' && typeof window.enterTrainingRoomSessionById === 'function') {
+                        window.enterTrainingRoomSessionById(groupSessionLiveRoomCode);
                       }
                     }}
                   >
@@ -13141,12 +13141,15 @@ function OpenRidingGroupForm(props) {
     [firestore, editGroupId, isEdit]
   );
 
-  /** Live Training Room 목록(그룹 훈련 > 대기 중인 방) — 클럽에 연결할 방을 고를 때 사용.
-   * 기존 groupTrainingManager.js의 전역 함수를 그대로 재사용(별도 API 없음). */
+  /** Live Training Rooms 목록(그룹 훈련 > Live Training Rooms = Firestore training_rooms) —
+   * 클럽에 연결할 방을 고를 때 사용. trainingRoomManager.js의 전역 조회 함수를 재사용. */
   function loadLiveTrainingRoomList() {
-    if (typeof window === 'undefined' || typeof window.getAllWaitingRooms !== 'function') return;
+    if (typeof window === 'undefined' || typeof window.fetchTrainingRoomsForClubPicker !== 'function') {
+      setLiveRoomList({ items: [], loading: false, loaded: true });
+      return;
+    }
     setLiveRoomList(function (prev) { return Object.assign({}, prev, { loading: true }); });
-    window.getAllWaitingRooms().then(function (rooms) {
+    window.fetchTrainingRoomsForClubPicker().then(function (rooms) {
       setLiveRoomList({ items: Array.isArray(rooms) ? rooms : [], loading: false, loaded: true });
     }).catch(function () {
       setLiveRoomList({ items: [], loading: false, loaded: true });
@@ -13457,33 +13460,34 @@ function OpenRidingGroupForm(props) {
             var code = e.target.value;
             setLiveTrainingRoomCode(code);
             var picked = liveRoomList.items.find(function (r) {
-              return String(r.Code || r.code || r.roomCode || '') === code;
+              return String(r.id) === code;
             });
-            setLiveTrainingRoomName(picked ? String(picked.Name || picked.name || picked.roomName || '') : '');
+            setLiveTrainingRoomName(picked ? String(picked.title || '') : '');
           }}
         >
           <option value="">선택 안 함</option>
+          {liveTrainingRoomCode &&
+          !liveRoomList.items.some(function (r) { return String(r.id) === liveTrainingRoomCode; }) ? (
+            <option value={liveTrainingRoomCode}>{liveTrainingRoomName || liveTrainingRoomCode}</option>
+          ) : null}
           {liveRoomList.items.map(function (r) {
-            var code = String(r.Code || r.code || r.roomCode || '');
-            var rname = String(r.Name || r.name || r.roomName || '(이름 없음)');
-            if (!code) return null;
             return (
-              <option key={code} value={code}>
-                {rname} ({code})
+              <option key={r.id} value={r.id}>
+                {r.title || '(이름 없음)'}
               </option>
             );
           })}
         </select>
         {liveRoomList.loaded && liveRoomList.items.length === 0 ? (
-          <p className="text-[11px] text-slate-400 mt-1 m-0">현재 대기 중인 Live Training Room이 없습니다.</p>
+          <p className="text-[11px] text-slate-400 mt-1 m-0">등록된 Live Training Room이 없습니다.</p>
         ) : null}
         {liveTrainingRoomCode ? (
           <button
             type="button"
             className="mt-2 w-full py-2 rounded-lg border border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
             onClick={function () {
-              if (typeof window !== 'undefined' && typeof window.joinRoomByCode === 'function') {
-                window.joinRoomByCode(liveTrainingRoomCode);
+              if (typeof window !== 'undefined' && typeof window.enterTrainingRoomSessionById === 'function') {
+                window.enterTrainingRoomSessionById(liveTrainingRoomCode);
               }
             }}
           >

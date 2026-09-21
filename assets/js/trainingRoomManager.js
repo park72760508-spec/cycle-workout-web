@@ -7070,3 +7070,70 @@ function handleBluetoothPlayerEnterClick(event, trackNumber, roomId) {
   return false;
 }
 
+
+/* ========== 클럽 연동: Live Training Rooms 목록 조회 · 세션 바로 입장 ========== */
+
+/** training_rooms 전체(비활성 제외) — loadTrainingRooms와 동일한 조회. 민감 필드 포함이라 내부 전용. */
+async function fetchTrainingRoomsFull() {
+  await waitForAuthReady(5000);
+  var db = null;
+  var v9 = false;
+  if (window.firestoreV9) { db = window.firestoreV9; v9 = true; }
+  else if (window.firebase && typeof window.firebase.firestore === 'function') { db = window.firebase.firestore(); }
+  else if (window.firestore) { db = window.firestore; }
+  if (!db) throw new Error('Firestore 인스턴스를 찾을 수 없습니다.');
+  var docs;
+  if (v9) {
+    var fsMod = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js');
+    var snap = await fsMod.getDocs(
+      fsMod.query(fsMod.collection(db, TRAINING_ROOMS_COLLECTION), fsMod.where('status', '!=', 'inactive'), fsMod.limit(100))
+    );
+    docs = snap.docs;
+  } else {
+    var snapC = await db.collection(TRAINING_ROOMS_COLLECTION).where('status', '!=', 'inactive').limit(100).get();
+    docs = snapC.docs;
+  }
+  return docs.map(function (d) {
+    var dd = d.data() || {};
+    var o = { id: d.id, title: dd.title || dd.name, _sourceCollection: 'training_rooms' };
+    for (var k in dd) { if (Object.prototype.hasOwnProperty.call(dd, k)) o[k] = dd[k]; }
+    return o;
+  });
+}
+
+/** 클럽 수정 화면 선택 목록용 — [{ id, title }] (비밀번호 등 제외) */
+async function fetchTrainingRoomsForClubPicker() {
+  var rooms = await fetchTrainingRoomsFull();
+  return rooms.map(function (r) {
+    return { id: String(r.id), title: String(r.title || r.name || r.Name || r.roomName || '') };
+  });
+}
+window.fetchTrainingRoomsForClubPicker = fetchTrainingRoomsForClubPicker;
+
+/** 지정 Training Room 선택(비밀번호 확인 포함) 후 Live Training Session(Player 화면)으로 바로 이동 */
+async function enterTrainingRoomSessionById(roomId) {
+  var id = String(roomId == null ? '' : roomId).trim();
+  if (!id) return;
+  try {
+    var grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : (window.currentUser && window.currentUser.grade) || '2';
+    var g = parseInt(grade, 10);
+    if (!(g === 1 || g === 2 || g === 3)) {
+      if (typeof showToast === 'function') showToast('Live Training Room에 입장할 수 없는 등급입니다.', 'error');
+      return;
+    }
+    if (!trainingRoomList.some(function (r) { return String(r.id) === id; })) {
+      trainingRoomList = await fetchTrainingRoomsFull();
+    }
+    if (!trainingRoomList.some(function (r) { return String(r.id) === id; })) {
+      if (typeof showToast === 'function') showToast('연결된 Live Training Room을 찾을 수 없습니다.', 'error');
+      return;
+    }
+    await selectTrainingRoom(id);
+    if (!currentSelectedTrainingRoom || String(currentSelectedTrainingRoom.id) !== id) return;
+    await openPlayerList();
+  } catch (e) {
+    console.error('[Training Room] 바로 입장 실패:', e);
+    if (typeof showToast === 'function') showToast('Live Training Room 입장에 실패했습니다.', 'error');
+  }
+}
+window.enterTrainingRoomSessionById = enterTrainingRoomSessionById;
