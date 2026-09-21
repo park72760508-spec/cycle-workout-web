@@ -1834,56 +1834,31 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 펄스 애니메이션 효과
     const currentTime = Date.now() / 1000;
-    // 모바일 훈련 화면과 그룹 모바일 훈련 화면(bluetoothIndividual 통합 화면)은 동일한 마스코트 펄스 사용
-    const isMobileSegGraphMascot = canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph';
-
-    // 마스코트 그리기
+    // 마스코트 그리기 — 개인/그룹/모바일 훈련 화면 공통: 흰색 다중 링 확산 + 빨간 원
     ctx.save();
 
-    if (isMobileSegGraphMascot) {
-      // 모바일 훈련 화면: 중고랜드 하단 네비 마이페이지 배지(marketRequestDotPulse — 1.6초
-      // ease-in-out 주기로 box-shadow가 0px→5px로 커졌다 줄어들며 alpha 0.5→0.18로 "숨쉬는"
-      // 단일 링)와 동일한 색(오렌지 #ea580c)·리듬을 캔버스로 재현. cos 파형으로 ease-in-out 근사.
-      const pulseDuration = 1.6;
-      const cyclePos = (currentTime % pulseDuration) / pulseDuration;
-      const wave = (1 - Math.cos(cyclePos * Math.PI * 2)) / 2; // 0(시작)→1(중간)→0(끝)
-      const haloOffset = wave * 5; // box-shadow spread: 0px → 5px
-      const haloAlpha = 0.5 - wave * (0.5 - 0.18); // box-shadow alpha: 0.5 → 0.18
+    const pulseDuration = 1.5;
+    const pulsePhase = currentTime % pulseDuration;
+    const pulseCount = 3;
+    for (let i = 0; i < pulseCount; i++) {
+      const pulseOffset = (i / pulseCount) * pulseDuration;
+      const pulseTime = (pulsePhase + pulseOffset) % pulseDuration;
+      const pulseNormalized = pulseTime / pulseDuration;
+      const pulseRadius = mascotRadius + (pulseNormalized * mascotRadius * 2);
+      const pulseAlpha = 1 - pulseNormalized;
 
       ctx.beginPath();
-      ctx.arc(mascotX, mascotY, mascotRadius * 0.85 + haloOffset, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(234, 88, 12, ${haloAlpha})`;
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
-      ctx.fillStyle = '#ea580c';
-      ctx.fill();
-    } else {
-      // 개인 대시보드: 기존 다중 링 확산 효과 유지
-      const pulseDuration = 1.5;
-      const pulsePhase = currentTime % pulseDuration;
-      const pulseCount = 3;
-      for (let i = 0; i < pulseCount; i++) {
-        const pulseOffset = (i / pulseCount) * pulseDuration;
-        const pulseTime = (pulsePhase + pulseOffset) % pulseDuration;
-        const pulseNormalized = pulseTime / pulseDuration;
-        const pulseRadius = mascotRadius + (pulseNormalized * mascotRadius * 2);
-        const pulseAlpha = 1 - pulseNormalized;
-
-        ctx.beginPath();
-        ctx.arc(mascotX, mascotY, pulseRadius, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-
-      // 메인 빨간색 원 (개인 대시보드)
-      ctx.beginPath();
-      ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
-      ctx.fillStyle = '#ef4444';
-      ctx.fill();
+      ctx.arc(mascotX, mascotY, pulseRadius, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 255, 255, ${pulseAlpha * 0.8})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
+
+    // 메인 빨간색 원
+    ctx.beginPath();
+    ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
+    ctx.fillStyle = '#ef4444';
+    ctx.fill();
 
     ctx.restore();
   }
