@@ -1834,7 +1834,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     
     // 펄스 애니메이션 효과
     const currentTime = Date.now() / 1000;
-    const isMobileSegGraphMascot = canvasId === 'mobileIndividualSegmentGraph';
+    // 모바일 훈련 화면과 그룹 모바일 훈련 화면(bluetoothIndividual 통합 화면)은 동일한 마스코트 펄스 사용
+    const isMobileSegGraphMascot = canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph';
 
     // 마스코트 그리기
     ctx.save();

@@ -28357,9 +28357,10 @@ html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.
 #bluetoothIndividualScreen .indiv-stat-label { font-size: 0.8em; color: #888; margin-bottom: 2.5px; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
 #bluetoothIndividualScreen .indiv-stat-value { font-size: 1.8em; font-weight: bold; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
 #bluetoothIndividualScreen .indiv-unit { font-size: 0.5em; color: #aaa; font-family: "Noto Sans KR", "Pretendard", sans-serif; }
-#bluetoothIndividualScreen .indiv-c-cadence { color: #ff4444; }
+/* 그룹 모바일 훈련 화면: CADENCE(민트)·HEART RATE(빨강) — 일반 모바일 훈련 화면과 동일 배색 */
+#bluetoothIndividualScreen .indiv-c-cadence { color: #00d4aa; }
 #bluetoothIndividualScreen .indiv-c-target { color: #ff8c00; }
-#bluetoothIndividualScreen .indiv-c-hr { color: #00d4aa; }
+#bluetoothIndividualScreen .indiv-c-hr { color: #ff4444; }
 #bluetoothIndividualScreen .indiv-individual-intensity-adjustment-container {
   display: flex;
   flex-direction: column;
