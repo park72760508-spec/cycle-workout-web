@@ -34762,10 +34762,9 @@
   <div id="bluetoothTrainingCoachScreen" class="screen">
     <div class="dashboard-header" style="position: relative;">
       <h1 class="race-title-animated" style="flex: 1; display: flex; align-items: center; justify-content: flex-start;">
-        <!-- 좌측: Live Training Room -->
-        <div style="display: flex; align-items: center; gap: 8px; flex: 0 0 auto;">
-          <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
-          <span class="race-title-text">Live Training Room</span>
+        <!-- 좌측: 접속한 Training Room 이름 (initBluetoothCoachDashboard에서 채움) -->
+        <div style="display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; max-width: 32vw;">
+          <span class="race-title-text" id="bluetoothCoachRoomTitle" style="color: #ffffff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Live Training Room</span>
         </div>
       </h1>
       <!-- 중앙: 현재 세그먼트 정보 (dashboard-header 기준 중앙 배치) -->
@@ -34851,7 +34850,7 @@
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
-  <script src="assets/js/bluetoothCoachDashboard.js?v=20260924coachGrid1"></script>
+  <script src="assets/js/bluetoothCoachDashboard.js?v=20260924coachTitle1"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

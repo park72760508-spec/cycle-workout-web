@@ -262,8 +262,25 @@ async function getTrackConfigFromFirebase() {
  * Bluetooth Training Coach 대시보드 초기화
  * Indoor Training과 동일: 그리드를 동기 생성 후 Firebase 구독 (옛날 잘 되던 방식)
  */
+/**
+ * 상단 타이틀: 접속한 Training Room 이름 표시 (없으면 기본 문구)
+ */
+function updateBluetoothCoachRoomTitle() {
+  const titleEl = document.getElementById('bluetoothCoachRoomTitle');
+  if (!titleEl) return;
+  let roomName = (window.currentTrainingRoomName && String(window.currentTrainingRoomName).trim()) || '';
+  if (!roomName) {
+    try {
+      roomName = (localStorage.getItem('currentTrainingRoomName') || '').trim();
+    } catch (e) { /* localStorage 접근 불가 */ }
+  }
+  titleEl.textContent = roomName || 'Live Training Room';
+  titleEl.title = titleEl.textContent;
+}
+
 window.initBluetoothCoachDashboard = function initBluetoothCoachDashboard() {
   console.log('🎯 [진단/bluetoothCoachDashboard.js] initBluetoothCoachDashboard 함수 실행 시작');
+  updateBluetoothCoachRoomTitle();
   console.log('🎯 [진단] 함수 호출 스택:', new Error().stack);
   
   // 0. Firebase db 객체 확인 (치명적 오류 방지)
