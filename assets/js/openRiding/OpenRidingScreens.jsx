@@ -6839,6 +6839,38 @@ function OpenRidingCreateForm(props) {
   });
   var workoutPicker = _workoutPicker[0];
   var setWorkoutPicker = _workoutPicker[1];
+  /** STELVIO 워크아웃 목록(apiGetWorkouts)에는 세그먼트가 없다(제목·시간 등 요약 정보만) —
+   * 그래프 표시를 위해 선택된 항목만 apiGetWorkout(id)로 상세(세그먼트 포함)를 따로 받아온다. */
+  var _gasSegCache = useState({});
+  var gasWorkoutSegmentsCache = _gasSegCache[0];
+  var setGasWorkoutSegmentsCache = _gasSegCache[1];
+
+  useEffect(
+    function () {
+      if (form.workoutSource !== 'gas' || !form.workoutId) return undefined;
+      var wid = String(form.workoutId);
+      if (gasWorkoutSegmentsCache[wid] !== undefined) return undefined;
+      if (typeof window === 'undefined' || typeof window.apiGetWorkout !== 'function') return undefined;
+      var cancelled = false;
+      window.apiGetWorkout(wid).then(function (r) {
+        if (cancelled) return;
+        var segs = r && r.success && r.item && Array.isArray(r.item.segments) ? r.item.segments : [];
+        setGasWorkoutSegmentsCache(function (prev) {
+          return Object.assign({}, prev, { [wid]: segs });
+        });
+      }).catch(function () {
+        if (!cancelled) {
+          setGasWorkoutSegmentsCache(function (prev) {
+            return Object.assign({}, prev, { [wid]: [] });
+          });
+        }
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [form.workoutSource, form.workoutId]
+  );
 
   /** 그룹세션 모드 진입 시 워크아웃 선택기용 목록(기존/클럽 전용)을 로드.
    * 워크아웃 작성 화면에서 새 클럽 전용 워크아웃을 만들고 돌아온 경우, 이 목록을 받아온 직후
@@ -8711,22 +8743,33 @@ function OpenRidingCreateForm(props) {
                           <span className="truncate">{w.title}</span>
                           <span className="shrink-0 text-xs text-slate-500">{mins}분</span>
                         </button>
-                        {selected ? (
-                          <div className="px-2 pb-2">
-                            {Array.isArray(w.segments) && w.segments.length > 0 ? (
-                              <div
-                                className="workout-card__graph"
-                                ref={function (el) {
-                                  if (el && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
-                                    window.renderSegmentedWorkoutGraph(el, w.segments, { maxHeight: 100 });
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <p className="segmented-workout-graph-empty text-xs text-slate-400 m-0">세그먼트 없음</p>
-                            )}
-                          </div>
-                        ) : null}
+                        {selected ? (function () {
+                          /* STELVIO 워크아웃 목록에는 세그먼트가 안 실려와 선택 시 apiGetWorkout으로 따로
+                           * 받아온다(가스Cache) — 클럽 전용 워크아웃은 목록 응답에 이미 포함돼 있음. */
+                          var segsLoading = workoutPicker.tab === 'gas' && gasWorkoutSegmentsCache[wid] === undefined;
+                          var segs =
+                            workoutPicker.tab === 'gas'
+                              ? gasWorkoutSegmentsCache[wid] || (Array.isArray(w.segments) ? w.segments : [])
+                              : Array.isArray(w.segments) ? w.segments : [];
+                          return (
+                            <div className="px-2 pb-2">
+                              {segsLoading ? (
+                                <p className="text-xs text-slate-400 text-center py-3 m-0">그래프 불러오는 중…</p>
+                              ) : segs.length > 0 ? (
+                                <div
+                                  className="workout-card__graph"
+                                  ref={function (el) {
+                                    if (el && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
+                                      window.renderSegmentedWorkoutGraph(el, segs, { maxHeight: 100 });
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <p className="segmented-workout-graph-empty text-xs text-slate-400 m-0">세그먼트 없음</p>
+                              )}
+                            </div>
+                          );
+                        })() : null}
                       </div>
                     );
                   })
