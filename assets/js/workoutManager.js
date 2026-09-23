@@ -3314,8 +3314,13 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
 
   console.log('[loadWorkouts] 🔄 백그라운드 세그먼트 로딩 시작 (', totalToFetch, '개, 목록은 이미 표시됨)');
 
-  const batchSize = isFromCacheForSegments ? 100 : 20;
-  const batchDelay = isFromCacheForSegments ? 0 : (isAndroid ? 250 : 100);
+  /* GAS Web App은 동시 실행 개수에 한계가 있어, 이전에는 배치당 20~100개를 한꺼번에
+   * Promise.all로 쏘면 대부분 15초 타임아웃으로 실패해 세그먼트가 하나도 안 채워지는
+   * 경우가 있었다(캐시가 비어있는 최초 진입 시 특히 심함 — 워크아웃 화면에 그래프가 전부
+   * "세그먼트 없음"으로 보이는 원인). 동시 요청 수를 대폭 낮춰(4개) 실제로 성공하도록 하고,
+   * 그래도 실패(빈 배열)한 항목은 배치가 다 끝난 뒤 순차적으로 한 번 더 재시도한다. */
+  const batchSize = 4;
+  const batchDelay = isAndroid ? 200 : 120;
 
   for (let i = 0; i < workoutsNeedingSegments.length; i += batchSize) {
     const batch = workoutsNeedingSegments.slice(i, i + batchSize);
@@ -3323,8 +3328,19 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
       const segments = await apiGetWorkoutSegments(workout.id);
       workout.segments = segments;
     }));
-    if (i + batchSize < workoutsNeedingSegments.length && batchDelay > 0) {
+    if (i + batchSize < workoutsNeedingSegments.length) {
       await new Promise(function (r) { setTimeout(r, batchDelay); });
+    }
+  }
+
+  const stillMissing = workoutsNeedingSegments.filter(function (w) {
+    return !Array.isArray(w.segments) || w.segments.length === 0;
+  });
+  if (stillMissing.length > 0) {
+    console.log('[loadWorkouts] 🔁 1차 시도에서 비어있던', stillMissing.length, '개 순차 재시도');
+    for (var ri = 0; ri < stillMissing.length; ri++) {
+      var retrySegs = await apiGetWorkoutSegments(stillMissing[ri].id, true);
+      stillMissing[ri].segments = retrySegs;
     }
   }
   console.log('[loadWorkouts] ✅ 백그라운드 세그먼트 로딩 완료 (', totalToFetch, '개)');
