@@ -4217,10 +4217,17 @@ function renderWorkoutCards(workouts, workoutRoomStatusMap = {}, workoutRoomCode
   `;
   workouts.forEach(workout => {
     const graphEl = document.getElementById('workout-card-graph-' + workout.id);
-    if (graphEl && workout.segments && workout.segments.length > 0 && typeof renderSegmentedWorkoutGraph === 'function') {
+    if (!graphEl) return;
+    if (workout.segments && workout.segments.length > 0 && typeof renderSegmentedWorkoutGraph === 'function') {
       renderSegmentedWorkoutGraph(graphEl, workout.segments, { maxHeight: 100 });
-    } else if (graphEl && (!workout.segments || workout.segments.length === 0)) {
+    } else if (Array.isArray(workout.segments) && workout.segments.length === 0) {
+      // 세그먼트를 이미 조회했는데(fetchMissingWorkoutSegmentsInBackground 완료) 실제로 0개인 경우
       graphEl.innerHTML = '<div class="segmented-workout-graph-empty">세그먼트 없음</div>';
+    } else {
+      // workout.segments가 아직 undefined — 목록 응답엔 세그먼트가 없어 백그라운드에서 개별
+      // 조회 중인 상태다(수십~백여 개면 수 초 걸릴 수 있음). "세그먼트 없음"으로 잘못 보이지
+      // 않도록 로딩 상태를 구분해서 보여준다 — 조회가 끝나면 loadWorkouts가 다시 그린다.
+      graphEl.innerHTML = '<div class="segmented-workout-graph-empty">그래프 불러오는 중…</div>';
     }
   });
   applyWorkoutPermissions?.();
