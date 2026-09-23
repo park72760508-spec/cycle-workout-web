@@ -33189,3 +33189,11 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-weight: 300;
   line-height: 1;
 }
+
+/* Live Training Room 계기판: rpm·bpm 숫자 색상 맞교환 (rpm 진녹색 / bpm 빨강) */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-rpm .speed-stat-value {
+  color: #006400;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .heart-rate-row .distance-value {
+  color: #ff0000;
+}

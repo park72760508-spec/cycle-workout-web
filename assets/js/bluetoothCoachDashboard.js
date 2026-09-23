@@ -1371,7 +1371,7 @@ function updatePowerMeterUI(trackId) {
   if (heartRateEl) {
     if (powerMeter.heartRate > 0) {
       heartRateEl.textContent = Math.round(powerMeter.heartRate);
-      heartRateEl.style.color = '#006400';
+      heartRateEl.style.color = '#ff0000'; // bpm: 빨강 (rpm과 색상 맞교환)
     } else {
       heartRateEl.textContent = '0';
       heartRateEl.style.color = '';
