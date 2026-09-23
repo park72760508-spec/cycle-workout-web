@@ -33198,3 +33198,26 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 #bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .heart-rate-row .distance-value {
   color: #ff0000;
 }
+
+/* Live Training Room: 계기판 행은 위로 모으고(늘이지 않음), 남은 공간에 은은한 로고 표시 */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  align-content: start;
+}
+#bluetoothTrainingCoachScreen .coach-empty-logo {
+  flex: 1 1 auto;
+  min-height: 0;
+  container-type: size;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+}
+#bluetoothTrainingCoachScreen .coach-empty-logo img {
+  height: min(80cqh, 240px);
+  width: auto;
+  opacity: 0.12;
+}
