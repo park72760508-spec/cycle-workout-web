@@ -8699,18 +8699,35 @@ function OpenRidingCreateForm(props) {
                     var selected = form.workoutId === wid && form.workoutSource === workoutPicker.tab;
                     var mins = Math.round((Number(w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60)) || 0) / 60);
                     return (
-                      <button
-                        key={wid}
-                        type="button"
-                        className={'w-full text-left px-3 py-2 rounded-lg border text-sm flex items-center justify-between gap-2 ' + (selected ? 'border-violet-500 bg-violet-50 text-violet-900 font-semibold' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50')}
-                        onClick={function () {
-                          set('workoutId', wid);
-                          set('workoutSource', workoutPicker.tab);
-                        }}
-                      >
-                        <span className="truncate">{w.title}</span>
-                        <span className="shrink-0 text-xs text-slate-500">{mins}분</span>
-                      </button>
+                      <div key={wid} className={'rounded-lg border ' + (selected ? 'border-violet-500' : 'border-slate-200')}>
+                        <button
+                          type="button"
+                          className={'w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 rounded-lg ' + (selected ? 'bg-violet-50 text-violet-900 font-semibold' : 'bg-white text-slate-700 hover:bg-slate-50')}
+                          onClick={function () {
+                            set('workoutId', wid);
+                            set('workoutSource', workoutPicker.tab);
+                          }}
+                        >
+                          <span className="truncate">{w.title}</span>
+                          <span className="shrink-0 text-xs text-slate-500">{mins}분</span>
+                        </button>
+                        {selected ? (
+                          <div className="px-2 pb-2">
+                            {Array.isArray(w.segments) && w.segments.length > 0 ? (
+                              <div
+                                className="workout-card__graph"
+                                ref={function (el) {
+                                  if (el && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
+                                    window.renderSegmentedWorkoutGraph(el, w.segments, { maxHeight: 100 });
+                                  }
+                                }}
+                              />
+                            ) : (
+                              <p className="segmented-workout-graph-empty text-xs text-slate-400 m-0">세그먼트 없음</p>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
                     );
                   })
                 )}
