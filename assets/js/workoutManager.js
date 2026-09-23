@@ -3322,12 +3322,27 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
   const batchSize = 4;
   const batchDelay = isAndroid ? 200 : 120;
 
+  /* 배치가 많으면(수백 개) 전체가 끝날 때까지(수십 초~1분 이상) 화면이 전혀 갱신되지
+   * 않아 "그래프 불러오는 중…"만 계속 보이는 것도 체감상 안 좋다 — 2초에 한 번씩
+   * 그때까지 채워진 것만 미리 반영해 그래프가 하나씩 나타나는 것처럼 보이게 한다. */
+  function renderIfActive() {
+    const screenEl = document.getElementById('workoutScreen');
+    if (screenEl && screenEl.classList.contains('active') && typeof renderWorkoutTable === 'function') {
+      renderWorkoutTable(filteredWorkouts, {}, {}, grade);
+    }
+  }
+  var lastIncrementalRenderAt = Date.now();
+
   for (let i = 0; i < workoutsNeedingSegments.length; i += batchSize) {
     const batch = workoutsNeedingSegments.slice(i, i + batchSize);
     await Promise.all(batch.map(async function (workout) {
       const segments = await apiGetWorkoutSegments(workout.id);
       workout.segments = segments;
     }));
+    if (Date.now() - lastIncrementalRenderAt > 2000) {
+      renderIfActive();
+      lastIncrementalRenderAt = Date.now();
+    }
     if (i + batchSize < workoutsNeedingSegments.length) {
       await new Promise(function (r) { setTimeout(r, batchDelay); });
     }
@@ -3341,6 +3356,10 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
     for (var ri = 0; ri < stillMissing.length; ri++) {
       var retrySegs = await apiGetWorkoutSegments(stillMissing[ri].id, true);
       stillMissing[ri].segments = retrySegs;
+      if (Date.now() - lastIncrementalRenderAt > 2000) {
+        renderIfActive();
+        lastIncrementalRenderAt = Date.now();
+      }
     }
   }
   console.log('[loadWorkouts] ✅ 백그라운드 세그먼트 로딩 완료 (', totalToFetch, '개)');
