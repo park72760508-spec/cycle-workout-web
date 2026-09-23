@@ -3409,9 +3409,12 @@ function logCurrentSegmentInfo() {
 
 // 세그먼트 그래프 업데이트 함수
 let mascotAnimationInterval = null; // 마스코트 애니메이션 인터벌
+// 펄스 인터벌은 최초 1회만 생성되므로, 최신 세그먼트 인덱스를 별도로 보관해 매 프레임 참조
+let pulseGraphSegmentIndex = -1;
 
 function updateSegmentGraph(segments, currentSegmentIndex = -1) {
     if (!segments || segments.length === 0) return;
+    pulseGraphSegmentIndex = currentSegmentIndex;
     
     // workoutManager.js의 drawSegmentGraph 함수 사용
     if (typeof drawSegmentGraph === 'function') {
@@ -3457,10 +3460,8 @@ function updateSegmentGraph(segments, currentSegmentIndex = -1) {
                         const isRunning = window.currentTrainingState === 'running';
                         if (window.currentWorkout && window.currentWorkout.segments && isRunning) {
                             const elapsedTime = window.lastElapsedTime || 0;
-                            // currentSegmentIndex를 동적으로 가져오기 (상태에서)
-                            const status = window.trainingResults?.getCurrentSessionData?.();
-                            const dynamicSegmentIndex = (status && status.segmentIndex !== undefined) ? status.segmentIndex : currentSegmentIndex;
-                            drawSegmentGraph(window.currentWorkout.segments, dynamicSegmentIndex, canvasId, elapsedTime);
+                            // 최신 세그먼트 인덱스 사용 (클로저의 최초 인덱스 고정 → 첫 세그먼트 네온 고정 버그 방지)
+                            drawSegmentGraph(window.currentWorkout.segments, pulseGraphSegmentIndex, canvasId, elapsedTime);
                         } else {
                             // 훈련이 종료되면 애니메이션 중지
                             if (mascotAnimationInterval) {
