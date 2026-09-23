@@ -439,6 +439,8 @@ function createBluetoothCoachPowerMeterGrid() {
   // 2. 트랙 개수 확인
   const maxTracks = window.bluetoothCoachState.maxTrackCount || 10;
   console.log(`📌 [Step 3-1] 설정된 트랙 개수: ${maxTracks}개`);
+  // 10개 이하: 1줄 5개 / 10개 초과: 1줄 10개 (블럭 축소 배치)
+  gridEl.classList.toggle('coach-grid-dense', maxTracks > 10);
 
   // 3. 반복문 실행
   console.log('📌 [Step 3-2] 트랙 생성 루프 시작...');
@@ -518,8 +520,8 @@ function createPowerMeterElement(powerMeter) {
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
-            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: 13px !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: 13px !important; ${trackButtonStyle} padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
+            style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: var(--coach-hdr-fs, 13px) !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
+      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: var(--coach-hdr-fs, 13px) !important; ${trackButtonStyle} padding: var(--coach-badge-pad, 6px 12px) !important; border-radius: 8px !important; display: inline-block !important;">트랙${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
         <span class="status-dot disconnected" id="status-dot-${powerMeter.id}"></span>

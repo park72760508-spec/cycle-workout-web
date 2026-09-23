@@ -33112,3 +33112,80 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 
 /* 상세화면 — 신고 누적으로 열람이 제한된 상품 */
 .market-report-blocked-notice { color: #dc2626 !important; font-weight: 600; }
+
+/* ========== Live Training Room 모니터 블럭 자동 배치 ==========
+   트랙 10개 이하: 1줄 5개 / 10개 초과(.coach-grid-dense): 1줄 10개
+   블럭 폭에 맞춰 수치 폰트는 컨테이너 쿼리(cqi)로 자동 축소, 계기반 크기는 최대 유지 */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid.coach-grid-dense {
+  grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
+  gap: 3px !important;
+  --coach-hdr-fs: 11px;
+  --coach-badge-pad: 3px 6px;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-container {
+  container-type: inline-size;
+  min-width: 0;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-user-name {
+  max-width: 34%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 계기반: 좌우 여백 최소화 (눈금 라벨이 잘리지 않도록 SVG overflow 허용) */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-dial {
+  /* 좌우 여백 = 눈금 끝 라벨(0/최대값) 반폭만 확보 */
+  padding: 8px clamp(8px, 6cqi, 12px) 4px;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-svg {
+  overflow: visible;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid.coach-grid-dense .speedometer-container {
+  padding: 2px !important;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid.coach-grid-dense .speedometer-dial {
+  padding-top: 6px;
+  padding-bottom: 2px;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid.coach-grid-dense .speedometer-header {
+  margin-bottom: 6px;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid.coach-grid-dense .status-text {
+  font-size: 10px;
+}
+
+/* 하단 정보바: rpm / 랩파워 / bpm — 단위는 숫자 아래 (랩파워[W]와 동일 형식) */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info {
+  gap: 2px;
+  padding: 6px clamp(4px, 3cqi, 12px);
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-row,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .heart-rate-row {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .heart-rate-row .distance-value {
+  min-width: 0;
+  text-align: center;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-value,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .distance-value {
+  font-size: clamp(16px, 12cqi, 25.92px);
+  font-variant-numeric: tabular-nums;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-value {
+  font-size: clamp(22px, 20cqi, 43.2px);
+  font-variant-numeric: tabular-nums;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-row .speed-unit-small,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .heart-rate-row .speed-unit-small {
+  font-size: 10px;
+  color: #000000;
+  font-weight: 300;
+  line-height: 1;
+}
