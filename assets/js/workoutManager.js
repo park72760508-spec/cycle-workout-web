@@ -127,6 +127,10 @@ function safeGetElement(id, required = false) {
 // 전역 변수로 현재 모드 추적
 let isWorkoutEditMode = false;
 let currentEditWorkoutId = null;
+/** 라이딩 생성(그룹세션) > 클럽 전용 워크아웃 > "새 클럽 전용 워크아웃 만들기"에서
+ * 이 화면(워크아웃 작성)을 재사용할 때의 컨텍스트. null이면 일반(GAS 워크아웃 라이브러리) 모드.
+ * @type {{groupId: string, hostUserId: string, returnScreen: string, onCreated?: function}|null} */
+let clubWorkoutBuilderCtx = null;
 
 // 세그먼트 관련 전역 변수
 let workoutSegments = [];
@@ -4716,6 +4720,12 @@ async function saveWorkout() {
     console.log('Edit mode active - saveWorkout blocked');
     return;
   }
+  if (clubWorkoutBuilderCtx) {
+    // btnSaveWorkout에는 addEventListener(saveWorkout)와 별개로 .onclick(saveClubWorkoutFromBuilder)도
+    // 걸려있어 클릭 시 둘 다 실행된다 — 클럽 모드에서는 이쪽(GAS 저장)을 막아 중복 생성을 방지한다.
+    console.log('Club workout builder mode active - saveWorkout blocked');
+    return;
+  }
 
   const titleEl = safeGetElement('wbTitle');
   const descEl = safeGetElement('wbDesc');
@@ -4871,6 +4881,186 @@ async function saveWorkout() {
   } catch (error) {
     console.error('워크아웃 저장 실패:', error);
     window.showToast('워크아웃 저장 중 오류가 발생했습니다: ' + error.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.classList.remove('btn-saving', 'saving-state');
+      saveBtn.innerHTML = '💾 저장';
+    }
+  }
+}
+
+// ==========================================================
+// 클럽 전용 워크아웃 — "워크아웃 작성" 화면 재사용 (라이딩 생성 > 그룹세션 > 클럽 전용 워크아웃)
+// ==========================================================
+
+/**
+ * 라이딩 생성 화면의 "+ 새 클럽 전용 워크아웃 만들기"에서 호출 — 기존 워크아웃 작성 화면을
+ * 그대로 열되, 저장 시 GAS(구글시트)가 아니라 Supabase club_workouts로 저장되도록 전환한다.
+ * @param {{groupId: string, hostUserId: string, returnScreen: string, onCreated?: function}} ctx
+ */
+window.openClubWorkoutBuilder = async function (ctx) {
+  if (!ctx || !ctx.groupId || !ctx.hostUserId) {
+    console.error('[클럽 워크아웃 작성] 잘못된 컨텍스트:', ctx);
+    return;
+  }
+  clubWorkoutBuilderCtx = ctx;
+  isWorkoutEditMode = false;
+  currentEditWorkoutId = null;
+
+  await showAddWorkoutForm(true);
+  applyClubWorkoutBuilderUiMode();
+};
+
+/** 클럽 전용 워크아웃 모드 진입 시 UI 전환 — 목록(TrainingSchedules 연동)·비밀번호 필드는
+ * 클럽 워크아웃에는 없는 개념이라 숨기고, 저장·뒤로가기·취소 버튼을 클럽 저장 경로로 바꾼다. */
+function applyClubWorkoutBuilderUiMode() {
+  var statusEl = safeGetElement('wbStatus');
+  if (statusEl) {
+    statusEl.value = '보이기';
+    var statusGroup = statusEl.closest('.form-group');
+    if (statusGroup) statusGroup.style.display = 'none';
+  }
+  var passwordGroup = safeGetElement('wbPasswordGroup');
+  if (passwordGroup) passwordGroup.style.display = 'none';
+
+  var formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
+  if (formTitle) formTitle.textContent = '클럽 전용 워크아웃 작성';
+  var subtitle = document.querySelector('#workoutBuilderScreen .workout-builder-subtitle');
+  if (subtitle) subtitle.textContent = '이 클럽에서만 사용하는 워크아웃입니다. 세그먼트를 추가/수정하고 저장하세요';
+
+  var saveBtn = safeGetElement('btnSaveWorkout');
+  if (saveBtn) saveBtn.onclick = saveClubWorkoutFromBuilder;
+  var backBtn = safeGetElement('workoutBuilderBackBtn');
+  if (backBtn) backBtn.onclick = function () { closeClubWorkoutBuilder(); };
+  var cancelBtn = safeGetElement('btnCancelBuilder');
+  if (cancelBtn) cancelBtn.onclick = function () { closeClubWorkoutBuilder(); };
+}
+
+/** 일반(GAS 워크아웃 라이브러리) 모드로 화면을 되돌린다 — 다음에 workoutScreen에서
+ * "새 워크아웃"으로 정상 진입할 때 클럽 모드 잔여 상태가 남지 않도록. */
+function restoreWorkoutBuilderDefaultUi() {
+  var statusEl = safeGetElement('wbStatus');
+  if (statusEl) {
+    var statusGroup = statusEl.closest('.form-group');
+    if (statusGroup) statusGroup.style.display = '';
+  }
+  var formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
+  if (formTitle) formTitle.textContent = '워크아웃 작성';
+  var subtitle = document.querySelector('#workoutBuilderScreen .workout-builder-subtitle');
+  if (subtitle) subtitle.textContent = '세그먼트를 추가/수정하고 저장하세요';
+
+  var saveBtn = safeGetElement('btnSaveWorkout');
+  if (saveBtn) saveBtn.onclick = saveWorkout;
+  var backBtn = safeGetElement('workoutBuilderBackBtn');
+  if (backBtn) backBtn.onclick = function () { if (typeof window.showScreen === 'function') window.showScreen('workoutScreen'); };
+  var cancelBtn = safeGetElement('btnCancelBuilder');
+  if (cancelBtn) cancelBtn.onclick = resetWorkoutFormMode;
+}
+
+/** 클럽 워크아웃 작성 중단(뒤로가기/취소) — 저장 없이 호출한 화면으로 돌아간다. */
+function closeClubWorkoutBuilder() {
+  var ctx = clubWorkoutBuilderCtx;
+  clubWorkoutBuilderCtx = null;
+  workoutSegments = [];
+  if (typeof renderSegments === 'function') renderSegments();
+  restoreWorkoutBuilderDefaultUi();
+  window.showScreen((ctx && ctx.returnScreen) || 'workoutScreen');
+}
+
+/** validSegments 변환 로직은 saveWorkout()과 동일하게 유지(세그먼트 저장 형식 통일). */
+function buildValidSegmentsForSave() {
+  return workoutSegments.filter(function (segment) {
+    return segment && typeof segment === 'object' && segment.label;
+  }).map(function (segment) {
+    var targetType = String(segment.target_type || 'ftp_pct');
+    var targetValue = segment.target_value;
+    if (targetType === 'dual') {
+      targetValue = String(targetValue || '100/90');
+    } else if (targetType === 'ftp_pctz') {
+      if (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) {
+        targetValue = targetValue;
+      } else {
+        targetValue = String(targetValue || '60/75');
+      }
+    } else if (targetType === 'cadence_rpm') {
+      targetValue = Number(targetValue) || 90;
+    } else {
+      targetValue = Number(targetValue) || 100;
+    }
+    return {
+      label: String(segment.label || '세그먼트'),
+      segment_type: String(segment.segment_type || 'interval'),
+      duration_sec: Number(segment.duration_sec) || 300,
+      target_type: targetType,
+      target_value: targetValue,
+      ramp: String(segment.ramp || 'none'),
+      ramp_to_value: segment.ramp !== 'none' ? Number(segment.ramp_to_value) || null : null
+    };
+  });
+}
+
+/** 클럽 전용 워크아웃 저장 — GAS(Workouts 시트)가 아니라 Supabase club_workouts로 저장. */
+async function saveClubWorkoutFromBuilder() {
+  var ctx = clubWorkoutBuilderCtx;
+  if (!ctx) return;
+
+  var titleEl = safeGetElement('wbTitle');
+  var descEl = safeGetElement('wbDesc');
+  var authorEl = safeGetElement('wbAuthor');
+  var saveBtn = safeGetElement('btnSaveWorkout');
+
+  var title = (titleEl && titleEl.value || '').trim();
+  if (!title) {
+    window.showToast('제목을 입력해주세요.');
+    if (titleEl) titleEl.focus();
+    return;
+  }
+  var author = (authorEl && authorEl.value || '').trim();
+  if (!author) {
+    window.showToast('카테고리를 선택해주세요.');
+    if (authorEl) authorEl.focus();
+    return;
+  }
+
+  var validSegments = buildValidSegmentsForSave();
+  if (!validSegments.length) {
+    window.showToast('세그먼트를 1개 이상 추가해 주세요.');
+    return;
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.classList.add('btn-saving', 'saving-state');
+    saveBtn.innerHTML = '<span class="saving-spinner"></span>저장 중...';
+  }
+
+  try {
+    var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    if (typeof svcGroup.createClubWorkout !== 'function') {
+      throw new Error('워크아웃 저장 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+    }
+    var res = await svcGroup.createClubWorkout(ctx.hostUserId, ctx.groupId, {
+      title: title,
+      description: (descEl && descEl.value || '').trim(),
+      author: author,
+      segments: validSegments
+    });
+
+    window.showToast(title + ' 클럽 전용 워크아웃이 저장되었습니다.');
+    var createdId = res && res.id != null ? String(res.id) : '';
+    var onCreated = ctx.onCreated;
+    var returnScreen = ctx.returnScreen;
+
+    workoutSegments = [];
+    if (typeof renderSegments === 'function') renderSegments();
+    clubWorkoutBuilderCtx = null;
+    restoreWorkoutBuilderDefaultUi();
+    window.showScreen(returnScreen || 'workoutScreen');
+    if (typeof onCreated === 'function') onCreated({ id: createdId, title: title });
+  } catch (error) {
+    console.error('클럽 전용 워크아웃 저장 실패:', error);
+    window.showToast('워크아웃 저장 중 오류가 발생했습니다: ' + (error && error.message ? error.message : error));
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
@@ -5196,9 +5386,14 @@ async function deleteWorkout(workoutId) {
 }
 
 function resetWorkoutFormMode() {
+  if (clubWorkoutBuilderCtx) {
+    // btnCancelBuilder에도 addEventListener(resetWorkoutFormMode)와 .onclick(closeClubWorkoutBuilder)이
+    // 함께 걸려 있다 — 클럽 모드에서는 이쪽(workoutScreen으로 강제 이동)을 막는다.
+    return;
+  }
   isWorkoutEditMode = false;
   currentEditWorkoutId = null;
-  
+
   window.showScreen('workoutScreen');
   
   const saveBtn = safeGetElement('btnSaveWorkout');

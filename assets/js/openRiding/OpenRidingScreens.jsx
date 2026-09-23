@@ -6704,6 +6704,52 @@ function OpenRidingGroupCalendarSection(props) {
   );
 }
 
+/** 라이딩 생성(그룹세션) > 클럽 전용 워크아웃 > "새 클럽 전용 워크아웃 만들기" — 워크아웃 작성
+ * 화면(workoutBuilderScreen, 전역 DOM 화면)을 재사용한다. 그 화면으로 이동하려면 openRidingRoomScreen을
+ * 벗어나야 하는데, app.js가 그 화면을 벗어날 때 destroyOpenRidingRoomReact()로 React 트리를
+ * 통째로 언마운트해버려서 이 폼의 state가 사라진다 — sessionStorage에 폼 스냅샷을 남겨두고
+ * 워크아웃 작성 화면에서 돌아와 재마운트될 때 복원한다(5분 지나면 만료 취급, 2026-09). */
+var OPEN_RIDING_CLUB_WORKOUT_DRAFT_KEY = 'stelvio_openRiding_groupSessionWorkoutDraft';
+var OPEN_RIDING_CLUB_WORKOUT_DRAFT_MAX_AGE_MS = 5 * 60 * 1000;
+
+function peekOpenRidingClubWorkoutDraftForResume() {
+  try {
+    if (typeof sessionStorage === 'undefined') return null;
+    var raw = sessionStorage.getItem(OPEN_RIDING_CLUB_WORKOUT_DRAFT_KEY);
+    if (!raw) return null;
+    var draft = JSON.parse(raw);
+    if (!draft || !draft.groupId || !draft.createdAt) return null;
+    if (Date.now() - Number(draft.createdAt) > OPEN_RIDING_CLUB_WORKOUT_DRAFT_MAX_AGE_MS) return null;
+    return draft;
+  } catch (e) {
+    return null;
+  }
+}
+
+function readOpenRidingClubWorkoutDraft(groupId, editRideId) {
+  var draft = peekOpenRidingClubWorkoutDraftForResume();
+  if (!draft) return null;
+  if (String(draft.groupId || '') !== String(groupId || '')) return null;
+  if (String(draft.editRideId || '') !== String(editRideId || '')) return null;
+  return draft;
+}
+
+function writeOpenRidingClubWorkoutDraft(draft) {
+  try {
+    if (typeof sessionStorage === 'undefined') return;
+    sessionStorage.setItem(
+      OPEN_RIDING_CLUB_WORKOUT_DRAFT_KEY,
+      JSON.stringify(Object.assign({ createdAt: Date.now() }, draft))
+    );
+  } catch (e) {}
+}
+
+function clearOpenRidingClubWorkoutDraft() {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(OPEN_RIDING_CLUB_WORKOUT_DRAFT_KEY);
+  } catch (e) {}
+}
+
 /** 생성·수정 폼 — editRideId 있으면 수정 모드 */
 function OpenRidingCreateForm(props) {
   var _svcForm = getOpenRidingServiceFns();
@@ -6752,7 +6798,7 @@ function OpenRidingCreateForm(props) {
     var prof = getOpenRidingProfileDefaults();
     var runPack =
       typeof moimCatApi.runPackFormDefaults === 'function' ? moimCatApi.runPackFormDefaults() : {};
-    return Object.assign(
+    var defaults = Object.assign(
       {
         category: initialFormCategory,
         title: '',
@@ -6782,20 +6828,21 @@ function OpenRidingCreateForm(props) {
       openRidingPackRulesFormDefaults(),
       runPack
     );
+    var draft = readOpenRidingClubWorkoutDraft(presetGroupId, editRideId);
+    return draft && draft.form && typeof draft.form === 'object' ? Object.assign({}, defaults, draft.form) : defaults;
   });
   var form = st[0];
   var setForm = st[1];
-  var _workoutPicker = useState({ tab: 'gas', gas: [], club: [], loading: false, showNewClubForm: false });
+  var _workoutPicker = useState(function () {
+    var draft = readOpenRidingClubWorkoutDraft(presetGroupId, editRideId);
+    return { tab: (draft && draft.workoutPickerTab) || 'gas', gas: [], club: [], loading: false };
+  });
   var workoutPicker = _workoutPicker[0];
   var setWorkoutPicker = _workoutPicker[1];
-  var _newClubWorkout = useState({ title: '', segments: [{ label: '', duration_min: 5, target_value: 70 }] });
-  var newClubWorkout = _newClubWorkout[0];
-  var setNewClubWorkout = _newClubWorkout[1];
-  var _clubWorkoutBusy = useState(false);
-  var clubWorkoutBusy = _clubWorkoutBusy[0];
-  var setClubWorkoutBusy = _clubWorkoutBusy[1];
 
-  /** 그룹세션 모드 진입 시 워크아웃 선택기용 목록(기존/클럽 전용)을 로드 */
+  /** 그룹세션 모드 진입 시 워크아웃 선택기용 목록(기존/클럽 전용)을 로드.
+   * 워크아웃 작성 화면에서 새 클럽 전용 워크아웃을 만들고 돌아온 경우, 이 목록을 받아온 직후
+   * 그 워크아웃을 자동 선택하고 드래프트를 소비(삭제)한다. */
   useEffect(
     function () {
       if (!form.isGroupSession) return undefined;
@@ -6817,6 +6864,15 @@ function OpenRidingCreateForm(props) {
         setWorkoutPicker(function (prev) {
           return Object.assign({}, prev, { gas: results[0] || [], club: results[1] || [], loading: false });
         });
+        var resumedDraft = readOpenRidingClubWorkoutDraft(presetGroupId, editRideId);
+        if (resumedDraft) {
+          if (resumedDraft.newWorkout && resumedDraft.newWorkout.id) {
+            set('workoutId', String(resumedDraft.newWorkout.id));
+            set('workoutSource', 'club');
+            setWorkoutPicker(function (prev) { return Object.assign({}, prev, { tab: 'club' }); });
+          }
+          clearOpenRidingClubWorkoutDraft();
+        }
       });
       return function () {
         cancelled = true;
@@ -8619,7 +8675,7 @@ function OpenRidingCreateForm(props) {
                 className={'flex-1 px-3 py-2 rounded-xl border text-sm font-semibold ' + (workoutPicker.tab === 'gas' ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-slate-200 bg-white text-slate-600')}
                 onClick={function () { setWorkoutPicker(function (prev) { return Object.assign({}, prev, { tab: 'gas' }); }); }}
               >
-                기존 워크아웃
+                STELVIO 워크아웃
               </button>
               <button
                 type="button"
@@ -8665,141 +8721,42 @@ function OpenRidingCreateForm(props) {
                 type="button"
                 className="mt-2 w-full py-2 rounded-lg border border-dashed border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
                 onClick={function () {
-                  setWorkoutPicker(function (prev) { return Object.assign({}, prev, { showNewClubForm: !prev.showNewClubForm }); });
+                  if (!presetGroupId || !hostUserId) return;
+                  writeOpenRidingClubWorkoutDraft({
+                    groupId: presetGroupId,
+                    editRideId: editRideId || null,
+                    clubCategory: moimCategoryProp,
+                    form: form,
+                    workoutPickerTab: 'club'
+                  });
+                  if (typeof window !== 'undefined' && typeof window.openClubWorkoutBuilder === 'function') {
+                    window.openClubWorkoutBuilder({
+                      groupId: presetGroupId,
+                      hostUserId: hostUserId,
+                      returnScreen: 'openRidingRoomScreen',
+                      onCreated: function (workout) {
+                        var raw = null;
+                        try {
+                          raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(OPEN_RIDING_CLUB_WORKOUT_DRAFT_KEY) : null;
+                        } catch (eRead) {}
+                        var draft = null;
+                        try {
+                          draft = raw ? JSON.parse(raw) : null;
+                        } catch (eParse) {}
+                        if (draft) {
+                          draft.newWorkout = workout;
+                          writeOpenRidingClubWorkoutDraft(draft);
+                        }
+                      }
+                    });
+                  } else {
+                    clearOpenRidingClubWorkoutDraft();
+                    showFormValidationMessages(['워크아웃 작성 화면을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.']);
+                  }
                 }}
               >
                 + 새 클럽 전용 워크아웃 만들기
               </button>
-            ) : null}
-            {workoutPicker.tab === 'club' && workoutPicker.showNewClubForm ? (
-              <div className="mt-2 p-3 border border-violet-200 rounded-xl bg-violet-50/60 space-y-2">
-                <input
-                  className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                  placeholder="워크아웃 제목"
-                  value={newClubWorkout.title}
-                  onChange={function (e) {
-                    setNewClubWorkout(function (prev) { return Object.assign({}, prev, { title: e.target.value }); });
-                  }}
-                />
-                {newClubWorkout.segments.map(function (seg, idx) {
-                  return (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <input
-                        className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                        placeholder={'구간 ' + (idx + 1) + ' 이름'}
-                        value={seg.label}
-                        onChange={function (e) {
-                          var next = newClubWorkout.segments.slice();
-                          next[idx] = Object.assign({}, next[idx], { label: e.target.value });
-                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
-                        }}
-                      />
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-16 shrink-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                        title="시간(분)"
-                        placeholder="분"
-                        value={seg.duration_min}
-                        onChange={function (e) {
-                          var next = newClubWorkout.segments.slice();
-                          next[idx] = Object.assign({}, next[idx], { duration_min: e.target.value });
-                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
-                        }}
-                      />
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-16 shrink-0 border border-slate-300 rounded-lg px-2 py-1.5 text-sm"
-                        title="FTP %"
-                        placeholder="FTP%"
-                        value={seg.target_value}
-                        onChange={function (e) {
-                          var next = newClubWorkout.segments.slice();
-                          next[idx] = Object.assign({}, next[idx], { target_value: e.target.value });
-                          setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
-                        }}
-                      />
-                      {newClubWorkout.segments.length > 1 ? (
-                        <button
-                          type="button"
-                          className="shrink-0 w-8 h-8 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-50"
-                          aria-label="구간 삭제"
-                          onClick={function () {
-                            var next = newClubWorkout.segments.slice();
-                            next.splice(idx, 1);
-                            setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
-                          }}
-                        >
-                          ✕
-                        </button>
-                      ) : null}
-                    </div>
-                  );
-                })}
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-violet-700"
-                  onClick={function () {
-                    var next = newClubWorkout.segments.concat([{ label: '', duration_min: 5, target_value: 70 }]);
-                    setNewClubWorkout(function (prev) { return Object.assign({}, prev, { segments: next }); });
-                  }}
-                >
-                  + 구간 추가
-                </button>
-                <button
-                  type="button"
-                  className="w-full py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-700 disabled:opacity-50"
-                  disabled={clubWorkoutBusy || !String(newClubWorkout.title || '').trim()}
-                  onClick={function () {
-                    if (!presetGroupId) return;
-                    var segmentsPayload = newClubWorkout.segments.map(function (seg, idx) {
-                      return {
-                        ord: idx,
-                        label: String(seg.label || '').trim() || ('구간 ' + (idx + 1)),
-                        segment_type: 'steady',
-                        duration_sec: Math.max(1, Math.round(Number(seg.duration_min) || 0)) * 60,
-                        target_type: 'ftp_pct',
-                        target_value: String(Number(seg.target_value) || 0),
-                        ramp: 'none',
-                        ramp_to_value: null
-                      };
-                    });
-                    setClubWorkoutBusy(true);
-                    var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
-                    if (typeof svcGroup.createClubWorkout !== 'function') {
-                      setClubWorkoutBusy(false);
-                      showFormValidationMessages(['워크아웃 저장 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.']);
-                      return;
-                    }
-                    svcGroup
-                      .createClubWorkout(hostUserId, presetGroupId, {
-                        title: newClubWorkout.title,
-                        segments: segmentsPayload
-                      })
-                      .then(function (res) {
-                        setNewClubWorkout({ title: '', segments: [{ label: '', duration_min: 5, target_value: 70 }] });
-                        setWorkoutPicker(function (prev) { return Object.assign({}, prev, { showNewClubForm: false, loading: true }); });
-                        return typeof svcGroup.fetchClubWorkouts === 'function' ? svcGroup.fetchClubWorkouts(presetGroupId) : [];
-                      })
-                      .then(function (list) {
-                        setWorkoutPicker(function (prev) { return Object.assign({}, prev, { club: list || [], loading: false }); });
-                        if (list && list.length) {
-                          set('workoutId', String(list[0].id));
-                          set('workoutSource', 'club');
-                        }
-                      })
-                      .catch(function (e) {
-                        showFormValidationMessages([e && e.message ? e.message : '워크아웃 저장에 실패했습니다.']);
-                      })
-                      .finally(function () {
-                        setClubWorkoutBusy(false);
-                      });
-                  }}
-                >
-                  {clubWorkoutBusy ? '저장 중…' : '워크아웃 저장'}
-                </button>
-              </div>
             ) : null}
           </div>
         </div>
@@ -15972,12 +15929,21 @@ function OpenRidingRoomApp(props) {
     []
   );
 
+  /** 라이딩 생성(그룹세션) > 클럽 전용 워크아웃 > "새 클럽 전용 워크아웃 만들기"로 워크아웃
+   * 작성 화면에 다녀오면 openRidingRoomScreen이 통째로 재마운트되므로, 남겨둔 드래프트가
+   * 있으면 처음부터 그 생성/수정 폼으로 바로 돌아간다(OpenRidingCreateForm이 나머지
+   * 필드값·새 워크아웃 자동 선택을 이어서 복원). */
   var _v = useState(function () {
+    var resumeDraft = peekOpenRidingClubWorkoutDraftForResume();
+    if (resumeDraft) return resumeDraft.editRideId ? 'edit' : 'create';
     return props.initialView === 'groups' ? 'groups' : 'main';
   });
   var view = _v[0];
   var setView = _v[1];
-  var _rid = useState(null);
+  var _rid = useState(function () {
+    var resumeDraft = peekOpenRidingClubWorkoutDraftForResume();
+    return resumeDraft && resumeDraft.editRideId ? String(resumeDraft.editRideId) : null;
+  });
   var detailRideId = _rid[0];
   var setDetailRideId = _rid[1];
   var _copyFrom = useState(null);
@@ -15988,7 +15954,10 @@ function OpenRidingRoomApp(props) {
   var setGroupInviteSeed = _groupInviteSeed[1];
   /** 클럽/크루 상세 "모임 생성"으로 만들 때만 채움 — 생성 시 rides.groupId로 저장돼 그 그룹
       상세의 캘린더가 자신의 모임만 필터링해서 보여줄 수 있게 한다. */
-  var _createFromGroupId = useState('');
+  var _createFromGroupId = useState(function () {
+    var resumeDraft = peekOpenRidingClubWorkoutDraftForResume();
+    return resumeDraft && !resumeDraft.editRideId ? String(resumeDraft.groupId || '') : '';
+  });
   var createFromGroupId = _createFromGroupId[0];
   var setCreateFromGroupId = _createFromGroupId[1];
   /** 클럽/크루 상세 화면이 자신의 수정·삭제 권한 상태를 화면 상단 제목 라인 버튼에 올려보내는 곳 */
