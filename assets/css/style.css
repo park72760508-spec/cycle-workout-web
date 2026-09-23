@@ -33123,7 +33123,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   grid-template-columns: repeat(10, minmax(0, 1fr)) !important;
   gap: 3px !important;
   --coach-hdr-fs: 11px;
-  --coach-badge-pad: 3px 6px;
+  --coach-badge-fs: 16px;
+  --coach-badge-pad: 1px 8px;
 }
 #bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-container {
   container-type: inline-size;
