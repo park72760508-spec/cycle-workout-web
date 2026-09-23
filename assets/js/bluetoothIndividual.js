@@ -361,12 +361,14 @@ let maxPowerRecorded = 0; // 기록된 최대 파워
 let fbLastSentPower = null;
 let fbLastSentHr = null;
 let fbLastSentCadence = null;
+let fbLastSentSpeed = null;
 let fbLastSentTargetPower = null;
 let fbLastSentAt = 0;
 const FB_SEND_HEARTBEAT_MS = 5000; // 값이 안 바뀌어도 최소 이 주기로는 강제 전송(코치 화면 정지 방지)
 const FB_POWER_DELTA_THRESHOLD = 3; // watt
 const FB_HR_DELTA_THRESHOLD = 2; // bpm
 const FB_CADENCE_DELTA_THRESHOLD = 2; // rpm
+const FB_SPEED_DELTA_THRESHOLD = 1; // km/h
 
 // ★ 블루투스 개인훈련 대시보드 전용 3초 평균 파워 계산 버퍼 (app.js와 독립적)
 let bluetoothIndividualPowerBuffer = [];
@@ -491,6 +493,12 @@ function sendDataToFirebase() {
     const heartRate = Number(window.liveData.heartRate || 0);
     const cadence = Number(window.liveData.cadence || 0);
     const targetPower = Number(window.liveData.targetPower || firebaseTargetPower || 0);
+    // 속도계 센서 (km/h) — 5초 이상 수신 없으면 0 (updateIndivSpeedArc와 동일 기준)
+    let speed = Number(window.liveData.speed || 0);
+    if (!(speed > 0) || !window._lastSpeedUpdateTime || (Date.now() - window._lastSpeedUpdateTime) > 5000) {
+        speed = 0;
+    }
+    speed = Math.round(speed * 10) / 10;
     
     // ★ 블루투스 개인훈련 대시보드 전용: 3초 평균 파워 계산을 위한 버퍼에 추가
     if (power > 0) {
@@ -553,13 +561,15 @@ function sendDataToFirebase() {
     const hrChanged = fbLastSentHr === null || Math.abs(heartRate - fbLastSentHr) >= FB_HR_DELTA_THRESHOLD;
     const cadenceChanged = fbLastSentCadence === null || Math.abs(cadence - fbLastSentCadence) >= FB_CADENCE_DELTA_THRESHOLD;
     const targetPowerChanged = fbLastSentTargetPower === null || targetPower !== fbLastSentTargetPower;
+    const speedChanged = fbLastSentSpeed === null || Math.abs(speed - fbLastSentSpeed) >= FB_SPEED_DELTA_THRESHOLD || (speed === 0) !== (fbLastSentSpeed === 0);
     const heartbeatDue = sinceLastSendMs >= FB_SEND_HEARTBEAT_MS;
-    if (!powerChanged && !hrChanged && !cadenceChanged && !targetPowerChanged && !heartbeatDue) {
+    if (!powerChanged && !hrChanged && !cadenceChanged && !targetPowerChanged && !speedChanged && !heartbeatDue) {
         return;
     }
     fbLastSentPower = power;
     fbLastSentHr = heartRate;
     fbLastSentCadence = cadence;
+    fbLastSentSpeed = speed;
     fbLastSentTargetPower = targetPower;
     fbLastSentAt = now;
 
@@ -569,6 +579,7 @@ function sendDataToFirebase() {
         power: power > 0 ? power : 0,
         hr: heartRate > 0 ? heartRate : 0,
         cadence: cadence > 0 ? cadence : 0,
+        speed: speed,
         avgPower: avgPower,
         maxPower: maxPowerRecorded,
         segmentPower: segmentPower,

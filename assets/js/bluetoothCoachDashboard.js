@@ -550,6 +550,11 @@ function createPowerMeterElement(powerMeter) {
         <path class="speedometer-arc-bg" d="M 20 140 A 80 80 0 0 1 180 140" 
               fill="none" stroke="rgba(255, 255, 255, 0.15)" stroke-width="1.5"/>
         
+        <!-- 속도계 센서 오버레이 (사용자 화면과 동일: 위쪽 반원, 우측→좌측 0~120 km/h) -->
+        <path id="speed-arc-${powerMeter.id}" d="M 180 140 A 80 80 0 0 0 20 140"
+              fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round"
+              style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
+        
         <g class="speedometer-ticks">
           ${generateBluetoothCoachPowerMeterTicks(powerMeter.id)}
         </g>
@@ -557,6 +562,8 @@ function createPowerMeterElement(powerMeter) {
         <g class="speedometer-labels">
           ${generateBluetoothCoachPowerMeterLabels(powerMeter.id)}
         </g>
+        
+        <g class="speedometer-speed-labels">${generateBluetoothCoachSpeedLabels()}</g>
         
         <text x="100" y="100" 
               id="target-power-value-${powerMeter.id}"
@@ -580,6 +587,10 @@ function createPowerMeterElement(powerMeter) {
                 stroke-linecap="round"
                 transform="rotate(-90)"/>
         </g>
+        
+        <circle id="speed-dot-${powerMeter.id}" cx="180" cy="140" r="7.5" fill="#4da6ff"/>
+        <text id="speed-dot-value-${powerMeter.id}" x="180" y="140" text-anchor="middle" dominant-baseline="middle"
+              fill="#ffffff" font-size="9" font-weight="bold">0</text>
         
         <text x="100" y="188" 
               text-anchor="middle" 
@@ -649,6 +660,48 @@ function createPowerMeterElement(powerMeter) {
 /**
  * 파워계 눈금 생성 (Bluetooth Coach 전용)
  */
+/**
+ * 속도계 센서 눈금 레이블 (0~120 km/h, 위쪽 반원 안쪽) — 사용자 화면 generateIndivSpeedLabels와 동일 배치
+ */
+function generateBluetoothCoachSpeedLabels() {
+  let html = '';
+  [0, 20, 40, 60, 80, 100, 120].forEach((val, i) => {
+    const rad = ((360 - (i / 6) * 180) * Math.PI) / 180;
+    const x = 100 + 60 * Math.cos(rad);
+    const y = 140 + 60 * Math.sin(rad);
+    html += `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" fill="#4595e6" font-size="8">${val === 0 ? '0 km/h' : val}</text>`;
+  });
+  return html;
+}
+
+/**
+ * 속도계 센서 원호 업데이트 (0~120 km/h, 끝점 Dot + 속도값) — 사용자 화면 updateIndivSpeedArc와 동일 로직
+ * 사용자 데이터가 10초 이상 갱신되지 않으면 0으로 표시
+ */
+function updateBluetoothCoachSpeedArc(trackId) {
+  const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === trackId);
+  const arc = document.getElementById(`speed-arc-${trackId}`);
+  if (!powerMeter || !arc) return;
+  let speedKmh = Number(powerMeter.speed) || 0;
+  if (!powerMeter.lastUpdateTime || (Date.now() - powerMeter.lastUpdateTime) > 10000) speedKmh = 0;
+  const ratio = Math.min(Math.max(speedKmh / 120, 0), 1);
+  const totalLen = Math.PI * 80;
+  arc.style.strokeDasharray = totalLen + ' ' + totalLen;
+  arc.style.strokeDashoffset = String(totalLen - totalLen * ratio);
+  const dot = document.getElementById(`speed-dot-${trackId}`);
+  const dotValue = document.getElementById(`speed-dot-value-${trackId}`);
+  if (dot && dotValue) {
+    const rad = ((360 - ratio * 180) * Math.PI) / 180;
+    const cx = 100 + 80 * Math.cos(rad);
+    const cy = 140 + 80 * Math.sin(rad);
+    dot.setAttribute('cx', cx);
+    dot.setAttribute('cy', cy);
+    dotValue.setAttribute('x', cx);
+    dotValue.setAttribute('y', cy);
+    dotValue.textContent = String(Math.round(speedKmh));
+  }
+}
+
 function generateBluetoothCoachPowerMeterTicks(powerMeterId) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(p => p.id === powerMeterId);
   if (!powerMeter) return '';
@@ -919,6 +972,14 @@ function startGaugeAnimationLoop() {
     const deltaTimeMs = now - lastFrameTime;
     const deltaTime = Math.min(deltaTimeMs / 16.67, 2.5); // 최대 2.5배까지 제한 (프레임 드롭 대응)
     window.bluetoothCoachState.lastFrameTime = now;
+
+    // 속도 원호: 데이터 수신이 끊긴 트랙은 0으로 복귀 (1초 간격 점검)
+    if (now - (window.bluetoothCoachState.lastSpeedStaleCheck || 0) > 1000) {
+      window.bluetoothCoachState.lastSpeedStaleCheck = now;
+      window.bluetoothCoachState.powerMeters.forEach(pm => {
+        if (pm.speed > 0) updateBluetoothCoachSpeedArc(pm.id);
+      });
+    }
 
     window.bluetoothCoachState.powerMeters.forEach(pm => {
       if (!pm.connected) return;
@@ -1230,6 +1291,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   const targetPower = userData.targetPower || 0;
   
   // 파워계 데이터 업데이트 (네트워크 단절 감지를 위해 updatePowerMeterNeedle 사용)
+  powerMeter.speed = Number(userData.speed) || 0;
   powerMeter.heartRate = heartRate;
   powerMeter.cadence = cadence;
   powerMeter.averagePower = avgPower;
@@ -1315,6 +1377,9 @@ function updatePowerMeterUI(trackId) {
       heartRateEl.style.color = '';
     }
   }
+  
+  // 속도계 센서 원호 (파랑)
+  updateBluetoothCoachSpeedArc(trackId);
   
   // 케이던스 (좌측 표시) - 0 표시 오류 개선
   const cadenceEl = document.getElementById(`cadence-value-${trackId}`);
@@ -1792,6 +1857,7 @@ function resetPowerMeterData(trackId) {
   powerMeter.currentPower = 0;
   powerMeter.heartRate = 0;
   powerMeter.cadence = 0;
+  powerMeter.speed = 0;
   powerMeter.connected = false;
   powerMeter.userId = null;
   powerMeter.userName = null;
