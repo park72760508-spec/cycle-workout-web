@@ -24352,7 +24352,7 @@
     /** 현재 그룹 지표 단위 */
     function stelvioGroupTabCurrentMetricUnit() {
       switch (stelvioGroupTabMetric) {
-        case 'gc':           return '점';
+        case 'gc':           return '점수';
         case 'tss':          return 'TSS';
         case 'personal_dist':return 'km';
         case 'personal_speed':return 'km/h';
@@ -24369,7 +24369,7 @@
       if (stelvioIsSpeedKmhRanking()) return 'km/h';
       if (stelvioIsKmDistanceRanking()) return 'km';
       if (stelvioIsTssRankingMode()) return 'TSS';
-      if (stelvioIsGcRankingMode()) return '점';
+      if (stelvioIsGcRankingMode()) return '점수';
       return 'W/kg';
     }
     function stelvioSyncRankingListHeaderUi() {
