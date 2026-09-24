@@ -182,3 +182,27 @@ test('저장: 권한 없는 회원은 거부, 워크아웃 미선택 단계는 �
     /워크아웃을 선택/
   );
 });
+
+test('단계 수가 줄면(3→2) 없어진 번호의 완료는 집계에서 제외, 늘면 그대로 반영', async () => {
+  reset();
+  tables.club_mission_completions.push(
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 1, step_score: 90, completed_at: '2026-10-01' },
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 2, step_score: 80, completed_at: '2026-10-02' },
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 3, step_score: 70, completed_at: '2026-10-03' }
+  );
+  tables.v_user_public_profile = [{ id: 'u-rider', display_name: '라이더', is_private: false }];
+  // 현재 미션은 2단계 → 3번 완료는 제외: 40×2/2 + 60×170/2/100 = 91
+  const r = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
+  assert.deepEqual(r.completedOrds, [1, 2]);
+  assert.equal(r.leaderboard[0].total, 91);
+  assert.equal(r.leaderboard[0].completed, 2);
+
+  // 30단계로 늘리면 수행률 분모가 30: 40×3/30 + 60×240/30/100 = 4 + 4.8 = 8.8
+  tables.club_missions[0].steps = Array.from({ length: 30 }, (_, i) => ({
+    ord: i + 1, workoutId: 'w' + (i + 1), workoutSource: 'gas', title: 'S' + (i + 1), totalSeconds: 600,
+  }));
+  const r30 = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
+  assert.deepEqual(r30.completedOrds, [1, 2, 3]);
+  assert.equal(r30.leaderboard[0].total, 8.8);
+  assert.equal(r30.leaderboard[0].completionRate, 10);
+});

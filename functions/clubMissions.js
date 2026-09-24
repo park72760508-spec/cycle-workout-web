@@ -171,7 +171,10 @@ async function handleGetClubMission(admin, uid, body) {
       .select("user_id, step_ord, step_score, interval_achievement, wkg, completed_at")
       .eq("mission_id", row.id);
     const byUser = new Map();
+    // 미션 수정으로 단계 수가 줄면(예: 30→5) 없어진 번호의 완료 기록은 집계에서 제외(기록 자체는 보존)
+    const validOrds = new Set((Array.isArray(row.steps) ? row.steps : []).map((st) => Number(st.ord)));
     (allComps || []).forEach((c) => {
+      if (!validOrds.has(Number(c.step_ord))) return;
       const key = String(c.user_id);
       if (!byUser.has(key)) byUser.set(key, { userId: key, stepScores: [], lastCompletedAt: "" });
       const u = byUser.get(key);
