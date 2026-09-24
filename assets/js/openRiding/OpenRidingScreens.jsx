@@ -6696,9 +6696,10 @@ function ClubMissionDetailModal(props) {
             >
               <img src="assets/img/start.png" alt="훈련 시작" />
             </button>
-            <div className="schedule-detail-graph-inner" ref={graphRef}>
-              {loading ? <div className="segmented-workout-graph-empty">불러오는 중…</div> : null}
-            </div>
+            {/* graphRef 안은 renderSegmentedWorkoutGraph가 innerHTML로 직접 그리므로 React 자식을 두지 않는다
+                (React 자식을 함께 두면 innerHTML 초기화 후 언마운트 시 removeChild NotFoundError 발생) */}
+            {loading ? <div className="segmented-workout-graph-empty">불러오는 중…</div> : null}
+            <div className="schedule-detail-graph-inner" ref={graphRef} />
           </div>
         </div>
       </div>
