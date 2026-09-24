@@ -6519,7 +6519,7 @@ function ClubMissionFormModal(props) {
   return openRidingRenderModalPortal(
     <div
       className="fixed inset-0 flex items-end sm:items-center justify-center"
-      style={{ zIndex: 10060, background: 'rgba(15, 23, 42, 0.55)' }}
+      style={{ zIndex: 100001 /* 하단 글래스 네비(99999) 위 */, background: 'rgba(15, 23, 42, 0.55)' }}
       role="dialog"
       aria-modal="true"
       onClick={function (e) { if (e.target === e.currentTarget && !busy) onClose(); }}
@@ -6670,7 +6670,7 @@ function ClubMissionDetailModal(props) {
   }
 
   return openRidingRenderModalPortal(
-    <div className="modal" style={{ display: 'flex', zIndex: 10060 }}>
+    <div className="modal" style={{ display: 'flex', zIndex: 100001 /* 하단 글래스 네비(99999) 위 */ }}>
       <div className="modal-overlay" onClick={onClose} />
       <div className="modal-content schedule-detail-modal-content" style={{ maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header schedule-detail-modal-header">
