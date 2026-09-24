@@ -125,6 +125,7 @@ const groupDualWriteTriggers = require("./groupDualWriteTriggers");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 const clubWorkoutWrites = require("./clubWorkoutWrites");
+const clubMissions = require("./clubMissions");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 const tossPaymentsClient = require("./tossPaymentsClient");
 const raceRedisClient = require("./raceRedisClient");
@@ -12976,6 +12977,14 @@ registerRidingGroupSupabaseWriteEndpoint(
 registerRidingGroupSupabaseWriteEndpoint(
   "deleteClubWorkoutSupabase",
   clubWorkoutWrites.handleDeleteClubWorkout
+);
+
+/** 클럽 챌린지 미션 — 조회(내 진행 포함)·생성/수정(방장·관리자)·단계 완료(훈련 저장 직후) */
+registerRidingGroupSupabaseWriteEndpoint("getClubMissionSupabase", clubMissions.handleGetClubMission);
+registerRidingGroupSupabaseWriteEndpoint("saveClubMissionSupabase", clubMissions.handleSaveClubMission);
+registerRidingGroupSupabaseWriteEndpoint(
+  "completeClubMissionStepSupabase",
+  clubMissions.handleCompleteClubMissionStep
 );
 
 /**

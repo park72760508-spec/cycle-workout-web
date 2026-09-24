@@ -156,7 +156,7 @@ async function httpPostJsonAuthed(path, body) {
 
 /**
  * 가입/승인/거절/탈퇴/기간설정/클럽워크아웃 — Supabase-우선 쓰기 Cloud Function 공용 호출부.
- * @param {'join'|'approve'|'reject'|'leave'|'setJoinRequestExpiry'|'updateMemberExpiry'|'createClubWorkout'|'deleteClubWorkout'} action
+ * @param {'join'|'approve'|'reject'|'leave'|'setJoinRequestExpiry'|'updateMemberExpiry'|'createClubWorkout'|'deleteClubWorkout'|'getClubMission'|'saveClubMission'|'completeClubMissionStep'} action
  * @param {object} body
  */
 export async function postRidingGroupWriteRouted(action, body) {
@@ -169,6 +169,9 @@ export async function postRidingGroupWriteRouted(action, body) {
     updateMemberExpiry: API_BASE + '/updateRidingGroupMemberExpirySupabase',
     createClubWorkout: API_BASE + '/createClubWorkoutSupabase',
     deleteClubWorkout: API_BASE + '/deleteClubWorkoutSupabase',
+    getClubMission: API_BASE + '/getClubMissionSupabase',
+    saveClubMission: API_BASE + '/saveClubMissionSupabase',
+    completeClubMissionStep: API_BASE + '/completeClubMissionStepSupabase',
   };
   const url = endpoints[action];
   if (!url) throw new Error('알 수 없는 요청입니다.');

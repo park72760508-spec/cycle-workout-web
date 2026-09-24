@@ -429,6 +429,52 @@ function computeSegmentAvgWatts(oneHzWatts, segments) {
  * @param {Object} [firestoreInstance] - Firestore 인스턴스 (선택사항, 없으면 window.firestoreV9 사용)
  * @returns {Promise<Object>} 저장 결과
  */
+/** 클럽 미션 상세 > START 시 저장되는 대기 정보 키 (OpenRidingScreens.jsx 와 동일) */
+const CLUB_MISSION_PENDING_KEY = 'stelvio_club_mission_pending';
+const CLUB_MISSION_PENDING_MAX_AGE_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * 훈련 저장 직후 — 대기 중인 클럽 미션 단계가 이 훈련의 워크아웃과 같으면 완료 요청.
+ * 저장 흐름을 막지 않도록 비동기로만 실행하고 실패는 토스트로만 알린다.
+ */
+function completePendingClubMissionAfterSave(trainingData, trainingLogId) {
+  let pending = null;
+  try {
+    pending = JSON.parse(localStorage.getItem(CLUB_MISSION_PENDING_KEY) || 'null');
+  } catch (e) {
+    pending = null;
+  }
+  if (!pending || !trainingLogId) return;
+  const fresh = Date.now() - (Number(pending.setAt) || 0) <= CLUB_MISSION_PENDING_MAX_AGE_MS;
+  const sameWorkout = String(pending.workoutId || '') === String((trainingData && trainingData.workout_id) || '');
+  if (!fresh) {
+    try { localStorage.removeItem(CLUB_MISSION_PENDING_KEY); } catch (e) {}
+    return;
+  }
+  if (!sameWorkout) return;
+  try { localStorage.removeItem(CLUB_MISSION_PENDING_KEY); } catch (e) {}
+  const toast = (msg, type) => {
+    if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast(msg, type);
+  };
+  import('./openRiding/openRidingGroupService.js')
+    .then((mod) =>
+      mod.completeClubMissionStep({
+        groupId: pending.groupId,
+        missionId: pending.missionId,
+        stepOrd: pending.stepOrd,
+        trainingLogId: String(trainingLogId)
+      })
+    )
+    .then((res) => {
+      if (res && res.completed) toast(pending.stepOrd + '번 미션을 완료했습니다!', 'success');
+      else if (res && res.reason === 'too_short') toast('훈련 시간이 짧아 미션 완료로 인정되지 않았습니다.', 'error');
+    })
+    .catch((err) => {
+      console.warn('[ClubMission] 완료 처리 실패:', err && err.message ? err.message : err);
+      toast('미션 완료 처리에 실패했습니다: ' + (err && err.message ? err.message : ''), 'error');
+    });
+}
+
 export async function saveTrainingSession(userId, trainingData, firestoreInstance = null) {
   if (!userId) {
     throw new Error('userId는 필수입니다.');
@@ -761,6 +807,9 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       newExpiryDate: result.userUpdateData.expiry_date,
       trainingLogId: result.trainingLogId
     });
+
+    // 클럽 챌린지 미션: 미션 상세에서 START한 워크아웃이면 단계 완료 처리(서버가 로그로 검증)
+    completePendingClubMissionAfterSave(trainingData, result.trainingLogId);
 
     try {
       const dualMod = await import('./supabaseDualWrite.js');

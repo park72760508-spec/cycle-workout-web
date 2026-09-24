@@ -6274,6 +6274,549 @@ function OpenRidingCalendarMain(props) {
  * 메인 달력(OpenRidingCalendarMain)과 동일한 그리드·오늘 표시 CSS 클래스를 그대로 재사용해
  * 동일 디자인을 유지하되, 필터·초대·내 라이딩 목록 등 다른 관심사는 들고 오지 않는다.
  */
+/* ========== 클럽 챌린지 미션 (클럽 상세 > 라이딩 모임 캘린더 카드 "미션" 탭, 2026-09) ==========
+ * - 클럽당 진행 중 미션 1개, 순서대로 수행. 완료는 훈련 저장 직후 서버가 로그로 검증
+ *   (assets/js/trainingResultService.js completePendingClubMissionAfterSave · functions/clubMissions.js).
+ * - START 시 아래 키로 대기 정보를 남겨 두면 훈련 저장 후 자동 완료 요청이 나간다. */
+var CLUB_MISSION_PENDING_KEY = 'stelvio_club_mission_pending';
+
+/** 'YYYY-MM-DD' → '2026.11.1' */
+function formatClubMissionDate(ymd) {
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+  if (!m) return String(ymd || '');
+  return m[1] + '.' + Number(m[2]) + '.' + Number(m[3]);
+}
+
+function clubMissionTodayYmd() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function clubMissionWorkoutMinutes(w) {
+  return Math.round((Number(w && (w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60))) || 0) / 60);
+}
+
+/** 미션 단계의 워크아웃 상세(세그먼트 포함) — STELVIO: apiGetWorkout, 클럽 전용: 클럽 워크아웃 목록에서 */
+function loadClubMissionStepWorkout(groupId, step) {
+  if (!step) return Promise.resolve(null);
+  var wid = String(step.workoutId || '');
+  if (step.workoutSource === 'club') {
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    if (typeof svc.fetchClubWorkouts !== 'function') return Promise.resolve(null);
+    return svc.fetchClubWorkouts(groupId).then(function (items) {
+      return (items || []).find(function (w) { return String(w.id) === wid; }) || null;
+    }).catch(function () { return null; });
+  }
+  if (typeof window === 'undefined' || typeof window.apiGetWorkout !== 'function') return Promise.resolve(null);
+  return window.apiGetWorkout(wid).then(function (r) {
+    return r && r.success && r.item ? r.item : null;
+  }).catch(function () { return null; });
+}
+
+/** 번호 칸 색상: 완료 녹색 · 수행할 미션(다음 순서) 오렌지 · 미수행 하늘색 */
+function clubMissionStepStyle(state) {
+  if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
+  if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
+  return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
+}
+
+/**
+ * 워크아웃 선택기 — 그룹세션 라이딩 생성 화면의 "STELVIO 워크아웃 / 클럽 전용 워크아웃" 선택기와 동일 마크업.
+ * 목록 로드·세그먼트 캐시는 부모(미션 생성 폼)가 한 번만 수행하고 여러 미션 단계가 공유한다.
+ */
+function ClubMissionWorkoutPicker(props) {
+  var lists = props.lists || { gas: [], club: [], loading: false };
+  var gasSegs = props.gasSegs || {};
+  var selected = props.selected || null;
+  var onSelect = props.onSelect || function () {};
+  var _tab = useState(selected && selected.workoutSource === 'club' ? 'club' : 'gas');
+  var tab = _tab[0];
+  var setTab = _tab[1];
+  var items = tab === 'gas' ? lists.gas : lists.club;
+  return (
+    <div className="mt-2">
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          className={'flex-1 px-3 py-2 rounded-xl border text-sm font-semibold ' + (tab === 'gas' ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-slate-200 bg-white text-slate-600')}
+          onClick={function () { setTab('gas'); }}
+        >
+          STELVIO 워크아웃
+        </button>
+        <button
+          type="button"
+          className={'flex-1 px-3 py-2 rounded-xl border text-sm font-semibold ' + (tab === 'club' ? 'border-violet-500 bg-violet-50 text-violet-900' : 'border-slate-200 bg-white text-slate-600')}
+          onClick={function () { setTab('club'); }}
+        >
+          클럽 전용 워크아웃
+        </button>
+      </div>
+      {lists.loading ? (
+        <p className="text-sm text-slate-500 text-center py-4 m-0">불러오는 중…</p>
+      ) : (
+        <div className="space-y-1 max-h-56 overflow-y-auto border border-slate-200 rounded-xl p-2">
+          {items.length === 0 ? (
+            <p className="text-sm text-slate-500 text-center py-3 m-0">
+              {tab === 'gas' ? '등록된 워크아웃이 없습니다.' : '이 클럽에 등록된 전용 워크아웃이 없습니다.'}
+            </p>
+          ) : (
+            items.map(function (w) {
+              var wid = String(w.id);
+              var isSel = !!selected && selected.workoutId === wid && selected.workoutSource === tab;
+              var segsLoading = tab === 'gas' && isSel && gasSegs[wid] === undefined;
+              var segs = tab === 'gas' ? gasSegs[wid] || (Array.isArray(w.segments) ? w.segments : []) : Array.isArray(w.segments) ? w.segments : [];
+              return (
+                <div key={wid} className={'rounded-lg border ' + (isSel ? 'border-violet-500' : 'border-slate-200')}>
+                  <button
+                    type="button"
+                    className={'w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 rounded-lg ' + (isSel ? 'bg-violet-50 text-violet-900 font-semibold' : 'bg-white text-slate-700 hover:bg-slate-50')}
+                    onClick={function () { onSelect(w, tab); }}
+                  >
+                    <span className="truncate">{w.title}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{clubMissionWorkoutMinutes(w)}분</span>
+                  </button>
+                  {isSel ? (
+                    <div className="px-2 pb-2">
+                      {segsLoading ? (
+                        <p className="text-xs text-slate-400 text-center py-3 m-0">그래프 불러오는 중…</p>
+                      ) : segs.length > 0 ? (
+                        <div
+                          className="workout-card__graph"
+                          ref={function (el) {
+                            if (el && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
+                              window.renderSegmentedWorkoutGraph(el, segs, { maxHeight: 100 });
+                            }
+                          }}
+                        />
+                      ) : (
+                        <p className="segmented-workout-graph-empty text-xs text-slate-400 m-0">세그먼트 없음</p>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 미션 생성·수정 팝업 — 미션명, 기간(시작일·종료일), 미션 개수만큼 워크아웃 선택 */
+function ClubMissionFormModal(props) {
+  var groupId = props.groupId || '';
+  var initial = props.mission || null;
+  var onClose = props.onClose || function () {};
+  var onSaved = props.onSaved || function () {};
+
+  var _title = useState(initial ? initial.title : '');
+  var title = _title[0];
+  var setTitle = _title[1];
+  var _start = useState(initial ? initial.startDate : '');
+  var startDate = _start[0];
+  var setStartDate = _start[1];
+  var _end = useState(initial ? initial.endDate : '');
+  var endDate = _end[0];
+  var setEndDate = _end[1];
+  var _steps = useState(function () {
+    return initial && Array.isArray(initial.steps) && initial.steps.length
+      ? initial.steps.map(function (s) { return Object.assign({}, s); })
+      : [null];
+  });
+  var steps = _steps[0];
+  var setSteps = _steps[1];
+  var _openIdx = useState(-1);
+  var openIdx = _openIdx[0];
+  var setOpenIdx = _openIdx[1];
+  var _lists = useState({ gas: [], club: [], loading: true });
+  var lists = _lists[0];
+  var setLists = _lists[1];
+  var _gasSegs = useState({});
+  var gasSegs = _gasSegs[0];
+  var setGasSegs = _gasSegs[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _err = useState('');
+  var err = _err[0];
+  var setErr = _err[1];
+
+  useEffect(function () {
+    var cancelled = false;
+    var gasPromise =
+      typeof window !== 'undefined' && typeof window.apiGetWorkouts === 'function'
+        ? window.apiGetWorkouts().then(function (r) { return r && r.success && Array.isArray(r.items) ? r.items : []; }).catch(function () { return []; })
+        : Promise.resolve([]);
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    var clubPromise =
+      groupId && typeof svc.fetchClubWorkouts === 'function'
+        ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
+        : Promise.resolve([]);
+    Promise.all([gasPromise, clubPromise]).then(function (res) {
+      if (!cancelled) setLists({ gas: res[0] || [], club: res[1] || [], loading: false });
+    });
+    return function () { cancelled = true; };
+  }, [groupId]);
+
+  function setCount(nRaw) {
+    var n = Math.max(1, Math.min(60, Math.floor(Number(nRaw) || 1)));
+    setSteps(function (prev) {
+      var next = prev.slice(0, n);
+      while (next.length < n) next.push(null);
+      return next;
+    });
+    setOpenIdx(-1);
+  }
+
+  function selectWorkout(idx, w, source) {
+    var wid = String(w.id);
+    setSteps(function (prev) {
+      var next = prev.slice();
+      next[idx] = {
+        workoutId: wid,
+        workoutSource: source,
+        title: String(w.title || ''),
+        totalSeconds: Math.round(Number(w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60)) || 0)
+      };
+      return next;
+    });
+    if (source === 'gas' && gasSegs[wid] === undefined && typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function') {
+      window.apiGetWorkout(wid).then(function (r) {
+        var segs = r && r.success && r.item && Array.isArray(r.item.segments) ? r.item.segments : [];
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = segs; return o; });
+      }).catch(function () {
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = []; return o; });
+      });
+    }
+  }
+
+  function submit() {
+    var problems = [];
+    if (!title.trim()) problems.push('미션명을 입력해 주세요.');
+    if (!startDate || !endDate) problems.push('미션 기간(시작일·종료일)을 선택해 주세요.');
+    else if (endDate < startDate) problems.push('종료일은 시작일 이후여야 합니다.');
+    var missing = [];
+    steps.forEach(function (s, i) { if (!s) missing.push(i + 1); });
+    if (missing.length) problems.push(missing.join(', ') + '번 미션의 워크아웃을 선택해 주세요.');
+    if (problems.length) {
+      setErr(problems.join('\n'));
+      return;
+    }
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    if (typeof svc.saveClubMission !== 'function') {
+      setErr('미션을 저장할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    setBusy(true);
+    setErr('');
+    svc.saveClubMission(groupId, { title: title.trim(), startDate: startDate, endDate: endDate, steps: steps })
+      .then(function () { onSaved(); })
+      .catch(function (e) { setErr((e && e.message) || '미션 저장에 실패했습니다.'); })
+      .then(function () { setBusy(false); });
+  }
+
+  return openRidingRenderModalPortal(
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center"
+      style={{ zIndex: 10060, background: 'rgba(15, 23, 42, 0.55)' }}
+      role="dialog"
+      aria-modal="true"
+      onClick={function (e) { if (e.target === e.currentTarget && !busy) onClose(); }}
+    >
+      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col" style={{ maxHeight: '92vh' }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <h3 className="text-base font-bold text-slate-800 m-0">{initial ? '미션 수정' : '미션 생성'}</h3>
+          <button type="button" className="text-2xl leading-none text-slate-400 px-2" onClick={onClose} disabled={busy} aria-label="닫기">&times;</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm">
+          <label className="block">
+            <span className="block font-medium text-slate-700 mb-1">미션명 *</span>
+            <input
+              type="text"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2"
+              value={title}
+              maxLength={100}
+              placeholder="예: 겨울 FTP 빌드업 챌린지"
+              onChange={function (e) { setTitle(e.target.value); }}
+            />
+          </label>
+          <div>
+            <span className="block font-medium text-slate-700 mb-1">미션 기간 *</span>
+            <div className="flex items-center gap-2">
+              <input type="date" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2" value={startDate} onChange={function (e) { setStartDate(e.target.value); }} aria-label="시작일" />
+              <span className="text-slate-400">~</span>
+              <input type="date" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2" value={endDate} min={startDate || undefined} onChange={function (e) { setEndDate(e.target.value); }} aria-label="종료일" />
+            </div>
+          </div>
+          <label className="block">
+            <span className="block font-medium text-slate-700 mb-1">미션 개수 *</span>
+            <input
+              type="number"
+              min="1"
+              max="60"
+              className="w-24 border border-slate-300 rounded-lg px-3 py-2"
+              value={steps.length}
+              onChange={function (e) { setCount(e.target.value); }}
+            />
+          </label>
+          <div className="space-y-2">
+            {steps.map(function (s, i) {
+              var open = openIdx === i;
+              return (
+                <div key={i} className="rounded-xl border border-slate-200 p-2">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 text-left"
+                    onClick={function () { setOpenIdx(open ? -1 : i); }}
+                  >
+                    <span className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-sm font-bold" style={clubMissionStepStyle(s ? 'done' : 'todo')}>{i + 1}</span>
+                    <span className={'flex-1 truncate ' + (s ? 'text-slate-800 font-medium' : 'text-slate-400')}>
+                      {s ? s.title + ' (' + Math.round((s.totalSeconds || 0) / 60) + '분)' : '워크아웃 선택'}
+                    </span>
+                    <span className="shrink-0 text-slate-400 text-xs">{open ? '닫기 ▲' : '선택 ▼'}</span>
+                  </button>
+                  {open ? (
+                    <ClubMissionWorkoutPicker
+                      lists={lists}
+                      gasSegs={gasSegs}
+                      selected={s}
+                      onSelect={function (w, source) { selectWorkout(i, w, source); }}
+                    />
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          {err ? <p className="text-sm text-red-600 whitespace-pre-line m-0">{err}</p> : null}
+        </div>
+        <div className="flex gap-2 px-4 py-3 border-t border-slate-200">
+          <button type="button" className="flex-1 h-11 rounded-xl border border-slate-300 text-slate-700 font-medium" onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button type="button" className="flex-1 h-11 rounded-xl bg-violet-600 text-white font-medium disabled:opacity-50" onClick={submit} disabled={busy}>
+            {busy ? '저장 중…' : initial ? '저장' : '생성'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 미션 상세 팝업 — 훈련 스케줄 > 훈련 상세 디자인(워크아웃명·운동시간·예상 TSS·그래프 위 START) */
+function ClubMissionDetailModal(props) {
+  var groupId = props.groupId || '';
+  var mission = props.mission;
+  var step = props.step;
+  var state = props.state; // 'done' | 'next' | 'todo'
+  var canStart = !!props.canStart;
+  var blockedReason = props.blockedReason || '';
+  var onClose = props.onClose || function () {};
+
+  var _w = useState(null);
+  var workout = _w[0];
+  var setWorkout = _w[1];
+  var _loading = useState(true);
+  var loading = _loading[0];
+  var setLoading = _loading[1];
+  var graphRef = useRef(null);
+
+  useEffect(function () {
+    var cancelled = false;
+    setLoading(true);
+    loadClubMissionStepWorkout(groupId, step).then(function (w) {
+      if (cancelled) return;
+      setWorkout(w);
+      setLoading(false);
+    });
+    return function () { cancelled = true; };
+  }, [groupId, step && step.workoutId]);
+
+  useEffect(function () {
+    if (!graphRef.current) return;
+    graphRef.current.innerHTML = '';
+    var segs = workout && Array.isArray(workout.segments) ? workout.segments : [];
+    if (segs.length && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
+      window.renderSegmentedWorkoutGraph(graphRef.current, segs, { maxHeight: 200 });
+    } else if (!loading) {
+      graphRef.current.innerHTML = '<div class="segmented-workout-graph-empty">그래프를 표시할 수 없습니다</div>';
+    }
+  }, [workout, loading]);
+
+  var minutes = workout ? clubMissionWorkoutMinutes(workout) : Math.round((Number(step && step.totalSeconds) || 0) / 60);
+  var tss = workout && typeof window !== 'undefined' && typeof window.estimateWorkoutTSS === 'function' ? window.estimateWorkoutTSS(workout) : null;
+  var stateLabel = state === 'done' ? '완료' : state === 'next' ? '수행할 미션' : '대기';
+
+  function start() {
+    if (!canStart || !workout) return;
+    var wid = String(step.workoutId);
+    var w = Object.assign({}, workout, { id: wid });
+    try {
+      localStorage.setItem(CLUB_MISSION_PENDING_KEY, JSON.stringify({
+        groupId: groupId,
+        missionId: mission.id,
+        stepOrd: step.ord,
+        workoutId: wid,
+        setAt: Date.now()
+      }));
+    } catch (e) {}
+    window.currentWorkout = w;
+    try { localStorage.setItem('currentWorkout', JSON.stringify(w)); } catch (e2) {}
+    onClose();
+    window.rpeModalSource = 'solo';
+    if (typeof window.showRPEModal === 'function') window.showRPEModal('solo');
+    else if (typeof window.showRPEModalForSoloTraining === 'function') window.showRPEModalForSoloTraining();
+    else if (typeof window.showScreen === 'function') window.showScreen('trainingReadyScreen');
+  }
+
+  return openRidingRenderModalPortal(
+    <div className="modal" style={{ display: 'flex', zIndex: 10060 }}>
+      <div className="modal-overlay" onClick={onClose} />
+      <div className="modal-content schedule-detail-modal-content" style={{ maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div className="modal-header schedule-detail-modal-header">
+          <h3 className="schedule-detail-modal-title">미션 상세</h3>
+          <button type="button" className="modal-close" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body">
+          <div className="schedule-detail-info">
+            <div className="schedule-detail-workout-row">
+              <p className="schedule-detail-workout-name"><strong>{(workout && workout.title) || (step && step.title) || '워크아웃'}</strong></p>
+            </div>
+            <p>운동 시간: {minutes}분 | 예상 TSS: {tss != null ? tss : '—'}</p>
+            <p>{mission.title} · {step.ord}번 미션 ({stateLabel})</p>
+            {!canStart && blockedReason ? <p style={{ color: '#ea580c' }}>{blockedReason}</p> : null}
+          </div>
+          <div className="schedule-detail-graph schedule-detail-graph-with-start">
+            <button
+              type="button"
+              className="btn btn-schedule-start btn-schedule-start-on-graph"
+              disabled={!canStart || !workout}
+              onClick={start}
+              title="미션 훈련 시작"
+            >
+              <img src="assets/img/start.png" alt="훈련 시작" />
+            </button>
+            <div className="schedule-detail-graph-inner" ref={graphRef}>
+              {loading ? <div className="segmented-workout-graph-empty">불러오는 중…</div> : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 미션 탭 본문 — 미션명·기간·번호 칸 목록(완료 녹색 / 수행할 미션 오렌지 / 미수행 하늘색) */
+function ClubMissionPanel(props) {
+  var groupId = props.groupId || '';
+  var data = props.data;
+  var loading = !!props.loading;
+  var error = props.error || '';
+  var canPerform = !!props.canPerform;
+  var onCreateOrEdit = props.onCreateOrEdit || function () {};
+  var _detail = useState(null);
+  var detailOrd = _detail[0];
+  var setDetailOrd = _detail[1];
+
+  if (loading) {
+    return (
+      <div className="open-riding-loading-wrap">
+        <div className="open-riding-loading-spinner" />
+        <p className="open-riding-loading-text">미션 불러오는 중...</p>
+      </div>
+    );
+  }
+  if (error) return <p className="text-sm text-red-600 text-center py-6 m-0">{error}</p>;
+
+  var mission = data && data.mission;
+  var canManage = !!(data && data.canManage);
+  if (!mission) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-sm text-slate-500 m-0">진행 중인 미션이 없습니다.</p>
+        {canManage ? (
+          <button type="button" className="mt-3 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium" onClick={onCreateOrEdit}>
+            미션 만들기
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
+  var done = new Set((data.completedOrds || []).map(Number));
+  var ords = mission.steps.map(function (s) { return Number(s.ord); }).sort(function (a, b) { return a - b; });
+  var nextOrd = ords.find(function (o) { return !done.has(o); });
+  var today = clubMissionTodayYmd();
+  var inPeriod = today >= mission.startDate && today <= mission.endDate;
+  var detailStep = detailOrd != null ? mission.steps.find(function (s) { return Number(s.ord) === detailOrd; }) : null;
+  var detailState = detailStep ? (done.has(detailOrd) ? 'done' : detailOrd === nextOrd ? 'next' : 'todo') : null;
+  var blockedReason = '';
+  if (detailStep) {
+    if (detailState === 'done') blockedReason = '이미 완료한 미션입니다.';
+    else if (detailState === 'todo') blockedReason = '앞 번호 미션을 먼저 완료해 주세요.';
+    else if (!canPerform) blockedReason = '클럽 회원(멤버십 유효)만 미션을 수행할 수 있습니다.';
+    else if (!inPeriod) blockedReason = today < mission.startDate ? '미션 시작일 전입니다.' : '미션 기간이 끝났습니다.';
+  }
+  var canStart = detailState === 'next' && canPerform && inPeriod;
+
+  return (
+    <div>
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <p className="text-sm m-0 min-w-0">
+          <span className="text-slate-500">미션명 : </span>
+          <strong className="text-slate-800 break-words">{mission.title}</strong>
+        </p>
+        {canManage ? (
+          <button type="button" className="shrink-0 text-xs px-2 py-1 rounded-lg border border-violet-300 text-violet-700" onClick={onCreateOrEdit}>
+            수정
+          </button>
+        ) : null}
+      </div>
+      <p className="text-sm m-0 mb-1">
+        <span className="text-slate-500">미션 기간 : </span>
+        <span className="text-slate-800">{formatClubMissionDate(mission.startDate)} ~ {formatClubMissionDate(mission.endDate)}</span>
+      </p>
+      <p className="text-xs text-slate-500 m-0 mb-3">
+        완료 {done.size} / {ords.length}
+        {nextOrd == null ? ' · 모든 미션을 완료했습니다! 🎉' : ''}
+      </p>
+      <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
+        {ords.map(function (o) {
+          var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
+          return (
+            <button
+              key={o}
+              type="button"
+              className="aspect-square rounded-xl inline-flex items-center justify-center text-sm font-bold"
+              style={clubMissionStepStyle(st)}
+              onClick={function () { setDetailOrd(o); }}
+              aria-label={o + '번 미션 ' + (st === 'done' ? '완료' : st === 'next' ? '수행할 미션' : '미수행')}
+            >
+              {o}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex items-center gap-3 mt-3 text-[11px] text-slate-500">
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('next')} />수행할 미션</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('todo')} />미수행</span>
+      </div>
+      {detailStep ? (
+        <ClubMissionDetailModal
+          groupId={groupId}
+          mission={mission}
+          step={detailStep}
+          state={detailState}
+          canStart={canStart}
+          blockedReason={blockedReason}
+          onClose={function () { setDetailOrd(null); }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function OpenRidingGroupCalendarSection(props) {
   var firestore = props.firestore;
   var userId = props.userId || '';
@@ -6283,6 +6826,38 @@ function OpenRidingGroupCalendarSection(props) {
   var canCreate = !!props.canCreate;
   var createBusy = !!props.createBusy;
   var onCreateClick = props.onCreateClick || function () {};
+
+  /** 헤더 탭: 'calendar'(기존 캘린더) | 'mission'(클럽 챌린지 미션) */
+  var _panelTab = useState('calendar');
+  var panelTab = _panelTab[0];
+  var setPanelTab = _panelTab[1];
+  var _mission = useState({ data: null, loading: false, error: '', loaded: false });
+  var missionState = _mission[0];
+  var setMissionState = _mission[1];
+  var _missionForm = useState(false);
+  var missionFormOpen = _missionForm[0];
+  var setMissionFormOpen = _missionForm[1];
+
+  function reloadMission() {
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    if (!groupId || typeof svc.fetchClubMission !== 'function') {
+      setMissionState({ data: null, loading: false, error: '미션 정보를 불러올 수 없습니다.', loaded: true });
+      return;
+    }
+    setMissionState(function (prev) { return Object.assign({}, prev, { loading: !prev.loaded, error: '' }); });
+    svc.fetchClubMission(groupId)
+      .then(function (res) { setMissionState({ data: res || null, loading: false, error: '', loaded: true }); })
+      .catch(function (e) {
+        setMissionState({ data: null, loading: false, error: (e && e.message) || '미션 정보를 불러오지 못했습니다.', loaded: true });
+      });
+  }
+
+  useEffect(
+    function () {
+      if (panelTab === 'mission') reloadMission();
+    },
+    [panelTab, groupId]
+  );
 
   var _m = useState(function () { return new Date(); });
   var viewMonth = _m[0];
@@ -6505,8 +7080,58 @@ function OpenRidingGroupCalendarSection(props) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card mt-4">
       <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-slate-800 m-0">{moimCopy.screenTitle} 캘린더</h3>
-        {canCreate ? (
+        <h3 className="text-sm font-semibold text-slate-800 m-0 min-w-0 truncate">
+          {panelTab === 'mission' ? '클럽 미션' : moimCopy.screenTitle + ' 캘린더'}
+        </h3>
+        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+          {[
+            { key: 'calendar', icon: 'assets/img/event1.svg', label: '캘린더' },
+            { key: 'mission', icon: 'assets/img/mission.svg', label: '미션' }
+          ].map(function (t) {
+            var active = panelTab === t.key;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                className="shrink-0 inline-flex items-center justify-center rounded-full"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  background: active ? '#ffffff' : 'rgba(255,255,255,0.55)',
+                  border: active ? '2px solid #7c3aed' : '1px solid rgba(124,58,237,0.25)',
+                  boxShadow: active ? '0 1px 4px rgba(124,58,237,0.35)' : 'none'
+                }}
+                onClick={function () { setPanelTab(t.key); }}
+                title={t.label}
+                aria-label={t.label}
+                aria-pressed={active}
+              >
+                <img src={t.icon} alt="" style={{ width: '18px', height: '18px', opacity: active ? 1 : 0.6 }} />
+              </button>
+            );
+          })}
+        {panelTab === 'mission' ? (
+          missionState.data && missionState.data.canManage ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex items-center justify-center rounded-full border-0 text-white"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                width: '32px',
+                height: '32px',
+                minWidth: '32px',
+                minHeight: '32px'
+              }}
+              onClick={function () { setMissionFormOpen(true); }}
+              title={missionState.data.mission ? '미션 수정' : '미션 생성'}
+              aria-label={missionState.data.mission ? '미션 수정' : '미션 생성'}
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          ) : null
+        ) : canCreate ? (
           <button
             type="button"
             className="open-riding-action-btn shrink-0 inline-flex items-center justify-center rounded-full border-0 text-white disabled:opacity-50"
@@ -6530,8 +7155,20 @@ function OpenRidingGroupCalendarSection(props) {
             </svg>
           </button>
         ) : null}
+        </div>
       </div>
       <div className="stelvio-category-body p-3">
+        {panelTab === 'mission' ? (
+          <ClubMissionPanel
+            groupId={groupId}
+            data={missionState.data}
+            loading={missionState.loading}
+            error={missionState.error}
+            canPerform={canCreate}
+            onCreateOrEdit={function () { setMissionFormOpen(true); }}
+          />
+        ) : (
+        <React.Fragment>
         <div className="flex items-center justify-between mb-3 gap-2">
           <button
             type="button"
@@ -6699,7 +7336,21 @@ function OpenRidingGroupCalendarSection(props) {
             </ul>
           )}
         </div>
+        </React.Fragment>
+        )}
       </div>
+      {missionFormOpen ? (
+        <ClubMissionFormModal
+          groupId={groupId}
+          mission={missionState.data && missionState.data.mission}
+          onClose={function () { setMissionFormOpen(false); }}
+          onSaved={function () {
+            setMissionFormOpen(false);
+            reloadMission();
+            if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('미션을 저장했습니다.', 'success');
+          }}
+        />
+      ) : null}
     </section>
   );
 }

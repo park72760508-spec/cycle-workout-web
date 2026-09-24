@@ -456,6 +456,36 @@ export async function createClubWorkout(moderatorUid, groupId, payload) {
 }
 
 /**
+ * 클럽 챌린지 미션 — 진행 중 미션 + 내 완료 단계(completedOrds) + 관리 권한(canManage).
+ * @param {string} groupId
+ */
+export async function fetchClubMission(groupId) {
+  if (!groupId) return { mission: null, completedOrds: [], canManage: false };
+  return postRidingGroupWriteRouted('getClubMission', { groupId: String(groupId).trim() });
+}
+
+/**
+ * 클럽 챌린지 미션 생성·수정 — 방장/관리자만. 진행 중 미션이 있으면 수정된다.
+ * @param {string} groupId
+ * @param {{ title: string, startDate: string, endDate: string,
+ *   steps: { workoutId: string, workoutSource: 'gas'|'club', title: string, totalSeconds: number }[] }} payload
+ */
+export async function saveClubMission(groupId, payload) {
+  if (!groupId) throw new Error('요청이 올바르지 않습니다.');
+  return postRidingGroupWriteRouted('saveClubMission', Object.assign({}, payload, {
+    groupId: String(groupId).trim()
+  }));
+}
+
+/**
+ * 클럽 챌린지 미션 단계 완료 — 훈련 저장 직후(훈련 로그 ID로 서버 검증).
+ * @param {{ groupId: string, missionId: string, stepOrd: number, trainingLogId: string }} payload
+ */
+export async function completeClubMissionStep(payload) {
+  return postRidingGroupWriteRouted('completeClubMissionStep', payload || {});
+}
+
+/**
  * 클럽 전용 워크아웃 삭제.
  * @param {string} moderatorUid
  * @param {string} groupId
@@ -846,6 +876,9 @@ if (typeof window !== 'undefined') {
     updateRidingGroupMemberExpiry,
     fetchClubWorkouts,
     createClubWorkout,
+    fetchClubMission,
+    saveClubMission,
+    completeClubMissionStep,
     deleteClubWorkout,
     uploadRidingGroupCover,
     subscribeMyManagedGroupsJoinRequestCounts,
