@@ -665,8 +665,16 @@ export async function syncSupabaseSessionFromBridge() {
   return data.session;
 }
 
-/** 이 브라우저의 Supabase 세션이 어느 Firebase 계정으로 발급됐는지 — 계정 전환 시 이전 세션 재사용 방지 */
-const SB_SESSION_FB_UID_KEY = 'stelvio_sb_session_fb_uid';
+/**
+ * 비용 절감(2026-09): Cloud Run 조회 함수 대신 Supabase RPC 를 로그인 사용자 토큰으로 직접 호출.
+ *
+ * mintSupabaseSessionHttp 토큰은 GoTrue 가 추적하는 세션이 아닌 커스텀 JWT 라 setSession() 을 쓰면
+ * /auth/v1/user 403 → "Auth session missing!" 이 난다(중고랜드 marketService.js 와 같은 이유).
+ * 그래서 supabase-js 의 accessToken 콜백으로 토큰만 붙이는 전용 클라이언트를 쓴다.
+ * 토큰은 Firebase 계정별로 localStorage 에 캐시해 앱을 다시 열어도 만료(1시간) 전까지 재발급하지 않는다.
+ */
+const RPC_TOKEN_CACHE_KEY = 'stelvio_sb_rpc_token_v1';
+let rpcClientPromise = null;
 
 function currentFirebaseUid() {
   try {
@@ -677,24 +685,47 @@ function currentFirebaseUid() {
   return '';
 }
 
+async function getFreshRpcAccessToken() {
+  const fbUid = currentFirebaseUid();
+  if (!fbUid) throw new Error('Firebase 로그인 필요');
+  const nowSec = Math.floor(Date.now() / 1000);
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(RPC_TOKEN_CACHE_KEY) || 'null'); } catch (e) { cached = null; }
+  if (cached && cached.fbUid === fbUid && cached.token && Number(cached.exp) > nowSec + 120) {
+    return cached.token;
+  }
+  const cfg = getConfig();
+  if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
+  const idToken = await getFirebaseIdToken();
+  const minted = await fetchSupabaseSessionFromBridge(cfg.authBridgeUrl, idToken);
+  const entry = { fbUid, token: minted.access_token, exp: nowSec + (Number(minted.expires_in) || 3600) };
+  try { localStorage.setItem(RPC_TOKEN_CACHE_KEY, JSON.stringify(entry)); } catch (e) {}
+  return entry.token;
+}
+
+function getRpcSupabaseClient() {
+  if (!rpcClientPromise) {
+    rpcClientPromise = (async function () {
+      const cfg = getConfig();
+      if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('STELVIO_SUPABASE_CONFIG 미설정');
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.49.1');
+      return createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        accessToken: getFreshRpcAccessToken,
+      });
+    })();
+  }
+  return rpcClientPromise;
+}
+
 /**
- * 비용 절감(2026-09): Cloud Run 조회 함수 대신 Supabase RPC 를 로그인 사용자 세션으로 직접 호출.
- * RPC 는 auth.uid() 로 본인만 조회하며, 세션 발급(mintSupabaseSessionHttp)은 만료(1시간) 전 재사용한다.
- * 실패 시 throw — 호출부가 기존 Cloud Run 경로로 폴백한다.
+ * RPC 는 auth.uid() 로 본인만 조회한다. 실패 시 throw — 호출부가 기존 Cloud Run 경로로 폴백.
  * @param {string} fnName
  * @param {object} [args]
  */
 export async function callSupabaseRpcAsUser(fnName, args) {
-  const fbUid = currentFirebaseUid();
-  if (!fbUid) throw new Error('Firebase 로그인 필요');
-  const supabase = await getSupabaseClient();
-  let boundUid = '';
-  try { boundUid = localStorage.getItem(SB_SESSION_FB_UID_KEY) || ''; } catch (e) {}
-  if (boundUid !== fbUid) {
-    try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) {}
-  }
-  await syncSupabaseSessionFromBridge();
-  try { localStorage.setItem(SB_SESSION_FB_UID_KEY, fbUid); } catch (e) {}
+  await getFreshRpcAccessToken(); // 로그인·토큰 확보 실패를 먼저 드러냄
+  const supabase = await getRpcSupabaseClient();
   const { data, error } = await supabase.rpc(fnName, args || {});
   if (error) throw error;
   if (data && data.success === false) throw new Error(data.error || fnName + ' 실패');
