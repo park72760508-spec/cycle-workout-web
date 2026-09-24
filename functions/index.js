@@ -126,6 +126,7 @@ const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 const clubWorkoutWrites = require("./clubWorkoutWrites");
 const clubMissions = require("./clubMissions");
+const rankingBoardSnapshots = require("./rankingBoardSnapshots");
 const weeklyTssRankingBuilder = require("./weeklyTssRankingBuilder");
 const tossPaymentsClient = require("./tossPaymentsClient");
 const raceRedisClient = require("./raceRedisClient");
@@ -14161,6 +14162,12 @@ exports.getPeakPowerRanking = onRequest(
       if (req.query.parity !== "1" && req.query.parity !== "true") {
         delete supabasePeakPayload.rankingParity;
       }
+      /* 비용 절감 3단계: 배치 구간당 1회 공용 스냅샷 저장 → 이후 앱은 Supabase 에서 직접 읽음 */
+      await rankingBoardSnapshots.maybeWriteRankingBoardSnapshot(
+        req.query || {},
+        supabasePeakPayload,
+        filterWithdrawnUsersFromRankingPayload
+      );
       return res.status(200).json(supabasePeakPayload);
     }
 

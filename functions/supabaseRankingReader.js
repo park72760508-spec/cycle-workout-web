@@ -1900,4 +1900,8 @@ module.exports = {
   HEPTAGON_CATEGORIES,
   readRankingComputeCache,
   writeRankingComputeCache,
+  currentBatchEpochKeyKst,
+  PEAK_POWER_BATCH_BOUNDARIES_KST,
+  PERSONAL_SPEED_BATCH_BOUNDARIES_KST,
+  GC_BATCH_BOUNDARIES_KST,
 };
