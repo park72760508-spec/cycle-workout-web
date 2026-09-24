@@ -22253,7 +22253,8 @@ if (originalCleanupMobileDashboard) {
   'use strict';
 
   var BADGE_API_URL = 'https://us-central1-stelvio-ai.cloudfunctions.net/getBasecampBadgeCountsForRead';
-  var POLL_MS = 90 * 1000;
+  /* 비용 절감(2026-09): 90초 → 5분. 포그라운드 복귀 시 즉시 갱신(_onVisibilityChange)은 그대로 */
+  var POLL_MS = 5 * 60 * 1000;
 
   var _counts     = { ridesCycle: 0, ridesRun: 0, crewInviteCycle: 0, crewInviteRun: 0, hostedCycle: 0, hostedRun: 0, groups: 0, friends: 0, stravaTodayCycle: false, stravaTodayRun: false, settlementUnpaidCycle: 0, settlementUnpaidRun: 0 };
   var _pollTimer  = null;

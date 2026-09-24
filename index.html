@@ -12985,7 +12985,8 @@
     /** 비용 절감: 동일 보드 키의 백그라운드 재검증(getPeakPowerRanking) 최소 호출 간격.
      *  탭 전환·재진입마다 함수를 다시 때리지 않도록 키별 쓰로틀. 실시간 갱신 신호는 force로 우회. */
     var stelvioRankingBgLastAt = Object.create(null);
-    var STELVIO_RANKING_BG_MIN_INTERVAL_MS = 90000;
+    /* 비용 절감(2026-09): 90초 → 10분. 실시간 신호(force)·집계 메타 변경 무효화는 그대로 즉시 반영 */
+    var STELVIO_RANKING_BG_MIN_INTERVAL_MS = 10 * 60 * 1000;
     /** TOP10 모달: 모달 오픈마다 getWeeklyRanking 재검증하지 않도록 최소 간격(실시간 신호는 별도 경로) */
     var stelvioTop10BgLastAt = 0;
     /** 마지막 페인트 탭 참조(visibilitychange·롤오버). 별도 DB 없음 — 신선도는 IndexedDB expiresAt */
@@ -33915,7 +33916,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/app.js?v=20260924authNoHideOnDcl1"></script>
+  <script src="assets/js/app.js?v=20260925costPoll1"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
