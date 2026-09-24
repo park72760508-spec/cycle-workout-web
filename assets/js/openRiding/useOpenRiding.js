@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=club-mission-20260924a';
+} from './openRidingService.js?v=cost-rpc-20260925a';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db

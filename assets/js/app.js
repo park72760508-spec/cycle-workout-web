@@ -22376,14 +22376,45 @@ if (originalCleanupMobileDashboard) {
     if (!uid) { _clearAll(); _renderBadges(); return Promise.resolve(); }
     if (_inFlight) return Promise.resolve();
     _inFlight = true;
-    return _getIdToken().then(function (token) {
-      if (!token) return null;
-      return fetch(BADGE_API_URL + '?uid=' + encodeURIComponent(uid), {
-        method: 'GET',
-        mode: 'cors',
-        cache: 'no-store',
-        headers: { Authorization: 'Bearer ' + token }
-      }).then(function (res) { return res.ok ? res.json() : null; });
+    function viaCloudRun() {
+      return _getIdToken().then(function (token) {
+        if (!token) return null;
+        return fetch(BADGE_API_URL + '?uid=' + encodeURIComponent(uid), {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          headers: { Authorization: 'Bearer ' + token }
+        }).then(function (res) { return res.ok ? res.json() : null; });
+      });
+    }
+    /* 비용 절감(2026-09): Supabase RPC(fn_my_basecamp_badge_counts) 우선 + 친구 요청은 Firestore 직접 조회
+       (Supabase 미러 없음). 어느 쪽이든 실패하면 기존 Cloud Run 집계로 폴백. */
+    function viaSupabase() {
+      var rpcP =
+        typeof window.stelvioSupabaseRpc === 'function'
+          ? Promise.resolve(window.stelvioSupabaseRpc)
+          : import('/assets/js/supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
+      var friendsSvcP =
+        window.openRidingFriendsService && typeof window.openRidingFriendsService.countPendingIncomingFriendRequests === 'function'
+          ? Promise.resolve(window.openRidingFriendsService)
+          : import('/assets/js/openRiding/openRidingFriendsService.js?v=cost-rpc-20260925a').then(function () {
+              return window.openRidingFriendsService;
+            });
+      return Promise.all([
+        rpcP.then(function (rpc) { return rpc('fn_my_basecamp_badge_counts', {}); }),
+        friendsSvcP.then(function (svc) {
+          if (!svc || !window.firestoreV9) throw new Error('friends service unavailable');
+          return svc.countPendingIncomingFriendRequests(window.firestoreV9, uid);
+        })
+      ]).then(function (r) {
+        var json = r[0];
+        if (!json || json.success !== true) throw new Error('badge rpc empty');
+        return Object.assign({}, json, { friends: Number(r[1]) || 0 });
+      });
+    }
+    return viaSupabase().catch(function (e) {
+      try { console.warn('[BasecampBadge] Supabase 경로 실패 → Cloud Run 폴백:', e && e.message ? e.message : e); } catch (eLog) {}
+      return viaCloudRun();
     }).then(function (json) {
       if (json && json.success) {
         _counts.ridesCycle = Number(json.ridesCycle) || 0;

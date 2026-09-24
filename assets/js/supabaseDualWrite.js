@@ -665,6 +665,42 @@ export async function syncSupabaseSessionFromBridge() {
   return data.session;
 }
 
+/** 이 브라우저의 Supabase 세션이 어느 Firebase 계정으로 발급됐는지 — 계정 전환 시 이전 세션 재사용 방지 */
+const SB_SESSION_FB_UID_KEY = 'stelvio_sb_session_fb_uid';
+
+function currentFirebaseUid() {
+  try {
+    if (typeof window !== 'undefined' && window.authV9 && window.authV9.currentUser) {
+      return String(window.authV9.currentUser.uid || '');
+    }
+  } catch (e) {}
+  return '';
+}
+
+/**
+ * 비용 절감(2026-09): Cloud Run 조회 함수 대신 Supabase RPC 를 로그인 사용자 세션으로 직접 호출.
+ * RPC 는 auth.uid() 로 본인만 조회하며, 세션 발급(mintSupabaseSessionHttp)은 만료(1시간) 전 재사용한다.
+ * 실패 시 throw — 호출부가 기존 Cloud Run 경로로 폴백한다.
+ * @param {string} fnName
+ * @param {object} [args]
+ */
+export async function callSupabaseRpcAsUser(fnName, args) {
+  const fbUid = currentFirebaseUid();
+  if (!fbUid) throw new Error('Firebase 로그인 필요');
+  const supabase = await getSupabaseClient();
+  let boundUid = '';
+  try { boundUid = localStorage.getItem(SB_SESSION_FB_UID_KEY) || ''; } catch (e) {}
+  if (boundUid !== fbUid) {
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch (e) {}
+  }
+  await syncSupabaseSessionFromBridge();
+  try { localStorage.setItem(SB_SESSION_FB_UID_KEY, fbUid); } catch (e) {}
+  const { data, error } = await supabase.rpc(fnName, args || {});
+  if (error) throw error;
+  if (data && data.success === false) throw new Error(data.error || fnName + ' 실패');
+  return data;
+}
+
 export async function writeRideToSupabase(rideRow) {
   const supabase = await getSupabaseClient();
   const { data: sess } = await supabase.auth.getSession();
@@ -927,4 +963,5 @@ if (typeof window !== 'undefined') {
   window.refreshDualRunFromRemoteConfig = refreshDualRunFromRemoteConfig;
   window.shouldRunSupabaseDualWrite = shouldRunSupabaseDualWrite;
   window.syncSupabaseSessionFromBridge = syncSupabaseSessionFromBridge;
+  window.stelvioSupabaseRpc = callSupabaseRpcAsUser;
 }

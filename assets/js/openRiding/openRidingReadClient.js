@@ -980,6 +980,28 @@ export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpda
 }
 
 /**
+ * 비용 절감(2026-09): Supabase RPC(로그인 세션) 우선, 실패 시 기존 Cloud Run 조회로 폴백.
+ * @param {string} rpcName
+ * @param {() => Promise<any>} httpFallback
+ */
+function stelvioRpcFirst(rpcName, httpFallback) {
+  var rpcPromise =
+    typeof window !== 'undefined' && typeof window.stelvioSupabaseRpc === 'function'
+      ? Promise.resolve(window.stelvioSupabaseRpc)
+      : import('../supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
+  return rpcPromise
+    .then(function (rpc) { return rpc(rpcName, {}); })
+    .then(function (data) {
+      if (!data || data.success !== true) throw new Error('rpc_empty');
+      return data;
+    })
+    .catch(function (err) {
+      try { console.warn('[stelvioRpcFirst] ' + rpcName + ' → Cloud Run 폴백:', err && err.message ? err.message : err); } catch (e) {}
+      return httpFallback();
+    });
+}
+
+/**
  * 오픈라이딩 룸 — 내가 방장인 소mo임들의 가입신청 대기 건수(총합 + 그룹별 breakdown).
  * G개 그룹별 joinRequests fan-out onSnapshot 대체(그룹 목록 리스너 1개 + 그룹당 리스너 1개씩).
  */
@@ -992,7 +1014,9 @@ export function subscribeMyManagedGroupsJoinRequestCountsRouted(db, userId, onUp
   var pollTimer = null;
 
   function poll() {
-    httpGetJsonAuthed(API_BASE + '/getManagedGroupsPendingJoinRequestCountForRead', { uid: u }).then(function (json) {
+    stelvioRpcFirst('fn_my_managed_groups_pending_join_counts', function () {
+      return httpGetJsonAuthed(API_BASE + '/getManagedGroupsPendingJoinRequestCountForRead', { uid: u });
+    }).then(function (json) {
       if (stopped) return;
       if (json && json.success) {
         onUpdate(
@@ -1033,7 +1057,9 @@ export function subscribeMyInvitedRidesCountRouted(userId, category, onUpdate) {
   var pollTimer = null;
 
   function poll() {
-    httpGetJsonAuthed(API_BASE + '/getBasecampBadgeCountsForRead', { uid: u }).then(function (json) {
+    stelvioRpcFirst('fn_my_basecamp_badge_counts', function () {
+      return httpGetJsonAuthed(API_BASE + '/getBasecampBadgeCountsForRead', { uid: u });
+    }).then(function (json) {
       if (stopped) return;
       if (json && json.success) {
         var n = isRun ? json.ridesRun : json.ridesCycle;
