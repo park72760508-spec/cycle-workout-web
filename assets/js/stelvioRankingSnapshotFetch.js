@@ -455,10 +455,25 @@
       info.epoch = epoch;
       return fetchSnapshot(info).then(function (shared) {
         if (shared) return shared;
-        return new Promise(function (r) { setTimeout(r, 400 + Math.floor(Math.random() * 1200)); })
-          .then(function () { return fetchSnapshot(info); });
+        /* 이 보드 스냅샷이 아직 한 번도 없으면(서버 미배포·첫 요청) 기다리지 않고 바로 Cloud Run */
+        return snapshotRowExists(info.key).then(function (exists) {
+          if (!exists) return null;
+          return new Promise(function (r) { setTimeout(r, 400 + Math.floor(Math.random() * 1200)); })
+            .then(function () { return fetchSnapshot(info); });
+        });
       });
     });
+  }
+
+  function snapshotRowExists(key) {
+    var cfg = supabaseCfg();
+    if (!cfg) return Promise.resolve(false);
+    return originalFetch(cfg.supabaseUrl + '/rest/v1/ranking_board_snapshots?select=epoch&snapshot_key=eq.' + encodeURIComponent(key), {
+      method: 'GET',
+      headers: { apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey, Accept: 'application/json' }
+    }).then(function (res) { return res.ok ? res.json() : []; })
+      .then(function (rows) { return Array.isArray(rows) && rows.length > 0; })
+      .catch(function () { return false; });
   }
 
   function stelvioRankingSnapshotTry(url) {
