@@ -3,15 +3,15 @@
  * window.openRidingService, window.useOpenRiding, window.useOpenRideDetail, 지역/레벨 옵션 노출
  */
 import { refreshDualRunFromRemoteConfig } from '../supabaseDualWrite.js';
-import './openRidingService.js?v=club-heat-reduction-20260921b';
-import './openRidingGroupService.js?v=club-heat-reduction-20260921b';
+import './openRidingService.js?v=club-mission-20260924a';
+import './openRidingGroupService.js?v=club-mission-20260924a';
 
 refreshDualRunFromRemoteConfig(true).catch(function (err) {
   if (typeof console !== 'undefined' && console.warn) {
     console.warn('[openRidingBoot] Remote Config prefetch:', err);
   }
 });
-import './openRidingFriendsService.js?v=club-heat-reduction-20260921b';
-import './useOpenRiding.js?v=club-heat-reduction-20260921b';
+import './openRidingFriendsService.js?v=club-mission-20260924a';
+import './useOpenRiding.js?v=club-mission-20260924a';
 import './koreaRegions.js';
 import './groupRideEligibility.js';
