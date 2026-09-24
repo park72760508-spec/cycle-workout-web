@@ -388,6 +388,33 @@ export function subscribeRideByIdRouted(db, rideId, onNext, onError) {
 
 /** ---------- 소모임 Read ---------- */
 
+/**
+ * 비용 절감(2026-09): 클럽 상세(그룹 문서 + _members + _joinRequests) — Supabase RPC 우선.
+ * Supabase 멤버 행 수가 memberCount 보다 적으면(dual-write 누락 의심) Cloud Run 경로로 폴백해
+ * 서버의 Firestore parity 보정(groupReadRouter)을 그대로 받는다.
+ */
+function fetchRidingGroupPayloadRouted(gid, includeJoinRequests) {
+  function viaCloudRun() {
+    return httpGetJson(API_BASE + '/getRidingGroupForRead', {
+      groupId: gid,
+      includeJoinRequests: includeJoinRequests ? '1' : '0',
+    });
+  }
+  return stelvioRpcFirst(
+    'fn_riding_group_detail',
+    { p_group_id: gid, p_include_join_requests: !!includeJoinRequests },
+    viaCloudRun
+  ).then(function (json) {
+    var g = json && json.group;
+    if (json && json.readSource === 'supabase_rpc' && g) {
+      var mc = Number(g.memberCount) || 0;
+      var n = Array.isArray(g._members) ? g._members.length : 0;
+      if (mc > 0 && n < mc) return viaCloudRun();
+    }
+    return json;
+  });
+}
+
 export async function fetchRidingGroupByIdRouted(db, groupId, opts) {
   opts = opts || {};
   await stelvioEnsureGroupsReadSource();
@@ -395,10 +422,7 @@ export async function fetchRidingGroupByIdRouted(db, groupId, opts) {
   if (!gid) return null;
 
   if (stelvioGetGroupsReadSourceSync() === 'supabase') {
-    const json = await httpGetJson(API_BASE + '/getRidingGroupForRead', {
-      groupId: gid,
-      includeJoinRequests: opts.includeJoinRequests ? '1' : '0',
-    });
+    const json = await fetchRidingGroupPayloadRouted(gid, !!opts.includeJoinRequests);
     if (json && json.success && json.group) {
       var g = json.group;
       delete g._members;
@@ -429,10 +453,7 @@ export async function fetchRidingGroupMembersListRouted(db, groupId) {
   if (!gid) return [];
 
   if (stelvioGetGroupsReadSourceSync() === 'supabase') {
-    const json = await httpGetJson(API_BASE + '/getRidingGroupForRead', {
-      groupId: gid,
-      includeJoinRequests: '0',
-    });
+    const json = await fetchRidingGroupPayloadRouted(gid, false);
     if (json && json.success && json.group) {
       const fromSb = membersFromGroupPayload(json.group);
       if (fromSb.length > 0) return fromSb;
@@ -465,10 +486,7 @@ export async function fetchRidingGroupJoinRequestsListRouted(db, groupId) {
   if (!gid) return [];
 
   if (stelvioGetGroupsReadSourceSync() === 'supabase') {
-    const json = await httpGetJson(API_BASE + '/getRidingGroupForRead', {
-      groupId: gid,
-      includeJoinRequests: '1',
-    });
+    const json = await fetchRidingGroupPayloadRouted(gid, true);
     if (json && json.success && json.group) {
       const fromSb = joinRequestsFromGroupPayload(json.group);
       if (fromSb.length > 0) return fromSb;
@@ -634,10 +652,7 @@ export function subscribeRidingGroupDetailBundleRouted(db, groupId, includeJoinR
 
     if (stelvioGetGroupsReadSourceSync() === 'supabase') {
       function poll() {
-        httpGetJson(API_BASE + '/getRidingGroupForRead', {
-          groupId: gid,
-          includeJoinRequests: includeJoinRequests ? '1' : '0',
-        }).then(function (json) {
+        fetchRidingGroupPayloadRouted(gid, !!includeJoinRequests).then(function (json) {
           if (stopped || !json || !json.success || !json.group) return;
           var g = json.group;
           var members = membersFromGroupPayload(g);
@@ -921,7 +936,9 @@ export function subscribeMyRidingGroupsAsMemberRouted(db, uid, onUpdate) {
   var pollTimer = null;
 
   function poll() {
-    httpGetJson(API_BASE + '/getMyRidingGroupsForRead', { uid: u, userId: u }).then(function (json) {
+    stelvioRpcFirst('fn_my_riding_groups', {}, function () {
+      return httpGetJson(API_BASE + '/getMyRidingGroupsForRead', { uid: u, userId: u });
+    }).then(function (json) {
       if (stopped) return;
       if (json && json.success && Array.isArray(json.groups)) {
         onUpdate(json.groups);
@@ -958,10 +975,12 @@ export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpda
   var pollTimer = null;
 
   function poll() {
-    httpGetJson(API_BASE + '/getMyGroupMembershipsForRead', {
-      uid: u,
-      userId: u,
-      groupIds: ids.join(','),
+    stelvioRpcFirst('fn_my_group_memberships', { p_group_ids: ids }, function () {
+      return httpGetJson(API_BASE + '/getMyGroupMembershipsForRead', {
+        uid: u,
+        userId: u,
+        groupIds: ids.join(','),
+      });
     }).then(function (json) {
       if (stopped) return;
       if (json && json.success && Array.isArray(json.memberGroupIds)) {
@@ -984,13 +1003,17 @@ export function subscribeUserGroupMembershipsRouted(db, userId, groupIds, onUpda
  * @param {string} rpcName
  * @param {() => Promise<any>} httpFallback
  */
-function stelvioRpcFirst(rpcName, httpFallback) {
+function stelvioRpcFirst(rpcName, rpcArgs, httpFallback) {
+  if (typeof rpcArgs === 'function') {
+    httpFallback = rpcArgs;
+    rpcArgs = {};
+  }
   var rpcPromise =
     typeof window !== 'undefined' && typeof window.stelvioSupabaseRpc === 'function'
       ? Promise.resolve(window.stelvioSupabaseRpc)
       : import('../supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
   return rpcPromise
-    .then(function (rpc) { return rpc(rpcName, {}); })
+    .then(function (rpc) { return rpc(rpcName, rpcArgs || {}); })
     .then(function (data) {
       if (!data || data.success !== true) throw new Error('rpc_empty');
       return data;
@@ -1096,7 +1119,9 @@ export function subscribeRidingGroupMyJoinRequestRouted(db, groupId, uid, cb) {
   var pollTimer = null;
 
   function poll() {
-    httpGetJsonAuthed(API_BASE + '/getMyGroupJoinRequestStatusForRead', { uid: u, groupId: gid }).then(function (json) {
+    stelvioRpcFirst('fn_my_group_join_request_status', { p_group_id: gid }, function () {
+      return httpGetJsonAuthed(API_BASE + '/getMyGroupJoinRequestStatusForRead', { uid: u, groupId: gid });
+    }).then(function (json) {
       if (stopped) return;
       if (json && json.success) {
         cb(json.row || null);
@@ -1126,10 +1151,12 @@ export async function fetchMyGroupContactSetRouted(db, uid, groupIds) {
     .filter(Boolean);
   if (!u || !ids.length) return { uids: [], map: {} };
 
-  var json = await httpGetJson(API_BASE + '/getMyGroupContactSetForRead', {
-    uid: u,
-    userId: u,
-    groupIds: ids.join(','),
+  var json = await stelvioRpcFirst('fn_my_group_contact_set', { p_group_ids: ids }, function () {
+    return httpGetJson(API_BASE + '/getMyGroupContactSetForRead', {
+      uid: u,
+      userId: u,
+      groupIds: ids.join(','),
+    });
   });
   if (!json || !json.success) return null;
   return {

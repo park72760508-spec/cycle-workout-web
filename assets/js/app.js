@@ -22397,7 +22397,7 @@ if (originalCleanupMobileDashboard) {
       var friendsSvcP =
         window.openRidingFriendsService && typeof window.openRidingFriendsService.countPendingIncomingFriendRequests === 'function'
           ? Promise.resolve(window.openRidingFriendsService)
-          : import('/assets/js/openRiding/openRidingFriendsService.js?v=cost-rpc-20260925a').then(function () {
+          : import('/assets/js/openRiding/openRidingFriendsService.js?v=cost-rpc-20260925b').then(function () {
               return window.openRidingFriendsService;
             });
       return Promise.all([

@@ -28,7 +28,7 @@ import {
   fetchRidesInDateRangeRouted,
   fetchTrainingLogsByDateRangeForReviewRouted,
   subscribeRideByIdRouted,
-} from './openRidingReadClient.js?v=cost-rpc-20260925a';
+} from './openRidingReadClient.js?v=cost-rpc-20260925b';
 import {
   scheduleOpenRideDualWriteFromFirestore,
   runSecondaryAfterOpenRideDelete,
