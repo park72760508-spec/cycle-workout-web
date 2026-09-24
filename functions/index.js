@@ -6398,6 +6398,8 @@ exports.getWeeklyRanking = onRequest(
     const usePrevWeek = weekParam === "prev";
     const { startStr, endStr } = usePrevWeek ? getWeekRangeSeoul(-1) : getWeekRangeSeoul();
 
+    /* 비용 절감 4단계: 계산 전에 live epoch 를 잡아 주간 TOP10 공용 스냅샷 키로 쓴다 */
+    const weeklyLiveEpochPre = await supabaseRankingReader.fetchLiveBoardEpochKst();
     const weeklyReadRoute = await rankingReadConfig.shouldReadRankingFromSupabase(
       admin,
       userIdParam
@@ -6440,6 +6442,16 @@ exports.getWeeklyRanking = onRequest(
         weeklyFromSupabase.pendingAggregate
       ) {
         filterWithdrawnUsersFromRankingPayload(weeklyFromSupabase);
+        if (weeklyFromSupabaseRead) {
+          // 공용 스냅샷: 앱이 내 순위(myRank)를 계산할 전체 행에도 같은 비공개 오버레이를 적용
+          await applyRankingBoardPrivacyOverlay(db, { Supremo: ent }, null);
+          await rankingBoardSnapshots.maybeWriteWeeklyTop10Snapshot(
+            req.query || {},
+            weeklyFromSupabase,
+            ent,
+            weeklyLiveEpochPre
+          );
+        }
         res.set("Access-Control-Allow-Origin", "*");
         res.set("Cache-Control", "no-store");
         return res.status(200).json(weeklyFromSupabase);
@@ -14139,6 +14151,8 @@ exports.getPeakPowerRanking = onRequest(
       await hydrateRankingBoardProfileImages(db, payload.byCategory, payload.entries);
     };
 
+    /* 비용 절감 4단계: 실시간 보드는 계산 전에 Supabase 변경 신호(live epoch)를 잡아 스냅샷 키로 쓴다 */
+    const liveEpochPre = await rankingBoardSnapshots.captureLiveEpochForQuery(req.query || {});
     const rankingReadRoute = await rankingReadConfig.shouldReadRankingFromSupabase(admin, uid);
     const supabasePeakPayload =
       await rankingReadRouter.tryBuildPeakPowerRankingFromSupabase(
@@ -14166,7 +14180,8 @@ exports.getPeakPowerRanking = onRequest(
       await rankingBoardSnapshots.maybeWriteRankingBoardSnapshot(
         req.query || {},
         supabasePeakPayload,
-        filterWithdrawnUsersFromRankingPayload
+        filterWithdrawnUsersFromRankingPayload,
+        liveEpochPre
       );
       return res.status(200).json(supabasePeakPayload);
     }

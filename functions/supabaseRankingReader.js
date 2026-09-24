@@ -158,6 +158,40 @@ function currentBatchEpochKeyKst(boundariesKst) {
   return `${dateStr}_b${idx}`;
 }
 
+/** 실시간 보드(TSS·거리·클럽) 변경 신호 — Supabase 트리거가 데이터 변경마다 갱신하는 ranking_build_meta 행 */
+const LIVE_BOARD_META_KEYS = ["ranking_metrics_live", "open_rides_live", "master_daily_rebuild"];
+
+function metaMsFromIso(iso) {
+  if (!iso) return 0;
+  const t = Date.parse(String(iso));
+  return isFinite(t) ? t : 0;
+}
+
+/**
+ * 실시간 보드 epoch — '<오늘 KST>@<ranking_metrics_live ms>@<open_rides_live ms>@<master_daily_rebuild ms>'.
+ * 같은 epoch 이면 모든 사용자에게 같은 보드(앱 assets/js/stelvioRankingSnapshotFetch.js 와 동일 문자열).
+ * 조회 실패 시 null.
+ */
+async function fetchLiveBoardEpochKst() {
+  try {
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("ranking_build_meta")
+      .select("meta_key, completed_at")
+      .in("meta_key", LIVE_BOARD_META_KEYS);
+    if (error) throw error;
+    const byKey = {};
+    (data || []).forEach((r) => {
+      if (r && r.meta_key) byKey[r.meta_key] = metaMsFromIso(r.completed_at);
+    });
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
+    return [today].concat(LIVE_BOARD_META_KEYS.map((k) => byKey[k] || 0)).join("@");
+  } catch (err) {
+    console.warn("[supabaseRankingReader] live epoch read failed:", err && err.message ? err.message : err);
+    return null;
+  }
+}
+
 // 배치 구간 캐시의 안전판 TTL — 키가 이미 배치 구간별로 갈리므로 사실상 항상 이 값 이내에
 // 새 구간으로 넘어가 자동 갱신되지만, 만에 하나 재배포 등으로 갱신이 안 될 때의 상한선.
 const BATCH_EPOCH_CACHE_SAFETY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -805,7 +839,9 @@ async function fetchWeeklyTssRankingCore(admin, startStr, endStr, gender) {
 const TSS_CORE_CACHE_TTL_MS = 45000;
 
 async function fetchWeeklyTssRankingCoreCached(admin, startStr, endStr, gender) {
-  const cacheKey = "weekly_tss_core_v1__" + startStr + "__" + endStr + "__" + gender;
+  /* 키에 변경 신호(live epoch)를 넣어 데이터가 바뀌면 즉시 새로 계산 — 공용 스냅샷이 옛 캐시로 채워지지 않게 */
+  const liveEpoch = (await fetchLiveBoardEpochKst()) || "noepoch";
+  const cacheKey = "weekly_tss_core_v2__" + startStr + "__" + endStr + "__" + gender + "__" + liveEpoch;
   const t0 = Date.now();
   const cached = await readRankingComputeCache(admin, cacheKey, TSS_CORE_CACHE_TTL_MS);
   if (cached) {
@@ -1901,6 +1937,7 @@ module.exports = {
   readRankingComputeCache,
   writeRankingComputeCache,
   currentBatchEpochKeyKst,
+  fetchLiveBoardEpochKst,
   PEAK_POWER_BATCH_BOUNDARIES_KST,
   PERSONAL_SPEED_BATCH_BOUNDARIES_KST,
   GC_BATCH_BOUNDARIES_KST,

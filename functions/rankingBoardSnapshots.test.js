@@ -40,3 +40,21 @@ test('뷰어 개인화 필드 제거 — 원본은 호출부가 복제해서 넘
   assert.deepEqual(out.entries[0], { userId: 'me' });
   assert.ok(payload.currentUser, '원본 불변');
 });
+
+test('4단계 실시간 보드: TSS·30일 거리·클럽 거리는 live epoch 대상', () => {
+  ['tss', 'personal_dist', 'group_dist'].forEach((d) => assert.ok(snap.isLiveDuration(d), d));
+  ['gc', '5min', 'personal_speed'].forEach((d) => assert.equal(snap.isLiveDuration(d), false, d));
+  assert.equal(snap.weeklyTop10SnapshotKey({ week: 'prev' }), 'weekly_top10|prev');
+  assert.equal(snap.weeklyTop10SnapshotKey({}), 'weekly_top10|current');
+});
+
+test('클럽 거리: 뷰어 참가 여부는 공용본에서 false 로 초기화', () => {
+  const payload = {
+    byCategory: { Supremo: [{ userId: 'h1', currentUserParticipated: true }, { userId: 'h2', currentUserParticipated: false }] },
+    entries: [{ userId: 'h1', currentUserParticipated: true }],
+  };
+  const out = snap.stripViewerFields(payload);
+  assert.equal(out.byCategory.Supremo[0].currentUserParticipated, false);
+  assert.equal(out.entries[0].currentUserParticipated, false);
+  assert.ok(!('currentUserParticipated' in { userId: 'x' }));
+});
