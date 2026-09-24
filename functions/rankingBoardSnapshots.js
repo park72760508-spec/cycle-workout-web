@@ -78,8 +78,8 @@ async function maybeWriteRankingBoardSnapshot(query, payload, filterWithdrawn) {
     }
 
     const shared = stripViewerFields(JSON.parse(JSON.stringify(payload)));
-    // 기존 응답의 currentUser 는 탈퇴자 필터(순위 재부여) 이전 행이라 rank 가 필터 전 값이다 —
-    // 앱이 같은 값을 쓰도록 필터 전 순위를 _origRank 로 보존한다(행 표시 순위는 필터 후 값 그대로).
+    // 탈퇴자 필터(순위 재부여) 전 순위를 _origRank 로 보존(진단용). 앱은 currentUser 에
+    // 필터 후 순위를 쓰고 _origRank 는 떼어낸다 — 현재 Cloud Run 응답과 동일.
     if (shared.byCategory && typeof shared.byCategory === "object") {
       Object.keys(shared.byCategory).forEach((c) =>
         (Array.isArray(shared.byCategory[c]) ? shared.byCategory[c] : []).forEach((row) => {
