@@ -1,7 +1,7 @@
 /**
  * STELVIO 헵타곤(7축 레벨 포지션) — getPeakPowerRanking + 분포용 순위(부문/값 기준) 동일.
  * **그래프(면도)**: 축마다 30d·365d W/kg가 있으면 **동일 축** 정규화(롤링 365d≥30d)로 반지름; 없으면 순위→반지름 + 365d≥30d `max` 보정(순위만으로는 기간·코호트가 달라 보라·녹 역전 가능).
- * **집계 순위·레벨%·중앙 배지·환산 합(0~700)**: 랭킹보드 GC 탭과 동일한 `getPeakPowerRanking?duration=gc`(성별·부문) 응답을 우선 적용. 없을 때만 `heptagon_cohort_ranks`·7축 합 병합. 7각형 W/kg 레이더는 **건드리지 않음**.
+ * **집계 순위·레벨%·중앙 배지·GC 종합 점수(가중 합 0~100)**: 랭킹보드 GC 탭과 동일한 `getPeakPowerRanking?duration=gc`(성별·부문) 응답을 우선 적용. 없을 때만 `heptagon_cohort_ranks`·7축 합 병합. 7각형 W/kg 레이더는 **건드리지 않음**.
  * **레벨%** / **n 표기**: `heptagonUseNeffNPlusOne` — **가상·타 연령 부문**에만 Neff=n+1. **전체(Supremo)**·**본인 부문**은 집계 n만. Neff·n≥100 / Neff·n<100 식, r 1‥Neff.
  * **7축** 랭킹·표는 `getPeakPowerRanking` (선택 부문·성별, duration≠gc).
  * Firestore: `heptagon_rank_log/{uid}` (동기화). 팝업: 성별·부문 `heptagon_cohort_ranks` 순위표.
@@ -160,6 +160,21 @@
     return a.key;
   });
   var N_WKG_AXES = DURATIONS.length;
+
+  /**
+   * GC 종합 점수 축별 가중치(총합 1.00, AXES 순서) — Supabase fn_gc_axis_weights()·functions/gcWeights.js 와 동일해야 함.
+   * GC = Σ w_k·S_k (0~100), S_k = positionScore100FromRank
+   */
+  var GC_AXIS_WEIGHTS = { max: 0.05, '1min': 0.1, '5min': 0.2, '10min': 0.15, '20min': 0.25, '40min': 0.15, '60min': 0.1 };
+
+  function gcWeightedScoreFromPositionScores(posScores) {
+    var sum = 0;
+    for (var i = 0; i < N_WKG_AXES; i++) {
+      var v = Number(posScores[i]);
+      sum += GC_AXIS_WEIGHTS[DURATIONS[i]] * (isFinite(v) ? v : 0);
+    }
+    return Math.round(sum * 1e4) / 1e4;
+  }
 
   function buildRankingUrl(uid, duration, periodForPeak, gender) {
     var p = new URLSearchParams();
@@ -1267,7 +1282,7 @@
     var useNeff = heptagonUseNeffNPlusOne(filterCategory, userAgeCategory, isVirt);
     var out = Object.assign({}, tierAfterOvl);
     out.sumPositionScores = gcs;
-    out.avgPositionScore = gcs / 7;
+    out.avgPositionScore = gcs; /* GC 가중 점수 자체가 0~100 */
     out.pTier = pGc;
     out.pTotal = pGc;
     out.pComprehensive = pGc;
@@ -1318,22 +1333,22 @@
   }
 
   /**
-   * 레벨: 7축 **포지션 점수** 합(0~700)·평균(0~100) → `pTier = 100 - 평균` (낮을수록 상위) + 구간(소수 n은 K·상한).
-   * **종합 N위** `comprehensiveRank` = 7축 100분위(포지션) **합 S**·`0~700` → 동일 nRef 띠에서
-   * `1 + (1 - S/700)(nRef-1)` (S↑ → 1위에 가깝게). `pComprehensive` = (그 값 / nRef)·100. 면적과 독립.
+   * 레벨: 7축 **포지션 점수**의 GC 가중 합(0~100, GC_AXIS_WEIGHTS) → `pTier = 100 - GC` (낮을수록 상위) + 구간(소수 n은 K·상한).
+   * **종합 N위** `comprehensiveRank` = GC 점수 S(0~100) → 동일 nRef 띠에서
+   * `1 + (1 - S/100)(nRef-1)` (S↑ → 1위에 가깝게). `pComprehensive` = (그 값 / nRef)·100. 면적과 독립.
    * 그래프 `displayNorm`는 기존 log 스케일.
    */
-  function comprehensiveRankFromSumPosition100(sum0to700, nRef) {
+  function comprehensiveRankFromSumPosition100(score0to100, nRef) {
     var n = nRef | 0;
     if (n < 1) return NaN;
-    var s = Number(sum0to700);
+    var s = Number(score0to100);
     if (!isFinite(s)) return NaN;
     if (s < 0) s = 0;
-    if (s > 700) s = 700;
+    if (s > 100) s = 100;
     if (n === 1) {
       return 1;
     }
-    var r = 1 + (1 - s / 700) * (n - 1);
+    var r = 1 + (1 - s / 100) * (n - 1);
     if (r < 1) r = 1;
     if (r > n) r = n;
     return r;
@@ -1365,9 +1380,9 @@
     }
     if (!allOk) return null;
 
-    var sumPos = 0;
-    for (var j = 0; j < posScores.length; j++) sumPos += posScores[j];
-    var avgPos = sumPos / N_WKG_AXES;
+    /* GC 가중 점수(0~100) — 서버 sum_position_scores 와 같은 값, 평균도 동일 값 사용 */
+    var sumPos = gcWeightedScoreFromPositionScores(posScores);
+    var avgPos = sumPos;
     if (!isFinite(avgPos)) avgPos = 0;
     if (avgPos < 0) avgPos = 0;
     if (avgPos > 100) avgPos = 100;
@@ -1409,7 +1424,7 @@
       octagonArea: comp ? comp.area : null,
       octagonAreaMax: comp ? comp.aMax : null,
       octagonAreaMin: comp ? comp.aMin : null,
-      /** 0~700 합 S 기준 nRef 띠 상 동급순위(실수) — 툴팁 N위·Firestore는 반올림/클램프 */
+      /** GC 점수 S(0~100) 기준 nRef 띠 상 동급순위(실수) — 툴팁 N위·Firestore는 반올림/클램프 */
       comprehensiveRank: rFromSumPos,
       pComprehensive: pComprehensive
     };
@@ -1898,6 +1913,12 @@
         b.sumPositionScores != null && isFinite(Number(b.sumPositionScores)) ? Number(b.sumPositionScores) : 0;
       if (sb !== sa) {
         return sb - sa;
+      }
+      /* 동점: 서버 집계 순위(20분·5분 축 기준) 유지 */
+      var ra = a.boardRank != null && isFinite(Number(a.boardRank)) ? Number(a.boardRank) : Infinity;
+      var rb = b.boardRank != null && isFinite(Number(b.boardRank)) ? Number(b.boardRank) : Infinity;
+      if (ra !== rb) {
+        return ra - rb;
       }
       return String(a.userId).localeCompare(String(b.userId));
     });
@@ -2406,7 +2427,7 @@
       rUi = brMBoard;
       if (myBoardRow.sumPositionScores != null && isFinite(myBoardRow.sumPositionScores)) {
         sumP = Number(myBoardRow.sumPositionScores);
-        avgP = sumP / 7;
+        avgP = sumP;
       }
       if (nEffModal >= 1) {
         pT = heptagonLevelPercentForRankN(brMBoard, nEffModal, isVirtModal, boardC, viewerAgeCategory);
@@ -2422,7 +2443,7 @@
       }
       if (summary.sumPositionScores != null && isFinite(Number(summary.sumPositionScores))) {
         sumP = Number(summary.sumPositionScores);
-        avgP = sumP / 7;
+        avgP = sumP;
       }
       if (summary.pTier != null && isFinite(Number(summary.pTier))) {
         pT = Number(summary.pTier);
@@ -2435,7 +2456,7 @@
       rUi = brM;
       if (myBoardRow.sumPositionScores != null && isFinite(myBoardRow.sumPositionScores)) {
         sumP = Number(myBoardRow.sumPositionScores);
-        avgP = sumP / 7;
+        avgP = sumP;
       }
       if (nEffModal >= 1) {
         pT = heptagonLevelPercentForRankN(brM, nEffModal, isVirtModal, boardC, viewerAgeCategory);
@@ -2546,11 +2567,8 @@
                     : '요약 캐시·7축 합산값(표 본인 행이 아직 없을 때)'
                 }
               >
-                <span>7축 점수 합 (0~700)</span>
-                <strong>
-                  {sumP.toFixed(1)}
-                  {avgP != null ? ' (평균 ' + avgP.toFixed(2) + ')' : ''}
-                </strong>
+                <span>GC 종합 점수 (0~100)</span>
+                <strong>{sumP.toFixed(1)}</strong>
               </div>
             ) : null}
           </div>
@@ -2629,7 +2647,7 @@
             <div className="stelvio-heptagon-detail-modal__tablewrap stelvio-heptagon-detail-modal__tablewrap--neighbor">
               <table className="stelvio-heptagon-detail-modal__table" role="grid">
                 <caption className="stelvio-heptagon-detail-modal__caption">
-                  {categoryLabel} · {genderLabel} — 환산점수 합(0~700)이 높은 순(랭킹보드 GC API·
+                  {categoryLabel} · {genderLabel} — GC 종합 점수(구간별 가중 합, 0~100)가 높은 순(랭킹보드 GC API·
                   <code>heptagon_cohort_ranks</code> 병합 — 모든 사용자 동일 목록, 본인만 스냅샷 밖이면 점수 기준 삽입)
                 </caption>
                 <thead>

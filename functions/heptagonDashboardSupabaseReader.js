@@ -42,13 +42,28 @@ async function fetchCohortBySumDesc(admin, o) {
   if (lim > 10000) lim = 10000;
 
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-  const { data, error } = await supabase
+  /* 최신 집계일 행만 — 이번 집계에서 빠진 사용자의 이전 행(구 점수 스케일 포함)이 섞이지 않게 (GC 랭킹보드와 동일) */
+  const { data: latestRows, error: latestErr } = await supabase
+    .from("heptagon_cohort_ranks")
+    .select("as_of_seoul")
+    .eq("month_key", monthKey)
+    .eq("filter_category", filterCategory)
+    .eq("filter_gender", filterGender)
+    .order("as_of_seoul", { ascending: false })
+    .limit(1);
+  if (latestErr) throw latestErr;
+  const latestAsOf = latestRows && latestRows[0] ? latestRows[0].as_of_seoul : null;
+
+  let q = supabase
     .from("heptagon_cohort_ranks")
     .select("user_id, display_name, board_rank, sum_position_scores, is_private")
     .eq("month_key", monthKey)
     .eq("filter_category", filterCategory)
-    .eq("filter_gender", filterGender)
+    .eq("filter_gender", filterGender);
+  if (latestAsOf) q = q.eq("as_of_seoul", latestAsOf);
+  const { data, error } = await q
     .order("sum_position_scores", { ascending: false })
+    .order("board_rank", { ascending: true })
     .limit(lim);
   if (error) throw error;
 

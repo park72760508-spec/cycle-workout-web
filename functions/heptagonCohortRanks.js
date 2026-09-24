@@ -3,6 +3,7 @@
  * 각 부문 코호트에서는 이 값만으로 **내림차순** 정렬해 `boardRank`를 부여한다(부문마다 별도 환산 합을 계산하지 않음).
  * - 기간: `getRolling90DaysRangeSeoul` (최근 90일, 서울) — 피크는 90일 일별 top2 W/kg
  * - 7축 `sumPositionScores`: 항상 `computeDisplayRankForUser(..., "Supremo", ...)` 랭크로만 산출
+ * - `sumPositionScores` = GC 가중 점수(0~100, gcWeights.js) — 2026-09 이전엔 7축 균등 합(0~700)
  */
 
 const HEPTAGON_DURATIONS = ["max", "1min", "5min", "10min", "20min", "40min", "60min"];
@@ -12,6 +13,7 @@ const N_AXIS = 7;
 const HEPTAGON_COHORT_COL = "heptagon_cohort_ranks";
 const { isRankingEligibleUserData } = require("./rankingEligibility");
 const supabaseUsersReader = require("./supabaseUsersReader");
+const { computeGcWeightedScore, compareGcRows } = require("./gcWeights");
 
 /**
  * 헵타곤 집계용 사용자 메타(표시명·연령 카테고리·비공개 여부) 맵.
@@ -322,14 +324,14 @@ function effectiveRankForAverage(rank, n) {
 }
 
 function stelvioOctagonSmallGroupK(n) {
-  const N = n | 0;
+  let N = n | 0;
   if (N < 1) N = 1;
   if (N >= 100) return 1;
   return 1 + (100 - N) / (100 + N);
 }
 
 function stelvioOctagonPercentCutoffs(nRef) {
-  const N = nRef | 0;
+  let N = nRef | 0;
   if (N < 1) N = 1;
   if (N >= 100) {
     return { k: 1, isLarge: true, cutoffs: [5, 10, 20, 40, 60, 80] };
@@ -410,6 +412,21 @@ function comprehensiveRankFromSumPosition100(sum0to700, nRef) {
   return r;
 }
 
+/** GC 가중 점수(0~100) → 동일 nRef 띠 대응 종합 순위(실수) — SQL fn_comprehensive_rank_from_gc_score 와 동일 */
+function comprehensiveRankFromGcScore(score0to100, nRef) {
+  const n = nRef | 0;
+  if (n < 1) return NaN;
+  let s = Number(score0to100);
+  if (!isFinite(s)) return NaN;
+  if (s < 0) s = 0;
+  if (s > 100) s = 100;
+  if (n === 1) return 1;
+  let r = 1 + (1 - s / 100) * (n - 1);
+  if (r < 1) r = 1;
+  if (r > n) r = n;
+  return r;
+}
+
 function computePTotalAndTierHeptagon(ranks, cohortNPerAxis) {
   if (!ranks || !cohortNPerAxis || ranks.length !== N_AXIS || cohortNPerAxis.length !== N_AXIS) {
     return null;
@@ -434,14 +451,15 @@ function computePTotalAndTierHeptagon(ranks, cohortNPerAxis) {
   }
   if (!allOk) return null;
 
-  let sumPos = 0;
-  for (let j = 0; j < posScores.length; j++) sumPos += posScores[j];
-  const avgPos = sumPos / N_AXIS;
-  if (!isFinite(avgPos)) return null;
+  /* GC 가중 점수(0~100): sum·avg 모두 이 값 (SQL fn_compute_gc_weighted_heptagon 과 동일) */
+  const gcScore = computeGcWeightedScore(posScores);
+  if (gcScore == null || !isFinite(gcScore)) return null;
+  const sumPos = gcScore;
+  const avgPos = gcScore;
   const pTier = 100 - Math.max(0, Math.min(100, avgPos));
   const cspec = stelvioOctagonPercentCutoffs(nRef);
   const tierId = tierIdFromP(pTier, cspec.cutoffs);
-  const rFromSumPos = comprehensiveRankFromSumPosition100(sumPos, nRef);
+  const rFromSumPos = comprehensiveRankFromGcScore(gcScore, nRef);
   if (!isFinite(rFromSumPos)) return null;
   const pComprehensive = nRef >= 1 ? (rFromSumPos / nRef) * 100 : pTier;
   return {
@@ -636,10 +654,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         if (!pre) continue;
         rows.push({ ...pre });
       }
-      rows.sort((a, b) => {
-        if (b.sumPositionScores !== a.sumPositionScores) return b.sumPositionScores - a.sumPositionScores;
-        return String(a.userId).localeCompare(String(b.userId));
-      });
+      rows.sort(compareGcRows);
       const L = rows.length;
       for (let i = 0; i < rows.length; i++) {
         const boardRank = i + 1;
@@ -648,7 +663,7 @@ async function runRebuildHeptagonCohortRanks(db, deps) {
         const ref = db.collection(HEPTAGON_COHORT_COL).doc(docId);
         const pCohort = heptagonLevelPercentForRankN(boardRank, L);
         const boardTierId = heptagonCohortBoardTierIdFromLevelPercent(pCohort);
-        const crSynth = comprehensiveRankFromSumPosition100(r.sumPositionScores, L);
+        const crSynth = comprehensiveRankFromGcScore(r.sumPositionScores, L);
         const crSynthI = isFinite(crSynth) ? Math.max(1, Math.min(L, Math.round(crSynth))) : null;
 
         /** 전일 03:20 정규 집계 순위(yesterdayOfficial) 고정 — 당일 수동 재집계 시에도 덮어쓰지 않음 */
@@ -861,12 +876,10 @@ async function buildLiveGcRankingPayload(db, filterGender, deps) {
         is_private: r.is_private === true,
         rank: 0,
         gcScore: r.sumPositionScores,
+        positionScores100: r.positionScores100,
       });
     }
-    apiRows.sort((a, b) => {
-      if (b.gcScore !== a.gcScore) return b.gcScore - a.gcScore;
-      return String(a.userId).localeCompare(String(b.userId));
-    });
+    apiRows.sort(compareGcRows);
     for (let i = 0; i < apiRows.length; i++) {
       apiRows[i].rank = i + 1;
     }
@@ -1046,6 +1059,10 @@ function rerankGcBoardRows(rows) {
     const sb = b.gcScore != null && isFinite(Number(b.gcScore)) ? Number(b.gcScore) : 0;
     const sa = a.gcScore != null && isFinite(Number(a.gcScore)) ? Number(a.gcScore) : 0;
     if (sb !== sa) return sb - sa;
+    /* 동점: 집계(SQL)가 20분·5분 축으로 정한 기존 순위 유지 */
+    const ra = a.rank != null && isFinite(Number(a.rank)) ? Number(a.rank) : Infinity;
+    const rb = b.rank != null && isFinite(Number(b.rank)) ? Number(b.rank) : Infinity;
+    if (ra !== rb) return ra - rb;
     return String(a.userId || "").localeCompare(String(b.userId || ""));
   });
 
@@ -1091,6 +1108,8 @@ module.exports = {
   filterDocsToLatestAsOfSeoul,
   filterLatestGcDocsWithRankMovement,
   rerankGcBoardRows,
+  computePTotalAndTierHeptagon,
+  comprehensiveRankFromGcScore,
   asOfSeoulYmdFromDoc,
   HEPTAGON_COHORT_COL,
   HEPTAGON_GENDERS,
