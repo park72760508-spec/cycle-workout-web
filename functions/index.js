@@ -10079,38 +10079,7 @@ if (STRAVA_CLIENT_SECRET) {
 //   }
 // );
 
-/** KST 03:40 — 마스터 집계 (주간 TSS·TOP10·거리·항속). 02:50 피크·03:20 헵타곤 complete 후만 실행. */
-exports.rebuildRankingAggregates = onSchedule(
-  {
-    schedule: RANKING_REBUILD_CRON,
-    timeZone: "Asia/Seoul",
-    memory: "2GiB",
-    /** Cloud Scheduler(onSchedule) 상한 1800s — 초과 시 deploy 실패 */
-    timeoutSeconds: 1800,
-  },
-  async () => {
-    const db = admin.firestore();
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "rebuildRankingAggregates"))) {
-        console.log(
-          "[rebuildRankingAggregates] Supabase pg_cron 03:40 KST handles weekly aggregate (Firebase write disabled)"
-        );
-        return;
-      }
-      await assertPeakHeptagonCompleteBeforeMaster(db);
-      const r = await runRebuildRankingAggregatesCore(db);
-      console.log("[rebuildRankingAggregates] master ok", r);
-    } catch (e) {
-      console.error("[rebuildRankingAggregates]", e && e.message ? e.message : e);
-      try {
-        await markMasterDailyRankingRebuildFailed(db, e, { source: "rebuildRankingAggregates" });
-      } catch (eMeta) {
-        console.warn("[rebuildRankingAggregates] failed meta write:", eMeta && eMeta.message);
-      }
-      throw e;
-    }
-  }
-);
+/* rebuildRankingAggregates: 2026-09-25 삭제 — Supabase pg_cron 이 대체(비용 절감 1단계에서 일시중지 후 제거) */
 
 /**
  * 수동: `rebuildRankingAggregates`(03:40 마스터)와 동일. ?skipPeakHeptagonGate=1 선행 게이트 생략.
@@ -10317,36 +10286,7 @@ exports.manualRebuildRankingPhase = onRequest(
   }
 );
 
-/** KST 09:00 — 주간 마일리지 TOP10·TSS 보드 전체 재집계 (낮 1회, 03:40 마스터와 별도) */
-exports.scheduledWeeklyTop10PeakRefresh = onSchedule(
-  supabaseDualWriteServer.appendServiceRoleSecret({
-    schedule: WEEKLY_MILEAGE_TOP10_DAYTIME_CRON,
-    timeZone: "Asia/Seoul",
-    memory: "1GiB",
-    timeoutSeconds: 540,
-  }),
-  async () => {
-    const db = admin.firestore();
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledWeeklyTop10PeakRefresh"))) {
-        console.log(
-          "[scheduledWeeklyTop10PeakRefresh] Supabase pg_cron 09:00 KST primary — Functions RPC fallback"
-        );
-        const r = await runSupabaseWeeklyTssDaytimePipeline(
-          db,
-          "[scheduledWeeklyTop10PeakRefresh-supabase]"
-        );
-        console.log("[scheduledWeeklyTop10PeakRefresh] supabase daytime ok", r);
-        return;
-      }
-      const r = await refreshWeeklyMileageTop10AggregatesOnly(db);
-      console.log("[scheduledWeeklyTop10PeakRefresh] 09:00 KST TOP10 refresh", r);
-    } catch (e) {
-      console.error("[scheduledWeeklyTop10PeakRefresh]", e && e.message ? e.message : e);
-      throw e;
-    }
-  }
-);
+/* scheduledWeeklyTop10PeakRefresh: 2026-09-25 삭제 — Supabase pg_cron 이 대체(비용 절감 1단계에서 일시중지 후 제거) */
 
 /** @deprecated KST 00:05 증분 스케줄 제거 — TOP10은 03:40 마스터 + 09:00 2회만 갱신. refreshWeeklyTssMidnightIncremental()은 수동용 유지 */
 
@@ -10388,105 +10328,12 @@ if (STRAVA_CLIENT_SECRET) {
  * KST 02:50 — Strava 00:10 갭 탐지 직후 peak_28d rollup → 피크 보드(21) → 헵타곤 GC.
  * 23:00 마스터 타임아웃·고착 시에도 Max~60분·7축이 당일 갱신되도록 분리.
  */
-/** KST 02:50 — 28일 피크 보드만 (헵타곤은 03:20 별도 스케줄, 9분 한도 회피) */
-exports.scheduledPeak28dBoardAndHeptagon = onSchedule(
-  {
-    schedule: "50 2 * * *",
-    timeZone: "Asia/Seoul",
-    memory: "2GiB",
-    timeoutSeconds: 1800,
-  },
-  async () => {
-    const db = admin.firestore();
-    const dateKst = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Seoul" });
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dBoardAndHeptagon"))) return;
-      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-        {
-          dateKst,
-          status: "running",
-          runningAt: admin.firestore.FieldValue.serverTimestamp(),
-          step: "peak_only",
-        },
-        { merge: true }
-      );
-      const peakRes = await runRankingAggregatePeakMonthly28d(db, null, {
-        ensureMissingDays: false,
-        skipRollupBatch: true,
-        skipUsersFetch: true,
-        allowLegacyFallback: false,
-      });
-      console.log("[scheduledPeak28dBoardAndHeptagon] peak boards", peakRes);
-      await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-        {
-          dateKst,
-          status: "complete",
-          completedAt: admin.firestore.FieldValue.serverTimestamp(),
-          runningAt: admin.firestore.FieldValue.delete(),
-          peakSummary: peakRes,
-          note: "heptagon_scheduled_at_0320",
-        },
-        { merge: true }
-      );
-      console.log("[scheduledPeak28dBoardAndHeptagon] peak ok (heptagon → scheduledPeak28dHeptagonOnly)", peakRes);
-    } catch (e) {
-      console.error("[scheduledPeak28dBoardAndHeptagon]", e && e.message ? e.message : e);
-      try {
-        await db.collection("ranking_meta").doc("peak_28d_board_refresh").set(
-          {
-            dateKst,
-            status: "failed",
-            failedAt: admin.firestore.FieldValue.serverTimestamp(),
-            runningAt: admin.firestore.FieldValue.delete(),
-            lastError: e && e.message ? String(e.message).slice(0, 2000) : String(e),
-          },
-          { merge: true }
-        );
-      } catch (_eM) {}
-      throw e;
-    }
-  }
-);
+/* scheduledPeak28dBoardAndHeptagon: 2026-09-25 삭제 — Supabase pg_cron 이 대체(비용 절감 1단계에서 일시중지 후 제거) */
 
 /** peak_28d rollup 청크 백필 — Supabase pg_cron stelvio_ranking_metrics_backfill_chunk 로 이관 (2026-06-28). */
 
-/** KST 03:20 — 02:50 피크 보드 이후 헵타곤 GC (단독 9분) */
-exports.scheduledPeak28dHeptagonOnly = onSchedule(
-  {
-    schedule: "20 3 * * *",
-    timeZone: "Asia/Seoul",
-    memory: "2GiB",
-    timeoutSeconds: 540,
-  },
-  async () => {
-    const db = admin.firestore();
-    try {
-      if (!(await shouldRunFirebaseRankingScheduledJob(db, "scheduledPeak28dHeptagonOnly"))) return;
-      await markHeptagonRebuildRunning(db);
-      const heptRes = await runHeptagonCohortRanksRebuildJob();
-      await markHeptagonDailyRebuildComplete(db, heptRes);
-      console.log("[scheduledPeak28dHeptagonOnly] ok", heptRes);
-    } catch (e) {
-      console.error("[scheduledPeak28dHeptagonOnly]", e && e.message ? e.message : e);
-      try {
-        await markHeptagonRebuildFailed(db, e);
-      } catch (_eH) {}
-      throw e;
-    }
-  }
-);
+/* scheduledPeak28dHeptagonOnly: 2026-09-25 삭제 — Supabase pg_cron 이 대체(비용 절감 1단계에서 일시중지 후 제거) */
 
-/**
- * KST 03:40 — Strava 00:10·Supabase 03:15 집계 후 Firebase vs Supabase 랭킹 정합성 리포트.
- * ranking_meta/supabase_parity_audit 에 저장 (네이버 결제·Strava 스케줄 본체는 변경 없음).
- */
-const scheduledRankingParityAuditOptions =
-  supabaseDualWriteServer.appendServiceRoleSecret({
-    schedule: "40 3 * * *",
-    timeZone: "Asia/Seoul",
-    memory: "512MiB",
-    timeoutSeconds: 300,
-  });
 /**
  * 관리자(grade=1): 랭킹·집계 Read DB 전환 — appConfig/supabase_read_routing
  * GET: 현재 readSource(firebase|supabase) · POST/JSON body: { readSource: "firebase"|"supabase" }
@@ -13302,25 +13149,7 @@ exports.ingestRidingGroupDualWriteRelay = onRequest(
 
 Object.assign(exports, groupDualWriteTriggers);
 
-exports.scheduledRankingParityAudit = onSchedule(
-  scheduledRankingParityAuditOptions,
-  async () => {
-    const db = admin.firestore();
-    try {
-      await rankingParity.runNightlyParityAudit(admin, db, {
-        getWeekRangeSeoul,
-        getRolling28DaysRangeSeoul,
-        getRolling90DaysRangeSeoul,
-      });
-    } catch (e) {
-      console.error(
-        "[scheduledRankingParityAudit]",
-        e && e.message ? e.message : e
-      );
-      throw e;
-    }
-  }
-);
+/* scheduledRankingParityAudit: 2026-09-25 삭제 — Supabase pg_cron 이 대체(비용 절감 1단계에서 일시중지 후 제거) */
 
 // ---------- STELVIO 헵타곤·GC 랭킹: heptagon_cohort_ranks (일 1회 03:20 KST — scheduledPeak28dHeptagonOnly) ----------
 const heptagonCohortRanks = require("./heptagonCohortRanks");
