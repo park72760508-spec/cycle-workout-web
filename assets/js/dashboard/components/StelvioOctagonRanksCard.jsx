@@ -4638,7 +4638,7 @@
           fillGradId = 'stelvio-hept-fill-rad-def';
         }
         return (
-          <svg viewBox="0 0 200 200" className="w-full h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
+          <svg viewBox="0 0 200 200" overflow="visible" className="w-full h-[260px] touch-manipulation" role="img" aria-label="STELVIO 피크 파워 7축 헵타곤 레벨 포지션">
             <defs>
               <radialGradient
                 id={fillGradId}
@@ -4706,6 +4706,10 @@
                   {changeSuffix ? <title>{changeSuffix.title}</title> : null}
                   <tspan x={lx} dy="0" style={{ fontSize: '9.5px', fontWeight: 600 }}>
                     {ax.label}
+                    {/* GC 종합 점수 구간 가중치 */}
+                    <tspan style={{ fontSize: '7.5px', fontWeight: 600, fill: '#7c3aed' }}>
+                      {'(' + Math.round(GC_AXIS_WEIGHTS[ax.key] * 100) + '%)'}
+                    </tspan>
                   </tspan>
                   <tspan x={lx} dy="11" style={{ fontSize: '7.5px', fill: '#64748b' }}>
                     {mr != null ? mr + '위' : '—'}
