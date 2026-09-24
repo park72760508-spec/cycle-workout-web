@@ -46,6 +46,7 @@ class WriteError extends Error {
   constructor(status, msg) { super(msg); this.status = status; }
 }
 stub('./supabaseDualWriteServer.js', { getSupabaseAdminClient: () => fakeSupabase });
+stub('./supabaseUidMap.js', { getUuidToFirebaseUidMap: async () => new Map([['u-rider', 'rider'], ['u-other', 'other']]) });
 stub('./supabaseGroupDualWriteServer.js', {
   resolveUserUuid: (uid) => 'u-' + uid,
   resolveRidingGroupUuid: (gid) => 'g-' + gid,
@@ -166,6 +167,7 @@ test('조회: 진행 미션 + 내 완료 단계, 방장이면 canManage', async 
   // other: 40×2/2 + 60×140/2/100 = 82, rider: 40×1/2 + 60×90/2/100 = 47
   assert.deepEqual(mine.leaderboard.map((r) => [r.name, r.total, r.isMe]), [['홍**', 82, false], ['라이더', 47, true]]);
   assert.equal(mine.myRank, 2);
+  assert.deepEqual(mine.leaderboard.map((r) => r.uid), ['other', 'rider']);
   assert.equal(mine.canManage, false);
   assert.equal(mine.mission.steps.length, 2);
   const owner = await missions.handleGetClubMission(fakeAdmin, 'owner', { groupId: 'club1' });

@@ -13,6 +13,7 @@ const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 
 const clubMissionScoring = require("./clubMissionScoring");
+const supabaseUidMap = require("./supabaseUidMap");
 
 const { WriteError, fetchOrBackfillGroupRow, isRidingGroupAdminGrade } = ridingGroupSupabaseWrites;
 
@@ -204,12 +205,22 @@ async function handleGetClubMission(admin, uid, body) {
         .in("id", ids);
       (profs || []).forEach((p) => names.set(String(p.id), p));
     }
+    // 클럽 상세 멤버 리스트(항목 '미션')가 Firebase uid로 멤버와 매칭하므로 함께 내려준다
+    let fbUidByUuid = new Map();
+    if (ids.length) {
+      try {
+        fbUidByUuid = (await supabaseUidMap.getUuidToFirebaseUidMap(admin)) || new Map();
+      } catch (eMap) {
+        console.warn("[clubMissions] uid map failed:", eMap && eMap.message);
+      }
+    }
     leaderboard = ranked.map((r) => {
       const p = names.get(r.userId) || {};
       const isMe = !!userUuid && r.userId === String(userUuid);
       if (isMe) myRank = r.rank;
       return {
         rank: r.rank,
+        uid: fbUidByUuid.get(r.userId) || null,
         name: maskName(p.display_name, p.is_private === true, isMe),
         isMe,
         completed: r.completed,

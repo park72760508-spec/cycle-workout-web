@@ -6717,51 +6717,6 @@ function ClubMissionDetailModal(props) {
   );
 }
 
-/**
- * 달성도 순위 — 순위 점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (functions/clubMissionScoring.js).
- * 상위 10명 + (10위 밖이면) 본인 행.
- */
-function ClubMissionLeaderboard(props) {
-  var rows = props.rows || [];
-  var myRank = props.myRank;
-  var top = rows.slice(0, 10);
-  var me = rows.find(function (r) { return r.isMe; });
-  var showMeBelow = me && me.rank > 10;
-  function row(r) {
-    return (
-      <li
-        key={r.rank + '-' + r.name}
-        className={'flex items-center gap-2 px-2 py-1.5 rounded-lg ' + (r.isMe ? 'bg-violet-50 font-semibold' : '')}
-      >
-        <span className="w-7 shrink-0 text-center text-xs font-bold text-slate-500">{r.rank}</span>
-        <span className="flex-1 min-w-0 truncate text-slate-800">{r.name}{r.isMe ? ' (나)' : ''}</span>
-        <span className="shrink-0 text-[11px] text-slate-500">수행 {r.completionRate}%</span>
-        <span className="w-14 shrink-0 text-right text-violet-700 font-bold">{r.total}</span>
-      </li>
-    );
-  }
-  return (
-    <div className="mt-4 border-t border-slate-100 pt-3">
-      <div className="flex items-baseline justify-between mb-1">
-        <h4 className="text-sm font-semibold text-slate-800 m-0">달성도 순위</h4>
-        {myRank ? <span className="text-xs text-violet-700 font-semibold">내 순위 {myRank}위</span> : null}
-      </div>
-      <p className="text-[11px] text-slate-500 m-0 mb-2 leading-snug">
-        점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (인터벌 달성률 × W/kg 가중치 80~100%)
-      </p>
-      {rows.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-3 m-0">아직 미션을 완료한 회원이 없습니다.</p>
-      ) : (
-        <ul className="m-0 p-0 list-none text-sm">
-          {top.map(row)}
-          {showMeBelow ? <li className="text-center text-slate-300 text-xs py-0.5">⋯</li> : null}
-          {showMeBelow ? row(me) : null}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /** 미션 탭 본문 — 미션명·기간·번호 칸 목록(완료 녹색 / 수행할 미션 오렌지 / 미수행 하늘색) */
 function ClubMissionPanel(props) {
   var groupId = props.groupId || '';
@@ -6801,7 +6756,6 @@ function ClubMissionPanel(props) {
 
   var done = new Set((data.completedOrds || []).map(Number));
   var myResults = data.myResults || {};
-  var leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
   var ords = mission.steps.map(function (s) { return Number(s.ord); }).sort(function (a, b) { return a - b; });
   var nextOrd = ords.find(function (o) { return !done.has(o); });
   var today = clubMissionTodayYmd();
@@ -6863,7 +6817,10 @@ function ClubMissionPanel(props) {
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료</span>
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('todo')} />미수행</span>
       </div>
-      <ClubMissionLeaderboard rows={leaderboard} myRank={data.myRank} />
+      <p className="text-[11px] text-slate-500 m-0 mt-3 leading-snug">
+        {data.myRank ? '내 달성도 순위 ' + data.myRank + '위 · ' : ''}
+        달성도 순위는 아래 멤버 목록의 항목을 「미션」으로 선택하면 볼 수 있습니다.
+      </p>
       {detailStep ? (
         <ClubMissionDetailModal
           groupId={groupId}
@@ -14692,7 +14649,13 @@ function OpenRidingGroupDetailView(props) {
   var showRankFilter = isRunGroup || isCycleGroup;
   var rankMetricOptions = isRunGroup
     ? (window.runningRankingConfig && window.runningRankingConfig.CREW_METRIC_OPTIONS) || []
-    : (window.openRidingCycleClubRanking && window.openRidingCycleClubRanking.METRIC_OPTIONS) || [];
+    : ((window.openRidingCycleClubRanking && window.openRidingCycleClubRanking.METRIC_OPTIONS) || []).concat([
+        /* 클럽 챌린지 미션 달성도 순위(수행률 40% + 달성 점수 60%) — 클럽 상세 전용 항목 */
+        { value: 'mission', label: '미션' }
+      ]);
+  var _missionBoard = useState(null);
+  var missionBoard = _missionBoard[0];
+  var setMissionBoard = _missionBoard[1];
   var _rankMetric = useState(function () { return isRunGroup ? 'overall' : 'gc'; });
   var rankMetric = _rankMetric[0];
   var setRankMetric = _rankMetric[1];
@@ -14760,7 +14723,7 @@ function OpenRidingGroupDetailView(props) {
 
   useEffect(
     function () {
-      if (!isCycleGroup) return undefined;
+      if (!isCycleGroup || rankMetric === 'mission') return undefined;
       var api = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
       if (!api || typeof api.fetchClubRanking !== 'function') return undefined;
       var cancelled = false;
@@ -14781,6 +14744,33 @@ function OpenRidingGroupDetailView(props) {
       };
     },
     [isCycleGroup, rankMetric, rankGender]
+  );
+
+  /* 항목 '미션' — 진행 중 클럽 미션의 달성도 순위(서버 getClubMission leaderboard) */
+  useEffect(
+    function () {
+      if (!isCycleGroup || rankMetric !== 'mission') return undefined;
+      var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      if (!groupId || typeof svc.fetchClubMission !== 'function') return undefined;
+      var cancelled = false;
+      setRankLoading(true);
+      svc.fetchClubMission(groupId).then(
+        function (res) {
+          if (cancelled) return;
+          setRankLoading(false);
+          setMissionBoard(res || { mission: null, leaderboard: [] });
+        },
+        function () {
+          if (cancelled) return;
+          setRankLoading(false);
+          setMissionBoard({ mission: null, leaderboard: [], error: true });
+        }
+      );
+      return function () {
+        cancelled = true;
+      };
+    },
+    [isCycleGroup, rankMetric, groupId]
   );
 
   /* 아바타 확대 오버레이용 — GC·주간TSS·최근 30일 거리·독주 4개 항목을 선택된 탭과 무관하게 병렬로
@@ -14833,6 +14823,34 @@ function OpenRidingGroupDetailView(props) {
           paceDistance: rankPaceDistance,
           movement: mv
         });
+      } else if (isCycleGroup && rankMetric === 'mission') {
+        if (!missionBoard) return null;
+        var memberByUid = {};
+        (members || []).forEach(function (m) {
+          var mid = m && (m.userId || m.uid || m.id) ? String(m.userId || m.uid || m.id) : '';
+          if (mid) memberByUid[mid] = m;
+        });
+        ranked = [];
+        (missionBoard.leaderboard || []).forEach(function (row) {
+          var m = row && row.uid ? memberByUid[String(row.uid)] : null;
+          if (!m) return; // 탈퇴 등으로 현재 멤버가 아닌 기록은 멤버 리스트에 표시하지 않음
+          ranked.push(
+            Object.assign({}, m, {
+              firebaseUid: String(row.uid),
+              socialUserId: String(row.uid),
+              value: Number(row.total) || 0,
+              valueLabel: (Number(row.total) || 0).toFixed(1),
+              missionCompleted: row.completed,
+              missionCompletionRate: row.completionRate,
+              boardRank: row.rank,
+              rank: row.rank,
+              rankChange: null,
+              _groupRole: m.role || 'member'
+            })
+          );
+        });
+        /* 서버 순위(동점 규칙 포함) 순서를 유지하고, 현재 멤버끼리 1위부터 다시 매김 */
+        ranked.forEach(function (item, idx) { item._crewRank = idx + 1; });
       } else if (isCycleGroup) {
         var cycleApi = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
         if (!cycleApi || typeof cycleApi.buildClubMemberRankedList !== 'function' || !rankByCategory) return null;
@@ -14893,7 +14911,8 @@ function OpenRidingGroupDetailView(props) {
       rankGender,
       rankCategory,
       rankPaceDistance,
-      rankMovementInfo
+      rankMovementInfo,
+      missionBoard
     ]
   );
 
@@ -15621,6 +15640,8 @@ function OpenRidingGroupDetailView(props) {
               })}
             </select>
           </div>
+          {rankMetric === 'mission' ? null : (
+          <React.Fragment>
           <div className="stelvio-gender-dropdown">
             <span className="stelvio-dropdown-caption">성별</span>
             <span className="stelvio-dropdown-label">
@@ -15663,7 +15684,20 @@ function OpenRidingGroupDetailView(props) {
               })}
             </select>
           </div>
+          </React.Fragment>
+          )}
         </div>
+      ) : null}
+
+      {isCycleGroup && rankMetric === 'mission' && missionBoard && !rankLoading ? (
+        /* 미션 순위 기준 안내 — 진행 중 미션이 없으면 그 사실을 알린다 */
+        <p className="text-[11px] text-slate-500 text-center m-0 px-3 leading-snug">
+          {missionBoard.mission
+            ? '「' + missionBoard.mission.title + '」 달성도 순위 · 점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (인터벌 달성률 × W/kg 가중치 80~100%)'
+            : missionBoard.error
+              ? '미션 순위를 불러오지 못했습니다.'
+              : '진행 중인 클럽 미션이 없습니다.'}
+        </p>
       ) : null}
 
       {isRunGroup && rankMetric === 'pace' ? (
@@ -15759,6 +15793,7 @@ function OpenRidingGroupDetailView(props) {
                     var ct = typeof window !== 'undefined' ? window.runningRankingCrewTab : null;
                     return ct && typeof ct.crewMetricUnit === 'function' ? ct.crewMetricUnit(rankMetric) : 'pt';
                   }
+                  if (rankMetric === 'mission') return '점';
                   var cycleCt = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
                   return cycleCt && typeof cycleCt.metricUnit === 'function' ? cycleCt.metricUnit(rankMetric) : '점';
                 })()}
