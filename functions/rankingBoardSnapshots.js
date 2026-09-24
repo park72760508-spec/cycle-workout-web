@@ -17,6 +17,12 @@ const PEAK_DURATIONS = ["max", "1min", "5min", "10min", "20min", "40min", "60min
 /** 4단계: 실시간 보드 — 배치 경계 대신 Supabase 변경 신호(live epoch)로 공용본을 구분 */
 const LIVE_DURATIONS = ["tss", "personal_dist", "group_dist"];
 
+/**
+ * 서버 currentUser 가 탈퇴자 필터 **전** 행인 보드 — 코어 캐시가 없어 매 요청 새 객체에 붙는다.
+ * (GC·피크·독주·TSS 는 인메모리 코어 캐시 객체가 이전 응답의 필터로 이미 교체돼 있어 필터 후 행)
+ */
+const PRE_FILTER_CURRENT_USER_DURATIONS = ["personal_dist", "group_dist"];
+
 function isLiveDuration(duration) {
   return LIVE_DURATIONS.indexOf(String(duration || "")) >= 0;
 }
@@ -102,11 +108,46 @@ async function maybeWriteRankingBoardSnapshot(query, payload, filterWithdrawn, l
           })
         );
       }
+      const preRows = PRE_FILTER_CURRENT_USER_DURATIONS.indexOf(duration) >= 0 ? capturePreFilterRows(shared) : null;
       if (typeof filterWithdrawn === "function") filterWithdrawn(shared);
+      if (preRows) attachPreFilterDiffs(shared, preRows);
     });
   } catch (err) {
     console.warn("[rankingBoardSnapshots] write skipped:", err && err.message ? err.message : err);
   }
+}
+
+/**
+ * 30일 거리·클럽 거리: 서버 currentUser 는 탈퇴자 필터(부문 내 순위 재부여·순위변동 재계산) **전** 행 객체다.
+ * 부문 행마다 필터 전과 달라진 필드만 _pre 로 남겨, 앱이 같은 currentUser 를 복원하게 한다.
+ * (값이 없던 필드는 {"__undef": true})
+ */
+function capturePreFilterRows(shared) {
+  const pre = {};
+  const cats = shared.byCategory && typeof shared.byCategory === "object" ? Object.keys(shared.byCategory) : [];
+  cats.forEach((c) => {
+    pre[c] = {};
+    (Array.isArray(shared.byCategory[c]) ? shared.byCategory[c] : []).forEach((row) => {
+      if (row && row.userId != null) pre[c][String(row.userId)] = JSON.parse(JSON.stringify(row));
+    });
+  });
+  return pre;
+}
+
+function attachPreFilterDiffs(shared, pre) {
+  Object.keys(pre).forEach((c) => {
+    (Array.isArray(shared.byCategory && shared.byCategory[c]) ? shared.byCategory[c] : []).forEach((row) => {
+      const before = row && row.userId != null ? pre[c][String(row.userId)] : null;
+      if (!before) return;
+      const d = {};
+      new Set(Object.keys(before).concat(Object.keys(row))).forEach((k) => {
+        if (k === "_origRank") return;
+        if (JSON.stringify(before[k]) === JSON.stringify(row[k])) return;
+        d[k] = Object.prototype.hasOwnProperty.call(before, k) ? before[k] : { __undef: true };
+      });
+      if (Object.keys(d).length) row._pre = d;
+    });
+  });
 }
 
 /**
@@ -177,4 +218,6 @@ module.exports = {
   snapshotKeyForQuery,
   boundariesForDuration,
   stripViewerFields,
+  capturePreFilterRows,
+  attachPreFilterDiffs,
 };

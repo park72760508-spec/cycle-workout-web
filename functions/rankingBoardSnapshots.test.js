@@ -58,3 +58,11 @@ test('클럽 거리: 뷰어 참가 여부는 공용본에서 false 로 초기화
   assert.equal(out.entries[0].currentUserParticipated, false);
   assert.ok(!('currentUserParticipated' in { userId: 'x' }));
 });
+
+test('필터 전 차이(_pre): 바뀐 필드만, 없던 필드는 __undef', () => {
+  const shared = { byCategory: { Rosa: [{ userId: 'u', rank: 8, totalKm: 10 }] } };
+  const pre = snap.capturePreFilterRows(shared);
+  shared.byCategory.Rosa = [{ userId: 'u', rank: 4, totalKm: 10, rankChange: 0 }];
+  snap.attachPreFilterDiffs(shared, pre);
+  assert.deepEqual(shared.byCategory.Rosa[0]._pre, { rank: 8, rankChange: { __undef: true } });
+});

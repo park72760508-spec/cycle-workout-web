@@ -315,6 +315,15 @@
     if (!row) return row;
     var o = Object.assign({}, row);
     delete o._origRank;
+    /* 실시간 보드: 서버 currentUser 는 탈퇴자 필터 전 행 — 필터 전 값(_pre)으로 되돌린다 */
+    if (o._pre && typeof o._pre === 'object') {
+      Object.keys(o._pre).forEach(function (k) {
+        var v = o._pre[k];
+        if (v && typeof v === 'object' && v.__undef === true) delete o[k];
+        else o[k] = v;
+      });
+    }
+    delete o._pre;
     return o;
   }
 
@@ -340,7 +349,7 @@
     var cats = payload.byCategory ? Object.keys(payload.byCategory) : [];
     for (var c = 0; c < cats.length; c++) {
       var rows = payload.byCategory[cats[c]] || [];
-      for (var k = 0; k < rows.length; k++) if (rows[k]) delete rows[k]._origRank;
+      for (var k = 0; k < rows.length; k++) if (rows[k]) { delete rows[k]._origRank; delete rows[k]._pre; }
     }
     if (Array.isArray(payload.entries)) {
       for (var e = 0; e < payload.entries.length; e++) if (payload.entries[e]) delete payload.entries[e]._origRank;
