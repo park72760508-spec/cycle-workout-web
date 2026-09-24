@@ -8444,7 +8444,17 @@ function validateNewUserForm() {
 
 document.addEventListener('DOMContentLoaded', function() {
   console.log('📱 인증 시스템 초기화 시작');
-  
+
+  /* 조기 부트(stelvioBootEarly)가 이미 인증 화면/자동 로그인 라우팅을 끝냈으면 화면을 건드리지 않는다.
+     (이전: 여기서 스플래시 활성으로 오판해 모든 화면을 숨김 → window load(저사양 Android에서 ~10초 뒤)까지
+      로그인 화면이 사라져 인증 로딩이 크게 지연됨) */
+  if (window.__stelvioEarlyBootDone) {
+    setTimeout(() => {
+      initializeAuthenticationSystem();
+    }, 500);
+    return;
+  }
+
   // 스플래시 화면이 활성화되어 있으면 인증 화면 초기화 건너뛰기
   const splashScreen = document.getElementById('splashScreen');
   const isSplashActive = splashScreen && splashScreen.classList.contains('active');
