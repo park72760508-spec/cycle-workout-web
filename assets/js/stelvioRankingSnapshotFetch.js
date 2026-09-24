@@ -141,17 +141,40 @@
   }
 
   /** attachCurrentUserToPayload 와 동일 — 부문 배열에서 본인 행을 찾아 currentUser 로 */
+  function withOrigRank(row) {
+    if (!row) return row;
+    var o = Object.assign({}, row);
+    if (o._origRank != null) o.rank = o._origRank;
+    delete o._origRank;
+    return o;
+  }
+
+  /**
+   * attachCurrentUserToPayload 와 동일 — 부문 배열에서 본인 행을 찾아 currentUser 로.
+   * 서버는 탈퇴자 필터(순위 재부여) 전에 붙이므로 currentUser·동기부여 메시지는 필터 전 순위(_origRank)를 쓴다.
+   * 스냅샷 전용 필드 _origRank 는 이후 모든 행에서 제거해 기존 응답과 같은 모양으로 맞춘다.
+   */
   function attachCurrentUser(payload, uid) {
-    if (!uid || !payload.byCategory) return;
-    for (var i = 0; i < USER_LOOKUP_ORDER.length; i++) {
-      var arr = payload.byCategory[USER_LOOKUP_ORDER[i]] || [];
-      for (var j = 0; j < arr.length; j++) {
-        if (arr[j] && String(arr[j].userId) === String(uid)) {
-          payload.currentUser = arr[j];
-          payload.motivationMessage = buildMotivationMessage(arr[j], j > 0 ? arr[j - 1] : null);
-          return;
+    if (uid && payload.byCategory) {
+      outer: for (var i = 0; i < USER_LOOKUP_ORDER.length; i++) {
+        var arr = payload.byCategory[USER_LOOKUP_ORDER[i]] || [];
+        for (var j = 0; j < arr.length; j++) {
+          if (arr[j] && String(arr[j].userId) === String(uid)) {
+            var cur = withOrigRank(arr[j]);
+            payload.currentUser = cur;
+            payload.motivationMessage = buildMotivationMessage(cur, j > 0 ? withOrigRank(arr[j - 1]) : null);
+            break outer;
+          }
         }
       }
+    }
+    var cats = payload.byCategory ? Object.keys(payload.byCategory) : [];
+    for (var c = 0; c < cats.length; c++) {
+      var rows = payload.byCategory[cats[c]] || [];
+      for (var k = 0; k < rows.length; k++) if (rows[k]) delete rows[k]._origRank;
+    }
+    if (Array.isArray(payload.entries)) {
+      for (var e = 0; e < payload.entries.length; e++) if (payload.entries[e]) delete payload.entries[e]._origRank;
     }
   }
 
@@ -195,11 +218,7 @@
           break;
         }
       }
-      if (payload.currentUser && String(payload.currentUser.userId) === info.uid) {
-        payload.currentUser.heptagonRanks = ranks;
-        payload.currentUser.heptagonCohortNPerAxis = cohortN;
-        payload.currentUser.positionScores100 = pos;
-      }
+      /* 서버는 7축을 currentUser 부착 전에 붙이므로 currentUser 에는 넣지 않는다(기존 응답과 동일) */
     }).catch(function () {});
   }
 
