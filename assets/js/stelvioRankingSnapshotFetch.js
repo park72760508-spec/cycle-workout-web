@@ -141,18 +141,18 @@
   }
 
   /** attachCurrentUserToPayload 와 동일 — 부문 배열에서 본인 행을 찾아 currentUser 로 */
+  /** 행 복사(스냅샷 전용 _origRank 제거) — 순위는 목록과 같은 탈퇴자 필터 후 값 */
   function withOrigRank(row) {
     if (!row) return row;
     var o = Object.assign({}, row);
-    if (o._origRank != null) o.rank = o._origRank;
     delete o._origRank;
     return o;
   }
 
   /**
    * attachCurrentUserToPayload 와 동일 — 부문 배열에서 본인 행을 찾아 currentUser 로.
-   * 서버는 탈퇴자 필터(순위 재부여) 전에 붙이므로 currentUser·동기부여 메시지는 필터 전 순위(_origRank)를 쓴다.
-   * 스냅샷 전용 필드 _origRank 는 이후 모든 행에서 제거해 기존 응답과 같은 모양으로 맞춘다.
+   * 순위는 목록 표시와 같은 탈퇴자 필터 후 값(현재 Cloud Run 응답과 동일).
+   * 스냅샷 전용 필드 _origRank 는 모든 행에서 제거해 기존 응답과 같은 모양으로 맞춘다.
    */
   function attachCurrentUser(payload, uid) {
     if (uid && payload.byCategory) {
