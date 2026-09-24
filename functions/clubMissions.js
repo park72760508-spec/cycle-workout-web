@@ -12,7 +12,14 @@ const supabaseDualWriteServer = require("./supabaseDualWriteServer");
 const supabaseGroupDualWrite = require("./supabaseGroupDualWriteServer");
 const ridingGroupSupabaseWrites = require("./ridingGroupSupabaseWrites");
 
+const clubMissionScoring = require("./clubMissionScoring");
+
 const { WriteError, fetchOrBackfillGroupRow, isRidingGroupAdminGrade } = ridingGroupSupabaseWrites;
+
+/** STELVIO(구글시트) 워크아웃 조회 — 프런트 window.GAS_URL 과 동일한 공개 웹앱 */
+const GAS_WORKOUT_URL =
+  "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec";
+const MAX_SEGMENTS = 200;
 
 const MAX_STEPS = 60;
 /** 훈련 로그 수행 시간이 워크아웃 총 시간의 이 비율 이상이어야 완료로 인정 */
@@ -43,6 +50,53 @@ function sanitizeSteps(stepsRaw) {
       totalSeconds: Math.max(0, Math.floor(Number(s && s.totalSeconds) || 0)),
     };
   });
+}
+
+function sanitizeSegments(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, MAX_SEGMENTS).map((seg) => ({
+    segment_type: String((seg && seg.segment_type) || "").slice(0, 30),
+    duration_sec: Math.max(0, Math.floor(Number(seg && (seg.duration_sec != null ? seg.duration_sec : seg.duration)) || 0)),
+    target_type: String((seg && seg.target_type) || "ftp_pct").slice(0, 30),
+    target_value: String(seg && seg.target_value != null ? seg.target_value : "").slice(0, 30),
+    ramp: seg && seg.ramp === "linear" ? "linear" : "none",
+    ramp_to_value: seg && seg.ramp === "linear" ? Number(seg.ramp_to_value) || null : null,
+  }));
+}
+
+/**
+ * 단계 워크아웃의 세그먼트(목표) — 달성 점수 산출용. 클라이언트 값은 믿지 않고 서버가 원본에서 조회한다.
+ * @returns {Promise<object[]>} 실패 시 빈 배열
+ */
+async function fetchStepSegments(supabase, step) {
+  try {
+    if (step.workoutSource === "club") {
+      const { data } = await supabase
+        .from("club_workout_segments")
+        .select("*")
+        .eq("workout_id", step.workoutId)
+        .order("ord", { ascending: true });
+      return sanitizeSegments(data || []);
+    }
+    const res = await fetch(GAS_WORKOUT_URL + "?action=getWorkout&id=" + encodeURIComponent(step.workoutId));
+    const json = await res.json();
+    return sanitizeSegments(json && json.success && json.item ? json.item.segments : []);
+  } catch (err) {
+    console.warn("[clubMissions] segments fetch failed:", step.workoutSource, step.workoutId, err && err.message);
+    return [];
+  }
+}
+
+async function attachStepSegments(supabase, steps) {
+  const segs = await Promise.all(steps.map((st) => fetchStepSegments(supabase, st)));
+  return steps.map((st, i) => Object.assign({}, st, { segments: segs[i] }));
+}
+
+/** 공개 프로필 표시명 — 비공개 회원은 본인 외에는 첫 글자만 */
+function maskName(name, isPrivate, isMe) {
+  const n = String(name || "").trim() || "(이름 없음)";
+  if (!isPrivate || isMe) return n;
+  return n.slice(0, 1) + "**";
 }
 
 async function assertGroupWriteAuthority(admin, supabase, uid, gid) {
@@ -108,13 +162,59 @@ async function handleGetClubMission(admin, uid, body) {
   const row = await fetchActiveMissionRow(supabase, groupUuid);
 
   let completedOrds = [];
-  if (row && userUuid) {
-    const { data: comps } = await supabase
+  const myResults = {};
+  let leaderboard = [];
+  let myRank = null;
+  if (row) {
+    const { data: allComps } = await supabase
       .from("club_mission_completions")
-      .select("step_ord")
-      .eq("mission_id", row.id)
-      .eq("user_id", userUuid);
-    completedOrds = (comps || []).map((c) => Number(c.step_ord)).sort((a, b) => a - b);
+      .select("user_id, step_ord, step_score, interval_achievement, wkg, completed_at")
+      .eq("mission_id", row.id);
+    const byUser = new Map();
+    (allComps || []).forEach((c) => {
+      const key = String(c.user_id);
+      if (!byUser.has(key)) byUser.set(key, { userId: key, stepScores: [], lastCompletedAt: "" });
+      const u = byUser.get(key);
+      u.stepScores.push(c.step_score != null ? Number(c.step_score) : null);
+      if (String(c.completed_at || "") > u.lastCompletedAt) u.lastCompletedAt = String(c.completed_at || "");
+      if (userUuid && key === String(userUuid)) {
+        completedOrds.push(Number(c.step_ord));
+        myResults[c.step_ord] = {
+          score: c.step_score != null ? Number(c.step_score) : null,
+          intervalAchievement: c.interval_achievement != null ? Number(c.interval_achievement) : null,
+          wkg: c.wkg != null ? Number(c.wkg) : null,
+        };
+      }
+    });
+    completedOrds.sort((a, b) => a - b);
+
+    const ranked = clubMissionScoring.rankMissionUsers(
+      Array.isArray(row.steps) ? row.steps.length : 0,
+      Array.from(byUser.values())
+    );
+    const ids = ranked.map((r) => r.userId);
+    const names = new Map();
+    if (ids.length) {
+      const { data: profs } = await supabase
+        .from("v_user_public_profile")
+        .select("id, display_name, is_private")
+        .in("id", ids);
+      (profs || []).forEach((p) => names.set(String(p.id), p));
+    }
+    leaderboard = ranked.map((r) => {
+      const p = names.get(r.userId) || {};
+      const isMe = !!userUuid && r.userId === String(userUuid);
+      if (isMe) myRank = r.rank;
+      return {
+        rank: r.rank,
+        name: maskName(p.display_name, p.is_private === true, isMe),
+        isMe,
+        completed: r.completed,
+        completionRate: r.completionRate,
+        avgStepScore: r.avgStepScore,
+        total: r.total,
+      };
+    });
   }
 
   let canManage = false;
@@ -127,7 +227,15 @@ async function handleGetClubMission(admin, uid, body) {
     canManage = false;
   }
 
-  return { success: true, mission: mapMissionRow(row), completedOrds, canManage: !!canManage };
+  return {
+    success: true,
+    mission: mapMissionRow(row),
+    completedOrds,
+    myResults,
+    leaderboard,
+    myRank,
+    canManage: !!canManage,
+  };
 }
 
 /**
@@ -144,10 +252,10 @@ async function handleSaveClubMission(admin, uid, body) {
   if (!title) throw new WriteError(400, "미션명을 입력해 주세요.");
   if (!YMD_RE.test(startDate) || !YMD_RE.test(endDate)) throw new WriteError(400, "미션 기간을 선택해 주세요.");
   if (endDate < startDate) throw new WriteError(400, "종료일은 시작일 이후여야 합니다.");
-  const steps = sanitizeSteps(body && body.steps);
-
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   const group = await assertGroupWriteAuthority(admin, supabase, uid, gid);
+  // 달성 점수용 세그먼트 목표를 서버가 원본에서 조회해 단계에 저장(실패한 단계는 완료 시 재조회)
+  const steps = await attachStepSegments(supabase, sanitizeSteps(body && body.steps));
   const existing = await fetchActiveMissionRow(supabase, group.id);
   const fields = {
     title: title.slice(0, 100),
@@ -228,15 +336,37 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     return { success: true, completed: false, reason: "too_short", needSec };
   }
 
+  // 세그먼트 목표가 없으면(미션 저장 당시 조회 실패·기능 추가 전 미션) 지금 조회해 미션에 채워 둔다
+  let segments = Array.isArray(step.segments) ? step.segments : [];
+  if (!segments.length) {
+    segments = await fetchStepSegments(supabase, step);
+    if (segments.length) {
+      const nextSteps = mission.steps.map((s) => (Number(s.ord) === stepOrd ? Object.assign({}, s, { segments }) : s));
+      await supabase.from("club_missions").update({ steps: nextSteps }).eq("id", row.id);
+    }
+  }
+  const result = clubMissionScoring.computeStepAchievement(
+    segments,
+    log.segment_avg_watts,
+    Number(log.ftp_at_time),
+    Number(log.weight),
+    Number(log.avg_watts)
+  );
+
   const { error } = await supabase.from("club_mission_completions").insert({
     mission_id: row.id,
     user_id: userUuid,
     step_ord: stepOrd,
     workout_id: String(step.workoutId),
     training_log_id: logId,
+    step_score: result ? result.score : null,
+    interval_achievement: result ? result.intervalAchievement : null,
+    wkg: result ? result.wkg : null,
+    wkg_factor: result ? result.wkgFactor : null,
+    score_method: result ? result.method : null,
   });
   if (error && error.code !== "23505") throw error;
-  return { success: true, completed: true, stepOrd };
+  return { success: true, completed: true, stepOrd, result };
 }
 
 module.exports = {

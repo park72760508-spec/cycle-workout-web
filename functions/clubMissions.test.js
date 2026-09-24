@@ -5,13 +5,23 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 /* ---- 의존 모듈 스텁: Supabase(메모리 테이블) · UUID 매핑 · 관리자 판정 ---- */
-const tables = { club_missions: [], club_mission_completions: [], riding_group_members: [], riding_groups: [] };
+const tables = {
+  club_missions: [], club_mission_completions: [], riding_group_members: [], riding_groups: [],
+  club_workout_segments: [], v_user_public_profile: [],
+};
+/* 외부 네트워크(GAS 워크아웃 조회) 차단 — 테스트는 스텁 응답만 사용 */
+global.fetch = async () => ({ json: async () => ({ success: true, item: { segments: [
+  { segment_type: 'interval', duration_sec: 3600, target_type: 'ftp_pct', target_value: '80' },
+] } }) });
 
 function query(table) {
   let rows = tables[table].slice();
   const q = {
     select() { return q; },
     eq(col, val) { rows = rows.filter((r) => String(r[col]) === String(val)); return q; },
+    in(col, vals) { rows = rows.filter((r) => vals.map(String).includes(String(r[col]))); return q; },
+    order() { return q; },
+    update(fields) { rows.forEach((r) => Object.assign(r, fields)); return q; },
     maybeSingle() { return Promise.resolve({ data: rows[0] || null, error: null }); },
     single() { return Promise.resolve({ data: rows[0] || null, error: null }); },
     then(res, rej) { return Promise.resolve({ data: rows, error: null }).then(res, rej); },
@@ -90,9 +100,17 @@ function complete(stepOrd, logId) {
 test('1번 미션: 같은 워크아웃·충분한 시간이면 완료', async () => {
   reset();
   logs['rider/L1'] = { workout_id: 'w1', duration_sec: 3500, date: TODAY };
+  logs['rider/L1'].ftp_at_time = 250;
+  logs['rider/L1'].weight = 70;
+  logs['rider/L1'].segment_avg_watts = [200];
   const r = await complete(1, 'L1');
   assert.equal(r.completed, true);
   assert.equal(tables.club_mission_completions.length, 1);
+  // 세그먼트 목표를 서버가 조회해 점수 저장: 목표 200W(80%) 달성 100%, 2.86 W/kg → 가중치 0.886
+  assert.equal(r.result.intervalAchievement, 100);
+  assert.equal(tables.club_mission_completions[0].step_score, 88.6);
+  // 조회한 세그먼트가 미션에 채워짐
+  assert.equal(tables.club_missions[0].steps[0].segments.length, 1);
 });
 
 test('순서 건너뛰기(2번 먼저)는 거부', async () => {
@@ -133,9 +151,21 @@ test('미션 기간 밖이면 거부', async () => {
 
 test('조회: 진행 미션 + 내 완료 단계, 방장이면 canManage', async () => {
   reset();
-  tables.club_mission_completions.push({ mission_id: 'm1', user_id: 'u-rider', step_ord: 1 });
+  tables.club_mission_completions.push(
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 1, step_score: 90, completed_at: '2026-10-02' },
+    { mission_id: 'm1', user_id: 'u-other', step_ord: 1, step_score: 70, completed_at: '2026-10-01' },
+    { mission_id: 'm1', user_id: 'u-other', step_ord: 2, step_score: 70, completed_at: '2026-10-03' }
+  );
+  tables.v_user_public_profile = [
+    { id: 'u-rider', display_name: '라이더', is_private: true },
+    { id: 'u-other', display_name: '홍길동', is_private: true },
+  ];
   const mine = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
   assert.deepEqual(mine.completedOrds, [1]);
+  assert.equal(mine.myResults[1].score, 90);
+  // other: 40×2/2 + 60×140/2/100 = 82, rider: 40×1/2 + 60×90/2/100 = 47
+  assert.deepEqual(mine.leaderboard.map((r) => [r.name, r.total, r.isMe]), [['홍**', 82, false], ['라이더', 47, true]]);
+  assert.equal(mine.myRank, 2);
   assert.equal(mine.canManage, false);
   assert.equal(mine.mission.steps.length, 2);
   const owner = await missions.handleGetClubMission(fakeAdmin, 'owner', { groupId: 'club1' });

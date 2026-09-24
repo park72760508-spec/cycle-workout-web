@@ -6611,6 +6611,7 @@ function ClubMissionDetailModal(props) {
   var state = props.state; // 'done' | 'next' | 'todo'
   var canStart = !!props.canStart;
   var blockedReason = props.blockedReason || '';
+  var result = props.result || null; // 완료 단계의 { score, intervalAchievement, wkg }
   var onClose = props.onClose || function () {};
 
   var _w = useState(null);
@@ -6684,6 +6685,15 @@ function ClubMissionDetailModal(props) {
             </div>
             <p>운동 시간: {minutes}분 | 예상 TSS: {tss != null ? tss : '—'}</p>
             <p>{mission.title} · {step.ord}번 미션 ({stateLabel})</p>
+            {state === 'done' && result && result.score != null ? (
+              <p style={{ color: '#16a34a', fontWeight: 700 }}>
+                달성 점수 {result.score}점
+                <span style={{ color: '#64748b', fontWeight: 400 }}>
+                  {' '}(인터벌 달성률 {result.intervalAchievement != null ? result.intervalAchievement + '%' : '—'}
+                  {result.wkg != null ? ' · ' + result.wkg + ' W/kg' : ''})
+                </span>
+              </p>
+            ) : null}
             {!canStart && blockedReason ? <p style={{ color: '#ea580c' }}>{blockedReason}</p> : null}
           </div>
           <div className="schedule-detail-graph schedule-detail-graph-with-start">
@@ -6703,6 +6713,51 @@ function ClubMissionDetailModal(props) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 달성도 순위 — 순위 점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (functions/clubMissionScoring.js).
+ * 상위 10명 + (10위 밖이면) 본인 행.
+ */
+function ClubMissionLeaderboard(props) {
+  var rows = props.rows || [];
+  var myRank = props.myRank;
+  var top = rows.slice(0, 10);
+  var me = rows.find(function (r) { return r.isMe; });
+  var showMeBelow = me && me.rank > 10;
+  function row(r) {
+    return (
+      <li
+        key={r.rank + '-' + r.name}
+        className={'flex items-center gap-2 px-2 py-1.5 rounded-lg ' + (r.isMe ? 'bg-violet-50 font-semibold' : '')}
+      >
+        <span className="w-7 shrink-0 text-center text-xs font-bold text-slate-500">{r.rank}</span>
+        <span className="flex-1 min-w-0 truncate text-slate-800">{r.name}{r.isMe ? ' (나)' : ''}</span>
+        <span className="shrink-0 text-[11px] text-slate-500">수행 {r.completionRate}%</span>
+        <span className="w-14 shrink-0 text-right text-violet-700 font-bold">{r.total}</span>
+      </li>
+    );
+  }
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="flex items-baseline justify-between mb-1">
+        <h4 className="text-sm font-semibold text-slate-800 m-0">달성도 순위</h4>
+        {myRank ? <span className="text-xs text-violet-700 font-semibold">내 순위 {myRank}위</span> : null}
+      </div>
+      <p className="text-[11px] text-slate-500 m-0 mb-2 leading-snug">
+        점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (인터벌 달성률 × W/kg 가중치 80~100%)
+      </p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate-400 text-center py-3 m-0">아직 미션을 완료한 회원이 없습니다.</p>
+      ) : (
+        <ul className="m-0 p-0 list-none text-sm">
+          {top.map(row)}
+          {showMeBelow ? <li className="text-center text-slate-300 text-xs py-0.5">⋯</li> : null}
+          {showMeBelow ? row(me) : null}
+        </ul>
+      )}
     </div>
   );
 }
@@ -6745,6 +6800,8 @@ function ClubMissionPanel(props) {
   }
 
   var done = new Set((data.completedOrds || []).map(Number));
+  var myResults = data.myResults || {};
+  var leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
   var ords = mission.steps.map(function (s) { return Number(s.ord); }).sort(function (a, b) { return a - b; });
   var nextOrd = ords.find(function (o) { return !done.has(o); });
   var today = clubMissionTodayYmd();
@@ -6784,16 +6841,19 @@ function ClubMissionPanel(props) {
       <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
         {ords.map(function (o) {
           var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
+          var res = myResults[o];
+          var scoreTxt = st === 'done' && res && res.score != null ? String(Math.round(res.score)) : '';
           return (
             <button
               key={o}
               type="button"
-              className="aspect-square rounded-xl inline-flex items-center justify-center text-sm font-bold"
+              className="aspect-square rounded-xl inline-flex flex-col items-center justify-center font-bold leading-none"
               style={clubMissionStepStyle(st)}
               onClick={function () { setDetailOrd(o); }}
-              aria-label={o + '번 미션 ' + (st === 'done' ? '완료' : st === 'next' ? '수행할 미션' : '미수행')}
+              aria-label={o + '번 미션 ' + (st === 'done' ? '완료' + (scoreTxt ? ' ' + scoreTxt + '점' : '') : st === 'next' ? '수행할 미션' : '미수행')}
             >
-              {o}
+              <span className="text-sm">{o}</span>
+              {scoreTxt ? <span className="text-[10px] font-semibold mt-0.5" style={{ opacity: 0.9 }}>{scoreTxt}점</span> : null}
             </button>
           );
         })}
@@ -6803,6 +6863,7 @@ function ClubMissionPanel(props) {
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료</span>
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('todo')} />미수행</span>
       </div>
+      <ClubMissionLeaderboard rows={leaderboard} myRank={data.myRank} />
       {detailStep ? (
         <ClubMissionDetailModal
           groupId={groupId}
@@ -6811,6 +6872,7 @@ function ClubMissionPanel(props) {
           state={detailState}
           canStart={canStart}
           blockedReason={blockedReason}
+          result={myResults[detailOrd] || null}
           onClose={function () { setDetailOrd(null); }}
         />
       ) : null}

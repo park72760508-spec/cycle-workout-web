@@ -466,7 +466,10 @@ function completePendingClubMissionAfterSave(trainingData, trainingLogId) {
       })
     )
     .then((res) => {
-      if (res && res.completed) toast(pending.stepOrd + '번 미션을 완료했습니다!', 'success');
+      if (res && res.completed) {
+        const sc = res.result && res.result.score != null ? ' 달성 점수 ' + res.result.score + '점' : '';
+        toast(pending.stepOrd + '번 미션을 완료했습니다!' + sc, 'success');
+      }
       else if (res && res.reason === 'too_short') toast('훈련 시간이 짧아 미션 완료로 인정되지 않았습니다.', 'error');
     })
     .catch((err) => {
