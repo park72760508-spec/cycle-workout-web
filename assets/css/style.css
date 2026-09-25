@@ -33671,3 +33671,18 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   margin: 0 !important;
   color: rgb(158, 158, 158) !important;
 }
+
+/* 훈련 준비 화면: 좌우 여백 절반 — 화면 20→10px, 흰 카드 30→15px, 워크아웃·Select Dashboard 블럭 15→7.5px
+   (블럭 폭은 줄어든 여백만큼 자동 확장) */
+#trainingReadyScreen.active {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+#trainingReadyScreen .connection-form-card {
+  padding-left: 15px !important;
+  padding-right: 15px !important;
+}
+#trainingReadyScreen .connection-form-card > .connection-device-section {
+  padding-left: 7.5px !important;
+  padding-right: 7.5px !important;
+}
