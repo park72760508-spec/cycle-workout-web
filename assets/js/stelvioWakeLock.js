@@ -9,7 +9,7 @@
 
   var LOG = '[StelvioWakeLock]';
   /** 코치 화면은 훈련 진행 중에만 웨이크(applyForScreen에서 별도 처리) */
-  var WAKE_SCREEN_IDS = ['mobileDashboardScreen', 'trainingScreen', 'bluetoothIndividualScreen'];
+  var WAKE_SCREEN_IDS = ['mobileDashboardScreen', 'trainingScreen', 'bluetoothIndividualScreen', 'bluetoothCoachMobileScreen'];
 
   /** 훈련 진행 여부(모바일·태블릿·인도어·블루투스·코치) — 복귀/주기 재획득 판단용 */
   function stelvioIsTrainingLikeSessionActive() {

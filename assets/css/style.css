@@ -373,7 +373,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothCoachMobileScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -27164,7 +27164,8 @@ line[id^="needle-"] {
 }
 
 /* ========== 모바일 대시보드 화면 스타일 (individual.html과 동일) ========== */
-#mobileDashboardScreen {
+#mobileDashboardScreen,
+#bluetoothCoachMobileScreen {
   background-color: #121212 !important;
   color: #ffffff;
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
@@ -27225,14 +27226,16 @@ body.bluetooth-individual-screen-active {
 
 /* 모바일 대시보드 가로 모드 방지 */
 @media screen and (orientation: landscape) {
-  #mobileDashboardScreen.active {
+  #mobileDashboardScreen.active,
+#bluetoothCoachMobileScreen.active {
     display: flex !important;
     flex-direction: column;
     justify-content: center;
     align-items: center;
   }
   
-  #mobileDashboardScreen.active::before {
+  #mobileDashboardScreen.active::before,
+#bluetoothCoachMobileScreen.active::before {
     content: '세로 모드로 기기를 회전해주세요';
     position: absolute;
     top: 50%;
@@ -27249,37 +27252,44 @@ body.bluetooth-individual-screen-active {
     white-space: nowrap;
   }
   
-  #mobileDashboardScreen.active > * {
+  #mobileDashboardScreen.active > *,
+#bluetoothCoachMobileScreen.active > * {
     opacity: 0.3;
     pointer-events: none;
   }
   /* 가로 잠금 시에도 상단(뒤로·연결)은 동작 — 세로 전환 안내는 ::before */
   #mobileDashboardScreen.active .mobile-dashboard-header,
-  #mobileDashboardScreen.active .mobile-dashboard-header * {
+  #mobileDashboardScreen.active .mobile-dashboard-header *,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header * {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
-#mobileDashboardScreen.screen {
+#mobileDashboardScreen.screen,
+#bluetoothCoachMobileScreen.screen {
   display: none !important;
 }
 
 /* 모바일 대시보드가 활성화되었을 때만 표시 */
 /* 글래스 하단 네비(#globalHubBottomGlassNavRoot 99999) 위에 쌓여야 훈련 하단 슬라이더(특히 가로 트랙 중앙) 터치가 먹힘—부모(1000)는 자식 z로 네비를 뚫을 수 없음 */
-#mobileDashboardScreen.active {
+#mobileDashboardScreen.active,
+#bluetoothCoachMobileScreen.active {
   display: flex !important;
   z-index: 100100 !important;
 }
 
 /* 모바일 대시보드 내부 요소들 */
-#mobileDashboardScreen > * {
+#mobileDashboardScreen > *,
+#bluetoothCoachMobileScreen > * {
   position: relative;
   z-index: 1;
 }
 
 /* 훈련 전체 z-index(100100) + 하단 슬라이더 isolate 이후에도 상단(좌·우 버튼) 히트가 먹도록 헤더만 스택 최상단 + 네비와 동일 터치 규칙 */
-#mobileDashboardScreen.active .mobile-dashboard-header {
+#mobileDashboardScreen.active .mobile-dashboard-header,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header {
   z-index: 100200 !important;
   position: relative;
   pointer-events: auto;
@@ -27291,11 +27301,15 @@ body.bluetooth-individual-screen-active {
   -webkit-user-select: none;
 }
 #mobileDashboardScreen.active .mobile-dashboard-header .mobile-timer,
-#mobileDashboardScreen.active #mobile-main-timer {
+#mobileDashboardScreen.active #mobile-main-timer,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-timer,
+#bluetoothCoachMobileScreen.active #mobile-main-timer {
   pointer-events: none;
 }
 #mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
-#mobileDashboardScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap {
+#mobileDashboardScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap {
   position: relative;
   z-index: 1;
   touch-action: manipulation;
@@ -27310,10 +27324,18 @@ body.bluetooth-individual-screen-active {
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-label,
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-value,
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-min,
-#mobileDashboardScreen .mobile-individual-intensity-adjustment-max {
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-max,
+#bluetoothCoachMobileScreen .mobile-stat-label,
+#bluetoothCoachMobileScreen .mobile-stat-value,
+#bluetoothCoachMobileScreen .mobile-stat-value .unit,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-label,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-value,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-min,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-max {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
-#mobileDashboardScreen .mobile-gauge-container svg text {
+#mobileDashboardScreen .mobile-gauge-container svg text,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
   pointer-events: none; /* 큰 파워 숫자 등이 컨트롤 버튼 히트를 가리지 않도록 */
 }
@@ -27494,7 +27516,8 @@ body.bluetooth-individual-screen-active {
  * 훈련대시보드(모바일) 하단 목표값 슬라이더: 글래스 하단 네비와 동일 터치/히트 규칙
  * (자식 span이 히트를 가로채지 않게·range에 터치 최적화). 레이아웃·여백·배경 스타일 불변.
  */
-#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider-wrapper {
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider-wrapper,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider-wrapper {
   position: relative;
   z-index: 2;
   isolation: isolate;
@@ -27510,13 +27533,21 @@ body.bluetooth-individual-screen-active {
   .mobile-individual-intensity-adjustment-min,
 #mobileDashboardScreen
   .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-max,
+#bluetoothCoachMobileScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-min,
+#bluetoothCoachMobileScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
   .mobile-individual-intensity-adjustment-max {
   pointer-events: none;
 }
-#mobileDashboardScreen .mobile-individual-intensity-adjustment-label span {
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-label span,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-label span {
   pointer-events: none;
 }
-#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider {
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider,
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -27578,7 +27609,8 @@ body.bluetooth-individual-screen-active {
 }
 
 /* 재생/일시정지: 투명 히트 원 확대 — 그룹 onclick 버블 수신, 모바일 중앙 탭 안정화 */
-#mobileDashboardScreen .svg-btn-hit-area {
+#mobileDashboardScreen .svg-btn-hit-area,
+#bluetoothCoachMobileScreen .svg-btn-hit-area {
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -28379,7 +28411,8 @@ body.bluetooth-individual-screen-active {
 }
 /* 정기 구독 모드에서 네비가 10000000으로 올라갈 때에도 훈련 전체화면·하단 슬라이더가 네비에 가리지 않도록 */
 html.global-hub-nav-over-subscribe #mobileDashboardScreen.active,
-html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.active {
+html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.active,
+html.global-hub-nav-over-subscribe #bluetoothCoachMobileScreen.active {
   z-index: 10000001 !important;
 }
 #bluetoothIndividualScreen .indiv-header {
@@ -33392,4 +33425,160 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   height: min(80cqh, 240px);
   width: auto;
   opacity: 0.12;
+}
+
+
+/* ========== Live Training Room Coach — 휴대폰 전용 화면 (bluetoothCoachMobile.js) ========== */
+#bluetoothCoachMobileScreen .coachm-menu {
+  min-width: 250px;
+  max-width: calc(100vw - 24px);
+  max-height: 70vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #fff;
+  cursor: pointer;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item:active,
+#bluetoothCoachMobileScreen .coachm-slot-item.selected {
+  background: rgba(0, 212, 170, 0.18);
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__no {
+  min-width: 26px;
+  font-weight: 700;
+  color: #00d4aa;
+  font-variant-numeric: tabular-nums;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item--empty .coachm-slot-item__name {
+  color: #777;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #444;
+  flex-shrink: 0;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__dot.on {
+  background: #00d4aa;
+}
+#bluetoothCoachMobileScreen .coachm-menu .mobile-bluetooth-dropdown-item span {
+  white-space: nowrap;
+}
+#bluetoothCoachMobileScreen .coachm-menu-divider {
+  height: 1px;
+  margin: 4px 0;
+  background: rgba(255, 255, 255, 0.18);
+}
+#bluetoothCoachMobileScreen .coachm-countdown-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+#bluetoothCoachMobileScreen .coachm-countdown-overlay span {
+  font-size: 120px;
+  font-weight: 800;
+  color: #00d4aa;
+  text-shadow: 0 0 24px rgba(0, 212, 170, 0.6);
+}
+#bluetoothCoachMobileScreen .coachm-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 10060;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+}
+#bluetoothCoachMobileScreen .coachm-picker__sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  background: #1e1e1e;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#bluetoothCoachMobileScreen .coachm-picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  font-weight: 700;
+  font-size: 16px;
+  border-bottom: 1px solid #333;
+}
+#bluetoothCoachMobileScreen .coachm-picker__close {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+}
+#bluetoothCoachMobileScreen .coachm-picker__list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 6px 0 12px;
+}
+#bluetoothCoachMobileScreen .coachm-picker__group {
+  padding: 10px 16px 4px;
+  font-size: 12px;
+  color: #00d4aa;
+  font-weight: 700;
+}
+#bluetoothCoachMobileScreen .coachm-picker__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+#bluetoothCoachMobileScreen .coachm-picker__item.selected {
+  background: rgba(0, 212, 170, 0.15);
+}
+#bluetoothCoachMobileScreen .coachm-picker__item-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#bluetoothCoachMobileScreen .coachm-picker__item-min {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #aaa;
+}
+#bluetoothCoachMobileScreen .coachm-picker__empty {
+  padding: 30px 16px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
 }

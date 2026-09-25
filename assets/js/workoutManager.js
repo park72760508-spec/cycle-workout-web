@@ -724,7 +724,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   if (!canvas) return;
   
   // 통합 블루투스 개인훈련(indiv-individualSegmentGraph) = individualSegmentGraph와 동일 처리
-  const isIndividualDashboardCanvas = canvasId === 'individualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph';
+  // coachmSegmentGraph: Live Training Room 휴대폰 Coach 화면 — 모바일 훈련 화면과 같은 그래프 스타일
+  const isIndividualDashboardCanvas = canvasId === 'individualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph';
   
   // 사용자 FTP 가져오기
   // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
@@ -996,7 +997,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
       ctx.textAlign = 'right'; // 원래 정렬 복원
       ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
-    } else if (canvasId === 'mobileIndividualSegmentGraph') {
+    } else if (canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph') {
       // 모바일 대시보드: FTP 기준선 끝 = 빨강 원 + "90"
       const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
       const cx = padding.left + chartWidth - circleR - 2;

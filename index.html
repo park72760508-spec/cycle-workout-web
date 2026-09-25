@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260925clubEdit1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260926coachm3" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -7520,16 +7520,19 @@
   <!-- ========== 모바일 대시보드 화면 ========== -->
   <style>
     /* 펄스는 장식만 — 터치/클릭은 아래 재생·일시정지 버튼으로 통과 */
-    #mobileDashboardScreen .mobile-start-pulse-wrap {
+    #mobileDashboardScreen .mobile-start-pulse-wrap,
+    #bluetoothCoachMobileScreen .mobile-start-pulse-wrap {
       pointer-events: none;
     }
     /* 모바일 개인훈련 대시보드: 시작 버튼 펄스 (세그먼트 마스코트와 동일 스타일, 사용자 이름 라벨 초록 #00d4aa) */
-    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
+    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring,
+    #bluetoothCoachMobileScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
       transform-box: fill-box;
       transform-origin: center;
       animation: mobile-start-mascot-pulse 1.5s ease-out infinite;
     }
-    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-hidden {
+    #mobileDashboardScreen .mobile-start-pulse-wrap.pulse-hidden,
+    #bluetoothCoachMobileScreen .mobile-start-pulse-wrap.pulse-hidden {
       visibility: hidden;
       pointer-events: none;
     }
@@ -8902,7 +8905,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-clubpre-20260925a"></script>
+<script src="assets/js/workoutManager.js?v=workout-coachm-20260926a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -34105,7 +34108,7 @@
 <script>window.__bluetoothIndividualIdPrefix = 'indiv-';</script>
 <!-- 공통 타이머 모듈 (절대 시간 + rAF 기반, setInterval 배제) -->
 <script src="assets/js/trainingTimerModule.js"></script>
-<script src="assets/js/stelvioWakeLock.js"></script>
+<script src="assets/js/stelvioWakeLock.js?v=20260926coachm1"></script>
 <script src="assets/js/wakeLockManager.js"></script>
 <script src="assets/js/bluetoothIndividual.js?v=20260924coachSpeed1"></script>
 <!-- Bluetooth Training 모듈 -->
@@ -34966,6 +34969,122 @@
   </div>
 
   <!-- ========== Bluetooth Training Coach 대시보드 화면 ========== -->
+  <!-- Live Training Room Coach — 휴대폰 전용 화면 (모바일 훈련 화면 디자인 기반, 독립 구동)
+       Coach 엔진(bluetoothCoachDashboard.js: 참가자 수신·워크아웃·카운트다운·타이머)은 그대로 사용하고
+       화면만 bluetoothCoachMobile.js 가 그린다. 목표값 조절 슬라이드 없음. -->
+  <div id="bluetoothCoachMobileScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Noto Sans KR', 'Pretendard', sans-serif; margin: 0; overflow: hidden; flex-direction: column; min-height: 100vh; min-height: 100dvh;">
+    <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative; z-index: 10001;">
+      <div id="coachm-user-name-wrap" class="mobile-dashboard-user-name-wrap" style="display: inline-flex; align-items: center; gap: 6px; background-color: #00d4aa; color: #000; border-radius: 6px; padding: 2px 10px; line-height: 1.25; font-weight: 600; font-size: 1em; box-sizing: border-box; max-width: 38vw;" title="선택된 사용자">
+        <span id="coachm-user-name" style="color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">슬롯 선택</span>
+      </div>
+      <div id="coachm-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+        <div class="mobile-bluetooth-connect-wrap" style="position: relative; display: flex; align-items: center;">
+          <button type="button" id="coachmMenuBtn" class="mobile-bluetooth-connect-btn" onclick="toggleCoachMobileMenu()">
+            <img src="assets/img/wifi2.png" alt="" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
+            <span>연결</span>
+          </button>
+          <div id="coachmMenu" class="mobile-bluetooth-dropdown coachm-menu">
+            <div id="coachmSlotList" class="coachm-slot-list"></div>
+            <div class="coachm-menu-divider" role="separator"></div>
+            <div class="mobile-bluetooth-dropdown-item" onclick="openCoachMobileWorkoutPicker('group')">
+              <img src="assets/img/people.png" alt="" style="filter: invert(1);">
+              <span>워크아웃 선택 (그룹 전용)</span>
+            </div>
+            <div class="mobile-bluetooth-dropdown-item" onclick="openCoachMobileWorkoutPicker('general')">
+              <img src="assets/img/train1.png" alt="">
+              <span>워크아웃 선택 (일반 워크아웃)</span>
+            </div>
+            <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitCoachMobileScreen()">
+              <img src="assets/img/logout.png" alt="">
+              <span>종료</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mobile-segment-graph-section">
+      <div class="mobile-segment-graph-container" style="position: relative;">
+        <canvas id="coachmSegmentGraph"></canvas>
+      </div>
+      <div id="coachm-segment-info" class="mobile-segment-info">워크아웃을 선택하세요</div>
+    </div>
+
+    <div class="mobile-main-content">
+      <div class="mobile-gauge-segment-wrap">
+        <div class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0;">
+        <svg viewBox="-15 0 230 260" style="width:100%; height:100%;">
+          <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+          <path id="coachm-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+          <path id="coachm-gauge-speed-arc" d="M 180 140 A 80 80 0 0 0 20 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
+          <g id="coachm-gauge-ticks"></g>
+          <g id="coachm-gauge-labels"></g>
+          <g id="coachm-gauge-speed-labels"></g>
+          <text id="coachm-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
+          <text x="100" y="93" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
+          <text id="coachm-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text id="coachm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+          <g id="coachm-gauge-needle" transform="translate(100, 140) rotate(-90)">
+            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="6" fill="#fff"/>
+          </g>
+          <circle id="coachm-gauge-speed-dot" cx="180" cy="140" r="4" fill="#4da6ff"/>
+          <text id="coachm-gauge-speed-dot-value" x="180" y="140" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="5" font-weight="bold">0</text>
+          <g>
+            <g class="svg-btn-group" onclick="handleCoachMobileSkip()">
+              <circle class="svg-neon-circle" cx="60" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image class="svg-btn-icon" x="52" y="213" width="16" height="16" href="assets/img/next0.png" />
+            </g>
+            <g id="coachmStartPulseWrap" class="mobile-start-pulse-wrap pulse-active" transform="translate(100, 221)">
+              <circle class="mobile-start-pulse-ring" cx="0" cy="0" r="14" fill="none" stroke="#00d4aa" stroke-width="2" />
+            </g>
+            <g class="svg-btn-group" onclick="handleCoachMobileToggle()">
+              <circle class="svg-neon-circle" cx="100" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image id="coachmToggleImg" class="svg-btn-icon" x="92" y="213" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
+              <circle class="svg-btn-hit-area" cx="100" cy="221" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+            </g>
+            <g class="svg-btn-group" onclick="handleCoachMobileStop()">
+              <circle class="svg-neon-circle" cx="140" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image class="svg-btn-icon" x="132" y="213" width="16" height="16" href="assets/img/stop0.png" />
+            </g>
+          </g>
+        </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 7.5px 0; border-top: 1px solid #333;">
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">CADENCE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="coachm-ui-cadence">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">rpm</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">LAP AVG</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="coachm-ui-lap-power">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">w</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">HEART RATE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="coachm-ui-hr">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">bpm</span></div>
+      </div>
+    </div>
+
+    <!-- 시작 카운트다운 (Coach 엔진이 기록하는 status.countdownRemainingSec) -->
+    <div id="coachmCountdownOverlay" class="coachm-countdown-overlay" style="display: none;"><span id="coachmCountdownNumber">5</span></div>
+
+    <!-- 워크아웃 선택 (그룹 전용 / 일반) -->
+    <div id="coachmWorkoutPicker" class="coachm-picker" style="display: none;" onclick="if (event.target === this) closeCoachMobileWorkoutPicker();">
+      <div class="coachm-picker__sheet">
+        <div class="coachm-picker__head">
+          <span id="coachmWorkoutPickerTitle">워크아웃 선택</span>
+          <button type="button" class="coachm-picker__close" onclick="closeCoachMobileWorkoutPicker()" aria-label="닫기">✕</button>
+        </div>
+        <div id="coachmWorkoutPickerList" class="coachm-picker__list"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="bluetoothTrainingCoachScreen" class="screen">
     <div class="dashboard-header" style="position: relative;">
       <h1 class="race-title-animated" style="flex: 1; display: flex; align-items: center; justify-content: flex-start;">
@@ -35062,7 +35181,9 @@
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
-  <script src="assets/js/bluetoothCoachDashboard.js?v=20260924coachLogo1"></script>
+  <script src="assets/js/bluetoothCoachDashboard.js?v=20260926coachm1"></script>
+  <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
+  <script src="assets/js/bluetoothCoachMobile.js?v=20260926coachm3"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

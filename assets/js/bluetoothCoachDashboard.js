@@ -2707,62 +2707,8 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
       segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0
     });
     
-    // 선택된 워크아웃 저장 (Bluetooth Coach State만 사용, window.currentWorkout은 덮어쓰지 않음)
-    window.bluetoothCoachState.currentWorkout = loadedWorkout;
-    // 주의: window.currentWorkout은 Indoor Training에서 사용하므로 덮어쓰지 않음
-    // Bluetooth Coach는 window.bluetoothCoachState.currentWorkout만 사용
-    
-    console.log('🎮 [진단] 워크아웃 선택 완료:', {
-      id: loadedWorkout.id,
-      title: loadedWorkout.title,
-      segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0,
-      storedIn: 'bluetoothCoachState.currentWorkout'
-    });
-    
-    // 버튼 상태 업데이트 (워크아웃 선택 후 시작 버튼 활성화)
-    if (typeof updateBluetoothCoachTrainingButtons === 'function') {
-      updateBluetoothCoachTrainingButtons();
-      console.log('🎮 [진단] 버튼 상태 업데이트 완료');
-    }
-    
-    // Firebase에 workoutPlan 및 workoutId 저장
-    if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
-      const sessionId = getBluetoothCoachSessionId();
-      if (sessionId) {
-        // workoutPlan 저장 (세그먼트 배열)
-        db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
-          .then(() => {
-            console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
-          })
-          .catch(error => {
-            console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
-          });
-        
-        // workoutId 저장
-        if (loadedWorkout.id) {
-          db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
-            .then(() => {
-              console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
-            })
-            .catch(error => {
-              console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
-            });
-        }
-        
-        // Firebase status에 idle 상태 저장 (워크아웃 선택 시, 사용자 접속 시 현재 상황 바로 반영)
-        db.ref(`sessions/${sessionId}/status`).update({
-          state: 'idle',
-          segmentIndex: 0,
-          elapsedTime: 0,
-          countdownRemainingSec: null
-        }).then(() => {
-          console.log('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 완료: idle');
-        }).catch(error => {
-          console.error('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 실패:', error);
-        });
-      }
-    }
-    
+    applyBluetoothCoachSelectedWorkout(loadedWorkout);
+
     // 모달 닫기
     if (typeof closeWorkoutSelectionModal === 'function') {
       closeWorkoutSelectionModal();
@@ -2775,77 +2721,6 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
       setTimeout(() => {
         selectedRow.classList.remove('upload-complete');
       }, 500);
-    }
-    
-    // 전광판 우측에 세그먼트 그래프 표시 (Indoor Training과 동일한 방식)
-    // 워크아웃 선택 시에는 현재 세그먼트 없음 (-1)
-    updateWorkoutSegmentGraphForBluetoothCoach(loadedWorkout, -1);
-    
-    // 워크아웃 선택 시 경과시간, 랩카운트다운, 랩파워 등 초기화
-    window.bluetoothCoachState.trainingState = 'idle';
-    window.bluetoothCoachState.startTime = null;
-    window.bluetoothCoachState.pausedTime = 0;
-    window.bluetoothCoachState.totalElapsedTime = 0;
-    window.bluetoothCoachState.currentSegmentIndex = 0;
-    window.bluetoothCoachState.segmentStartTime = null;
-    window.bluetoothCoachState.segmentElapsedTime = 0;
-    window.bluetoothCoachState.segmentCountdownActive = false;
-    
-    // 경과시간 및 랩카운트다운 UI 초기화
-    const elapsedTimeEl = document.getElementById('bluetoothCoachElapsedTime');
-    if (elapsedTimeEl) {
-      elapsedTimeEl.textContent = '00:00:00';
-    }
-    
-    // 세그먼트 정보 업데이트 (워크아웃 선택 시 첫 번째 세그먼트 표시)
-    updateCurrentSegmentInfo();
-    updateBluetoothCoachSegmentInfoBar();
-    const lapCountdownEl = document.getElementById('bluetoothCoachLapCountdown');
-    if (lapCountdownEl) {
-      lapCountdownEl.textContent = '00:00';
-    }
-    
-    // 모든 트랙의 랩파워 및 통계 초기화
-    window.bluetoothCoachState.powerMeters.forEach(pm => {
-      // 랩파워 초기화
-      pm.segmentPower = 0;
-      pm.segmentPowerSum = 0;
-      pm.segmentPowerCount = 0;
-      
-      // 궤적 초기화
-      pm.powerTrailHistory = [];
-      pm.lastTrailAngle = null;
-      const trailContainer = document.getElementById(`needle-path-${pm.id}`);
-      if (trailContainer) trailContainer.innerHTML = '';
-      
-      // 목표 파워 초기화
-      pm.targetPower = 0;
-      const targetPowerEl = document.getElementById(`target-power-value-${pm.id}`);
-      if (targetPowerEl) targetPowerEl.textContent = '';
-      
-      // 랩파워 UI 초기화
-      const segmentPowerEl = document.getElementById(`segment-power-value-${pm.id}`);
-      if (segmentPowerEl) segmentPowerEl.textContent = '0';
-      
-      // FTP 값이 있으면 속도계 눈금 업데이트 (워크아웃 선택 시에도 반영)
-      if (pm.userFTP) {
-        updateBluetoothCoachPowerMeterTicks(pm.id);
-      }
-      
-      // 목표 파워 궤적 업데이트 (초기 상태)
-      const currentPower = pm.currentPower || 0;
-      const ftp = pm.userFTP || 200;
-      const maxPower = ftp * 2;
-      const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
-      const angle = -90 + (ratio * 180);
-      updateBluetoothCoachPowerMeterTrail(pm.id, currentPower, angle, pm);
-    });
-    
-    // 버튼 상태 업데이트
-    updateBluetoothCoachTrainingButtons();
-    
-    if (typeof showToast === 'function') {
-      showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
     }
     
   } catch (error) {
@@ -2868,6 +2743,141 @@ async function selectWorkoutForBluetoothCoach(workoutId) {
     }
   }
 }
+
+/**
+ * 불러온 워크아웃을 Coach 엔진에 적용 — 상태 저장, Firebase workoutPlan/workoutId/status(idle) 기록,
+ * 세그먼트 그래프·경과시간·랩파워 초기화. 일반(구글 시트)·그룹 전용(클럽) 워크아웃 공통.
+ * @param {object} loadedWorkout { id, title, segments[] }
+ */
+function applyBluetoothCoachSelectedWorkout(loadedWorkout) {
+  // 선택된 워크아웃 저장 (Bluetooth Coach State만 사용, window.currentWorkout은 덮어쓰지 않음)
+  window.bluetoothCoachState.currentWorkout = loadedWorkout;
+  // 주의: window.currentWorkout은 Indoor Training에서 사용하므로 덮어쓰지 않음
+  // Bluetooth Coach는 window.bluetoothCoachState.currentWorkout만 사용
+  
+  console.log('🎮 [진단] 워크아웃 선택 완료:', {
+    id: loadedWorkout.id,
+    title: loadedWorkout.title,
+    segmentsCount: loadedWorkout.segments ? loadedWorkout.segments.length : 0,
+    storedIn: 'bluetoothCoachState.currentWorkout'
+  });
+  
+  // 버튼 상태 업데이트 (워크아웃 선택 후 시작 버튼 활성화)
+  if (typeof updateBluetoothCoachTrainingButtons === 'function') {
+    updateBluetoothCoachTrainingButtons();
+    console.log('🎮 [진단] 버튼 상태 업데이트 완료');
+  }
+  
+  // Firebase에 workoutPlan 및 workoutId 저장
+  if (loadedWorkout.segments && loadedWorkout.segments.length > 0 && typeof db !== 'undefined') {
+    const sessionId = getBluetoothCoachSessionId();
+    if (sessionId) {
+      // workoutPlan 저장 (세그먼트 배열)
+      db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
+        .then(() => {
+          console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
+        })
+        .catch(error => {
+          console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 실패:', error);
+        });
+      
+      // workoutId 저장
+      if (loadedWorkout.id) {
+        db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
+          .then(() => {
+            console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
+          })
+          .catch(error => {
+            console.error('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 실패:', error);
+          });
+      }
+      
+      // Firebase status에 idle 상태 저장 (워크아웃 선택 시, 사용자 접속 시 현재 상황 바로 반영)
+      db.ref(`sessions/${sessionId}/status`).update({
+        state: 'idle',
+        segmentIndex: 0,
+        elapsedTime: 0,
+        countdownRemainingSec: null
+      }).then(() => {
+        console.log('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 완료: idle');
+      }).catch(error => {
+        console.error('[Bluetooth Coach] 워크아웃 선택 시 Firebase status 업데이트 실패:', error);
+      });
+    }
+  }
+  
+  // 전광판 우측에 세그먼트 그래프 표시 (Indoor Training과 동일한 방식)
+  // 워크아웃 선택 시에는 현재 세그먼트 없음 (-1)
+  updateWorkoutSegmentGraphForBluetoothCoach(loadedWorkout, -1);
+  
+  // 워크아웃 선택 시 경과시간, 랩카운트다운, 랩파워 등 초기화
+  window.bluetoothCoachState.trainingState = 'idle';
+  window.bluetoothCoachState.startTime = null;
+  window.bluetoothCoachState.pausedTime = 0;
+  window.bluetoothCoachState.totalElapsedTime = 0;
+  window.bluetoothCoachState.currentSegmentIndex = 0;
+  window.bluetoothCoachState.segmentStartTime = null;
+  window.bluetoothCoachState.segmentElapsedTime = 0;
+  window.bluetoothCoachState.segmentCountdownActive = false;
+  
+  // 경과시간 및 랩카운트다운 UI 초기화
+  const elapsedTimeEl = document.getElementById('bluetoothCoachElapsedTime');
+  if (elapsedTimeEl) {
+    elapsedTimeEl.textContent = '00:00:00';
+  }
+  
+  // 세그먼트 정보 업데이트 (워크아웃 선택 시 첫 번째 세그먼트 표시)
+  updateCurrentSegmentInfo();
+  updateBluetoothCoachSegmentInfoBar();
+  const lapCountdownEl = document.getElementById('bluetoothCoachLapCountdown');
+  if (lapCountdownEl) {
+    lapCountdownEl.textContent = '00:00';
+  }
+  
+  // 모든 트랙의 랩파워 및 통계 초기화
+  window.bluetoothCoachState.powerMeters.forEach(pm => {
+    // 랩파워 초기화
+    pm.segmentPower = 0;
+    pm.segmentPowerSum = 0;
+    pm.segmentPowerCount = 0;
+    
+    // 궤적 초기화
+    pm.powerTrailHistory = [];
+    pm.lastTrailAngle = null;
+    const trailContainer = document.getElementById(`needle-path-${pm.id}`);
+    if (trailContainer) trailContainer.innerHTML = '';
+    
+    // 목표 파워 초기화
+    pm.targetPower = 0;
+    const targetPowerEl = document.getElementById(`target-power-value-${pm.id}`);
+    if (targetPowerEl) targetPowerEl.textContent = '';
+    
+    // 랩파워 UI 초기화
+    const segmentPowerEl = document.getElementById(`segment-power-value-${pm.id}`);
+    if (segmentPowerEl) segmentPowerEl.textContent = '0';
+    
+    // FTP 값이 있으면 속도계 눈금 업데이트 (워크아웃 선택 시에도 반영)
+    if (pm.userFTP) {
+      updateBluetoothCoachPowerMeterTicks(pm.id);
+    }
+    
+    // 목표 파워 궤적 업데이트 (초기 상태)
+    const currentPower = pm.currentPower || 0;
+    const ftp = pm.userFTP || 200;
+    const maxPower = ftp * 2;
+    const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
+    const angle = -90 + (ratio * 180);
+    updateBluetoothCoachPowerMeterTrail(pm.id, currentPower, angle, pm);
+  });
+  
+  // 버튼 상태 업데이트
+  updateBluetoothCoachTrainingButtons();
+  
+  if (typeof showToast === 'function') {
+    showToast(`"${loadedWorkout.title || '워크아웃'}" 워크아웃이 선택되었습니다.`, 'success');
+  }
+}
+window.applyBluetoothCoachSelectedWorkout = applyBluetoothCoachSelectedWorkout;
 
 /**
  * 워크아웃 선택 모달 열기 (Indoor Training 함수를 재사용하되, selectWorkoutForBluetoothCoach 호출하도록 수정)
