@@ -6459,6 +6459,18 @@ function ClubMissionFormModal(props) {
     return function () { cancelled = true; };
   }, [groupId]);
 
+  /** 미션 개수 입력 중 문자열 — 빈 칸(모든 자리 삭제)도 허용하고, 칸을 벗어나면 실제 개수로 되돌린다 */
+  var _countDraft = useState(null);
+  var countDraft = _countDraft[0];
+  var setCountDraft = _countDraft[1];
+
+  function onCountInput(v) {
+    var raw = String(v == null ? '' : v).replace(/[^0-9]/g, '').slice(0, 2);
+    if (raw !== '' && Number(raw) > 60) raw = '60';
+    setCountDraft(raw);
+    if (raw !== '' && Number(raw) >= 1) setCount(raw);
+  }
+
   function setCount(nRaw) {
     var n = Math.max(1, Math.min(60, Math.floor(Number(nRaw) || 1)));
     setSteps(function (prev) {
@@ -6555,9 +6567,11 @@ function ClubMissionFormModal(props) {
               type="number"
               min="1"
               max="60"
+              inputMode="numeric"
               className="w-24 border border-slate-300 rounded-lg px-3 py-2"
-              value={steps.length}
-              onChange={function (e) { setCount(e.target.value); }}
+              value={countDraft != null ? countDraft : String(steps.length)}
+              onChange={function (e) { onCountInput(e.target.value); }}
+              onBlur={function () { setCountDraft(null); }}
             />
           </label>
           <div className="space-y-2">
