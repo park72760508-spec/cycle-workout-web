@@ -344,7 +344,8 @@
       var has = !!pm.userName;
       return '<div class="coachm-slot-item' + (has ? '' : ' coachm-slot-item--empty') +
         (sel && String(sel.id) === String(pm.id) ? ' selected' : '') + '" data-track="' + escapeText(pm.id) + '">' +
-        '<span class="coachm-slot-item__dot' + (has && pm.connected !== false ? ' on' : '') + '"></span>' +
+        // 슬롯에 사용자가 접속해 있으면 번호와 같은 색(민트), 비어 있으면 회색
+        '<span class="coachm-slot-item__dot' + (has ? ' on' : '') + '"></span>' +
         '<span class="coachm-slot-item__no">' + escapeText(pm.id) + '</span>' +
         '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '미접속') + '</span></div>';
     }).join('');
