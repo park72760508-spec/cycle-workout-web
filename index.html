@@ -8923,7 +8923,7 @@
         { id: 'VO2 Max', label: 'VO2 Max', icon: 'assets/img/vo2max.png', color: 'var(--zone-5)' },
         { id: '기타', label: '입문자 전용', icon: 'assets/img/etc.png', color: 'var(--zone-1)' },
         /* 클럽 관리자(방장·관리자·부관리자)에게만 표시 — 그룹세션 클럽 전용 워크아웃 */
-        { id: '클럽', label: '클럽 전용', icon: 'assets/img/people.png', color: 'var(--zone-1)' }
+        { id: '클럽', label: '클럽 전용', icon: 'assets/img/club.svg', color: 'var(--zone-1)' }
       ];
       /** fn_my_manageable_clubs 결과 — null: 아직 조회 전, []: 관리 클럽 없음(카드 숨김) */
       var workoutManagedClubs = null;
@@ -9147,7 +9147,7 @@
         if (c.id === '클럽') {
           var clubCount = Array.isArray(workoutManagedClubs) ? workoutManagedClubs.length : 0;
           return '<div class="workout-category-card workout-category-card-club" data-category="클럽" data-zone="1" onclick="workoutViewShowClubs()">' +
-            '<img src="' + c.icon + '" alt="' + c.label + '" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain; filter: invert(1);">' +
+            '<img src="' + c.icon + '" alt="' + c.label + '" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain;">' +
             '<div class="category-label">' + c.label + '</div>' +
             '<div class="category-count">' + (clubCount > 0 ? clubCount + '개 클럽' : '-') + '</div>' +
             '</div>';
