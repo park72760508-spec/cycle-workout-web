@@ -70,6 +70,8 @@
     if (st.trackId != null) {
       pm = pms.find(function (p) { return p && String(p.id) === String(st.trackId); }) || null;
     }
+    // 직접 고르기 전(자동 선택)에는 빈 슬롯에 머물지 않고 접속자가 생기면 그 슬롯으로
+    if (pm && !pm.userName && !st.userPicked) pm = null;
     if (!pm) {
       pm = pms.find(function (p) { return p && p.userName; }) || pms[0];
       if (pm) st.trackId = pm.id;
@@ -311,6 +313,8 @@
   }
 
   function onEnter() {
+    st.userPicked = false;
+    st.trackId = null;
     st.displayPower = 0;
     st.gaugeFtp = 0;
     closeMenu();
@@ -346,6 +350,7 @@
       row.addEventListener('click', function (e) {
         e.stopPropagation();
         st.trackId = row.getAttribute('data-track');
+        st.userPicked = true;
         st.displayPower = 0;
         st.lastTextAt = 0;
         closeMenu();
