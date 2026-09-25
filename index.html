@@ -1173,13 +1173,34 @@
   color: #666;
 }
 
+.repeat-segment-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.repeat-segment-edit,
 .repeat-segment-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: none;
   border: none;
-  color: #dc3545;
   cursor: pointer;
-  padding: 4px 8px;
+  padding: 6px;
   border-radius: 4px;
+}
+
+.repeat-segment-edit img,
+.repeat-segment-remove img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  display: block;
+}
+
+.repeat-segment-edit:hover {
+  background: #e0f2fe;
 }
 
 .repeat-segment-remove:hover {
@@ -3750,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260924coachLogo1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260925workoutIcons1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -6416,8 +6437,8 @@
         <h1 id="workoutScreenTitle">워크아웃</h1>
         <p class="subtitle workout-screen-subtitle" id="workoutScreenSubtitle">오늘의 훈련 프로그램을 선택하세요</p>
       </div>
-      <button type="button" class="workout-screen-new-btn" id="workoutScreenNewBtn" onclick="if (typeof showAddWorkoutForm === 'function') showAddWorkoutForm(true);" aria-label="새 워크아웃" style="display:none;">
-        <img src="assets/img/write.png" alt="새 워크아웃" class="workout-screen-new-icon" style="width: 24px; height: 24px; object-fit: contain;" />
+      <button type="button" class="workout-screen-new-btn" id="workoutScreenNewBtn" onclick="if (typeof showAddWorkoutForm === 'function') showAddWorkoutForm(true);" aria-label="워크아웃 작성" title="워크아웃 작성" style="display:none;">
+        <svg class="workout-screen-new-icon" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
       </button>
     </div>
 
@@ -8875,7 +8896,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-segment-incremental-render-20260923a"></script>
+<script src="assets/js/workoutManager.js?v=workout-icons-20260925a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -8914,13 +8935,18 @@
         var headerEl = document.getElementById('workoutScreenHeader');
         if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
         if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
+        /* 카테고리(워크아웃 제목) 화면: 좌측 < 홈 이동, 우측 + 워크아웃 작성 */
         var backBtn = document.getElementById('workoutScreenBackBtn');
         if (backBtn) {
-          backBtn.style.display = 'none';
-          backBtn.onclick = null;
+          backBtn.style.display = 'flex';
+          backBtn.setAttribute('aria-label', '홈으로');
+          backBtn.onclick = function () {
+            if (typeof window.goHomeBasecamp === 'function') window.goHomeBasecamp();
+            else if (typeof showScreen === 'function') showScreen('basecampScreen');
+          };
         }
         var newBtn = document.getElementById('workoutScreenNewBtn');
-        if (newBtn) newBtn.style.display = 'none';
+        if (newBtn) newBtn.style.display = 'flex';
         if (titleEl) { titleEl.textContent = '워크아웃'; }
         if (subtitleEl) { subtitleEl.textContent = '오늘의 훈련 프로그램을 선택하세요'; subtitleEl.style.display = ''; }
         if (headerEl) headerEl.classList.remove('workout-screen-header--list-view');

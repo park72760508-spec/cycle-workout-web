@@ -5699,8 +5699,8 @@ function createSegmentCard(segment, index) {
       </div>
     </div>
     <div class="segment-actions">
-      <button class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="편집">✏️</button>
-      <button class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제">🗑️</button>
+      <button type="button" class="segment-edit-btn" onclick="showEditSegmentModal(${index})" title="수정" aria-label="수정"><img src="assets/img/edit2.png" alt="수정" /></button>
+      <button type="button" class="segment-delete-btn" onclick="deleteSegment(${index})" title="삭제" aria-label="삭제"><img src="assets/img/delete2.png" alt="삭제" /></button>
     </div>
   `;
   
@@ -6299,8 +6299,8 @@ function renderRepeatSegments() {
           </div>
         </div>
         <div class="repeat-segment-actions">
-          <button class="btn btn-secondary btn-sm" onclick="editRepeatSegment(${index})">편집</button>
-          <button class="repeat-segment-remove" onclick="removeRepeatSegment(${index})" title="삭제">🗑️</button>
+          <button type="button" class="repeat-segment-edit" onclick="editRepeatSegment(${index})" title="편집" aria-label="편집"><img src="assets/img/edit2.png" alt="편집" /></button>
+          <button type="button" class="repeat-segment-remove" onclick="removeRepeatSegment(${index})" title="삭제" aria-label="삭제"><img src="assets/img/delete2.png" alt="삭제" /></button>
         </div>
       </div>
     `;

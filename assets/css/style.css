@@ -11774,6 +11774,7 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   border-radius: 8px;
   cursor: pointer;
   flex-shrink: 0;
+  color: var(--text-primary);
   transition: background 0.2s;
 }
 
@@ -13529,6 +13530,8 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 
 .segment-edit-btn:hover { background: #e0f2fe; }
 .segment-delete-btn:hover { background: #fee2e2; }
+.segment-edit-btn, .segment-delete-btn { display: inline-flex; align-items: center; justify-content: center; }
+.segment-edit-btn img, .segment-delete-btn img { width: 18px; height: 18px; object-fit: contain; display: block; }
 
 .quick-add-buttons {
   display: flex;
