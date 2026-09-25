@@ -268,6 +268,8 @@
     if (now - st.lastTextAt >= 150) {
       st.lastTextAt = now;
       renderTexts(pm);
+      var menu = $('coachmMenu');
+      if (menu && menu.classList.contains('show')) updateSlotAchievementDots();
     }
     if (now - st.lastGraphAt >= 1000) {
       st.lastGraphAt = now;
@@ -331,6 +333,41 @@
   }
 
   /* ---------- 연결 메뉴: 슬롯 목록 · 워크아웃 선택 ---------- */
+
+  /** 사용자 화면과 같은 목표값(사용자 기기 보고값 우선) */
+  function userTargetPower(pm) {
+    if (pm && typeof pm.reportedTargetPower === 'number' && isFinite(pm.reportedTargetPower)) return pm.reportedTargetPower;
+    return Number(pm && pm.targetPower) || 0;
+  }
+
+  /**
+   * 세그먼트 달성도 점 색 — 사용자 계기판 목표 원호와 동일 규칙:
+   * LAP AVG / 목표 ≥ 98.5% 민트, 미만 주황. 워밍업·휴식·쿨다운·목표 없음·RPM 목표는 회색.
+   */
+  function achievementClass(pm) {
+    var cs = coachState();
+    var w = cs.currentWorkout;
+    var seg = w && Array.isArray(w.segments) ? w.segments[cs.currentSegmentIndex || 0] : null;
+    var type = String(seg && seg.segment_type || '').toLowerCase();
+    if (!seg || type === 'warmup' || type === 'rest' || type === 'cooldown' || seg.target_type === 'cadence_rpm') return 'rest';
+    if (cs.trainingState !== 'running' && cs.trainingState !== 'paused') return 'rest';
+    var target = userTargetPower(pm);
+    if (!(target > 0)) return 'rest';
+    return (Number(pm.segmentPower) || 0) / target >= 0.985 ? 'ok' : 'under';
+  }
+
+  function updateSlotAchievementDots() {
+    var list = $('coachmSlotList');
+    if (!list) return;
+    var pms = powerMeters();
+    Array.prototype.forEach.call(list.querySelectorAll('.coachm-slot-item[data-track]'), function (row) {
+      var dot = row.querySelector('.coachm-slot-item__ach');
+      if (!dot) return;
+      var pm = pms.find(function (p) { return p && String(p.id) === row.getAttribute('data-track'); });
+      var cls = 'coachm-slot-item__ach coachm-slot-item__ach--' + (pm && pm.userName ? achievementClass(pm) : 'rest');
+      if (dot.className !== cls) dot.className = cls;
+    });
+  }
   function renderSlotList() {
     var list = $('coachmSlotList');
     if (!list) return;
@@ -347,7 +384,9 @@
         // 슬롯에 사용자가 접속해 있으면 번호와 같은 색(민트), 비어 있으면 회색
         '<span class="coachm-slot-item__dot' + (has ? ' on' : '') + '"></span>' +
         '<span class="coachm-slot-item__no">' + escapeText(pm.id) + '</span>' +
-        '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '미접속') + '</span></div>';
+        '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '미접속') + '</span>' +
+        (has ? '<span class="coachm-slot-item__ach coachm-slot-item__ach--' + achievementClass(pm) + '" title="세그먼트 달성도"></span>' : '') +
+        '</div>';
     }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.coachm-slot-item[data-track]'), function (row) {
       row.addEventListener('click', function (e) {

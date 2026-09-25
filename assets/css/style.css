@@ -33478,6 +33478,25 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 #bluetoothCoachMobileScreen .coachm-menu .mobile-bluetooth-dropdown-item span {
   white-space: nowrap;
 }
+/* 세그먼트 달성도 점 (사용자 계기판 목표 원호와 같은 색) */
+#bluetoothCoachMobileScreen .coachm-slot-item__ach {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-left: 6px;
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--ok {
+  background: #00d4aa;
+  box-shadow: 0 0 6px rgba(0, 212, 170, 0.7);
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--under {
+  background: #ff8c00;
+  box-shadow: 0 0 6px rgba(255, 140, 0, 0.7);
+}
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--rest {
+  background: #6b7280;
+}
 #bluetoothCoachMobileScreen .coachm-menu-divider {
   height: 1px;
   margin: 4px 0;
