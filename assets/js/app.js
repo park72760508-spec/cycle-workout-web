@@ -4061,6 +4061,7 @@ if (!window.showScreen) {
           
           // 현재 워크아웃이 없으면 placeholder 표시 (flex-direction: column 유지)
           if (!window.currentWorkout) {
+            if (segmentPreview) segmentPreview.classList.remove('segment-preview--card');
             if (placeholder) {
               placeholder.style.display = 'flex';
             }
@@ -16790,24 +16791,47 @@ function updateTrainingReadyScreenWithWorkout(workout) {
         }, 200);
       }
       
-      // 워크아웃 화면 카드와 같은 디자인(SegmentedWorkoutGraph)으로 표시 — 없으면 기존 캔버스 그래프
-      if (typeof renderSegmentedWorkoutGraph === 'function') {
+      // 워크아웃 화면의 워크아웃 카드 블럭(제목·그래프·시간/TSS/카테고리)을 버튼만 빼고 그대로 표시
+      // — renderWorkoutCard/renderSegmentedWorkoutGraph 가 없으면 기존 캔버스 그래프
+      if (typeof renderSegmentedWorkoutGraph === 'function' && typeof renderWorkoutCard === 'function') {
         setTimeout(() => {
           const prev = document.getElementById('segmentPreviewGraph');
           if (prev) prev.remove();
-          const box = document.createElement('div');
-          box.id = 'segmentPreviewGraph';
-          box.className = 'training-ready-swg';
-          box.style.opacity = '0';
-          box.style.transition = 'opacity 0.4s ease';
-          segmentPreview.appendChild(box);
+          const wrap = document.createElement('div');
+          wrap.id = 'segmentPreviewGraph';
+          wrap.className = 'training-ready-card';
+          wrap.style.opacity = '0';
+          wrap.style.transition = 'opacity 0.4s ease';
+          wrap.innerHTML = renderWorkoutCard(workout, {}, {}, '2');
+          const card = wrap.querySelector('.workout-card');
+          if (card) {
+            // 버튼·카드 클릭 동작 제거 (미리보기 블럭 클릭 = 워크아웃 다시 선택)
+            const actions = card.querySelector('.workout-card__actions');
+            if (actions) actions.remove();
+            const check = card.querySelector('.workout-card__title-check');
+            if (check) check.remove();
+            card.removeAttribute('onclick');
+            card.removeAttribute('role');
+            card.removeAttribute('tabindex');
+            card.classList.remove('workout-card--clickable', 'workout-card--selected');
+          }
+          segmentPreview.classList.add('segment-preview--card');
+          segmentPreview.style.removeProperty('min-height');
+          segmentPreview.style.removeProperty('height');
+          segmentPreview.style.removeProperty('max-height');
+          segmentPreview.appendChild(wrap);
+          fitTrainingReadyCard();
           requestAnimationFrame(() => {
-            try {
-              renderSegmentedWorkoutGraph(box, workout.segments, { maxHeight: 160 });
-            } catch (error) {
-              console.error('[Training Ready] renderSegmentedWorkoutGraph 실행 오류:', error);
+            const graphEl = wrap.querySelector('.workout-card__graph');
+            if (graphEl) {
+              graphEl.removeAttribute('id');
+              try {
+                renderSegmentedWorkoutGraph(graphEl, workout.segments, { maxHeight: 100 });
+              } catch (error) {
+                console.error('[Training Ready] renderSegmentedWorkoutGraph 실행 오류:', error);
+              }
             }
-            box.style.opacity = '1';
+            wrap.style.opacity = '1';
           });
         }, 250);
         return finishTrainingReadyWorkoutButtons();
@@ -16858,6 +16882,7 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }
   } else {
     if (segmentPreview) {
+      segmentPreview.classList.remove('segment-preview--card');
       // 세그먼트가 없으면 placeholder 표시
       if (placeholder) {
         placeholder.style.display = 'flex';
@@ -16877,6 +16902,20 @@ function updateTrainingReadyScreenWithWorkout(workout) {
 
   finishTrainingReadyWorkoutButtons();
 }
+
+/**
+ * 훈련 준비 화면 워크아웃 카드: 워크아웃 화면 카드 기준 크기(326×205)로 그린 뒤 미리보기 폭에 맞춰
+ * 전체를 같은 비율로 축소/확대 — 제목·그래프·하단 줄 비율까지 워크아웃 화면 카드와 동일.
+ */
+var TRAINING_READY_CARD_BASE_W = 326;
+function fitTrainingReadyCard() {
+  var box = document.getElementById('segmentPreview');
+  var wrap = document.getElementById('segmentPreviewGraph');
+  if (!box || !wrap || !wrap.classList.contains('training-ready-card')) return;
+  var w = box.clientWidth;
+  if (w > 0) wrap.style.setProperty('--tr-card-scale', String(w / TRAINING_READY_CARD_BASE_W));
+}
+window.addEventListener('resize', function () { fitTrainingReadyCard(); });
 
 /** 워크아웃 선택 시 Select Dashboard 버튼 활성화 */
 function finishTrainingReadyWorkoutButtons() {
