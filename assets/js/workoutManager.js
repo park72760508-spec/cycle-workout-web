@@ -4667,6 +4667,32 @@ async function showAddWorkoutForm(clearForm = true) {
   }
 }
 
+/** 목록(wbStatus) 값 중 클럽 전용 저장 대상 — "club:<groupId>" (저장은 Supabase club_workouts) */
+const WB_STATUS_CLUB_PREFIX = 'club:';
+
+function isClubWorkoutStatusValue(v) {
+  return typeof v === 'string' && v.indexOf(WB_STATUS_CLUB_PREFIX) === 0;
+}
+
+/** 공개("보이기")·클럽 전용은 비밀번호 없음, 그 외(TrainingSchedules 비공개 목록)만 비밀번호 필수 */
+function workoutStatusNeedsPassword(v) {
+  return !!v && v !== '보이기' && !isClubWorkoutStatusValue(v);
+}
+
+/** 내가 클럽 전용 워크아웃을 저장할 수 있는 멤버쉽 클럽 — RPC fn_my_manageable_membership_groups */
+async function fetchManageableMembershipClubsForWorkoutForm() {
+  try {
+    const rpc = typeof window.stelvioSupabaseRpc === 'function'
+      ? window.stelvioSupabaseRpc
+      : (await import('/assets/js/supabaseDualWrite.js')).callSupabaseRpcAsUser;
+    const rows = await rpc('fn_my_manageable_membership_groups', {});
+    return Array.isArray(rows) ? rows.filter(r => r && r.groupId && r.name) : [];
+  } catch (e) {
+    console.warn('[워크아웃 작성] 멤버쉽 클럽 목록 조회 실패:', e && e.message ? e.message : e);
+    return [];
+  }
+}
+
 /**
  * 워크아웃 작성 화면용 TrainingSchedules 목록 로드
  * 구글 시트의 TrainingSchedules > title 리스트를 가져와서 상태 콤보박스에 추가
@@ -4682,6 +4708,9 @@ async function loadTrainingSchedulesForWorkoutForm() {
     // 기본 옵션 유지: "보이기 (공개)"
     const baseOption = '<option value="보이기">보이기 (공개)</option>';
     
+    // 멤버쉽 클럽(클럽 전용 저장 대상)은 TrainingSchedules 와 병렬로 조회
+    const clubsPromise = fetchManageableMembershipClubsForWorkoutForm();
+
     // TrainingSchedules 목록 가져오기
     const url = `${window.GAS_URL}?action=listTrainingSchedules`;
     const response = await fetch(url);
@@ -4708,6 +4737,13 @@ async function loadTrainingSchedulesForWorkoutForm() {
       });
     }
     
+    const clubs = await clubsPromise;
+    if (clubs.length) {
+      optionsHtml += '<optgroup label="멤버쉽 클럽 (클럽 전용)">' + clubs.map(c =>
+        `<option value="${escapeHtml(WB_STATUS_CLUB_PREFIX + c.groupId)}">${escapeHtml(c.name)}</option>`
+      ).join('') + '</optgroup>';
+    }
+    
     statusEl.innerHTML = optionsHtml;
     
     // status 변경 시 비밀번호 필드 활성화/비활성화 이벤트 리스너 추가
@@ -4717,8 +4753,8 @@ async function loadTrainingSchedulesForWorkoutForm() {
       const selectedStatus = this.value;
       
       if (passwordGroup && passwordInput) {
-        if (selectedStatus && selectedStatus !== '보이기') {
-          // "보이기" 이외 선택 시 비밀번호 필드 표시 및 필수로 설정
+        if (workoutStatusNeedsPassword(selectedStatus)) {
+          // "보이기"·클럽 전용 이외 선택 시 비밀번호 필드 표시 및 필수로 설정
           passwordGroup.style.display = 'block';
           passwordInput.required = true;
         } else {
@@ -4734,8 +4770,15 @@ async function loadTrainingSchedulesForWorkoutForm() {
     
   } catch (error) {
     console.error('[loadTrainingSchedulesForWorkoutForm] 오류:', error);
-    // 오류 발생 시 기본 옵션만 유지
-    statusEl.innerHTML = baseOption;
+    // 오류 발생 시 기본 옵션 + 멤버쉽 클럽만 유지
+    let fallbackHtml = '<option value="보이기">보이기 (공개)</option>'; // baseOption 은 try 블록 안 상수라 여기서 못 씀
+    const clubsOnError = await fetchManageableMembershipClubsForWorkoutForm();
+    if (clubsOnError.length) {
+      fallbackHtml += '<optgroup label="멤버쉽 클럽 (클럽 전용)">' + clubsOnError.map(c =>
+        `<option value="${escapeHtml(WB_STATUS_CLUB_PREFIX + c.groupId)}">${escapeHtml(c.name)}</option>`
+      ).join('') + '</optgroup>';
+    }
+    statusEl.innerHTML = fallbackHtml;
     
     // 이벤트 리스너는 여전히 추가
     statusEl.addEventListener('change', function() {
@@ -4744,7 +4787,7 @@ async function loadTrainingSchedulesForWorkoutForm() {
       const selectedStatus = this.value;
       
       if (passwordGroup && passwordInput) {
-        if (selectedStatus && selectedStatus !== '보이기') {
+        if (workoutStatusNeedsPassword(selectedStatus)) {
           passwordGroup.style.display = 'block';
           passwordInput.required = true;
         } else {
@@ -4757,7 +4800,20 @@ async function loadTrainingSchedulesForWorkoutForm() {
   }
 }
 
+/** 저장 버튼에 addEventListener(saveWorkout)와 onclick(saveWorkout)이 함께 걸리는 경우가 있어 중복 저장 방지 */
+let workoutSaveInFlight = false;
+
 async function saveWorkout() {
+  if (workoutSaveInFlight) return;
+  workoutSaveInFlight = true;
+  try {
+    await saveWorkoutInner();
+  } finally {
+    workoutSaveInFlight = false;
+  }
+}
+
+async function saveWorkoutInner() {
   if (isWorkoutEditMode) {
     console.log('Edit mode active - saveWorkout blocked');
     return;
@@ -4799,6 +4855,12 @@ async function saveWorkout() {
   if (!author) {
     window.showToast('카테고리를 선택해주세요.');
     authorEl.focus();
+    return;
+  }
+
+  // 목록에서 멤버쉽 클럽을 고르면 구글 시트가 아니라 Supabase club_workouts 로 저장
+  if (isClubWorkoutStatusValue(status)) {
+    await saveWorkoutToMembershipClub(status.slice(WB_STATUS_CLUB_PREFIX.length));
     return;
   }
 
@@ -5042,6 +5104,27 @@ function buildValidSegmentsForSave() {
   });
 }
 
+/**
+ * 워크아웃 작성 > 목록에서 멤버쉽 클럽 선택 시 — 그룹세션의 클럽 전용 워크아웃과 같은 경로
+ * (createClubWorkoutSupabase → club_workouts)로 저장한다. 권한은 서버가 다시 확인한다.
+ */
+async function saveWorkoutToMembershipClub(groupId) {
+  var uid = (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+    (window.currentUser && (window.currentUser.id || window.currentUser.uid)) || '';
+  if (!uid) {
+    window.showToast('로그인 후 저장할 수 있습니다.');
+    return;
+  }
+  var tempCtx = { groupId: groupId, hostUserId: String(uid), returnScreen: 'workoutScreen' };
+  clubWorkoutBuilderCtx = tempCtx;
+  try {
+    await saveClubWorkoutFromBuilder();
+  } finally {
+    // 실패 시 saveClubWorkoutFromBuilder 가 ctx 를 남겨두므로 일반 모드로 되돌린다
+    if (clubWorkoutBuilderCtx === tempCtx) clubWorkoutBuilderCtx = null;
+  }
+}
+
 /** 클럽 전용 워크아웃 저장 — GAS(Workouts 시트)가 아니라 Supabase club_workouts로 저장. */
 async function saveClubWorkoutFromBuilder() {
   var ctx = clubWorkoutBuilderCtx;
@@ -5268,6 +5351,12 @@ async function performWorkoutUpdate() {
   const publishDate = publishDateEl.value || null;
   // 비공개 워크아웃인 경우 비밀번호 저장
   const password = (status !== '보이기' && passwordEl) ? (passwordEl.value || '').trim() : '';
+
+  if (isClubWorkoutStatusValue(status)) {
+    // 수정은 구글 시트 워크아웃 기준 — 클럽 전용(Supabase)으로 옮기는 것은 새 워크아웃 저장으로만
+    window.showToast('기존 워크아웃은 클럽 전용으로 옮길 수 없습니다. 새 워크아웃으로 작성해 저장해 주세요.');
+    return;
+  }
 
   if (!title) {
     window.showToast('제목을 입력해주세요.');
