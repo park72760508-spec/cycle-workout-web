@@ -451,11 +451,9 @@
   }
 
   function chooseWorkout(w, isClub) {
-    var state = coachState().trainingState;
-    if (state === 'running' || state === 'paused') {
-      if (typeof window.showToast === 'function') window.showToast('훈련 중에는 워크아웃을 바꿀 수 없습니다. 종료 후 선택하세요.');
-      return;
-    }
+    // PC Coach 와 동일하게 선택 허용 — 방 상태가 이전 훈련의 'paused' 로 남아 있는 경우가 많다.
+    // 실제로 진행 중(running)일 때만 확인 후 교체(적용 시 엔진이 idle 로 초기화)
+    if (coachState().trainingState === 'running' && !confirm('훈련이 진행 중입니다. 워크아웃을 바꿀까요?')) return;
     closeCoachMobileWorkoutPicker();
     if (isClub) {
       if (typeof window.applyBluetoothCoachSelectedWorkout === 'function') {
