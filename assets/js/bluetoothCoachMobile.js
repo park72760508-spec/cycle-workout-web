@@ -290,9 +290,15 @@
         : (window.SESSION_ID || window.currentTrainingRoomId);
       var db = window.db || (window.firebase && window.firebase.database && window.firebase.database());
       if (!sid || !db) return;
+      st.planRef = db.ref('sessions/' + sid + '/workoutPlan');
+      st.planCb = st.planRef.on('value', function (snap) {
+        var v = snap && snap.val();
+        st.fbPlan = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.keys(v).sort(function (a, b) { return a - b; }).map(function (k) { return v[k]; }) : null);
+      });
       st.statusRef = db.ref('sessions/' + sid + '/status');
       st.statusCb = st.statusRef.on('value', function (snap) {
         var s = snap && snap.val();
+        st.fbStatus = s || null;
         var overlay = $('coachmCountdownOverlay');
         if (!overlay) return;
         var n = s && s.state === 'countdown' ? Number(s.countdownRemainingSec) : NaN;
@@ -312,8 +318,15 @@
     if (st.statusRef && st.statusCb) {
       try { st.statusRef.off('value', st.statusCb); } catch (e) {}
     }
+    if (st.planRef && st.planCb) {
+      try { st.planRef.off('value', st.planCb); } catch (e) {}
+    }
     st.statusRef = null;
     st.statusCb = null;
+    st.planRef = null;
+    st.planCb = null;
+    st.fbStatus = null;
+    st.fbPlan = null;
   }
 
   function onEnter() {
@@ -345,12 +358,17 @@
    * LAP AVG / 목표 ≥ 98.5% 민트, 미만 주황. 워밍업·휴식·쿨다운·목표 없음·RPM 목표는 회색.
    */
   function achievementClass(pm) {
+    // 방의 Firebase 상태·워크아웃 계획 우선 — 워크아웃을 고르지 않은(나중에 접속한) Coach 기기에서도 동일
     var cs = coachState();
+    var fbS = st.fbStatus || {};
     var w = cs.currentWorkout;
-    var seg = w && Array.isArray(w.segments) ? w.segments[cs.currentSegmentIndex || 0] : null;
+    var segments = Array.isArray(st.fbPlan) && st.fbPlan.length ? st.fbPlan : (w && Array.isArray(w.segments) ? w.segments : []);
+    var idx = typeof fbS.segmentIndex === 'number' ? fbS.segmentIndex : (cs.currentSegmentIndex || 0);
+    var state = fbS.state || cs.trainingState;
+    var seg = segments[idx] || null;
     var type = String(seg && seg.segment_type || '').toLowerCase();
     if (!seg || type === 'warmup' || type === 'rest' || type === 'cooldown' || seg.target_type === 'cadence_rpm') return 'rest';
-    if (cs.trainingState !== 'running' && cs.trainingState !== 'paused') return 'rest';
+    if (state !== 'running' && state !== 'paused') return 'rest';
     var target = userTargetPower(pm);
     if (!(target > 0)) return 'rest';
     return (Number(pm.segmentPower) || 0) / target >= 0.985 ? 'ok' : 'under';
