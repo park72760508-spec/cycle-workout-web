@@ -13694,6 +13694,23 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   -webkit-touch-callout: none;
 }
 
+/* 세그먼트 편집 모달 하단: 워크아웃 작성 화면 하단 취소·저장 버튼과 같은 크기·간격 */
+#segmentModal .segment-modal-footer {
+  gap: 12px;
+  flex-direction: row !important;
+  justify-content: center;
+}
+#segmentModal .segment-modal-footer .btn {
+  flex: 0 1 auto;
+  width: auto !important; /* 모바일 공통 .modal-footer button { width:100% !important } 무효화 */
+  min-height: auto;
+  min-width: 0;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+}
+
 /* 워크아웃 선택 테이블 스타일 */
 .workout-selection-table {
   width: 100%;
@@ -14062,6 +14079,28 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
 
 .duration-input input {
   width: 60px;
+}
+
+/* 세그먼트 편집(모바일 반 폭 칸): 분·초 입력이 잘려 빈칸처럼 보이지 않게 */
+#segmentModal .duration-input {
+  gap: 4px;
+}
+#segmentModal .duration-input input {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+#segmentModal .duration-input input::-webkit-outer-spin-button,
+#segmentModal .duration-input input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#segmentModal .duration-input .input-suffix {
+  flex-shrink: 0;
 }
 
 .intensity-input {

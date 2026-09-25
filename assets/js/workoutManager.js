@@ -5754,9 +5754,8 @@ function addQuickSegment(type) {
     renderSegments();
     updateSegmentSummary();
     
-    if (typeof window.showToast === 'function') {
-      window.showToast(`${template.label} 세그먼트가 추가되었습니다.`);
-    }
+    // 추가된 세그먼트 값으로 편집 화면을 바로 열어 세부 조정(토스트는 편집 화면 입력칸을 가려 생략)
+    showEditSegmentModal(workoutSegments.length - 1);
   }
 }
 
@@ -5827,7 +5826,8 @@ function showEditSegmentModal(index) {
   // target_type 설정
   const segmentTargetType = safeGetElement('segmentTargetType');
   const segmentTargetRpm = safeGetElement('segmentTargetRpm');
-  const targetType = segment.target_type || 'ftp_pct';
+  // 빠른 추가 세그먼트는 target_type 'ftp_percent' — 선택지(ftp_pct)와 같은 % FTP 로 표시
+  const targetType = (segment.target_type === 'ftp_percent' ? 'ftp_pct' : segment.target_type) || 'ftp_pct';
   
   if (segmentTargetType) {
     segmentTargetType.value = targetType;
