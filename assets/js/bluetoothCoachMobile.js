@@ -209,7 +209,9 @@
       ? (segInfo || (w.title || '워크아웃'))
       : '워크아웃을 선택하세요');
 
-    var target = Math.round(Number(pm && pm.targetPower) || 0);
+    // 사용자 화면과 같은 값: 사용자 기기가 보낸 목표값 우선(Coach 엔진 재계산값은 보조)
+    var hasReported = pm && typeof pm.reportedTargetPower === 'number' && isFinite(pm.reportedTargetPower);
+    var target = Math.round(hasReported ? pm.reportedTargetPower : (Number(pm && pm.targetPower) || 0));
     var lap = Math.round(Number(pm && pm.segmentPower) || 0);
     setText('coachm-ui-target-power', target);
     setText('coachm-ui-current-power', Math.round(Number(pm && pm.currentPower) || 0));

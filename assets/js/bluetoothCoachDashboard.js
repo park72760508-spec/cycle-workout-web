@@ -1298,6 +1298,9 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   powerMeter.maxPower = maxPower;
   powerMeter.segmentPower = segmentPower;
   powerMeter.targetPower = targetPower;
+  // 사용자 기기가 자기 계기판에 표시하는 목표값 — 아래 궤적 계산이 targetPower 를 Coach FTP×% 로
+  // 덮어쓰므로 원본을 따로 보관(휴대폰 Coach 화면은 사용자 화면과 같은 이 값을 표시)
+  powerMeter.reportedTargetPower = targetPower;
   powerMeter.lastUpdateTime = userData.lastUpdate || Date.now();
   
   // 파워값 업데이트 (네트워크 단절 감지 포함)
