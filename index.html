@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260925segZone1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260925clubWk1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -8900,7 +8900,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-clubsave-20260925a"></script>
+<script src="assets/js/workoutManager.js?v=workout-clubview-20260925a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -8921,8 +8921,13 @@
         { id: 'Tempo', label: 'Tempo', icon: 'assets/img/tempo.png', color: 'var(--zone-3)' },
         { id: 'Threshold', label: 'Threshold', icon: 'assets/img/threshold.png', color: 'var(--zone-4)' },
         { id: 'VO2 Max', label: 'VO2 Max', icon: 'assets/img/vo2max.png', color: 'var(--zone-5)' },
-        { id: '기타', label: '입문자 전용', icon: 'assets/img/etc.png', color: 'var(--zone-1)' }
+        { id: '기타', label: '입문자 전용', icon: 'assets/img/etc.png', color: 'var(--zone-1)' },
+        /* 클럽 관리자(방장·관리자·부관리자)에게만 표시 — 그룹세션 클럽 전용 워크아웃 */
+        { id: '클럽', label: '클럽 전용', icon: 'assets/img/people.png', color: 'var(--zone-1)' }
       ];
+      /** fn_my_manageable_clubs 결과 — null: 아직 조회 전, []: 관리 클럽 없음(카드 숨김) */
+      var workoutManagedClubs = null;
+      var workoutManagedClubsLoading = null;
 
       function getCategoryLabel(categoryId) {
         var c = WORKOUT_CATEGORIES.find(function(x) { return x.id === categoryId; });
@@ -8972,6 +8977,8 @@
         workoutViewState.selectedCategory = categoryId;
         var catView = document.getElementById('workoutCategoryView');
         var listView = document.getElementById('workoutListView');
+        var listToolbar = listView && listView.querySelector('.workout-list-toolbar');
+        if (listToolbar) listToolbar.style.display = '';
         if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
         if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
         var backBtn = document.getElementById('workoutScreenBackBtn');
@@ -9018,6 +9025,108 @@
         if (typeof window.refreshGlobalBackToTopState === 'function') window.refreshGlobalBackToTopState();
       }
 
+      /** 관리 클럽 조회(화면 진입마다 1회) → 카테고리 그리드에 "클럽 전용" 카드 반영 */
+      function workoutLoadManagedClubs() {
+        if (workoutManagedClubsLoading || typeof window.fetchManagedClubsForWorkoutView !== 'function') return workoutManagedClubsLoading;
+        workoutManagedClubsLoading = window.fetchManagedClubsForWorkoutView().then(function (clubs) {
+          var prevLen = Array.isArray(workoutManagedClubs) ? workoutManagedClubs.length : -1;
+          workoutManagedClubs = clubs;
+          if (workoutViewState.mode === 'category' && prevLen !== clubs.length) {
+            renderWorkoutCategories(window.__workoutCategoryLastWorkouts || window.workouts || []);
+          }
+          return clubs;
+        }).finally(function () { workoutManagedClubsLoading = null; });
+        return workoutManagedClubsLoading;
+      }
+
+      /** 클럽 전용 화면 공통: 목록 뷰로 전환, 제목·뒤로가기 설정, 검색줄 숨김 */
+      function workoutViewEnterClubMode(mode, title, onBack) {
+        workoutViewState.mode = mode;
+        var catView = document.getElementById('workoutCategoryView');
+        var listView = document.getElementById('workoutListView');
+        if (catView) { catView.style.display = 'none'; catView.setAttribute('data-hidden', 'true'); }
+        if (listView) { listView.style.display = 'block'; listView.removeAttribute('data-hidden'); }
+        var toolbar = listView && listView.querySelector('.workout-list-toolbar');
+        if (toolbar) toolbar.style.display = 'none';
+        var backBtn = document.getElementById('workoutScreenBackBtn');
+        if (backBtn) {
+          backBtn.style.display = 'flex';
+          backBtn.setAttribute('aria-label', '뒤로');
+          backBtn.onclick = onBack;
+        }
+        var newBtn = document.getElementById('workoutScreenNewBtn');
+        if (newBtn) newBtn.style.display = 'flex';
+        var titleEl = document.getElementById('workoutScreenTitle');
+        var subtitleEl = document.getElementById('workoutScreenSubtitle');
+        var headerEl = document.getElementById('workoutScreenHeader');
+        if (titleEl) titleEl.textContent = title;
+        if (subtitleEl) subtitleEl.style.display = 'none';
+        if (headerEl) headerEl.classList.add('workout-screen-header--list-view');
+        var wsc = document.getElementById('workoutScreen');
+        var wvc = document.getElementById('workoutViewContainer');
+        if (wsc) wsc.scrollTop = 0;
+        if (wvc) wvc.scrollTop = 0;
+      }
+
+      function workoutEscape(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+        });
+      }
+
+      /** "클럽 전용" 카드 → 내가 관리하는 클럽 목록 */
+      async function workoutViewShowClubs() {
+        workoutViewEnterClubMode('clubs', '클럽 전용', function () { workoutViewShowCategory(); });
+        var list = document.getElementById('workoutList');
+        if (!list) return;
+        if (!Array.isArray(workoutManagedClubs)) {
+          list.innerHTML = '<div class="loading-spinner">클럽 목록을 불러오는 중...</div>';
+          await workoutLoadManagedClubs();
+          if (workoutViewState.mode !== 'clubs') return;
+        }
+        var clubs = workoutManagedClubs || [];
+        if (!clubs.length) {
+          list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div>' +
+            '<div class="empty-state-title">관리 중인 클럽이 없습니다</div>' +
+            '<div class="empty-state-description">클럽 방장·관리자·부관리자만 클럽 전용 워크아웃을 볼 수 있습니다.</div></div>';
+          return;
+        }
+        list.innerHTML = '<div class="workout-club-list">' + clubs.map(function (c, i) {
+          var photo = c.photoUrl
+            ? '<img src="' + workoutEscape(c.photoUrl) + '" alt="" class="workout-club-item__photo" loading="lazy">'
+            : '<span class="workout-club-item__photo workout-club-item__photo--empty">👥</span>';
+          return '<button type="button" class="workout-club-item" data-index="' + i + '">' + photo +
+            '<span class="workout-club-item__body"><span class="workout-club-item__name">' + workoutEscape(c.name) +
+            (c.isPaid ? ' <span class="workout-club-item__badge">멤버쉽</span>' : '') + '</span>' +
+            '<span class="workout-club-item__count">클럽 전용 워크아웃 ' + (Number(c.workoutCount) || 0) + '개</span></span>' +
+            '<span class="workout-club-item__chevron" aria-hidden="true">›</span></button>';
+        }).join('') + '</div>';
+        Array.prototype.forEach.call(list.querySelectorAll('.workout-club-item'), function (btn) {
+          btn.addEventListener('click', function () {
+            var c = clubs[Number(btn.getAttribute('data-index'))];
+            if (c) workoutViewShowClubWorkouts(c);
+          });
+        });
+      }
+
+      /** 클럽 선택 → 그 클럽의 클럽 전용 워크아웃 카드 목록 */
+      async function workoutViewShowClubWorkouts(club) {
+        workoutViewEnterClubMode('clubWorkouts', club.name, function () { workoutViewShowClubs(); });
+        var list = document.getElementById('workoutList');
+        if (!list) return;
+        list.innerHTML = '<div class="loading-spinner">클럽 전용 워크아웃을 불러오는 중...</div>';
+        try {
+          var items = await window.fetchClubWorkoutsForManager(club.groupId);
+          if (workoutViewState.mode !== 'clubWorkouts') return;
+          window.renderClubWorkoutCards(items, club.name);
+        } catch (e) {
+          if (workoutViewState.mode !== 'clubWorkouts') return;
+          list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div>' +
+            '<div class="empty-state-title">' + workoutEscape(e && e.message ? e.message : '불러오지 못했습니다') + '</div></div>';
+        }
+      }
+      window.workoutViewShowClubs = workoutViewShowClubs;
+
       function getCategoryWorkoutCount(workouts, categoryId) {
         if (!workouts || !Array.isArray(workouts)) return 0;
         if (categoryId === 'all') return workouts.length;
@@ -9034,6 +9143,15 @@
       }
 
       function renderCategoryCard(c, workouts) {
+        // 클럽 전용: 관리 클럽 수 표시, 클릭 시 클럽 목록
+        if (c.id === '클럽') {
+          var clubCount = Array.isArray(workoutManagedClubs) ? workoutManagedClubs.length : 0;
+          return '<div class="workout-category-card workout-category-card-club" data-category="클럽" data-zone="1" onclick="workoutViewShowClubs()">' +
+            '<img src="' + c.icon + '" alt="' + c.label + '" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain; filter: invert(1);">' +
+            '<div class="category-label">' + c.label + '</div>' +
+            '<div class="category-count">' + (clubCount > 0 ? clubCount + '개 클럽' : '-') + '</div>' +
+            '</div>';
+        }
         // AI 분석 카테고리는 특별 처리
         if (c.id === 'ai-recommendation') {
           var iconHtml = c.icon && c.icon.indexOf('.gif') !== -1 
@@ -9065,6 +9183,8 @@
         var cats = WORKOUT_CATEGORIES;
         var byId = function(id) { return cats.find(function(x) { return x.id === id; }); };
         var catsOrdered = [byId('all'), byId('ai-recommendation'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('기타')].filter(Boolean);
+        if (Array.isArray(workoutManagedClubs) && workoutManagedClubs.length > 0) catsOrdered.push(byId('클럽'));
+        window.__workoutCategoryLastWorkouts = workouts;
         var renderRow = function(arr) {
           return (arr || []).filter(Boolean).map(function(c) { return renderCategoryCard(c, workouts); }).join('');
         };
@@ -9084,6 +9204,7 @@
           }
           
           workoutViewShowCategory();
+          workoutLoadManagedClubs();
           var useCache = window.workouts && Array.isArray(window.workouts) && window.workouts.length > 5;
           if (useCache) {
             renderWorkoutCategories(window.workouts);

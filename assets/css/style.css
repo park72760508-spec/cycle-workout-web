@@ -11375,6 +11375,79 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   touch-action: pan-y;
 }
 
+/* 워크아웃 화면 > 클럽 전용: 관리 클럽 목록 */
+.workout-club-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+.workout-club-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  touch-action: pan-y;
+}
+.workout-club-item:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+.workout-club-item__photo {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  object-fit: cover;
+}
+.workout-club-item__photo--empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 20px;
+}
+.workout-club-item__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.workout-club-item__name {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workout-club-item__badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  vertical-align: middle;
+}
+.workout-club-item__count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.workout-club-item__chevron {
+  font-size: 22px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
 .workout-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-2px);

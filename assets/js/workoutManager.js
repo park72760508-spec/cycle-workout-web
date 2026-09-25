@@ -4193,17 +4193,20 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const tssVal = estimateWorkoutTSS(workout);
   const tss = (tssVal != null && tssVal !== '' && !Number.isNaN(Number(tssVal))) ? Number(tssVal) : 0;
   const graphId = 'workout-card-graph-' + workout.id;
-  const isAdmin = (grade === '1' || grade === '3');
+  const isClubWorkout = workout.source === 'club';
+  // 클럽 전용 워크아웃 id 는 uuid — 인라인 onclick 인자로 쓰려면 따옴표가 필요, 수정·삭제는 그룹세션에서만
+  const idArg = isClubWorkout ? `'${String(workout.id).replace(/[^0-9a-fA-F-]/g, '')}'` : workout.id;
+  const isAdmin = (grade === '1' || grade === '3') && !isClubWorkout;
   const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
   const isSelected = window.currentWorkout && String(window.currentWorkout.id) === String(workout.id);
   const selectedCheck = isSelected ? '<img src="assets/img/check2.png" alt="선택됨" class="workout-card__title-check" />' : '';
   const selectedClass = isSelected ? ' workout-card--selected' : '';
   return `
-    <div class="workout-card workout-card--clickable${selectedClass}" data-workout-id="${workout.id}" onclick="handleWorkoutCardClick(event, ${workout.id})" role="button" tabindex="0" aria-label="워크아웃 선택: ${safeTitle}">
+    <div class="workout-card workout-card--clickable${selectedClass}" data-workout-id="${workout.id}" onclick="handleWorkoutCardClick(event, ${idArg})" role="button" tabindex="0" aria-label="워크아웃 선택: ${safeTitle}">
       <div class="workout-card__header">
         <h3 class="workout-card__title">${selectedCheck}<span class="workout-card__title-text">${safeTitle}</span></h3>
         <div class="workout-card__actions">
-          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${workout.id})" title="선택" aria-label="선택">
+          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${idArg})" title="선택" aria-label="선택">
             <img src="assets/img/check2.png" alt="선택" class="workout-card__select-icon" />
           </button>
           ${isAdmin ? `
@@ -4269,6 +4272,68 @@ function renderWorkoutCards(workouts, workoutRoomStatusMap = {}, workoutRoomCode
   checkExpiryAndWarn?.();
 }
 
+// ==========================================================
+// 워크아웃 화면 > "클럽 전용" — 클럽 관리자(방장·관리자·부관리자)의 그룹세션 클럽 전용 워크아웃
+// ==========================================================
+
+/** 클럽 전용 워크아웃 id → 워크아웃(세그먼트 포함) — selectWorkout 이 GAS 재조회 없이 사용 */
+window.__clubWorkoutsById = window.__clubWorkoutsById || {};
+
+function isClubWorkoutViewMode() {
+  const mode = window.workoutViewState && window.workoutViewState.mode;
+  return mode === 'clubs' || mode === 'clubWorkouts';
+}
+
+async function workoutClubRpc(fnName, args) {
+  const rpc = typeof window.stelvioSupabaseRpc === 'function'
+    ? window.stelvioSupabaseRpc
+    : (await import('/assets/js/supabaseDualWrite.js')).callSupabaseRpcAsUser;
+  return rpc(fnName, args || {});
+}
+
+/** 내가 관리하는 클럽 목록 — RPC fn_my_manageable_clubs (로그인 전·실패 시 빈 배열) */
+async function fetchManagedClubsForWorkoutView() {
+  try {
+    const rows = await workoutClubRpc('fn_my_manageable_clubs', {});
+    return Array.isArray(rows) ? rows.filter(r => r && r.groupId && r.name) : [];
+  } catch (e) {
+    console.warn('[클럽 전용] 관리 클럽 조회 실패:', e && e.message ? e.message : e);
+    return [];
+  }
+}
+
+/** 클럽 전용 워크아웃 목록 — RPC fn_club_workouts_for_manager (권한 없으면 빈 배열) */
+async function fetchClubWorkoutsForManager(groupId) {
+  const res = await workoutClubRpc('fn_club_workouts_for_manager', { p_group_id: String(groupId) });
+  if (!res || res.success !== true || !Array.isArray(res.items)) {
+    throw new Error(res && res.error === 'forbidden' ? '이 클럽의 워크아웃을 볼 권한이 없습니다.' : '클럽 전용 워크아웃을 불러오지 못했습니다.');
+  }
+  res.items.forEach(w => { if (w && w.id) window.__clubWorkoutsById[String(w.id)] = w; });
+  return res.items;
+}
+
+/** 클럽 전용 워크아웃 카드 렌더 — 일반 워크아웃과 같은 카드(그래프·시간·TSS), 선택만 가능 */
+function renderClubWorkoutCards(items, clubName) {
+  const workoutList = safeGetElement('workoutList');
+  if (!workoutList) return;
+  if (!items.length) {
+    workoutList.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-title">등록된 클럽 전용 워크아웃이 없습니다</div>
+        <div class="empty-state-description">${escapeHtml(clubName || '')} 그룹세션에서 만든 클럽 전용 워크아웃이 여기에 표시됩니다.</div>
+      </div>`;
+    return;
+  }
+  renderWorkoutCards(items, {}, {}, '2');
+  if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
+}
+
+window.fetchManagedClubsForWorkoutView = fetchManagedClubsForWorkoutView;
+window.fetchClubWorkoutsForManager = fetchClubWorkoutsForManager;
+window.renderClubWorkoutCards = renderClubWorkoutCards;
+window.isClubWorkoutViewMode = isClubWorkoutViewMode;
+
 /**
  * 워크아웃 테이블 렌더링 함수 (WorkoutCard 그리드 뷰)
  */
@@ -4278,6 +4343,8 @@ function renderWorkoutTable(workouts, workoutRoomStatusMap = {}, workoutRoomCode
     console.warn('workoutList 요소를 찾을 수 없습니다.');
     return;
   }
+  // "클럽 전용" 화면을 보는 중이면 백그라운드 loadWorkouts 가 일반 목록으로 덮어쓰지 않게
+  if (isClubWorkoutViewMode()) return;
   renderWorkoutCards(workouts, workoutRoomStatusMap, workoutRoomCodeMap, grade);
   attachTableEventListeners();
 }
@@ -4555,6 +4622,9 @@ async function selectWorkout(workoutId) {
     var cachedMatch = cachedList
       ? cachedList.find(function (w) { return w && String(w.id) === String(workoutId); })
       : null;
+    if (!cachedMatch && window.__clubWorkoutsById && window.__clubWorkoutsById[String(workoutId)]) {
+      cachedMatch = window.__clubWorkoutsById[String(workoutId)]; // 클럽 전용(Supabase) — GAS 에 없음
+    }
     if (cachedMatch && Array.isArray(cachedMatch.segments) && cachedMatch.segments.length > 0) {
       console.log('[Workout Cache] 이미 로드된 워크아웃 사용(재다운로드 없음):', workoutId);
       workout = cachedMatch;
