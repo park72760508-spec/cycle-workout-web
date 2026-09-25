@@ -4690,14 +4690,16 @@
                   <img src="assets/img/mwon.svg" alt="" />
                 </span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-cycle-competition" id="btnBasecampCompetition" onclick="if(typeof openCompetitionFromCycleBasecamp==='function')openCompetitionFromCycleBasecamp();else if(typeof showScreen==='function')showScreen('competitionScreen');" aria-label="대회">
-                <span>대회</span>
+              <!-- 클럽 하우스: CYCLE 클럽 리스트 화면 (s(05) 아트워크, 가입 신청 건수 배지는 app.js refreshBasecampBadge) -->
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-riding-group-entry" id="btnBasecampRidingGroupEntry" onclick="if (typeof navigateToClubHouseFromBasecamp === 'function') navigateToClubHouseFromBasecamp(); else { window.__openRidingInitialView = 'groups'; if (typeof showScreen === 'function') showScreen('openRidingRoomScreen'); }" aria-label="클럽 하우스">
+                <span>클럽 하우스</span>
+                <span id="basecampClubHouseNotiBadge" aria-label="클럽 가입 신청 건수"></span>
               </button>
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-indoor-entry" id="btnBasecampIndoorEntry" onclick="if (typeof showScreen === 'function') showScreen('indoorTrainingSubScreen');" aria-label="인도어 훈련">
                 <span>인도어 훈련</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-affiliate-entry" id="btnBasecampAffiliateEntry" onclick="if (typeof window.onAffiliateButtonClick === 'function') window.onAffiliateButtonClick(); else if (typeof showScreen === 'function') showScreen('affiliateScreen');" aria-label="제휴 할인">
-                <span>제휴 할인</span>
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-cycle-competition" id="btnBasecampCompetition" onclick="if(typeof openCompetitionFromCycleBasecamp==='function')openCompetitionFromCycleBasecamp();else if(typeof showScreen==='function')showScreen('competitionScreen');" aria-label="대회 신청">
+                <span>대회 신청</span>
               </button>
             </div>
             <!-- 로그인 상태 바: 비로그인 시 로그인 버튼, 로그인 시 환영합니다. 사용자명님 + 로그아웃 -->
