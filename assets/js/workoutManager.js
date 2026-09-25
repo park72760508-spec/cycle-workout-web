@@ -4800,6 +4800,14 @@ async function selectWorkout(workoutId) {
 // ==========================================================
 
 async function showAddWorkoutForm(clearForm = true) {
+  // 워크아웃 > 클럽 전용 > (클럽) 목록에서 "+"로 들어오면 목록 항목을 그 클럽으로 미리 선택
+  const fromActive = document.querySelector('.screen.active');
+  const viewState = window.workoutViewState || {};
+  const preselectClubId =
+    fromActive && fromActive.id === 'workoutScreen' && viewState.mode === 'clubWorkouts' && viewState.club
+      ? String(viewState.club.groupId || '')
+      : '';
+
   window.showScreen('workoutBuilderScreen');
   
   // TrainingSchedules 목록 로드 및 상태 콤보박스에 추가
@@ -4816,6 +4824,10 @@ async function showAddWorkoutForm(clearForm = true) {
     if (descEl) descEl.value = '';
     if (authorEl) authorEl.value = '';
     if (statusEl) statusEl.value = '보이기';
+    if (statusEl && preselectClubId && !clubWorkoutBuilderCtx) {
+      const clubValue = WB_STATUS_CLUB_PREFIX + preselectClubId;
+      if (Array.prototype.some.call(statusEl.options, o => o.value === clubValue)) statusEl.value = clubValue;
+    }
     if (publishDateEl) publishDateEl.value = '';
     
     // 비밀번호 필드 초기화 및 숨김
@@ -5282,7 +5294,8 @@ async function saveWorkoutToMembershipClub(groupId) {
     window.showToast('로그인 후 저장할 수 있습니다.');
     return;
   }
-  var tempCtx = { groupId: groupId, hostUserId: String(uid), returnScreen: 'workoutScreen' };
+  // 저장 후 클럽 전용 목록을 보던 중이면 새 워크아웃이 보이도록 다시 그린다
+  var tempCtx = { groupId: groupId, hostUserId: String(uid), returnScreen: 'workoutScreen', onCreated: refreshClubWorkoutView };
   clubWorkoutBuilderCtx = tempCtx;
   try {
     await saveClubWorkoutFromBuilder();
