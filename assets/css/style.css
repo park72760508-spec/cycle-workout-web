@@ -14081,6 +14081,24 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   width: 60px;
 }
 
+/* 세그먼트 편집 %FTP Zone: Zone 선택·하한·상한을 한 줄 전체 폭으로 — 반 폭 칸 안에서 입력칸이 32px로 줄어 숫자가 안 보이던 문제 */
+#segmentModal #targetFtpZoneGroup {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+#segmentModal #targetFtpZoneGroup .form-row {
+  margin-bottom: 0;
+}
+#segmentModal #targetFtpZoneGroup .intensity-input input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 64px;
+  text-align: center;
+}
+#segmentModal #targetFtpZoneGroup .input-suffix {
+  flex-shrink: 0;
+}
+
 /* 세그먼트 편집: 타입별 목표 강도 가이드 (Ramp 아래) */
 .segment-intensity-guide {
   margin-top: 12px;

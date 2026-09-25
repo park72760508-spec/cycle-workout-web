@@ -5770,16 +5770,16 @@ const SEGMENT_EDITOR_ITEMS = {
   cooldown: ['cooldown']
 };
 const SEGMENT_EDITOR_TYPES = {
-  warmup: { name: '워밍업', segType: 'warmup', guide: '워밍업 (Warm-up)', detail: ['Z1 ~ Z2', '45% ~ 75%'] },
-  sst: { name: 'SST', segType: 'sweetspot', guide: 'SST (Sweet Spot)', detail: ['Z3 상단 ~ Z4 하단', '88% ~ 94%', '10 ~ 30분'] },
-  threshold: { name: '역치', segType: 'threshold', guide: '역치 (Threshold / FTP)', detail: ['Z4', '95% ~ 105%', '8 ~ 20분'] },
-  overunder: { name: '오버/언더', segType: 'interval', guide: '오버/언더 (Over-Under)', detail: ['Z4 ~ Z5 반복', 'Over: 105% ~ 110%/Under: 88% ~ 92%', '8 ~ 15분'] },
-  vo2max: { name: 'VO2 max', segType: 'vo2max', guide: 'VO2max (최대 유산소)', detail: ['Z5', '106% ~ 120%', '3 ~ 5분'] },
-  anaerobic: { name: '무산소', segType: 'interval', guide: '무산소 (Anaerobic)', detail: ['Z6', '121% ~ 150%', '30초 ~ 2분'] },
-  microburst: { name: '마이크로버스트', segType: 'interval', guide: '마이크로버스트 (Microburst)', detail: ['Z6 ~ Z7', '120% ~ 140%', '15 ~ 40초'] },
-  sprint: { name: '신경근/스프린트', segType: 'interval', guide: '신경근/스프린트 (Sprint)', detail: ['Z7', '> 150% (Max 올아웃)', '5 ~ 15초'] },
-  rest: { name: '휴식', segType: 'rest', guide: '휴식 (Rest / Recovery)', detail: ['Z1', '45% ~ 55%'] },
-  cooldown: { name: '쿨다운', segType: 'cooldown', guide: '쿨다운 (Cool-down)', detail: ['Z1', '45% ~ 55%'] }
+  warmup: { name: '워밍업', segType: 'warmup', low: 45, high: 75, guide: '워밍업 (Warm-up)', detail: ['Z1 ~ Z2', '45% ~ 75%'] },
+  sst: { name: 'SST', segType: 'sweetspot', low: 88, high: 94, guide: 'SST (Sweet Spot)', detail: ['Z3 상단 ~ Z4 하단', '88% ~ 94%', '10 ~ 30분'] },
+  threshold: { name: '역치', segType: 'threshold', low: 95, high: 105, guide: '역치 (Threshold / FTP)', detail: ['Z4', '95% ~ 105%', '8 ~ 20분'] },
+  overunder: { name: '오버/언더', segType: 'interval', low: 88, high: 110, guide: '오버/언더 (Over-Under)', detail: ['Z4 ~ Z5 반복', 'Over: 105% ~ 110%/Under: 88% ~ 92%', '8 ~ 15분'] },
+  vo2max: { name: 'VO2 max', segType: 'vo2max', low: 106, high: 120, guide: 'VO2max (최대 유산소)', detail: ['Z5', '106% ~ 120%', '3 ~ 5분'] },
+  anaerobic: { name: '무산소', segType: 'interval', low: 121, high: 150, guide: '무산소 (Anaerobic)', detail: ['Z6', '121% ~ 150%', '30초 ~ 2분'] },
+  microburst: { name: '마이크로버스트', segType: 'interval', low: 120, high: 140, guide: '마이크로버스트 (Microburst)', detail: ['Z6 ~ Z7', '120% ~ 140%', '15 ~ 40초'] },
+  sprint: { name: '신경근/스프린트', segType: 'interval', low: 150, high: 300, guide: '신경근/스프린트 (Sprint)', detail: ['Z7', '> 150% (Max 올아웃)', '5 ~ 15초'] },
+  rest: { name: '휴식', segType: 'rest', low: 45, high: 55, guide: '휴식 (Rest / Recovery)', detail: ['Z1', '45% ~ 55%'] },
+  cooldown: { name: '쿨다운', segType: 'cooldown', low: 45, high: 55, guide: '쿨다운 (Cool-down)', detail: ['Z1', '45% ~ 55%'] }
 };
 /** 목록에 없는 기존 세그먼트(예: 이름 "메인셋", 타입 tempo) — 원래 값 보존용 선택지 */
 const SEGMENT_SUBTYPE_KEEP = '__keep';
@@ -5863,6 +5863,29 @@ function syncSegmentEditorFromFields() {
   applySegmentSubtypeToFields();
 }
 
+/**
+ * 사용자가 타입을 바꿨을 때 목표 강도를 가이드 하한값으로 채운다(모달을 열 때는 저장된 값 유지).
+ * %FTP·%FTP+rpm → 목표 강도 = 하한, %FTP Zone → 하한·상한 = 가이드 범위. rpm 전용은 변경 없음.
+ */
+function applySegmentGuideIntensity() {
+  const sel = safeGetElement('segmentSubtype');
+  const t = sel ? SEGMENT_EDITOR_TYPES[sel.value] : null;
+  if (!t || t.low == null) return;
+  const targetTypeEl = safeGetElement('segmentTargetType');
+  const targetType = targetTypeEl ? targetTypeEl.value : 'ftp_pct';
+  if (targetType === 'ftp_pct' || targetType === 'dual') {
+    const intensity = safeGetElement('segmentIntensity');
+    if (intensity) intensity.value = t.low;
+  } else if (targetType === 'ftp_pctz') {
+    const zMin = safeGetElement('segmentFtpZoneMin');
+    const zMax = safeGetElement('segmentFtpZoneMax');
+    const zone = safeGetElement('segmentFtpZone');
+    if (zMin) zMin.value = t.low;
+    if (zMax) zMax.value = t.high;
+    if (zone) zone.value = '';
+  }
+}
+
 function onSegmentItemChange() {
   const itemEl = safeGetElement('segmentItem');
   if (!itemEl) return;
@@ -5872,10 +5895,12 @@ function onSegmentItemChange() {
     !(SEGMENT_EDITOR_ITEMS[item] || []).some(k => SEGMENT_EDITOR_TYPES[k].name === segmentEditorOriginal.label);
   fillSegmentSubtypeOptions(item, keepAvailable ? SEGMENT_SUBTYPE_KEEP : null);
   applySegmentSubtypeToFields();
+  applySegmentGuideIntensity();
 }
 
 function onSegmentSubtypeChange() {
   applySegmentSubtypeToFields();
+  applySegmentGuideIntensity();
 }
 
 function showAddSegmentModal() {
@@ -7357,6 +7382,7 @@ window.updateWorkoutPreview = updateWorkoutPreview;
 window.showAddWorkoutForm = showAddWorkoutForm;
 window.onSegmentItemChange = onSegmentItemChange;
 window.onSegmentSubtypeChange = onSegmentSubtypeChange;
+window.applySegmentGuideIntensity = applySegmentGuideIntensity;
 window.resetWorkoutFormMode = resetWorkoutFormMode;
 window.performWorkoutUpdate = performWorkoutUpdate;
 

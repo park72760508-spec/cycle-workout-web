@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260925segGuide1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260925segZone1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -7004,7 +7004,7 @@
         </div>
         <div class="form-group">
           <label>목표 강도 카테고리 *</label>
-          <select id="segmentTargetType" required onchange="updateTargetTypeFields()">
+          <select id="segmentTargetType" required onchange="updateTargetTypeFields(); if (typeof applySegmentGuideIntensity === 'function') applySegmentGuideIntensity();">
             <option value="ftp_pct">% FTP</option>
             <option value="ftp_pctz">%FTP Zone</option>
             <option value="cadence_rpm">rpm</option>
@@ -8900,7 +8900,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-segguide-20260925a"></script>
+<script src="assets/js/workoutManager.js?v=workout-segzone-20260925b"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
