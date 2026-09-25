@@ -33601,3 +33601,38 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #888;
   font-size: 14px;
 }
+
+/* Coach 휴대폰: 워크아웃 미설정 그래프 placeholder (훈련 준비 화면과 같은 막대) */
+#bluetoothCoachMobileScreen .coachm-graph-placeholder {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+#bluetoothCoachMobileScreen .coachm-graph-placeholder__bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 4px;
+  height: 70%;
+  max-height: 120px;
+  opacity: 0.3;
+}
+
+/* 훈련 준비 화면: 선택한 워크아웃 그래프 — 워크아웃 화면 카드와 같은 SegmentedWorkoutGraph */
+#segmentPreview .training-ready-swg {
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+}
+#segmentPreview .training-ready-swg .segmented-workout-graph {
+  height: 170px;
+}

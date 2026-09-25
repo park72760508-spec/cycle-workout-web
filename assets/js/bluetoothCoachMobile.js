@@ -241,7 +241,10 @@
     var w = cs.currentWorkout;
     var canvas = $('coachmSegmentGraph');
     if (!canvas) return;
-    if (!w || !Array.isArray(w.segments) || !w.segments.length || typeof window.drawSegmentGraph !== 'function') {
+    var hasWorkout = !!(w && Array.isArray(w.segments) && w.segments.length);
+    var ph = $('coachmGraphPlaceholder');
+    if (ph) ph.style.display = hasWorkout ? 'none' : 'flex';
+    if (!hasWorkout || typeof window.drawSegmentGraph !== 'function') {
       var ctx = canvas.getContext && canvas.getContext('2d');
       if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       return;

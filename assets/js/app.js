@@ -16790,6 +16790,29 @@ function updateTrainingReadyScreenWithWorkout(workout) {
         }, 200);
       }
       
+      // 워크아웃 화면 카드와 같은 디자인(SegmentedWorkoutGraph)으로 표시 — 없으면 기존 캔버스 그래프
+      if (typeof renderSegmentedWorkoutGraph === 'function') {
+        setTimeout(() => {
+          const prev = document.getElementById('segmentPreviewGraph');
+          if (prev) prev.remove();
+          const box = document.createElement('div');
+          box.id = 'segmentPreviewGraph';
+          box.className = 'training-ready-swg';
+          box.style.opacity = '0';
+          box.style.transition = 'opacity 0.4s ease';
+          segmentPreview.appendChild(box);
+          requestAnimationFrame(() => {
+            try {
+              renderSegmentedWorkoutGraph(box, workout.segments, { maxHeight: 160 });
+            } catch (error) {
+              console.error('[Training Ready] renderSegmentedWorkoutGraph 실행 오류:', error);
+            }
+            box.style.opacity = '1';
+          });
+        }, 250);
+        return finishTrainingReadyWorkoutButtons();
+      }
+
       // 캔버스 생성 및 그래프 그리기 (placeholder 숨김 후 즉시)
       setTimeout(() => {
         // 캔버스 생성
@@ -16852,7 +16875,11 @@ function updateTrainingReadyScreenWithWorkout(workout) {
     }
   }
 
-  // 워크아웃 선택 시 Select Dashboard 버튼 활성화
+  finishTrainingReadyWorkoutButtons();
+}
+
+/** 워크아웃 선택 시 Select Dashboard 버튼 활성화 */
+function finishTrainingReadyWorkoutButtons() {
   const btnStart = document.getElementById('btnStartTraining');
   const btnMobile = document.getElementById('btnMobileDashboard');
   if (btnStart) { btnStart.disabled = false; }
