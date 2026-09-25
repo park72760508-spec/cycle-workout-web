@@ -4194,7 +4194,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const tss = (tssVal != null && tssVal !== '' && !Number.isNaN(Number(tssVal))) ? Number(tssVal) : 0;
   const graphId = 'workout-card-graph-' + workout.id;
   const isClubWorkout = workout.source === 'club';
-  // 클럽 전용 워크아웃 id 는 uuid — 인라인 onclick 인자로 쓰려면 따옴표가 필요, 수정·삭제는 그룹세션에서만
+  // 클럽 전용 워크아웃 id 는 uuid — 인라인 onclick 인자로 쓰려면 따옴표가 필요, 수정·삭제는 클럽 전용 버튼으로
   const idArg = isClubWorkout ? `'${String(workout.id).replace(/[^0-9a-fA-F-]/g, '')}'` : workout.id;
   const isAdmin = (grade === '1' || grade === '3') && !isClubWorkout;
   const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
@@ -4209,6 +4209,14 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
           <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${idArg})" title="선택" aria-label="선택">
             <img src="assets/img/check2.png" alt="선택" class="workout-card__select-icon" />
           </button>
+          ${isClubWorkout ? `
+            <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); editClubWorkout(${idArg})" title="수정" aria-label="수정">
+              <img src="assets/img/edit2.png" alt="수정" />
+            </button>
+            <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); deleteClubWorkoutFromList(${idArg})" title="삭제" aria-label="삭제">
+              <img src="assets/img/delete2.png" alt="삭제" />
+            </button>
+          ` : ''}
           ${isAdmin ? `
             <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); editWorkout(${workout.id})" title="수정">
               <img src="assets/img/edit2.png" alt="수정" />
@@ -4329,6 +4337,95 @@ function renderClubWorkoutCards(items, clubName) {
   if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
 }
 
+function currentFirebaseUidForWorkout() {
+  return (window.authV9 && window.authV9.currentUser && window.authV9.currentUser.uid) ||
+    (window.currentUser && (window.currentUser.id || window.currentUser.uid)) || '';
+}
+
+/** 클럽 전용 목록 화면 새로고침(수정·삭제 후) — index.html workoutViewRefreshClubWorkouts */
+function refreshClubWorkoutView() {
+  if (typeof window.workoutViewRefreshClubWorkouts === 'function') window.workoutViewRefreshClubWorkouts();
+}
+
+/** 저장된 세그먼트(target_value 문자열) → 작성 화면 세그먼트 */
+function clubSegmentToBuilderSegment(seg, idx) {
+  const targetType = String(seg.target_type || 'ftp_pct');
+  let targetValue = seg.target_value;
+  if (targetType !== 'dual' && targetType !== 'ftp_pctz') {
+    const n = Number(targetValue);
+    targetValue = Number.isFinite(n) ? n : targetValue;
+  }
+  return {
+    id: Date.now() + idx,
+    label: seg.label || '',
+    segment_type: seg.segment_type || 'interval',
+    duration_sec: Number(seg.duration_sec) || 0,
+    target_type: targetType,
+    target_value: targetValue,
+    ramp: seg.ramp || 'none',
+    ramp_to_value: seg.ramp_to_value != null ? Number(seg.ramp_to_value) : null
+  };
+}
+
+/** 카드 "수정" — 워크아웃 작성 화면을 클럽 전용 수정 모드로 열어 기존 값을 채운다 */
+async function editClubWorkout(workoutId) {
+  const w = window.__clubWorkoutsById && window.__clubWorkoutsById[String(workoutId)];
+  if (!w) {
+    window.showToast('워크아웃 정보를 찾을 수 없습니다. 목록을 새로고침해 주세요.');
+    return;
+  }
+  const uid = currentFirebaseUidForWorkout();
+  if (!uid) {
+    window.showToast('로그인 후 수정할 수 있습니다.');
+    return;
+  }
+  clubWorkoutBuilderCtx = {
+    groupId: w.groupId,
+    hostUserId: String(uid),
+    returnScreen: 'workoutScreen',
+    editWorkoutId: String(w.id),
+    onCreated: refreshClubWorkoutView
+  };
+  isWorkoutEditMode = false;
+  currentEditWorkoutId = null;
+  await showAddWorkoutForm(true);
+  const titleEl = safeGetElement('wbTitle');
+  const descEl = safeGetElement('wbDesc');
+  const authorEl = safeGetElement('wbAuthor');
+  if (titleEl) titleEl.value = w.title || '';
+  if (descEl) descEl.value = w.description || '';
+  if (authorEl) authorEl.value = w.author || '';
+  workoutSegments = (Array.isArray(w.segments) ? w.segments : []).map(clubSegmentToBuilderSegment);
+  if (typeof renderSegments === 'function') renderSegments();
+  if (typeof updateSegmentSummary === 'function') updateSegmentSummary();
+  applyClubWorkoutBuilderUiMode();
+  const formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
+  if (formTitle) formTitle.textContent = '클럽 전용 워크아웃 수정';
+}
+
+/** 카드 "삭제" — 기존 deleteClubWorkoutSupabase 경로(서버에서 방장·관리자 권한 재확인) */
+async function deleteClubWorkoutFromList(workoutId) {
+  const w = window.__clubWorkoutsById && window.__clubWorkoutsById[String(workoutId)];
+  if (!w) return;
+  if (!confirm(`'${w.title || '워크아웃'}' 클럽 전용 워크아웃을 삭제할까요?\n삭제하면 되돌릴 수 없습니다.`)) return;
+  const uid = currentFirebaseUidForWorkout();
+  const svc = window.openRidingGroupService || {};
+  if (!uid || typeof svc.deleteClubWorkout !== 'function') {
+    window.showToast('삭제 기능을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+  try {
+    await svc.deleteClubWorkout(uid, w.groupId, String(w.id));
+    delete window.__clubWorkoutsById[String(w.id)];
+    window.showToast(`${w.title || '워크아웃'}이(가) 삭제되었습니다.`);
+    refreshClubWorkoutView();
+  } catch (e) {
+    window.showToast('삭제 중 오류가 발생했습니다: ' + (e && e.message ? e.message : e));
+  }
+}
+
+window.editClubWorkout = editClubWorkout;
+window.deleteClubWorkoutFromList = deleteClubWorkoutFromList;
 window.fetchManagedClubsForWorkoutView = fetchManagedClubsForWorkoutView;
 window.fetchClubWorkoutsForManager = fetchClubWorkoutsForManager;
 window.renderClubWorkoutCards = renderClubWorkoutCards;
@@ -5231,18 +5328,32 @@ async function saveClubWorkoutFromBuilder() {
   }
 
   try {
-    var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
-    if (typeof svcGroup.createClubWorkout !== 'function') {
-      throw new Error('워크아웃 저장 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+    var res;
+    if (ctx.editWorkoutId) {
+      // 수정: Supabase RPC(fn_update_club_workout — 방장·관리자·부관리자 권한 확인 후 세그먼트 교체)
+      res = await workoutClubRpc('fn_update_club_workout', {
+        p_group_id: String(ctx.groupId),
+        p_workout_id: String(ctx.editWorkoutId),
+        p_title: title,
+        p_description: (descEl && descEl.value || '').trim(),
+        p_author: author,
+        p_segments: validSegments
+      });
+      if (!res || res.success !== true) throw new Error((res && res.error) || '수정에 실패했습니다.');
+    } else {
+      var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      if (typeof svcGroup.createClubWorkout !== 'function') {
+        throw new Error('워크아웃 저장 기능을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
+      }
+      res = await svcGroup.createClubWorkout(ctx.hostUserId, ctx.groupId, {
+        title: title,
+        description: (descEl && descEl.value || '').trim(),
+        author: author,
+        segments: validSegments
+      });
     }
-    var res = await svcGroup.createClubWorkout(ctx.hostUserId, ctx.groupId, {
-      title: title,
-      description: (descEl && descEl.value || '').trim(),
-      author: author,
-      segments: validSegments
-    });
 
-    window.showToast(title + ' 클럽 전용 워크아웃이 저장되었습니다.');
+    window.showToast(title + (ctx.editWorkoutId ? ' 클럽 전용 워크아웃이 수정되었습니다.' : ' 클럽 전용 워크아웃이 저장되었습니다.'));
     var createdId = res && res.id != null ? String(res.id) : '';
     var onCreated = ctx.onCreated;
     var returnScreen = ctx.returnScreen;

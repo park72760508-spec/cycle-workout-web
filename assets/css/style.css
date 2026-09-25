@@ -11375,6 +11375,17 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   touch-action: pan-y;
 }
 
+/* 클럽 전용 워크아웃 목록: 헤더 제목 대신 클럽 아바타 */
+.workout-screen-title-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  display: block;
+}
+
 /* 워크아웃 화면 > 클럽 전용: 관리 클럽 목록 */
 .workout-club-list {
   display: flex;

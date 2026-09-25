@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260925clubWk1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260925clubEdit1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -8902,7 +8902,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-clubview-20260925a"></script>
+<script src="assets/js/workoutManager.js?v=workout-clubedit-20260925a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -8959,6 +8959,7 @@
         var newBtn = document.getElementById('workoutScreenNewBtn');
         if (newBtn) newBtn.style.display = 'flex';
         if (titleEl) { titleEl.textContent = '워크아웃'; }
+        workoutSetHeaderAvatar(null);
         if (subtitleEl) { subtitleEl.textContent = '오늘의 훈련 프로그램을 선택하세요'; subtitleEl.style.display = ''; }
         if (headerEl) headerEl.classList.remove('workout-screen-header--list-view');
         var wsc = document.getElementById('workoutScreen');
@@ -8997,6 +8998,7 @@
         var subtitleEl = document.getElementById('workoutScreenSubtitle');
         var headerEl = document.getElementById('workoutScreenHeader');
         if (titleEl) { titleEl.textContent = getCategoryLabel(categoryId); }
+        workoutSetHeaderAvatar(null);
         if (subtitleEl) { subtitleEl.style.display = 'none'; }
         if (headerEl) headerEl.classList.add('workout-screen-header--list-view');
         var grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
@@ -9041,6 +9043,28 @@
         return workoutManagedClubsLoading;
       }
 
+      /** 헤더 제목 자리에 클럽 아바타 — url 이 없으면 제목 글자를 다시 보인다 */
+      function workoutSetHeaderAvatar(url, alt) {
+        var titleEl = document.getElementById('workoutScreenTitle');
+        if (!titleEl) return;
+        var img = document.getElementById('workoutScreenTitleAvatar');
+        if (!url) {
+          if (img) img.style.display = 'none';
+          titleEl.style.display = '';
+          return;
+        }
+        if (!img) {
+          img = document.createElement('img');
+          img.id = 'workoutScreenTitleAvatar';
+          img.className = 'workout-screen-title-avatar';
+          titleEl.parentNode.insertBefore(img, titleEl);
+        }
+        img.src = url;
+        img.alt = alt || '';
+        img.style.display = '';
+        titleEl.style.display = 'none';
+      }
+
       /** 클럽 전용 화면 공통: 목록 뷰로 전환, 제목·뒤로가기 설정, 검색줄 숨김 */
       function workoutViewEnterClubMode(mode, title, onBack) {
         workoutViewState.mode = mode;
@@ -9062,6 +9086,7 @@
         var subtitleEl = document.getElementById('workoutScreenSubtitle');
         var headerEl = document.getElementById('workoutScreenHeader');
         if (titleEl) titleEl.textContent = title;
+        workoutSetHeaderAvatar(null);
         if (subtitleEl) subtitleEl.style.display = 'none';
         if (headerEl) headerEl.classList.add('workout-screen-header--list-view');
         var wsc = document.getElementById('workoutScreen');
@@ -9112,15 +9137,22 @@
       }
 
       /** 클럽 선택 → 그 클럽의 클럽 전용 워크아웃 카드 목록 */
-      async function workoutViewShowClubWorkouts(club) {
+      async function workoutViewShowClubWorkouts(club, opts) {
+        var keepScroll = opts && opts.keepScroll;
+        var wvcPrev = document.getElementById('workoutViewContainer');
+        var prevScroll = wvcPrev ? wvcPrev.scrollTop : 0;
+        workoutViewState.club = club;
         workoutViewEnterClubMode('clubWorkouts', club.name, function () { workoutViewShowClubs(); });
+        // 제목 라벨 대신 클럽 아바타(사진 없으면 클럽 이름)
+        workoutSetHeaderAvatar(club.photoUrl || null, club.name);
         var list = document.getElementById('workoutList');
         if (!list) return;
-        list.innerHTML = '<div class="loading-spinner">클럽 전용 워크아웃을 불러오는 중...</div>';
+        if (!keepScroll) list.innerHTML = '<div class="loading-spinner">클럽 전용 워크아웃을 불러오는 중...</div>';
         try {
           var items = await window.fetchClubWorkoutsForManager(club.groupId);
           if (workoutViewState.mode !== 'clubWorkouts') return;
           window.renderClubWorkoutCards(items, club.name);
+          if (keepScroll && wvcPrev) wvcPrev.scrollTop = prevScroll;
         } catch (e) {
           if (workoutViewState.mode !== 'clubWorkouts') return;
           list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div>' +
@@ -9128,6 +9160,14 @@
         }
       }
       window.workoutViewShowClubs = workoutViewShowClubs;
+      /** 클럽 전용 워크아웃 수정·삭제 후: 워크아웃 개수 갱신 + 현재 클럽 목록 다시 그림 */
+      window.workoutViewRefreshClubWorkouts = function () {
+        workoutManagedClubs = null;
+        workoutLoadManagedClubs();
+        if (workoutViewState.mode === 'clubWorkouts' && workoutViewState.club) {
+          workoutViewShowClubWorkouts(workoutViewState.club, { keepScroll: true });
+        }
+      };
 
       function getCategoryWorkoutCount(workouts, categoryId) {
         if (!workouts || !Array.isArray(workouts)) return 0;
