@@ -6739,6 +6739,7 @@ function ClubMissionPanel(props) {
   var error = props.error || '';
   var canPerform = !!props.canPerform;
   var onCreateOrEdit = props.onCreateOrEdit || function () {};
+  var onDelete = props.onDelete || function () {};
   var _detail = useState(null);
   var detailOrd = _detail[0];
   var setDetailOrd = _detail[1];
@@ -6793,9 +6794,26 @@ function ClubMissionPanel(props) {
           <strong className="text-slate-800 break-words">{mission.title}</strong>
         </p>
         {canManage ? (
-          <button type="button" className="shrink-0 text-xs px-2 py-1 rounded-lg border border-violet-300 text-violet-700" onClick={onCreateOrEdit}>
-            수정
-          </button>
+          <div className="shrink-0 flex items-center gap-1">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1.5 hover:bg-violet-50"
+              onClick={onCreateOrEdit}
+              title="미션 수정"
+              aria-label="미션 수정"
+            >
+              <img src="assets/img/edit2.png" alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1.5 hover:bg-red-50"
+              onClick={function () { onDelete(mission); }}
+              title="미션 삭제"
+              aria-label="미션 삭제"
+            >
+              <img src="assets/img/delete2.png" alt="" style={{ width: '18px', height: '18px', objectFit: 'contain' }} />
+            </button>
+          </div>
         ) : null}
       </div>
       <p className="text-sm m-0 mb-1">
@@ -6860,6 +6878,8 @@ function OpenRidingGroupCalendarSection(props) {
   var canCreate = !!props.canCreate;
   var createBusy = !!props.createBusy;
   var onCreateClick = props.onCreateClick || function () {};
+  /** 클럽 상세가 아는 방장·관리자·부관리자 여부 — 미션 정보를 불러오는 동안에도 + 버튼 유지 */
+  var canManageMissionHint = !!props.canManageMission;
 
   /** 헤더 탭: 'calendar'(기존 캘린더) | 'mission'(클럽 챌린지 미션) */
   var _panelTab = useState('calendar');
@@ -6871,6 +6891,25 @@ function OpenRidingGroupCalendarSection(props) {
   var _missionForm = useState(false);
   var missionFormOpen = _missionForm[0];
   var setMissionFormOpen = _missionForm[1];
+
+  /** 클럽 미션 삭제 — 확인 후 Supabase RPC fn_delete_club_mission(방장·관리자·부관리자) */
+  function deleteMission(mission) {
+    if (!mission || !mission.id || !groupId) return;
+    if (!window.confirm("'" + (mission.title || '미션') + "' 미션을 삭제할까요?\n회원들의 미션 완료 기록과 점수도 함께 삭제되며 되돌릴 수 없습니다.")) return;
+    var rpcP = typeof window.stelvioSupabaseRpc === 'function'
+      ? Promise.resolve(window.stelvioSupabaseRpc)
+      : import('/assets/js/supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
+    rpcP
+      .then(function (rpc) { return rpc('fn_delete_club_mission', { p_group_id: String(groupId), p_mission_id: String(mission.id) }); })
+      .then(function (res) {
+        if (!res || res.success !== true) throw new Error((res && res.error) || '미션을 삭제하지 못했습니다.');
+        if (typeof window.showToast === 'function') window.showToast('미션이 삭제되었습니다.');
+        reloadMission();
+      })
+      .catch(function (e) {
+        if (typeof window.showToast === 'function') window.showToast((e && e.message) || '미션을 삭제하지 못했습니다.');
+      });
+  }
 
   function reloadMission() {
     var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
@@ -7145,7 +7184,7 @@ function OpenRidingGroupCalendarSection(props) {
             );
           })}
         {panelTab === 'mission' ? (
-          missionState.data && missionState.data.canManage ? (
+          (missionState.data ? missionState.data.canManage : canManageMissionHint) ? (
             <button
               type="button"
               className="open-riding-action-btn shrink-0 inline-flex items-center justify-center rounded-full border-0 text-white"
@@ -7156,9 +7195,9 @@ function OpenRidingGroupCalendarSection(props) {
                 minWidth: '32px',
                 minHeight: '32px'
               }}
-              onClick={function () { setMissionFormOpen(true); }}
-              title={missionState.data.mission ? '미션 수정' : '미션 생성'}
-              aria-label={missionState.data.mission ? '미션 수정' : '미션 생성'}
+              onClick={function () { if (missionState.data) setMissionFormOpen(true); }}
+              title={missionState.data && missionState.data.mission ? '미션 수정' : '미션 생성'}
+              aria-label={missionState.data && missionState.data.mission ? '미션 수정' : '미션 생성'}
             >
               <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
@@ -7200,6 +7239,7 @@ function OpenRidingGroupCalendarSection(props) {
             error={missionState.error}
             canPerform={canCreate}
             onCreateOrEdit={function () { setMissionFormOpen(true); }}
+            onDelete={deleteMission}
           />
         ) : (
         <React.Fragment>
@@ -15594,6 +15634,7 @@ function OpenRidingGroupDetailView(props) {
           groupId={groupId}
           moimCopy={moimCopy}
           canCreate={isMember && isMembershipActive}
+          canManageMission={isOwner || isAdmin}
           createBusy={busy}
           onCreateClick={handleCreateRideFromGroup}
           onSelectRide={function (rideId) {
