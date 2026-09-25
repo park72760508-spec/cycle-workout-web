@@ -434,6 +434,17 @@
     menu.classList.toggle('show', open);
   };
 
+  /** 워크아웃 미설정 그래프(막대) 클릭 → 연결 메뉴를 펼치고 워크아웃 선택 항목이 보이게 */
+  window.openCoachMobileWorkoutMenu = function (e) {
+    if (e) e.stopPropagation(); // 문서 클릭(메뉴 닫기) 처리로 바로 닫히지 않게
+    var menu = $('coachmMenu');
+    if (!menu) return;
+    renderSlotList();
+    menu.classList.add('show');
+    var divider = menu.querySelector('.coachm-menu-divider');
+    if (divider) menu.scrollTop = Math.max(0, divider.offsetTop - 8);
+  };
+
   document.addEventListener('click', function (e) {
     var menu = $('coachmMenu');
     if (!menu || !menu.classList.contains('show')) return;
