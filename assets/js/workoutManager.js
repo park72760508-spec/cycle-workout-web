@@ -5759,6 +5759,125 @@ function addQuickSegment(type) {
   }
 }
 
+// ==========================================================
+// 세그먼트 편집: 세그먼트 항목 → 타입 → 목표 강도 가이드
+// 저장 값은 기존과 같다 — label = 타입 이름, segment_type = 기존 enum(분류·그래프 색 호환)
+// ==========================================================
+const SEGMENT_EDITOR_ITEMS = {
+  warmup: ['warmup'],
+  interval: ['sst', 'threshold', 'overunder', 'vo2max', 'anaerobic', 'microburst', 'sprint'],
+  rest: ['rest'],
+  cooldown: ['cooldown']
+};
+const SEGMENT_EDITOR_TYPES = {
+  warmup: { name: '워밍업', segType: 'warmup', guide: '워밍업 (Warm-up)', detail: ['Z1 ~ Z2', '45% ~ 75%'] },
+  sst: { name: 'SST', segType: 'sweetspot', guide: 'SST (Sweet Spot)', detail: ['Z3 상단 ~ Z4 하단', '88% ~ 94%', '10 ~ 30분'] },
+  threshold: { name: '역치', segType: 'threshold', guide: '역치 (Threshold / FTP)', detail: ['Z4', '95% ~ 105%', '8 ~ 20분'] },
+  overunder: { name: '오버/언더', segType: 'interval', guide: '오버/언더 (Over-Under)', detail: ['Z4 ~ Z5 반복', 'Over: 105% ~ 110%/Under: 88% ~ 92%', '8 ~ 15분'] },
+  vo2max: { name: 'VO2 max', segType: 'vo2max', guide: 'VO2max (최대 유산소)', detail: ['Z5', '106% ~ 120%', '3 ~ 5분'] },
+  anaerobic: { name: '무산소', segType: 'interval', guide: '무산소 (Anaerobic)', detail: ['Z6', '121% ~ 150%', '30초 ~ 2분'] },
+  microburst: { name: '마이크로버스트', segType: 'interval', guide: '마이크로버스트 (Microburst)', detail: ['Z6 ~ Z7', '120% ~ 140%', '15 ~ 40초'] },
+  sprint: { name: '신경근/스프린트', segType: 'interval', guide: '신경근/스프린트 (Sprint)', detail: ['Z7', '> 150% (Max 올아웃)', '5 ~ 15초'] },
+  rest: { name: '휴식', segType: 'rest', guide: '휴식 (Rest / Recovery)', detail: ['Z1', '45% ~ 55%'] },
+  cooldown: { name: '쿨다운', segType: 'cooldown', guide: '쿨다운 (Cool-down)', detail: ['Z1', '45% ~ 55%'] }
+};
+/** 목록에 없는 기존 세그먼트(예: 이름 "메인셋", 타입 tempo) — 원래 값 보존용 선택지 */
+const SEGMENT_SUBTYPE_KEEP = '__keep';
+let segmentEditorOriginal = { label: '', segType: 'interval', item: 'interval' };
+
+function segmentItemForSegType(segType) {
+  if (segType === 'warmup' || segType === 'rest' || segType === 'cooldown') return segType;
+  return 'interval';
+}
+
+function normalizeSegmentTypeName(v) {
+  return String(v || '').replace(/\s+/g, '').toLowerCase();
+}
+
+function fillSegmentSubtypeOptions(item, selectedKey) {
+  const sel = safeGetElement('segmentSubtype');
+  if (!sel) return;
+  const keys = SEGMENT_EDITOR_ITEMS[item] || [];
+  let html = '';
+  if (selectedKey === SEGMENT_SUBTYPE_KEEP) {
+    html += `<option value="${SEGMENT_SUBTYPE_KEEP}">${escapeHtml(segmentEditorOriginal.label || '현재 값')}</option>`;
+  }
+  html += keys.map(k => `<option value="${k}">${escapeHtml(SEGMENT_EDITOR_TYPES[k].name)}</option>`).join('');
+  sel.innerHTML = html;
+  sel.value = selectedKey && (selectedKey === SEGMENT_SUBTYPE_KEEP || keys.indexOf(selectedKey) >= 0) ? selectedKey : (keys[0] || '');
+}
+
+function updateSegmentIntensityGuide() {
+  const sel = safeGetElement('segmentSubtype');
+  const box = safeGetElement('segmentIntensityGuide');
+  const typeEl = safeGetElement('segmentIntensityGuideType');
+  const detailEl = safeGetElement('segmentIntensityGuideDetail');
+  if (!box || !typeEl || !detailEl) return;
+  const t = sel ? SEGMENT_EDITOR_TYPES[sel.value] : null;
+  if (!t) {
+    typeEl.textContent = '';
+    detailEl.textContent = '타입을 선택하면 목표 강도 가이드가 표시됩니다.';
+    return;
+  }
+  typeEl.textContent = '타입 : ' + t.guide;
+  detailEl.textContent = t.detail.join(' · ');
+}
+
+/** 선택한 타입 → 저장 값(label·segment_type) */
+function applySegmentSubtypeToFields() {
+  const sel = safeGetElement('segmentSubtype');
+  const labelEl = safeGetElement('segmentLabel');
+  const typeEl = safeGetElement('segmentType');
+  if (!sel || !labelEl || !typeEl) return;
+  if (sel.value === SEGMENT_SUBTYPE_KEEP) {
+    labelEl.value = segmentEditorOriginal.label;
+    typeEl.value = segmentEditorOriginal.segType;
+  } else {
+    const t = SEGMENT_EDITOR_TYPES[sel.value];
+    if (t) {
+      labelEl.value = t.name;
+      typeEl.value = t.segType;
+    }
+  }
+  updateSegmentIntensityGuide();
+}
+
+/** 모달을 열 때: segmentLabel·segmentType 에 넣은 세그먼트 값으로 항목·타입 선택을 맞춘다 */
+function syncSegmentEditorFromFields() {
+  const labelEl = safeGetElement('segmentLabel');
+  const typeEl = safeGetElement('segmentType');
+  const itemEl = safeGetElement('segmentItem');
+  if (!labelEl || !typeEl || !itemEl) return;
+  const label = String(labelEl.value || '').trim();
+  const segType = String(typeEl.value || 'interval');
+  const item = segmentItemForSegType(segType);
+  segmentEditorOriginal = { label: label, segType: segType, item: item };
+  const keys = SEGMENT_EDITOR_ITEMS[item];
+  const want = normalizeSegmentTypeName(label);
+  let key = keys.find(k => normalizeSegmentTypeName(SEGMENT_EDITOR_TYPES[k].name) === want);
+  if (!key && want === normalizeSegmentTypeName('VO2max')) key = 'vo2max';
+  if (!key && keys.length === 1 && (!label || label === SEGMENT_EDITOR_TYPES[keys[0]].name)) key = keys[0];
+  if (!key) key = label ? SEGMENT_SUBTYPE_KEEP : keys[0];
+  itemEl.value = item;
+  fillSegmentSubtypeOptions(item, key);
+  applySegmentSubtypeToFields();
+}
+
+function onSegmentItemChange() {
+  const itemEl = safeGetElement('segmentItem');
+  if (!itemEl) return;
+  const item = itemEl.value;
+  // 처음 항목으로 돌아오면 기존 값 선택지도 다시 보여준다
+  const keepAvailable = item === segmentEditorOriginal.item && segmentEditorOriginal.label &&
+    !(SEGMENT_EDITOR_ITEMS[item] || []).some(k => SEGMENT_EDITOR_TYPES[k].name === segmentEditorOriginal.label);
+  fillSegmentSubtypeOptions(item, keepAvailable ? SEGMENT_SUBTYPE_KEEP : null);
+  applySegmentSubtypeToFields();
+}
+
+function onSegmentSubtypeChange() {
+  applySegmentSubtypeToFields();
+}
+
 function showAddSegmentModal() {
   currentEditingSegmentIndex = null;
   
@@ -5780,6 +5899,7 @@ function showAddSegmentModal() {
   if (modalTitle) modalTitle.textContent = '새 세그먼트 추가';
   if (segmentLabel) segmentLabel.value = '';
   if (segmentType) segmentType.value = 'interval';
+  syncSegmentEditorFromFields();
   if (segmentMinutes) segmentMinutes.value = '5';
   if (segmentSeconds) segmentSeconds.value = '0';
   if (segmentIntensity) segmentIntensity.value = '100';
@@ -5817,6 +5937,7 @@ function showEditSegmentModal(index) {
   if (modalTitle) modalTitle.textContent = '세그먼트 편집';
   if (segmentLabel) segmentLabel.value = segment.label || '';
   if (segmentType) segmentType.value = segment.segment_type || 'interval';
+  syncSegmentEditorFromFields();
   
   const minutes = Math.floor((segment.duration_sec || 0) / 60);
   const seconds = (segment.duration_sec || 0) % 60;
@@ -6339,6 +6460,7 @@ function editRepeatSegment(index) {
   if (modalTitle) modalTitle.textContent = '반복 세그먼트 편집';
   if (segmentLabel) segmentLabel.value = segment.label || '';
   if (segmentType) segmentType.value = segment.segment_type || 'interval';
+  syncSegmentEditorFromFields();
   
   const minutes = Math.floor((segment.duration_sec || 0) / 60);
   const seconds = (segment.duration_sec || 0) % 60;
@@ -7233,6 +7355,8 @@ window.deleteWorkout = deleteWorkout;
 window.saveWorkout = saveWorkout;
 window.updateWorkoutPreview = updateWorkoutPreview;
 window.showAddWorkoutForm = showAddWorkoutForm;
+window.onSegmentItemChange = onSegmentItemChange;
+window.onSegmentSubtypeChange = onSegmentSubtypeChange;
 window.resetWorkoutFormMode = resetWorkoutFormMode;
 window.performWorkoutUpdate = performWorkoutUpdate;
 

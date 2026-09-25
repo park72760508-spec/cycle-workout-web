@@ -14081,6 +14081,34 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   width: 60px;
 }
 
+/* 세그먼트 편집: 타입별 목표 강도 가이드 (Ramp 아래) */
+.segment-intensity-guide {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ecfdf3;
+  border: 1px solid #bbf7d0;
+  color: #14532d;
+  line-height: 1.5;
+}
+.segment-intensity-guide__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #15803d;
+  margin-bottom: 4px;
+}
+.segment-intensity-guide__type {
+  font-size: 14px;
+  font-weight: 600;
+}
+.segment-intensity-guide__type:empty {
+  display: none;
+}
+.segment-intensity-guide__detail {
+  font-size: 13px;
+  word-break: keep-all;
+}
+
 /* 세그먼트 편집(모바일 반 폭 칸): 분·초 입력이 잘려 빈칸처럼 보이지 않게 */
 #segmentModal .duration-input {
   gap: 4px;

@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260925segEdit4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260925segGuide1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -6975,21 +6975,20 @@
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
-          <label>세그먼트 이름 *</label>
-          <input type="text" id="segmentLabel" placeholder="예: 워밍업, 메인셋" required />
-        </div>
-        <div class="form-group">
-          <label>타입 *</label>
-          <select id="segmentType" required>
+          <label for="segmentItem">세그먼트 항목 *</label>
+          <select id="segmentItem" required onchange="onSegmentItemChange()">
             <option value="warmup">워밍업</option>
             <option value="interval">인터벌</option>
             <option value="rest">휴식</option>
-            <option value="sweetspot">스위트스팟</option>
-            <option value="tempo">템포</option>
-            <option value="threshold">임계점</option>
-            <option value="vo2max">VO2 Max</option>
             <option value="cooldown">쿨다운</option>
           </select>
+          <!-- 저장 값: 세그먼트 이름(label)·segment_type — 항목/타입 선택으로 채움 -->
+          <input type="hidden" id="segmentLabel" />
+          <input type="hidden" id="segmentType" />
+        </div>
+        <div class="form-group">
+          <label for="segmentSubtype">타입 *</label>
+          <select id="segmentSubtype" required onchange="onSegmentSubtypeChange()"></select>
         </div>
       </div>
       
@@ -7076,6 +7075,12 @@
             </div>
           </div>
         </div>
+      </div>
+
+      <div class="segment-intensity-guide" id="segmentIntensityGuide">
+        <div class="segment-intensity-guide__title">목표 강도 가이드</div>
+        <div class="segment-intensity-guide__type" id="segmentIntensityGuideType"></div>
+        <div class="segment-intensity-guide__detail" id="segmentIntensityGuideDetail"></div>
       </div>
     </div>
     
@@ -8895,7 +8900,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-segedit-20260925b"></script>
+<script src="assets/js/workoutManager.js?v=workout-segguide-20260925a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
