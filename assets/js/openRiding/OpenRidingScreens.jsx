@@ -17131,9 +17131,16 @@ function OpenRidingRoomApp(props) {
         initialInviteSelected={groupInviteSeed}
         presetGroupId={createFromGroupId}
         onCreated={function () {
+          // 클럽 상세 > 라이딩 생성(그룹세션 포함)으로 만든 경우 → 그 클럽 상세로 복귀
+          var returnGroupId = String(createFromGroupId || '').trim();
           setGroupInviteSeed(null);
           setCreateFromGroupId('');
-          setView('main');
+          if (returnGroupId) {
+            setDetailGroupId(returnGroupId);
+            setView('groupDetail');
+          } else {
+            setView('main');
+          }
         }}
       />
     );
