@@ -405,7 +405,7 @@
         // 슬롯에 사용자가 접속해 있으면 번호와 같은 색(민트), 비어 있으면 회색
         '<span class="coachm-slot-item__dot' + (has ? ' on' : '') + '"></span>' +
         '<span class="coachm-slot-item__no">' + escapeText(pm.id) + '</span>' +
-        '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '미접속') + '</span>' +
+        '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '-') + '</span>' +
         (has ? '<span class="coachm-slot-item__ach coachm-slot-item__ach--' + achievementClass(pm) + '" title="세그먼트 달성도"></span>' : '') +
         '</div>';
     }).join('');
