@@ -6453,6 +6453,10 @@ function ClubMissionFormModal(props) {
   var _end = useState(initial ? initial.endDate : '');
   var endDate = _end[0];
   var setEndDate = _end[1];
+  /** 미션 기간 캘린더 팝업: 'start' | 'end' | '' */
+  var _mdp = useState('');
+  var missionDatePick = _mdp[0];
+  var setMissionDatePick = _mdp[1];
   var _steps = useState(function () {
     return initial && Array.isArray(initial.steps) && initial.steps.length
       ? initial.steps.map(function (s) { return Object.assign({}, s); })
@@ -6590,10 +6594,30 @@ function ClubMissionFormModal(props) {
           <div>
             <span className="block font-medium text-slate-700 mb-1">미션 기간 *</span>
             <div className="flex items-center gap-2">
-              <input type="date" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2" value={startDate} onChange={function (e) { setStartDate(e.target.value); }} aria-label="시작일" />
+              <div className="flex-1 min-w-0">
+                <StelvioDateFieldButton ymd={startDate} placeholder="시작일" ariaLabel="시작일" onClick={function () { setMissionDatePick('start'); }} />
+              </div>
               <span className="text-slate-400">~</span>
-              <input type="date" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-2 py-2" value={endDate} min={startDate || undefined} onChange={function (e) { setEndDate(e.target.value); }} aria-label="종료일" />
+              <div className="flex-1 min-w-0">
+                <StelvioDateFieldButton ymd={endDate} placeholder="종료일" ariaLabel="종료일" onClick={function () { setMissionDatePick('end'); }} />
+              </div>
             </div>
+            {missionDatePick ? (
+              <StelvioDateTimePickerModal
+                title={missionDatePick === 'start' ? '미션 시작일' : '미션 종료일'}
+                ymd={missionDatePick === 'start' ? startDate : endDate || startDate}
+                minYmd={missionDatePick === 'end' ? startDate : ''}
+                onPick={function (ymd) {
+                  if (missionDatePick === 'start') {
+                    setStartDate(ymd);
+                    if (endDate && endDate < ymd) setEndDate(ymd);
+                  } else {
+                    setEndDate(ymd);
+                  }
+                }}
+                onClose={function () { setMissionDatePick(''); }}
+              />
+            ) : null}
           </div>
           <label className="block">
             <span className="block font-medium text-slate-700 mb-1">미션 개수 *</span>
@@ -6767,6 +6791,11 @@ function ClubPtLessonFormModal(props) {
     }
   }
 
+  /** 날짜/시간 선택 팝업이 열린 일정 번호(-1: 닫힘) */
+  var _datePick = useState(-1);
+  var datePickIdx = _datePick[0];
+  var setDatePickIdx = _datePick[1];
+
   function setSlotAt(idx, v) {
     setSlots(function (prev) {
       var next = prev.slice();
@@ -6886,18 +6915,28 @@ function ClubPtLessonFormModal(props) {
                       onSelect={function (wk, source) { selectWorkout(i, wk, source); }}
                     />
                   ) : null}
-                  <input
-                    type="datetime-local"
-                    className="club-pt-datetime-input border border-sky-200 rounded-lg px-2 py-2"
-                    style={CLUB_PT_DATETIME_INPUT_STYLE}
-                    value={sl.at}
-                    onChange={function (e) { setSlotAt(i, e.target.value); }}
-                    aria-label={(i + 1) + '번 일정 날짜/시간'}
+                  <StelvioDateFieldButton
+                    tone="sky"
+                    ymd={sl.at ? sl.at.slice(0, 10) : ''}
+                    hm={sl.at ? sl.at.slice(11, 16) : ''}
+                    placeholder="날짜와 시간 선택"
+                    ariaLabel={(i + 1) + '번 일정 날짜/시간'}
+                    onClick={function () { setDatePickIdx(i); }}
                   />
                 </div>
               );
             })}
           </div>
+          {datePickIdx >= 0 && slots[datePickIdx] ? (
+            <StelvioDateTimePickerModal
+              withTime
+              title={(datePickIdx + 1) + '번 일정 날짜와 시간'}
+              ymd={slots[datePickIdx].at ? slots[datePickIdx].at.slice(0, 10) : ''}
+              hm={slots[datePickIdx].at ? slots[datePickIdx].at.slice(11, 16) : ''}
+              onPick={function (ymd, hm) { setSlotAt(datePickIdx, ymd + 'T' + hm); }}
+              onClose={function () { setDatePickIdx(-1); }}
+            />
+          ) : null}
           {err ? <p className="text-sm text-red-600 whitespace-pre-line m-0">{err}</p> : null}
         </div>
         <div className="flex gap-2 px-4 py-3 border-t border-slate-200">
@@ -6910,6 +6949,181 @@ function ClubPtLessonFormModal(props) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * 스텔비오 스타일 날짜(+시간) 선택 팝업 — 라이딩 생성 > 날짜 선택 캘린더와 같은 디자인.
+ * withTime: 시·분(5분 단위) 선택 + 확인 버튼, 아니면 날짜를 누르는 즉시 선택.
+ * @param {{ ymd: string, hm?: string, withTime?: boolean, minYmd?: string, title?: string,
+ *   onPick: (ymd: string, hm: string) => void, onClose: () => void }} props
+ */
+function StelvioDateTimePickerModal(props) {
+  var withTime = !!props.withTime;
+  var minYmd = props.minYmd || '';
+  var onClose = props.onClose || function () {};
+  var onPick = props.onPick || function () {};
+  var todayYmd = getTodaySeoulYmd();
+  var initYmd = /^\d{4}-\d{2}-\d{2}$/.test(String(props.ymd || '')) ? String(props.ymd) : '';
+  var baseParts = (initYmd || todayYmd).split('-');
+  var _y = useState(parseInt(baseParts[0], 10));
+  var pickerY = _y[0];
+  var setPickerY = _y[1];
+  var _m = useState(parseInt(baseParts[1], 10));
+  var pickerM = _m[0];
+  var setPickerM = _m[1];
+  var _sel = useState(initYmd);
+  var selYmd = _sel[0];
+  var setSelYmd = _sel[1];
+  var hmInit = parseHmFromDeparture(props.hm || '19:00');
+  var _h = useState(hmInit.h);
+  var hour = _h[0];
+  var setHour = _h[1];
+  var _mi = useState(Math.round(hmInit.mi / 5) * 5 % 60);
+  var minute = _mi[0];
+  var setMinute = _mi[1];
+
+  function shiftMonth(delta) {
+    var y = pickerY;
+    var m = pickerM + delta;
+    while (m < 1) { m += 12; y -= 1; }
+    while (m > 12) { m -= 12; y += 1; }
+    setPickerY(y);
+    setPickerM(m);
+  }
+
+  var firstDow = seoulFirstDayOfWeekSun0(pickerY, pickerM);
+  var dim = daysInGregorianMonth(pickerY, pickerM);
+  var cells = [];
+  var ci;
+  for (ci = 0; ci < firstDow; ci++) cells.push(null);
+  for (ci = 1; ci <= dim; ci++) cells.push(ci);
+  while (cells.length % 7 !== 0) cells.push(null);
+  var hours = [];
+  for (ci = 0; ci < 24; ci++) hours.push(ci);
+  var minutes = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+
+  function pickDay(key) {
+    if (withTime) {
+      setSelYmd(key);
+      return;
+    }
+    onPick(key, '');
+    onClose();
+  }
+
+  function confirm() {
+    if (!selYmd) return;
+    onPick(selYmd, pad2(hour) + ':' + pad2(minute));
+    onClose();
+  }
+
+  return openRidingRenderModalPortal(
+    <div
+      className="fixed inset-0 z-[200060] flex items-end sm:items-center justify-center bg-black/45 p-3"
+      role="dialog"
+      aria-modal="true"
+      aria-label={props.title || (withTime ? '날짜와 시간 선택' : '날짜 선택')}
+      onClick={onClose}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden" onClick={function (e) { e.stopPropagation(); }}>
+        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-200 bg-slate-50">
+          <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftMonth(-1); }} aria-label="이전 달">‹</button>
+          <span className="font-semibold text-slate-800 text-sm">{pickerY}년 {pickerM}월</span>
+          <button type="button" className="p-2 text-slate-600 text-base" onClick={function () { shiftMonth(1); }} aria-label="다음 달">›</button>
+        </div>
+        <div className="p-3">
+          {props.title ? <p className="text-xs font-semibold text-slate-500 m-0 mb-2 text-center">{props.title}</p> : null}
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-slate-500 mb-1">
+            {['일', '월', '화', '수', '목', '금', '토'].map(function (w, wi) {
+              return <div key={w} className={wi === 0 ? 'text-red-500' : wi === 6 ? 'text-blue-500' : ''}>{w}</div>;
+            })}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {cells.map(function (cell, idx) {
+              if (cell == null) return <div key={'e' + idx} className="h-9" />;
+              var key = dateKey(pickerY, pickerM - 1, cell);
+              var isToday = key === todayYmd;
+              var isSel = selYmd === key;
+              var disabled = !!minYmd && key < minYmd;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={function () { pickDay(key); }}
+                  className={
+                    'h-9 rounded-lg text-sm ' +
+                    (disabled
+                      ? 'text-slate-300 cursor-not-allowed '
+                      : isSel
+                        ? 'bg-violet-600 text-white font-semibold '
+                        : 'hover:bg-violet-50 text-slate-800 ') +
+                    (isToday && !isSel ? ' ring-2 ring-violet-400 ring-inset ' : '')
+                  }
+                >
+                  {cell}
+                </button>
+              );
+            })}
+          </div>
+          {withTime ? (
+            <div className="mt-3">
+              <span className="block text-xs font-semibold text-slate-600 mb-1">시간</span>
+              <div className="flex gap-2 items-stretch">
+                <select className="open-riding-time-dial flex-1 min-w-0 text-sm" value={hour} aria-label="시" onChange={function (e) { setHour(Number(e.target.value)); }}>
+                  {hours.map(function (h) { return <option key={h} value={h}>{pad2(h)}시</option>; })}
+                </select>
+                <select className="open-riding-time-dial flex-1 min-w-0 text-sm" value={minute} aria-label="분" onChange={function (e) { setMinute(Number(e.target.value)); }}>
+                  {minutes.map(function (m) { return <option key={m} value={m}>{pad2(m)}분</option>; })}
+                </select>
+              </div>
+            </div>
+          ) : null}
+          <div className="mt-3 mb-1 flex gap-2">
+            <button
+              type="button"
+              className="flex-1 py-2 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100"
+              onClick={onClose}
+            >
+              닫기
+            </button>
+            {withTime ? (
+              <button
+                type="button"
+                className="flex-1 py-2 rounded-xl text-sm font-semibold text-white bg-violet-600 disabled:opacity-40"
+                disabled={!selYmd}
+                onClick={confirm}
+              >
+                확인
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** 날짜(+시간) 입력 버튼 — 라이딩 생성의 날짜 버튼과 같은 모양(개인레슨은 연한 하늘색 바탕) */
+function StelvioDateFieldButton(props) {
+  var ymd = props.ymd || '';
+  var hm = props.hm || '';
+  var label = ymd ? formatKoreanDateLabelFromYmd(ymd) + (hm ? ' ' + hm : '') : props.placeholder || '날짜 선택';
+  return (
+    <button
+      type="button"
+      className={
+        'w-full text-left border rounded-lg px-3 py-2 text-sm inline-flex items-center justify-between gap-2 min-w-0 ' +
+        (props.tone === 'sky' ? 'border-sky-200 bg-sky-100 hover:bg-sky-50 ' : 'border-slate-300 bg-white hover:bg-slate-50 ') +
+        (ymd ? 'text-slate-800' : 'text-slate-400')
+      }
+      onClick={props.onClick}
+      aria-label={props.ariaLabel || label}
+    >
+      <span className="truncate">{label}</span>
+      <img src="assets/img/event.svg" alt="" width="16" height="16" style={{ opacity: 0.6, flexShrink: 0 }} />
+    </button>
   );
 }
 
@@ -6942,6 +7156,9 @@ function ClubPtLessonEditModal(props) {
   var _open = useState(false);
   var pickerOpen = _open[0];
   var setPickerOpen = _open[1];
+  var _atPick = useState(false);
+  var atPickerOpen = _atPick[0];
+  var setAtPickerOpen = _atPick[1];
   var _lists = useState({ gas: [], club: [], loading: true });
   var lists = _lists[0];
   var setLists = _lists[1];
@@ -7044,15 +7261,25 @@ function ClubPtLessonEditModal(props) {
             {pickerOpen ? (
               <ClubMissionWorkoutPicker lists={lists} gasSegs={gasSegs} selected={workout} onSelect={selectWorkout} />
             ) : null}
-            <input
-              type="datetime-local"
-              className="club-pt-datetime-input border border-sky-200 rounded-lg px-2 py-2"
-              style={CLUB_PT_DATETIME_INPUT_STYLE}
-              value={at}
-              onChange={function (e) { setAt(e.target.value); }}
-              aria-label="날짜/시간"
+            <StelvioDateFieldButton
+              tone="sky"
+              ymd={at ? at.slice(0, 10) : ''}
+              hm={at ? at.slice(11, 16) : ''}
+              placeholder="날짜와 시간 선택"
+              ariaLabel="날짜/시간"
+              onClick={function () { setAtPickerOpen(true); }}
             />
           </div>
+          {atPickerOpen ? (
+            <StelvioDateTimePickerModal
+              withTime
+              title="레슨 날짜와 시간"
+              ymd={at ? at.slice(0, 10) : ''}
+              hm={at ? at.slice(11, 16) : ''}
+              onPick={function (ymd, hm) { setAt(ymd + 'T' + hm); }}
+              onClose={function () { setAtPickerOpen(false); }}
+            />
+          ) : null}
           {err ? <p className="text-sm text-red-600 whitespace-pre-line m-0">{err}</p> : null}
         </div>
         <div className="flex gap-2 px-4 py-3 border-t border-slate-200">
