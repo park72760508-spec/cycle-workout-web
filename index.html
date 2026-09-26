@@ -34112,7 +34112,7 @@
 <script src="assets/js/wakeLockManager.js"></script>
 <script src="assets/js/bluetoothIndividual.js?v=20260924coachSpeed1"></script>
 <!-- Bluetooth Training 모듈 -->
-<script src="assets/js/bluetoothTrainingManager.js"></script>
+<script src="assets/js/bluetoothTrainingManager.js?v=20260927slotClear1"></script>
 <!-- AI 분석 공통: 컨디션 점수 모듈 (50~100, 1점 단위 객관 산출) -->
   <script src="assets/js/conditionScoreModule.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
@@ -34986,6 +34986,10 @@
           </button>
           <div id="coachmMenu" class="mobile-bluetooth-dropdown coachm-menu">
             <div id="coachmSlotList" class="coachm-slot-list"></div>
+            <div class="mobile-bluetooth-dropdown-item coachm-slot-clear-item" onclick="confirmCoachMobileClearSlots(event)">
+              <img src="assets/img/user-logout.svg" alt="" style="filter: brightness(0) invert(1);">
+              <span>슬롯 비우기</span>
+            </div>
             <div class="coachm-menu-divider" role="separator"></div>
             <div class="mobile-bluetooth-dropdown-item" onclick="openCoachMobileWorkoutPicker('group')">
               <img src="assets/img/people.png" alt="" style="filter: invert(1);">
@@ -35187,7 +35191,7 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js?v=20260926coachm6"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20260927coachm13"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20260927coachm14"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

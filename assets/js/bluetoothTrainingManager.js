@@ -990,13 +990,17 @@ function selectUserForBluetoothTrackSelection(userId, userName, userFTP, userWei
 /**
  * Bluetooth 트랙 일괄 퇴실
  */
-async function clearAllBluetoothTracksData() {
-  if (!confirm('모든 트랙의 사용자를 제거하시겠습니까?')) {
+async function clearAllBluetoothTracksData(opts) {
+  // opts.skipConfirm: 호출부가 이미 확인을 받은 경우(Coach 휴대폰 화면 "슬롯 비우기" — STELVIO 스타일 확인창)
+  const options = opts && typeof opts === 'object' ? opts : {};
+  if (!options.skipConfirm && !confirm('모든 트랙의 사용자를 제거하시겠습니까?')) {
     return;
   }
 
-  let roomId = null;
-  if (typeof currentSelectedTrainingRoom !== 'undefined' && currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
+  let roomId = options.roomId ? String(options.roomId) : null;
+  if (roomId) {
+    // 호출부가 방을 지정함
+  } else if (typeof currentSelectedTrainingRoom !== 'undefined' && currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) {
     roomId = currentSelectedTrainingRoom.id;
   } else if (typeof window !== 'undefined' && window.currentTrainingRoomId) {
     roomId = String(window.currentTrainingRoomId);

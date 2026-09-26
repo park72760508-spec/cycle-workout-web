@@ -599,6 +599,33 @@
     if (typeof window.stopBluetoothCoachTraining === 'function') window.stopBluetoothCoachTraining();
   };
 
+  /**
+   * 연결 메뉴 "슬롯 비우기" — STELVIO 스타일 확인 후 이 Live Training Session 의 모든 슬롯 사용자 제거
+   * (Live Training Session 화면 "퇴실"과 같은 clearAllBluetoothTracksData: users 삭제, 트랙 수 유지)
+   */
+  window.confirmCoachMobileClearSlots = function (e) {
+    if (e) e.stopPropagation();
+    closeMenu();
+    var sid = typeof window.getBluetoothCoachSessionId === 'function' ? window.getBluetoothCoachSessionId()
+      : (window.SESSION_ID || window.currentTrainingRoomId);
+    var run = function () {
+      if (typeof window.clearAllBluetoothTracksData !== 'function') {
+        if (typeof window.showToast === 'function') window.showToast('슬롯 비우기 기능을 불러오지 못했습니다.', 'error');
+        return;
+      }
+      window.clearAllBluetoothTracksData({ skipConfirm: true, roomId: sid });
+      st.trackId = null;
+      st.userPicked = false;
+      st.displayPower = 0;
+    };
+    var msg = '모든 슬롯을 비우시겠습니까?';
+    if (typeof window.showStelvioExitConfirmPopup === 'function') {
+      window.showStelvioExitConfirmPopup(run, { message: msg, cancelText: '취소', okText: '비우기' });
+    } else if (window.confirm(msg)) {
+      run();
+    }
+  };
+
   window.exitCoachMobileScreen = function () {
     var state = coachState().trainingState;
     if ((state === 'running' || state === 'paused') && !confirm('훈련이 진행 중입니다. Coach 화면을 나갈까요?')) return;
