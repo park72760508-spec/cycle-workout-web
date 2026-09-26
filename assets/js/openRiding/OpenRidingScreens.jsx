@@ -6290,6 +6290,20 @@ function clubPtRpc(fnName, args) {
   return rpcP.then(function (rpc) { return rpc(fnName, args || {}); });
 }
 
+/** 개인레슨 날짜/시간 입력 — iOS Safari datetime-local 의 기본 최소 폭 때문에 블럭 밖으로 넘치지 않게 폭 고정, 연한 하늘색 바탕 */
+var CLUB_PT_DATETIME_INPUT_STYLE = {
+  display: 'block',
+  width: '100%',
+  maxWidth: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
+  background: '#e0f2fe',
+  color: '#0f172a',
+  WebkitAppearance: 'none',
+  appearance: 'none',
+  minHeight: '40px'
+};
+
 function clubPtYmdSeoul(iso) {
   try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); } catch (e) { return ''; }
 }
@@ -6852,7 +6866,7 @@ function ClubPtLessonFormModal(props) {
               var open = openIdx === i;
               var w = sl.workout;
               return (
-                <div key={i} className="rounded-xl border border-slate-200 p-2 space-y-2">
+                <div key={i} className="rounded-xl border border-slate-200 p-2 space-y-2 min-w-0 overflow-hidden">
                   <button
                     type="button"
                     className="w-full flex items-center gap-2 text-left"
@@ -6874,7 +6888,8 @@ function ClubPtLessonFormModal(props) {
                   ) : null}
                   <input
                     type="datetime-local"
-                    className="w-full border border-slate-300 rounded-lg px-2 py-2"
+                    className="club-pt-datetime-input border border-sky-200 rounded-lg px-2 py-2"
+                    style={CLUB_PT_DATETIME_INPUT_STYLE}
                     value={sl.at}
                     onChange={function (e) { setSlotAt(i, e.target.value); }}
                     aria-label={(i + 1) + '번 일정 날짜/시간'}
@@ -7031,7 +7046,8 @@ function ClubPtLessonEditModal(props) {
             ) : null}
             <input
               type="datetime-local"
-              className="w-full border border-slate-300 rounded-lg px-2 py-2"
+              className="club-pt-datetime-input border border-sky-200 rounded-lg px-2 py-2"
+              style={CLUB_PT_DATETIME_INPUT_STYLE}
               value={at}
               onChange={function (e) { setAt(e.target.value); }}
               aria-label="날짜/시간"

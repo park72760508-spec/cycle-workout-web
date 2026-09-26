@@ -33711,3 +33711,12 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #0284c7;
   font-variant-numeric: tabular-nums;
 }
+
+/* 개인레슨 날짜/시간 입력: iOS datetime-local 내부 값 영역도 입력칸 폭 안에서 줄바꿈 없이 표시 */
+.club-pt-datetime-input::-webkit-date-and-time-value {
+  text-align: left;
+  min-width: 0;
+}
+.club-pt-datetime-input::-webkit-datetime-edit {
+  min-width: 0;
+}
