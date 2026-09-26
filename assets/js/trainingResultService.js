@@ -478,6 +478,53 @@ function completePendingClubMissionAfterSave(trainingData, trainingLogId) {
     });
 }
 
+/** 클럽 개인레슨 상세 > START 시 저장되는 대기 정보 키 (OpenRidingScreens.jsx 와 동일) */
+const CLUB_PT_PENDING_KEY = 'stelvio_club_pt_pending';
+
+/**
+ * 훈련 저장 직후 — 대기 중인 개인레슨이 이 훈련의 워크아웃과 같으면 레슨 완료 + 쿠폰 1개 차감
+ * (Supabase RPC fn_complete_club_pt_lesson: 본인 레슨만, 워크아웃 시간의 50% 미만이면 미인정).
+ */
+function completePendingClubPtLessonAfterSave(trainingData, trainingLogId) {
+  let pending = null;
+  try {
+    pending = JSON.parse(localStorage.getItem(CLUB_PT_PENDING_KEY) || 'null');
+  } catch (e) {
+    pending = null;
+  }
+  if (!pending || !pending.lessonId || !trainingLogId) return;
+  const fresh = Date.now() - (Number(pending.setAt) || 0) <= CLUB_MISSION_PENDING_MAX_AGE_MS;
+  const sameWorkout = String(pending.workoutId || '') === String((trainingData && trainingData.workout_id) || '');
+  if (!fresh) {
+    try { localStorage.removeItem(CLUB_PT_PENDING_KEY); } catch (e) {}
+    return;
+  }
+  if (!sameWorkout) return;
+  try { localStorage.removeItem(CLUB_PT_PENDING_KEY); } catch (e) {}
+  const toast = (msg, type) => {
+    if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast(msg, type);
+  };
+  const rpcP = typeof window !== 'undefined' && typeof window.stelvioSupabaseRpc === 'function'
+    ? Promise.resolve(window.stelvioSupabaseRpc)
+    : import('./supabaseDualWrite.js').then((m) => m.callSupabaseRpcAsUser);
+  rpcP
+    .then((rpc) =>
+      rpc('fn_complete_club_pt_lesson', {
+        p_lesson_id: String(pending.lessonId),
+        p_training_log_id: String(trainingLogId),
+        p_duration_sec: Math.round(Number(trainingData && trainingData.duration) || 0)
+      })
+    )
+    .then((res) => {
+      if (res && res.completed) toast('개인레슨을 완료했습니다! (남은 PT 쿠폰 ' + (res.couponsLeft != null ? res.couponsLeft : '-') + '개)', 'success');
+      else if (res && res.reason === 'too_short') toast('훈련 시간이 짧아 개인레슨 완료로 인정되지 않았습니다.', 'error');
+    })
+    .catch((err) => {
+      console.warn('[ClubPT] 완료 처리 실패:', err && err.message ? err.message : err);
+      toast('개인레슨 완료 처리에 실패했습니다.', 'error');
+    });
+}
+
 export async function saveTrainingSession(userId, trainingData, firestoreInstance = null) {
   if (!userId) {
     throw new Error('userId는 필수입니다.');
@@ -813,6 +860,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
 
     // 클럽 챌린지 미션: 미션 상세에서 START한 워크아웃이면 단계 완료 처리(서버가 로그로 검증)
     completePendingClubMissionAfterSave(trainingData, result.trainingLogId);
+    completePendingClubPtLessonAfterSave(trainingData, result.trainingLogId);
 
     try {
       const dualMod = await import('./supabaseDualWrite.js');

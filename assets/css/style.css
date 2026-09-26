@@ -33686,3 +33686,28 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   padding-left: 7.5px !important;
   padding-right: 7.5px !important;
 }
+
+/* 클럽 상세 멤버 아바타 팝업: 개인PT 쿠폰 수 (방장·관리자·부관리자) */
+.stelvio-pt-coupon-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.stelvio-pt-coupon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid #7dd3fc;
+  background: #f0f9ff;
+  color: #0369a1;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.stelvio-pt-coupon-count {
+  min-width: 22px;
+  text-align: center;
+  color: #0284c7;
+  font-variant-numeric: tabular-nums;
+}

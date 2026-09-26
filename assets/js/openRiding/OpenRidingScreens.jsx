@@ -6279,6 +6279,26 @@ function OpenRidingCalendarMain(props) {
  *   (assets/js/trainingResultService.js completePendingClubMissionAfterSave · functions/clubMissions.js).
  * - START 시 아래 키로 대기 정보를 남겨 두면 훈련 저장 후 자동 완료 요청이 나간다. */
 var CLUB_MISSION_PENDING_KEY = 'stelvio_club_mission_pending';
+/** 개인레슨 상세 > START 시 저장 — 훈련 저장 직후 레슨 완료·쿠폰 차감(trainingResultService.js 와 동일 키) */
+var CLUB_PT_PENDING_KEY = 'stelvio_club_pt_pending';
+
+/** 개인레슨(PT) Supabase RPC — 로그인 사용자 JWT(권한은 RPC 가 확인) */
+function clubPtRpc(fnName, args) {
+  var rpcP = typeof window !== 'undefined' && typeof window.stelvioSupabaseRpc === 'function'
+    ? Promise.resolve(window.stelvioSupabaseRpc)
+    : import('/assets/js/supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
+  return rpcP.then(function (rpc) { return rpc(fnName, args || {}); });
+}
+
+function clubPtYmdSeoul(iso) {
+  try { return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' }); } catch (e) { return ''; }
+}
+
+function clubPtHmSeoul(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false });
+  } catch (e) { return ''; }
+}
 
 /** 'YYYY-MM-DD' → '2026.11.1' */
 function formatClubMissionDate(ymd) {
@@ -6617,6 +6637,267 @@ function ClubMissionFormModal(props) {
   );
 }
 
+/**
+ * 개인레슨 지정 팝업 (미션 생성 화면 방식) — 사용자(PT 쿠폰 > 0 멤버) 선택, 일정 개수(≤ 보유 쿠폰),
+ * 일정마다 워크아웃(STELVIO/클럽 전용) + 날짜/시간 선택. 저장: RPC fn_save_club_pt_lessons.
+ */
+function ClubPtLessonFormModal(props) {
+  var groupId = props.groupId || '';
+  var onClose = props.onClose || function () {};
+  var onSaved = props.onSaved || function () {};
+
+  var _members = useState({ list: [], loading: true, error: '' });
+  var members = _members[0];
+  var setMembers = _members[1];
+  var _memberUid = useState('');
+  var memberUid = _memberUid[0];
+  var setMemberUid = _memberUid[1];
+  var _slots = useState([{ workout: null, at: '' }]);
+  var slots = _slots[0];
+  var setSlots = _slots[1];
+  var _countDraft = useState(null);
+  var countDraft = _countDraft[0];
+  var setCountDraft = _countDraft[1];
+  var _openIdx = useState(-1);
+  var openIdx = _openIdx[0];
+  var setOpenIdx = _openIdx[1];
+  var _lists = useState({ gas: [], club: [], loading: true });
+  var lists = _lists[0];
+  var setLists = _lists[1];
+  var _gasSegs = useState({});
+  var gasSegs = _gasSegs[0];
+  var setGasSegs = _gasSegs[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _err = useState('');
+  var err = _err[0];
+  var setErr = _err[1];
+
+  useEffect(function () {
+    var cancelled = false;
+    clubPtRpc('fn_club_pt_coupons', { p_group_id: String(groupId) })
+      .then(function (res) {
+        if (cancelled) return;
+        if (!res || res.success !== true) throw new Error((res && res.error) || '멤버 목록을 불러오지 못했습니다.');
+        var list = (res.members || []).filter(function (m) { return Number(m.coupons) > 0; });
+        setMembers({ list: list, loading: false, error: '' });
+      })
+      .catch(function (e) {
+        if (!cancelled) setMembers({ list: [], loading: false, error: (e && e.message) || '멤버 목록을 불러오지 못했습니다.' });
+      });
+    var gasPromise =
+      typeof window !== 'undefined' && typeof window.apiGetWorkouts === 'function'
+        ? window.apiGetWorkouts().then(function (r) { return r && r.success && Array.isArray(r.items) ? r.items : []; }).catch(function () { return []; })
+        : Promise.resolve([]);
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    var clubPromise =
+      groupId && typeof svc.fetchClubWorkouts === 'function'
+        ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
+        : Promise.resolve([]);
+    Promise.all([gasPromise, clubPromise]).then(function (r) {
+      if (!cancelled) setLists({ gas: r[0] || [], club: r[1] || [], loading: false });
+    });
+    return function () { cancelled = true; };
+  }, [groupId]);
+
+  var selectedMember = members.list.find(function (m) { return String(m.userId) === String(memberUid); }) || null;
+  var maxCount = selectedMember ? Math.max(1, Math.min(60, Number(selectedMember.coupons) || 1)) : 60;
+
+  function setCount(nRaw) {
+    var n = Math.max(1, Math.min(maxCount, Math.floor(Number(nRaw) || 1)));
+    setSlots(function (prev) {
+      var next = prev.slice(0, n);
+      while (next.length < n) next.push({ workout: null, at: '' });
+      return next;
+    });
+    setOpenIdx(-1);
+  }
+
+  function onCountInput(v) {
+    var raw = String(v == null ? '' : v).replace(/[^0-9]/g, '').slice(0, 2);
+    if (raw !== '' && Number(raw) > maxCount) raw = String(maxCount);
+    setCountDraft(raw);
+    if (raw !== '' && Number(raw) >= 1) setCount(raw);
+  }
+
+  function onMemberChange(uid) {
+    setMemberUid(uid);
+    var m = members.list.find(function (x) { return String(x.userId) === String(uid); });
+    var cap = m ? Math.max(1, Number(m.coupons) || 1) : 60;
+    setSlots(function (prev) { return prev.length > cap ? prev.slice(0, cap) : prev; });
+  }
+
+  function selectWorkout(idx, w, source) {
+    var wid = String(w.id);
+    setSlots(function (prev) {
+      var next = prev.slice();
+      next[idx] = Object.assign({}, next[idx], {
+        workout: {
+          workoutId: wid,
+          workoutSource: source,
+          title: String(w.title || ''),
+          totalSeconds: Math.round(Number(w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60)) || 0)
+        }
+      });
+      return next;
+    });
+    setOpenIdx(-1);
+    if (source === 'gas' && gasSegs[wid] === undefined && typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function') {
+      window.apiGetWorkout(wid).then(function (r) {
+        var segs = r && r.success && r.item && Array.isArray(r.item.segments) ? r.item.segments : [];
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = segs; return o; });
+      }).catch(function () {
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = []; return o; });
+      });
+    }
+  }
+
+  function setSlotAt(idx, v) {
+    setSlots(function (prev) {
+      var next = prev.slice();
+      next[idx] = Object.assign({}, next[idx], { at: v });
+      return next;
+    });
+  }
+
+  function submit() {
+    var problems = [];
+    if (!selectedMember) problems.push('사용자를 선택해 주세요.');
+    var missingW = [];
+    var missingT = [];
+    slots.forEach(function (sl, i) {
+      if (!sl.workout) missingW.push(i + 1);
+      if (!sl.at) missingT.push(i + 1);
+    });
+    if (missingW.length) problems.push(missingW.join(', ') + '번 일정의 워크아웃을 선택해 주세요.');
+    if (missingT.length) problems.push(missingT.join(', ') + '번 일정의 날짜/시간을 선택해 주세요.');
+    if (problems.length) {
+      setErr(problems.join('\n'));
+      return;
+    }
+    var lessons = slots.map(function (sl) {
+      var d = new Date(sl.at);
+      return {
+        workoutId: sl.workout.workoutId,
+        workoutSource: sl.workout.workoutSource,
+        title: sl.workout.title,
+        totalSeconds: sl.workout.totalSeconds,
+        scheduledAt: isNaN(d.getTime()) ? sl.at : d.toISOString()
+      };
+    });
+    setBusy(true);
+    setErr('');
+    clubPtRpc('fn_save_club_pt_lessons', { p_group_id: String(groupId), p_user_uid: String(memberUid), p_lessons: lessons })
+      .then(function (res) {
+        if (!res || res.success !== true) throw new Error((res && res.error) || '개인레슨 저장에 실패했습니다.');
+        onSaved();
+      })
+      .catch(function (e) { setErr((e && e.message) || '개인레슨 저장에 실패했습니다.'); })
+      .then(function () { setBusy(false); });
+  }
+
+  return openRidingRenderModalPortal(
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center"
+      style={{ zIndex: 100001 /* 하단 글래스 네비(99999) 위 */, background: 'rgba(15, 23, 42, 0.55)' }}
+      role="dialog"
+      aria-modal="true"
+      onClick={function (e) { if (e.target === e.currentTarget && !busy) onClose(); }}
+    >
+      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col" style={{ maxHeight: '92vh' }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <h3 className="text-base font-bold text-slate-800 m-0">개인레슨 지정</h3>
+          <button type="button" className="text-2xl leading-none text-slate-400 px-2" onClick={onClose} disabled={busy} aria-label="닫기">&times;</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm">
+          <label className="block">
+            <span className="block font-medium text-slate-700 mb-1">사용자 선택 *</span>
+            {members.loading ? (
+              <p className="text-slate-400 m-0">멤버 불러오는 중…</p>
+            ) : members.error ? (
+              <p className="text-red-600 m-0">{members.error}</p>
+            ) : members.list.length === 0 ? (
+              <p className="text-slate-500 m-0">개인PT 쿠폰이 있는 멤버가 없습니다. 멤버 프로필 팝업에서 쿠폰 수를 입력해 주세요.</p>
+            ) : (
+              <select
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 bg-white"
+                value={memberUid}
+                onChange={function (e) { onMemberChange(e.target.value); }}
+              >
+                <option value="">멤버를 선택하세요</option>
+                {members.list.map(function (m) {
+                  return <option key={m.userId} value={m.userId}>{m.name} (쿠폰 {m.coupons}개)</option>;
+                })}
+              </select>
+            )}
+          </label>
+          <label className="block">
+            <span className="block font-medium text-slate-700 mb-1">
+              일정수립 개수 *{selectedMember ? <span className="text-slate-400 font-normal"> (최대 {maxCount}개 · 보유 쿠폰)</span> : null}
+            </span>
+            <input
+              type="number"
+              min="1"
+              max={maxCount}
+              inputMode="numeric"
+              className="w-24 border border-slate-300 rounded-lg px-3 py-2"
+              value={countDraft != null ? countDraft : String(slots.length)}
+              onChange={function (e) { onCountInput(e.target.value); }}
+              onBlur={function () { setCountDraft(null); }}
+            />
+          </label>
+          <div className="space-y-2">
+            {slots.map(function (sl, i) {
+              var open = openIdx === i;
+              var w = sl.workout;
+              return (
+                <div key={i} className="rounded-xl border border-slate-200 p-2 space-y-2">
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 text-left"
+                    onClick={function () { setOpenIdx(open ? -1 : i); }}
+                  >
+                    <span className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-sm font-bold" style={{ background: w ? '#0ea5e9' : '#e0f2fe', color: w ? '#fff' : '#0369a1' }}>{i + 1}</span>
+                    <span className={'flex-1 truncate ' + (w ? 'text-slate-800 font-medium' : 'text-slate-400')}>
+                      {w ? w.title + ' (' + Math.round((w.totalSeconds || 0) / 60) + '분)' : '워크아웃 선택'}
+                    </span>
+                    <span className="shrink-0 text-slate-400 text-xs">{open ? '닫기 ▲' : '선택 ▼'}</span>
+                  </button>
+                  {open ? (
+                    <ClubMissionWorkoutPicker
+                      lists={lists}
+                      gasSegs={gasSegs}
+                      selected={w}
+                      onSelect={function (wk, source) { selectWorkout(i, wk, source); }}
+                    />
+                  ) : null}
+                  <input
+                    type="datetime-local"
+                    className="w-full border border-slate-300 rounded-lg px-2 py-2"
+                    value={sl.at}
+                    onChange={function (e) { setSlotAt(i, e.target.value); }}
+                    aria-label={(i + 1) + '번 일정 날짜/시간'}
+                  />
+                </div>
+              );
+            })}
+          </div>
+          {err ? <p className="text-sm text-red-600 whitespace-pre-line m-0">{err}</p> : null}
+        </div>
+        <div className="flex gap-2 px-4 py-3 border-t border-slate-200">
+          <button type="button" className="flex-1 h-11 rounded-xl border border-slate-300 text-slate-700 font-medium" onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button type="button" className="flex-1 h-11 rounded-xl bg-sky-500 text-white font-medium disabled:opacity-50" onClick={submit} disabled={busy}>
+            {busy ? '저장 중…' : '저장'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 미션 상세 팝업 — 훈련 스케줄 > 훈련 상세 디자인(워크아웃명·운동시간·예상 TSS·그래프 위 START) */
 function ClubMissionDetailModal(props) {
   var groupId = props.groupId || '';
@@ -6667,13 +6948,23 @@ function ClubMissionDetailModal(props) {
     var wid = String(step.workoutId);
     var w = Object.assign({}, workout, { id: wid });
     try {
-      localStorage.setItem(CLUB_MISSION_PENDING_KEY, JSON.stringify({
-        groupId: groupId,
-        missionId: mission.id,
-        stepOrd: step.ord,
-        workoutId: wid,
-        setAt: Date.now()
-      }));
+      if (props.ptLessonId) {
+        // 개인레슨: 훈련 저장 직후 fn_complete_club_pt_lesson(레슨 완료 + 쿠폰 1개 차감)
+        localStorage.setItem(CLUB_PT_PENDING_KEY, JSON.stringify({
+          lessonId: String(props.ptLessonId),
+          groupId: groupId,
+          workoutId: wid,
+          setAt: Date.now()
+        }));
+      } else {
+        localStorage.setItem(CLUB_MISSION_PENDING_KEY, JSON.stringify({
+          groupId: groupId,
+          missionId: mission.id,
+          stepOrd: step.ord,
+          workoutId: wid,
+          setAt: Date.now()
+        }));
+      }
     } catch (e) {}
     window.currentWorkout = w;
     try { localStorage.setItem('currentWorkout', JSON.stringify(w)); } catch (e2) {}
@@ -6689,7 +6980,7 @@ function ClubMissionDetailModal(props) {
       <div className="modal-overlay" onClick={onClose} />
       <div className="modal-content schedule-detail-modal-content" style={{ maxWidth: '420px', maxHeight: '90vh', overflowY: 'auto' }}>
         <div className="modal-header schedule-detail-modal-header">
-          <h3 className="schedule-detail-modal-title">미션 상세</h3>
+          <h3 className="schedule-detail-modal-title">{props.titleText || '미션 상세'}</h3>
           <button type="button" className="modal-close" onClick={onClose}>&times;</button>
         </div>
         <div className="modal-body">
@@ -6698,7 +6989,7 @@ function ClubMissionDetailModal(props) {
               <p className="schedule-detail-workout-name"><strong>{(workout && workout.title) || (step && step.title) || '워크아웃'}</strong></p>
             </div>
             <p>운동 시간: {minutes}분 | 예상 TSS: {tss != null ? tss : '—'}</p>
-            <p>{mission.title} · {step.ord}번 미션 ({stateLabel})</p>
+            <p>{props.subtitleText || mission.title + ' · ' + step.ord + '번 미션 (' + stateLabel + ')'}</p>
             {state === 'done' && result && result.score != null ? (
               <p style={{ color: '#16a34a', fontWeight: 700 }}>
                 달성 점수 {result.score}점
@@ -6716,7 +7007,7 @@ function ClubMissionDetailModal(props) {
               className="btn btn-schedule-start btn-schedule-start-on-graph"
               disabled={!canStart || !workout}
               onClick={start}
-              title="미션 훈련 시작"
+              title={props.ptLessonId ? '개인레슨 훈련 시작' : '미션 훈련 시작'}
             >
               <img src="assets/img/start.png" alt="훈련 시작" />
             </button>
@@ -7150,17 +7441,73 @@ function OpenRidingGroupCalendarSection(props) {
     [groupRides, groupId]
   );
 
+  /* ---------- 개인레슨(PT) 탭 ---------- */
+  var _pt = useState({ lessons: [], canManage: false, loading: false, error: '' });
+  var ptState = _pt[0];
+  var setPtState = _pt[1];
+  var _ptTick = useState(0);
+  var ptReloadTick = _ptTick[0];
+  var setPtReloadTick = _ptTick[1];
+  var _ptForm = useState(false);
+  var ptFormOpen = _ptForm[0];
+  var setPtFormOpen = _ptForm[1];
+  var _ptDetail = useState(null);
+  var ptDetail = _ptDetail[0];
+  var setPtDetail = _ptDetail[1];
+
+  useEffect(
+    function () {
+      if (panelTab !== 'pt' || !groupId) return undefined;
+      var cancelled = false;
+      // 보이는 달 앞뒤 1주 포함(달력 앞·뒤 칸)
+      var from = new Date(year, month, 1 - 7);
+      var to = new Date(year, month + 1, 1 + 7);
+      setPtState(function (prev) { return Object.assign({}, prev, { loading: true, error: '' }); });
+      clubPtRpc('fn_club_pt_lessons', { p_group_id: String(groupId), p_from: from.toISOString(), p_to: to.toISOString() })
+        .then(function (res) {
+          if (cancelled) return;
+          if (!res || res.success !== true) throw new Error((res && res.error) || '개인레슨을 불러오지 못했습니다.');
+          setPtState({ lessons: res.lessons || [], canManage: !!res.canManage, loading: false, error: '' });
+        })
+        .catch(function (e) {
+          if (!cancelled) setPtState({ lessons: [], canManage: false, loading: false, error: (e && e.message) || '개인레슨을 불러오지 못했습니다.' });
+        });
+      return function () { cancelled = true; };
+    },
+    [panelTab, groupId, year, month, ptReloadTick]
+  );
+
+  var ptDateKeys = new Set(ptState.lessons.map(function (l) { return clubPtYmdSeoul(l.scheduledAt); }));
+  var ptLessonsForSelectedDay = selectedKey
+    ? ptState.lessons.filter(function (l) { return clubPtYmdSeoul(l.scheduledAt) === selectedKey; })
+    : [];
+
+  function deletePtLesson(lesson) {
+    if (!window.confirm((lesson.name ? lesson.name + ' · ' : '') + (lesson.title || '레슨') + ' 개인레슨 일정을 삭제할까요?')) return;
+    clubPtRpc('fn_delete_club_pt_lesson', { p_group_id: String(groupId), p_lesson_id: String(lesson.id) })
+      .then(function (res) {
+        if (!res || res.success !== true) throw new Error((res && res.error) || '삭제하지 못했습니다.');
+        if (typeof window.showToast === 'function') window.showToast('개인레슨 일정을 삭제했습니다.');
+        setPtReloadTick(function (n) { return n + 1; });
+      })
+      .catch(function (e) {
+        if (typeof window.showToast === 'function') window.showToast((e && e.message) || '삭제하지 못했습니다.');
+      });
+  }
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden stelvio-category-card mt-4">
       <div className="bg-violet-100 border-b border-violet-200/60 px-3 py-2.5 stelvio-category-header flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-slate-800 m-0 min-w-0 truncate">
-          {panelTab === 'mission' ? '클럽 미션' : moimCopy.screenTitle + ' 캘린더'}
+          {panelTab === 'mission' ? '클럽 미션' : panelTab === 'pt' ? '개인레슨' : moimCopy.screenTitle + ' 캘린더'}
         </h3>
         <div className="flex items-center gap-1.5 shrink-0 ml-auto">
           {[
-            { key: 'calendar', icon: 'assets/img/event1.svg', label: '캘린더' },
+            { key: 'calendar', icon: 'assets/img/gt.svg', label: '캘린더' },
+            // 개인레슨: 관리자(방장·관리자·부관리자)는 전체, 멤버는 본인 레슨만
+            canManageMissionHint || canCreate ? { key: 'pt', icon: 'assets/img/pt.svg', label: '개인레슨' } : null,
             { key: 'mission', icon: 'assets/img/mission.svg', label: '미션' }
-          ].map(function (t) {
+          ].filter(Boolean).map(function (t) {
             var active = panelTab === t.key;
             return (
               <button
@@ -7183,7 +7530,28 @@ function OpenRidingGroupCalendarSection(props) {
               </button>
             );
           })}
-        {panelTab === 'mission' ? (
+        {panelTab === 'pt' ? (
+          ptState.canManage || canManageMissionHint ? (
+            <button
+              type="button"
+              className="open-riding-action-btn shrink-0 inline-flex items-center justify-center rounded-full border-0 text-white"
+              style={{
+                background: 'linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)',
+                width: '32px',
+                height: '32px',
+                minWidth: '32px',
+                minHeight: '32px'
+              }}
+              onClick={function () { setPtFormOpen(true); }}
+              title="개인레슨 지정"
+              aria-label="개인레슨 지정"
+            >
+              <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          ) : null
+        ) : panelTab === 'mission' ? (
           (missionState.data ? missionState.data.canManage : canManageMissionHint) ? (
             <button
               type="button"
@@ -7262,10 +7630,10 @@ function OpenRidingGroupCalendarSection(props) {
             {'›'}
           </button>
         </div>
-        {loadingRides ? (
+        {(panelTab === 'pt' ? ptState.loading : loadingRides) ? (
           <div className="open-riding-loading-wrap">
             <div className="open-riding-loading-spinner" />
-            <p className="open-riding-loading-text">모임 로딩 중...</p>
+            <p className="open-riding-loading-text">{panelTab === 'pt' ? '개인레슨 로딩 중...' : '모임 로딩 중...'}</p>
           </div>
         ) : null}
         <div className="grid grid-cols-7 gap-1 text-center text-xs mb-1 font-semibold">
@@ -7287,14 +7655,26 @@ function OpenRidingGroupCalendarSection(props) {
             var showOtherOnly = !isHostDay && !hasMatch && hasAnyRide;
             var hasGroupSession = groupSessionDateKeys.has(key);
             var isConfirmedDay = participantConfirmedDateKeys.has(key);
+            // 개인레슨 탭: 모임 표시 대신 개인레슨 있는 날만 하늘색 원
+            var hasPt = panelTab === 'pt' && ptDateKeys.has(key);
+            if (panelTab === 'pt') {
+              isHostDay = false;
+              hasMatch = false;
+              hasAnyRide = false;
+              showOtherOnly = false;
+              hasGroupSession = false;
+              isConfirmedDay = false;
+            }
             var isTodayCell = key === todayYmd;
-            var isTodayWithRide = isTodayCell && (hasGroupSession || isHostDay || hasMatch || showOtherOnly);
+            var isTodayWithRide = isTodayCell && (hasGroupSession || isHostDay || hasMatch || showOtherOnly || hasPt);
             var isSel = selectedKey === key;
             var isOutside = cell.adjacent != null;
             var isPastCell = key < todayYmd;
             var dayNumClass = 'relative z-10 tabular-nums ';
             if (isOutside) {
               dayNumClass += 'text-slate-400 opacity-40';
+            } else if (hasPt) {
+              dayNumClass += isPastCell ? 'text-sky-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
             } else if (hasGroupSession) {
               /* 그룹세션(인도어 훈련 모임)이 있는 날 — 방장·매칭 여부와 무관하게 항상 녹색으로
                  우선 표시(2026-09 요청). */
@@ -7333,7 +7713,17 @@ function OpenRidingGroupCalendarSection(props) {
                     aria-hidden
                   />
                 ) : null}
-                {isOutside ? null : hasGroupSession ? (
+                {isOutside ? null : hasPt ? (
+                  <span
+                    className={
+                      'absolute z-[1] rounded-full pointer-events-none border ' +
+                      (isPastCell ? 'bg-sky-200/60 border-sky-300/50' : 'bg-sky-400 border-sky-500/50')
+                    }
+                    style={openRidingCalBadgeCircleStyle}
+                    title="개인레슨 있음"
+                    aria-hidden
+                  />
+                ) : hasGroupSession ? (
                   <span
                     className={
                       'absolute z-[1] rounded-full pointer-events-none border ' +
@@ -7394,7 +7784,49 @@ function OpenRidingGroupCalendarSection(props) {
           <h4 className="text-sm font-semibold text-slate-800 mb-2 m-0">
             {selectedKey ? formatMdDowFromYmdSeoul(selectedKey) || selectedKey : '날짜를 선택하세요'}
           </h4>
-          {!selectedKey ? (
+          {panelTab === 'pt' ? (
+            ptState.error ? (
+              <p className="text-sm text-red-600 m-0">{ptState.error}</p>
+            ) : !selectedKey ? (
+              <p className="text-sm text-slate-400 m-0">달력에서 날짜를 탭하면 개인레슨이 표시됩니다.</p>
+            ) : ptLessonsForSelectedDay.length === 0 ? (
+              <p className="text-sm text-slate-400 m-0">이 날 지정된 개인레슨이 없습니다.</p>
+            ) : (
+              <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto m-0 p-0 list-none">
+                {ptLessonsForSelectedDay.map(function (l) {
+                  var done = !!l.completedAt;
+                  return (
+                    <li key={l.id} className="flex items-center gap-2 py-2">
+                      <button
+                        type="button"
+                        className="flex-1 min-w-0 flex items-center gap-2 text-left bg-transparent border-0 p-0"
+                        onClick={function () { setPtDetail(l); }}
+                      >
+                        <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: done ? '#94a3b8' : '#38bdf8' }} aria-hidden />
+                        <span className="shrink-0 text-xs font-semibold text-sky-700 tabular-nums">{clubPtHmSeoul(l.scheduledAt)}</span>
+                        <span className="flex-1 min-w-0 truncate text-sm text-slate-800">
+                          {ptState.canManage && l.name ? <strong className="font-semibold">{l.name} · </strong> : null}
+                          {l.title || '워크아웃'} ({Math.round((Number(l.totalSeconds) || 0) / 60)}분)
+                        </span>
+                        {done ? <span className="shrink-0 text-[11px] text-slate-500 border border-slate-300 rounded px-1">완료</span> : null}
+                      </button>
+                      {ptState.canManage && !done ? (
+                        <button
+                          type="button"
+                          className="shrink-0 inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1 hover:bg-red-50"
+                          onClick={function () { deletePtLesson(l); }}
+                          title="개인레슨 삭제"
+                          aria-label="개인레슨 삭제"
+                        >
+                          <img src="assets/img/delete2.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )
+          ) : !selectedKey ? (
             <p className="text-sm text-slate-400 m-0">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
           ) : ridesForSelectedDay.length === 0 ? (
             <p className="text-sm text-slate-400 m-0">이 날 등록된 모임이 없습니다.</p>
@@ -7413,6 +7845,36 @@ function OpenRidingGroupCalendarSection(props) {
         </React.Fragment>
         )}
       </div>
+      {ptFormOpen ? (
+        <ClubPtLessonFormModal
+          groupId={groupId}
+          onClose={function () { setPtFormOpen(false); }}
+          onSaved={function () {
+            setPtFormOpen(false);
+            setPtReloadTick(function (n) { return n + 1; });
+            if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('개인레슨을 저장했습니다.', 'success');
+          }}
+        />
+      ) : null}
+      {ptDetail ? (function () {
+        var mine = String(ptDetail.userId || '') === String(userId || '');
+        var done = !!ptDetail.completedAt;
+        return (
+          <ClubMissionDetailModal
+            groupId={groupId}
+            mission={{ id: null, title: '개인레슨' }}
+            step={{ ord: ptDetail.ord, workoutId: ptDetail.workoutId, workoutSource: ptDetail.workoutSource, title: ptDetail.title, totalSeconds: ptDetail.totalSeconds }}
+            state={done ? 'done' : 'next'}
+            canStart={mine && !done}
+            blockedReason={done ? '이미 완료한 개인레슨입니다.' : !mine ? '본인에게 지정된 레슨만 시작할 수 있습니다.' : ''}
+            result={null}
+            titleText="개인레슨 상세"
+            subtitleText={(ptDetail.name ? ptDetail.name + ' · ' : '') + ptDetail.ord + '회차 · ' + (formatMdDowFromYmdSeoul(clubPtYmdSeoul(ptDetail.scheduledAt)) || '') + ' ' + clubPtHmSeoul(ptDetail.scheduledAt) + (done ? ' (완료)' : '')}
+            ptLessonId={ptDetail.id}
+            onClose={function () { setPtDetail(null); }}
+          />
+        );
+      })() : null}
       {missionFormOpen ? (
         <ClubMissionFormModal
           groupId={groupId}
@@ -14592,6 +15054,44 @@ function OpenRidingGroupDetailView(props) {
     })
   );
 
+  /** 개인PT 쿠폰 수(멤버 uid → 개수) — 방장·관리자·부관리자만 조회·수정(아바타 팝업) */
+  var _ptCoupons = useState({});
+  var ptCouponMap = _ptCoupons[0];
+  var setPtCouponMap = _ptCoupons[1];
+  var canManagePtCoupons = !!(isOwner || isAdmin);
+  useEffect(
+    function () {
+      if (!canManagePtCoupons || !groupId) return undefined;
+      var cancelled = false;
+      clubPtRpc('fn_club_pt_coupons', { p_group_id: String(groupId) })
+        .then(function (res) {
+          if (cancelled || !res || res.success !== true) return;
+          var map = {};
+          (res.members || []).forEach(function (m) { if (m && m.userId) map[String(m.userId)] = Number(m.coupons) || 0; });
+          setPtCouponMap(map);
+        })
+        .catch(function () {});
+      return function () { cancelled = true; };
+    },
+    [canManagePtCoupons, groupId]
+  );
+
+  function changePtCoupons(uid, next) {
+    var key = String(uid);
+    var prev = Number(ptCouponMap[key]) || 0;
+    var value = Math.max(0, Math.min(9999, Math.floor(Number(next) || 0)));
+    if (value === prev) return;
+    setPtCouponMap(function (m) { var o = Object.assign({}, m); o[key] = value; return o; });
+    clubPtRpc('fn_set_club_pt_coupons', { p_group_id: String(groupId), p_user_uid: key, p_coupons: value })
+      .then(function (res) {
+        if (!res || res.success !== true) throw new Error((res && res.error) || '쿠폰 수를 저장하지 못했습니다.');
+      })
+      .catch(function (e) {
+        setPtCouponMap(function (m) { var o = Object.assign({}, m); o[key] = prev; return o; });
+        if (typeof window.showToast === 'function') window.showToast((e && e.message) || '쿠폰 수를 저장하지 못했습니다.');
+      });
+  }
+
   /** 가입 기간(만료일) 게이팅 — 만료된 회원은 모임 생성 등 클럽 콘텐츠 이용 제한, 하단에 "연장하기" 노출 */
   var myMembership = useMemo(
     function () {
@@ -16462,7 +16962,7 @@ function OpenRidingGroupDetailView(props) {
                 버그: 만료일이 한 번도 저장되지 않는 원인이었음). 이제 랭킹 정보가 없어도 관리자
                 +유료(멤버쉽) 그룹이면 이 블록이 렌더되고, 랭킹 관련 줄(순위·랭킹보드 등)만
                 avatarZoom.rank가 있을 때 추가로 표시한다. */}
-            {avatarZoom.rank || ((isOwner || isAdmin) && avatarZoom.uid && isGroupPaid) ? (function () {
+            {avatarZoom.rank || ((isOwner || isAdmin) && avatarZoom.uid) ? (function () {
               var avatarZoomMember = avatarZoom.uid
                 ? (members || []).find(function (mm2) {
                     return String((mm2 && (mm2.userId || mm2.id)) || '') === avatarZoom.uid;
@@ -16503,6 +17003,37 @@ function OpenRidingGroupDetailView(props) {
                     </span>
                   ) : null}
                 </p>
+                {canManagePtCoupons && avatarZoom.uid && avatarZoomMember ? (
+                  <p className="stelvio-rank-avatar-zoom-line2 stelvio-pt-coupon-row">
+                    <span>개인PT 쿠폰</span>
+                    <button
+                      type="button"
+                      className="stelvio-pt-coupon-btn"
+                      aria-label="쿠폰 1개 줄이기"
+                      onClick={function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        changePtCoupons(avatarZoom.uid, (Number(ptCouponMap[avatarZoom.uid]) || 0) - 1);
+                      }}
+                    >
+                      −
+                    </button>
+                    <strong className="stelvio-pt-coupon-count">{Number(ptCouponMap[avatarZoom.uid]) || 0}</strong>
+                    <button
+                      type="button"
+                      className="stelvio-pt-coupon-btn"
+                      aria-label="쿠폰 1개 늘리기"
+                      onClick={function (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        changePtCoupons(avatarZoom.uid, (Number(ptCouponMap[avatarZoom.uid]) || 0) + 1);
+                      }}
+                    >
+                      +
+                    </button>
+                    <span>개</span>
+                  </p>
+                ) : null}
                 {avatarZoom.rank ? (
                   <>
                     <p className="stelvio-rank-avatar-zoom-line2">
