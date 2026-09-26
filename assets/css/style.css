@@ -33720,3 +33720,16 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 .club-pt-datetime-input::-webkit-datetime-edit {
   min-width: 0;
 }
+
+/* Coach 휴대폰: PC Coach 화면은 그리지 않고(엔진용 DOM 유지) 전용 화면을 부드럽게 표시 */
+html.coachm-phone #bluetoothTrainingCoachScreen {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+#bluetoothCoachMobileScreen.active {
+  animation: coachm-fade-in 0.22s ease-out both;
+}
+@keyframes coachm-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

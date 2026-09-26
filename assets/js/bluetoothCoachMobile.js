@@ -643,9 +643,17 @@
     var pc = $(PC_SCREEN_ID);
     if (!pc || !pc.classList.contains('active')) return;
     if (!isPhone() || window.__coachForcePcScreen) return;
+    // Coach 엔진 초기화가 PC 화면에 active 를 다시 붙여도 이미 휴대폰 화면이면 재전환하지 않음
+    // (재전환하면 표시 애니메이션이 처음부터 다시 시작돼 깜빡여 보인다). PC 화면은 CSS 로 숨김.
+    if (isActive()) return;
+    // MutationObserver 콜백은 화면을 그리기 전에 실행된다 — 지연(setTimeout) 없이 바로 전환해야
+    // PC Coach 화면이 한 프레임 그려졌다 사라지는 깜빡임이 생기지 않는다.
+    if (typeof window.showScreen === 'function') window.showScreen(SCREEN_ID, true);
+    // Coach 엔진(트랙 그리드·Firebase 구독) 초기화 — index.html showScreen 폴백이 하던 초기화를
+    // 휴대폰 전환에서는 폴백을 건너뛰므로 여기서 보장한다.
     setTimeout(function () {
-      if (typeof window.showScreen === 'function') window.showScreen(SCREEN_ID, true);
-    }, 0);
+      if (typeof window.initBluetoothCoachDashboard === 'function') window.initBluetoothCoachDashboard();
+    }, 100);
   }
   function onMobileScreenClass() {
     var active = isActive();
@@ -655,6 +663,8 @@
   }
   function install() {
     if (window.__coachMobileInstalled) return;
+    // 휴대폰에서는 PC Coach 화면을 그리지 않음(엔진 초기화용 DOM 은 유지) — 전환 중 깜빡임 방지
+    try { document.documentElement.classList.toggle('coachm-phone', isPhone()); } catch (e) {}
     var pc = $(PC_SCREEN_ID);
     var mobile = $(SCREEN_ID);
     if (!pc || !mobile || typeof MutationObserver !== 'function') return;

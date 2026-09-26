@@ -3771,7 +3771,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20260926clubPt2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20260927coachmFade1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35191,7 +35191,7 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js?v=20260926coachm6"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20260927coachm14"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20260927coachm17"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->
@@ -42161,6 +42161,10 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             
             // originalShowScreenFunc가 성공했는지 확인 (100ms 후)
             setTimeout(function() {
+              // 휴대폰 Coach: PC Coach 화면은 의도적으로 전용 화면(#bluetoothCoachMobileScreen)으로 바뀌므로
+              // 강제 재전환하지 않음(재전환 시 화면이 한 번 사라졌다 다시 나타나 깜빡임)
+              var coachMobileEl = document.getElementById('bluetoothCoachMobileScreen');
+              if (screenId === 'bluetoothTrainingCoachScreen' && coachMobileEl && coachMobileEl.classList.contains('active')) return;
               var targetScreen = document.getElementById(screenId);
               if (targetScreen) {
                 var isVisible = targetScreen.classList.contains('active') || 
