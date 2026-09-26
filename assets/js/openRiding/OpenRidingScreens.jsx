@@ -6898,6 +6898,160 @@ function ClubPtLessonFormModal(props) {
   );
 }
 
+/** ISO → datetime-local 입력값(서울 기준 'YYYY-MM-DDTHH:mm') */
+function clubPtLocalInputValue(iso) {
+  try {
+    return new Date(iso).toLocaleString('sv-SE', { timeZone: 'Asia/Seoul' }).replace(' ', 'T').slice(0, 16);
+  } catch (e) {
+    return '';
+  }
+}
+
+/** 개인레슨 수정 팝업(방장·관리자·부관리자) — 완료 전 레슨의 워크아웃·날짜/시간 변경 */
+function ClubPtLessonEditModal(props) {
+  var groupId = props.groupId || '';
+  var lesson = props.lesson;
+  var onClose = props.onClose || function () {};
+  var onSaved = props.onSaved || function () {};
+  var _w = useState({
+    workoutId: String(lesson.workoutId),
+    workoutSource: lesson.workoutSource === 'club' ? 'club' : 'gas',
+    title: lesson.title || '',
+    totalSeconds: Number(lesson.totalSeconds) || 0
+  });
+  var workout = _w[0];
+  var setWorkout = _w[1];
+  var _at = useState(clubPtLocalInputValue(lesson.scheduledAt));
+  var at = _at[0];
+  var setAt = _at[1];
+  var _open = useState(false);
+  var pickerOpen = _open[0];
+  var setPickerOpen = _open[1];
+  var _lists = useState({ gas: [], club: [], loading: true });
+  var lists = _lists[0];
+  var setLists = _lists[1];
+  var _gasSegs = useState({});
+  var gasSegs = _gasSegs[0];
+  var setGasSegs = _gasSegs[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _err = useState('');
+  var err = _err[0];
+  var setErr = _err[1];
+
+  useEffect(function () {
+    var cancelled = false;
+    var gasPromise =
+      typeof window !== 'undefined' && typeof window.apiGetWorkouts === 'function'
+        ? window.apiGetWorkouts().then(function (r) { return r && r.success && Array.isArray(r.items) ? r.items : []; }).catch(function () { return []; })
+        : Promise.resolve([]);
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    var clubPromise =
+      groupId && typeof svc.fetchClubWorkouts === 'function'
+        ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
+        : Promise.resolve([]);
+    Promise.all([gasPromise, clubPromise]).then(function (r) {
+      if (!cancelled) setLists({ gas: r[0] || [], club: r[1] || [], loading: false });
+    });
+    return function () { cancelled = true; };
+  }, [groupId]);
+
+  function selectWorkout(w, source) {
+    var wid = String(w.id);
+    setWorkout({
+      workoutId: wid,
+      workoutSource: source,
+      title: String(w.title || ''),
+      totalSeconds: Math.round(Number(w.total_seconds || w.totalSeconds || ((w.totalMinutes || 0) * 60)) || 0)
+    });
+    setPickerOpen(false);
+    if (source === 'gas' && gasSegs[wid] === undefined && typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function') {
+      window.apiGetWorkout(wid).then(function (r) {
+        var segs = r && r.success && r.item && Array.isArray(r.item.segments) ? r.item.segments : [];
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = segs; return o; });
+      }).catch(function () {
+        setGasSegs(function (prev) { var o = Object.assign({}, prev); o[wid] = []; return o; });
+      });
+    }
+  }
+
+  function submit() {
+    if (!workout || !workout.workoutId || !at) {
+      setErr('워크아웃과 날짜/시간을 선택해 주세요.');
+      return;
+    }
+    var d = new Date(at);
+    setBusy(true);
+    setErr('');
+    clubPtRpc('fn_update_club_pt_lesson', {
+      p_group_id: String(groupId),
+      p_lesson_id: String(lesson.id),
+      p_workout_id: workout.workoutId,
+      p_workout_source: workout.workoutSource,
+      p_title: workout.title,
+      p_total_seconds: workout.totalSeconds,
+      p_scheduled_at: isNaN(d.getTime()) ? at : d.toISOString()
+    })
+      .then(function (res) {
+        if (!res || res.success !== true) throw new Error((res && res.error) || '개인레슨을 수정하지 못했습니다.');
+        onSaved();
+      })
+      .catch(function (e) { setErr((e && e.message) || '개인레슨을 수정하지 못했습니다.'); })
+      .then(function () { setBusy(false); });
+  }
+
+  return openRidingRenderModalPortal(
+    <div
+      className="fixed inset-0 flex items-end sm:items-center justify-center"
+      style={{ zIndex: 100001, background: 'rgba(15, 23, 42, 0.55)' }}
+      role="dialog"
+      aria-modal="true"
+      onClick={function (e) { if (e.target === e.currentTarget && !busy) onClose(); }}
+    >
+      <div className="w-full sm:max-w-md bg-white rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col" style={{ maxHeight: '92vh' }}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+          <h3 className="text-base font-bold text-slate-800 m-0">개인레슨 수정</h3>
+          <button type="button" className="text-2xl leading-none text-slate-400 px-2" onClick={onClose} disabled={busy} aria-label="닫기">&times;</button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-sm">
+          <p className="m-0 text-slate-600">
+            <strong className="text-slate-800">{lesson.name || ''}</strong> · {lesson.ord}회차
+          </p>
+          <div className="rounded-xl border border-slate-200 p-2 space-y-2">
+            <button type="button" className="w-full flex items-center gap-2 text-left" onClick={function () { setPickerOpen(!pickerOpen); }}>
+              <span className="shrink-0 w-8 h-8 rounded-lg inline-flex items-center justify-center text-sm font-bold" style={{ background: '#0ea5e9', color: '#fff' }}>{lesson.ord}</span>
+              <span className="flex-1 truncate text-slate-800 font-medium">
+                {workout.title || '워크아웃'} ({Math.round((workout.totalSeconds || 0) / 60)}분)
+              </span>
+              <span className="shrink-0 text-slate-400 text-xs">{pickerOpen ? '닫기 ▲' : '변경 ▼'}</span>
+            </button>
+            {pickerOpen ? (
+              <ClubMissionWorkoutPicker lists={lists} gasSegs={gasSegs} selected={workout} onSelect={selectWorkout} />
+            ) : null}
+            <input
+              type="datetime-local"
+              className="w-full border border-slate-300 rounded-lg px-2 py-2"
+              value={at}
+              onChange={function (e) { setAt(e.target.value); }}
+              aria-label="날짜/시간"
+            />
+          </div>
+          {err ? <p className="text-sm text-red-600 whitespace-pre-line m-0">{err}</p> : null}
+        </div>
+        <div className="flex gap-2 px-4 py-3 border-t border-slate-200">
+          <button type="button" className="flex-1 h-11 rounded-xl border border-slate-300 text-slate-700 font-medium" onClick={onClose} disabled={busy}>
+            취소
+          </button>
+          <button type="button" className="flex-1 h-11 rounded-xl bg-sky-500 text-white font-medium disabled:opacity-50" onClick={submit} disabled={busy}>
+            {busy ? '저장 중…' : '저장'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 미션 상세 팝업 — 훈련 스케줄 > 훈련 상세 디자인(워크아웃명·운동시간·예상 TSS·그래프 위 START) */
 function ClubMissionDetailModal(props) {
   var groupId = props.groupId || '';
@@ -7457,7 +7611,8 @@ function OpenRidingGroupCalendarSection(props) {
 
   useEffect(
     function () {
-      if (panelTab !== 'pt' || !groupId) return undefined;
+      // 개인레슨 탭 + 일반 캘린더 탭(개인레슨 하늘색 원 우선 표시)에서 조회, 미션 탭은 제외
+      if (panelTab === 'mission' || !groupId) return undefined;
       var cancelled = false;
       // 보이는 달 앞뒤 1주 포함(달력 앞·뒤 칸)
       var from = new Date(year, month, 1 - 7);
@@ -7493,6 +7648,55 @@ function OpenRidingGroupCalendarSection(props) {
       .catch(function (e) {
         if (typeof window.showToast === 'function') window.showToast((e && e.message) || '삭제하지 못했습니다.');
       });
+  }
+
+  var _ptEdit = useState(null);
+  var ptEdit = _ptEdit[0];
+  var setPtEdit = _ptEdit[1];
+
+  /** 개인레슨 목록 한 줄 — 개인레슨 탭·일반 캘린더 탭 공통 */
+  function renderPtLessonRow(l) {
+    var done = !!l.completedAt;
+    return (
+      <li key={'pt-' + l.id} className="flex items-center gap-2 py-2">
+        <button
+          type="button"
+          className="flex-1 min-w-0 flex items-center gap-2 text-left bg-transparent border-0 p-0"
+          onClick={function () { setPtDetail(l); }}
+        >
+          <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: done ? '#94a3b8' : '#38bdf8' }} aria-hidden />
+          <span className="shrink-0 text-xs font-semibold text-sky-700 tabular-nums">{clubPtHmSeoul(l.scheduledAt)}</span>
+          <span className="flex-1 min-w-0 truncate text-sm text-slate-800">
+            <span className="text-sky-700 font-semibold">개인레슨 · </span>
+            {ptState.canManage && l.name ? <strong className="font-semibold">{l.name} · </strong> : null}
+            {l.title || '워크아웃'} ({Math.round((Number(l.totalSeconds) || 0) / 60)}분)
+          </span>
+          {done ? <span className="shrink-0 text-[11px] text-slate-500 border border-slate-300 rounded px-1">완료</span> : null}
+        </button>
+        {ptState.canManage && !done ? (
+          <>
+            <button
+              type="button"
+              className="shrink-0 inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1 hover:bg-sky-50"
+              onClick={function () { setPtEdit(l); }}
+              title="개인레슨 수정"
+              aria-label="개인레슨 수정"
+            >
+              <img src="assets/img/edit2.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+            </button>
+            <button
+              type="button"
+              className="shrink-0 inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1 hover:bg-red-50"
+              onClick={function () { deletePtLesson(l); }}
+              title="개인레슨 삭제"
+              aria-label="개인레슨 삭제"
+            >
+              <img src="assets/img/delete2.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
+            </button>
+          </>
+        ) : null}
+      </li>
+    );
   }
 
   return (
@@ -7656,7 +7860,8 @@ function OpenRidingGroupCalendarSection(props) {
             var hasGroupSession = groupSessionDateKeys.has(key);
             var isConfirmedDay = participantConfirmedDateKeys.has(key);
             // 개인레슨 탭: 모임 표시 대신 개인레슨 있는 날만 하늘색 원
-            var hasPt = panelTab === 'pt' && ptDateKeys.has(key);
+            // 개인레슨 있는 날: 개인레슨 탭·일반 캘린더 모두 하늘색 원(그룹세션 등보다 우선)
+            var hasPt = panelTab !== 'mission' && ptDateKeys.has(key);
             if (panelTab === 'pt') {
               isHostDay = false;
               hasMatch = false;
@@ -7793,45 +7998,16 @@ function OpenRidingGroupCalendarSection(props) {
               <p className="text-sm text-slate-400 m-0">이 날 지정된 개인레슨이 없습니다.</p>
             ) : (
               <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto m-0 p-0 list-none">
-                {ptLessonsForSelectedDay.map(function (l) {
-                  var done = !!l.completedAt;
-                  return (
-                    <li key={l.id} className="flex items-center gap-2 py-2">
-                      <button
-                        type="button"
-                        className="flex-1 min-w-0 flex items-center gap-2 text-left bg-transparent border-0 p-0"
-                        onClick={function () { setPtDetail(l); }}
-                      >
-                        <span className="shrink-0 w-2.5 h-2.5 rounded-full" style={{ background: done ? '#94a3b8' : '#38bdf8' }} aria-hidden />
-                        <span className="shrink-0 text-xs font-semibold text-sky-700 tabular-nums">{clubPtHmSeoul(l.scheduledAt)}</span>
-                        <span className="flex-1 min-w-0 truncate text-sm text-slate-800">
-                          {ptState.canManage && l.name ? <strong className="font-semibold">{l.name} · </strong> : null}
-                          {l.title || '워크아웃'} ({Math.round((Number(l.totalSeconds) || 0) / 60)}분)
-                        </span>
-                        {done ? <span className="shrink-0 text-[11px] text-slate-500 border border-slate-300 rounded px-1">완료</span> : null}
-                      </button>
-                      {ptState.canManage && !done ? (
-                        <button
-                          type="button"
-                          className="shrink-0 inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1 hover:bg-red-50"
-                          onClick={function () { deletePtLesson(l); }}
-                          title="개인레슨 삭제"
-                          aria-label="개인레슨 삭제"
-                        >
-                          <img src="assets/img/delete2.png" alt="" style={{ width: '16px', height: '16px', objectFit: 'contain' }} />
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
+                {ptLessonsForSelectedDay.map(renderPtLessonRow)}
               </ul>
             )
           ) : !selectedKey ? (
             <p className="text-sm text-slate-400 m-0">달력에서 날짜를 탭하면 목록이 표시됩니다.</p>
-          ) : ridesForSelectedDay.length === 0 ? (
+          ) : ridesForSelectedDay.length === 0 && ptLessonsForSelectedDay.length === 0 ? (
             <p className="text-sm text-slate-400 m-0">이 날 등록된 모임이 없습니다.</p>
           ) : (
             <ul className="divide-y divide-slate-100 max-h-56 overflow-y-auto m-0 p-0 list-none">
+              {ptLessonsForSelectedDay.map(renderPtLessonRow)}
               {ridesForSelectedDay.map(function (r) {
                 return openRidingRenderMonthRideListRowShared(
                   r,
@@ -7853,6 +8029,18 @@ function OpenRidingGroupCalendarSection(props) {
             setPtFormOpen(false);
             setPtReloadTick(function (n) { return n + 1; });
             if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('개인레슨을 저장했습니다.', 'success');
+          }}
+        />
+      ) : null}
+      {ptEdit ? (
+        <ClubPtLessonEditModal
+          groupId={groupId}
+          lesson={ptEdit}
+          onClose={function () { setPtEdit(null); }}
+          onSaved={function () {
+            setPtEdit(null);
+            setPtReloadTick(function (n) { return n + 1; });
+            if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('개인레슨을 수정했습니다.', 'success');
           }}
         />
       ) : null}
