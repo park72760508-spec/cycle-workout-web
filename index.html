@@ -9166,7 +9166,8 @@
         try {
           var items = await window.fetchClubWorkoutsForManager(club.groupId);
           if (workoutViewState.mode !== 'clubWorkouts') return;
-          window.renderClubWorkoutCards(items, club.name);
+          // RPC 는 최신 작성순(created_at DESC) — 클럽 전용 목록은 오래된 것부터, 최신 작성이 뒤로
+          window.renderClubWorkoutCards((items || []).slice().reverse(), club.name);
           if (keepScroll && wvcPrev) wvcPrev.scrollTop = prevScroll;
         } catch (e) {
           if (workoutViewState.mode !== 'clubWorkouts') return;
