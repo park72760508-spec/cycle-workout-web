@@ -6132,7 +6132,8 @@ function syncSegmentEditorFromFields() {
   const typeEl = safeGetElement('segmentType');
   const itemEl = safeGetElement('segmentItem');
   if (!labelEl || !typeEl || !itemEl) return;
-  const label = String(labelEl.value || '').trim();
+  let label = String(labelEl.value || '').trim();
+  if (label === '새 세그먼트') label = ''; // 예전 기본 이름 — 보존용 선택지 대신 인터벌 목록 표시
   const segType = String(typeEl.value || 'interval');
   const item = segmentItemForSegType(segType);
   segmentEditorOriginal = { label: label, segType: segType, item: item };
@@ -6682,11 +6683,12 @@ function closeRepeatModal() {
 function addRepeatSegment() {
   const newSegment = {
     id: Date.now(),
-    label: '새 세그먼트',
-    segment_type: 'interval',
-    duration_sec: 300,
+    // 반복 세그먼트 기본값 = 인터벌 첫 타입(SST) — 타입 목록에 "새 세그먼트" 대신 인터벌 목록이 표시되게
+    label: SEGMENT_EDITOR_TYPES.sst.name,
+    segment_type: SEGMENT_EDITOR_TYPES.sst.segType,
+    duration_sec: SEGMENT_EDITOR_TYPES.sst.durSec,
     target_type: 'ftp_percent',
-    target_value: 100,
+    target_value: SEGMENT_EDITOR_TYPES.sst.low,
     ramp: 'none',
     ramp_to_value: null
   };
