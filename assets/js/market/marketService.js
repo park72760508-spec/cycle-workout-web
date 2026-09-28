@@ -3,7 +3,7 @@
  * market_items/market_favorites는 Supabase RLS(auth.uid())로 직접 read/write, 결제(가상계좌
  * 발급·구매확정)는 Toss 시크릿 키가 필요해 Cloud Functions를 거친다.
  */
-import { fetchSupabaseSessionFromBridge } from '../supabaseDualWrite.js';
+import { getMintedSupabaseSession } from '../supabaseDualWrite.js';
 
 const MARKET_IMAGE_MAX_WIDTH = 800;
 const MARKET_IMAGE_QUALITY = 0.7;
@@ -137,10 +137,7 @@ async function getFreshMarketAccessToken() {
   if (marketTokenCache.token && marketTokenCache.expiresAtSec > nowSec + 120) {
     return marketTokenCache.token;
   }
-  const cfg = (typeof window !== 'undefined' && window.STELVIO_SUPABASE_CONFIG) || {};
-  if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
-  const idToken = await getFirebaseIdToken();
-  const minted = await fetchSupabaseSessionFromBridge(cfg.authBridgeUrl, idToken);
+  const minted = await getMintedSupabaseSession(); // 앱 전체 공유 캐시·발급 1회(supabaseDualWrite)
   marketTokenCache = {
     token: minted.access_token,
     expiresAtSec: nowSec + (Number(minted.expires_in) || 3600),

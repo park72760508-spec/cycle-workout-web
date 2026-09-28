@@ -568,7 +568,84 @@ async function getFirebaseIdToken() {
   return user.getIdToken(true);
 }
 
+/*
+ * 비용 절감(2026-09-28): mintSupabaseSessionHttp(Cloud Run) 호출 폭증 방지.
+ * 이관 후 RPC·세션·중고랜드·위치추적이 각자 토큰을 발급받고, 앱 시작 시 동시 RPC 가
+ * 빈 캐시를 보고 한꺼번에 발급 요청(초당 4~6건)을 보내 이 함수가 Cloud Run 호출 1위가 됐다.
+ * → 발급 결과를 Firebase 계정별로 localStorage 에 공유 캐시하고, 진행 중 발급은 window 에 1개만 둔다
+ *   (모듈이 ?v= 별로 여러 번 로드돼도 공유되도록 window·localStorage 사용).
+ */
+const MINTED_SESSION_CACHE_KEY = 'stelvio_sb_minted_session_v1';
+
+function currentFirebaseUidAny() {
+  try {
+    if (typeof window !== 'undefined') {
+      if (window.authV9 && window.authV9.currentUser) return String(window.authV9.currentUser.uid || '');
+      if (window.auth && window.auth.currentUser) return String(window.auth.currentUser.uid || '');
+    }
+  } catch (e) {}
+  return '';
+}
+
+function readMintedSessionCache(fbUid) {
+  if (!fbUid) return null;
+  let c = null;
+  try { c = JSON.parse(localStorage.getItem(MINTED_SESSION_CACHE_KEY) || 'null'); } catch (e) { c = null; }
+  const nowSec = Math.floor(Date.now() / 1000);
+  if (c && c.fbUid === fbUid && c.session && c.session.access_token && Number(c.exp) > nowSec + 120) {
+    return c.session;
+  }
+  return null;
+}
+
+function writeMintedSessionCache(fbUid, session) {
+  if (!fbUid || !session) return;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const exp = nowSec + (Number(session.expires_in) || 3600);
+  try { localStorage.setItem(MINTED_SESSION_CACHE_KEY, JSON.stringify({ fbUid, exp, session })); } catch (e) {}
+}
+
+function sharedMintInFlight(fbUid, run) {
+  const w = typeof window !== 'undefined' ? window : {};
+  const f = w.__stelvioMintInFlight;
+  if (f && f.fbUid === fbUid && f.promise) return f.promise;
+  const promise = run()
+    .then(function (session) {
+      writeMintedSessionCache(fbUid, session);
+      return session;
+    })
+    .finally(function () {
+      if (w.__stelvioMintInFlight && w.__stelvioMintInFlight.promise === promise) w.__stelvioMintInFlight = null;
+    });
+  w.__stelvioMintInFlight = { fbUid, promise };
+  return promise;
+}
+
+/** 공유 캐시 → 진행 중 발급 합류 → (없을 때만) Firebase ID 토큰으로 새로 발급 */
+export async function getMintedSupabaseSession() {
+  const cfg = getConfig();
+  if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
+  const fbUid = currentFirebaseUidAny();
+  if (!fbUid) throw new Error('Firebase 로그인 세션이 없습니다.');
+  const cached = readMintedSessionCache(fbUid);
+  if (cached) return cached;
+  return sharedMintInFlight(fbUid, async function () {
+    const idToken = await getFirebaseIdToken();
+    return mintSupabaseSessionRaw(cfg.authBridgeUrl, idToken);
+  });
+}
+
 export async function fetchSupabaseSessionFromBridge(authBridgeUrl, firebaseIdToken) {
+  const fbUid = currentFirebaseUidAny();
+  const cached = readMintedSessionCache(fbUid);
+  if (cached) return cached;
+  if (!fbUid) return mintSupabaseSessionRaw(authBridgeUrl, firebaseIdToken);
+  return sharedMintInFlight(fbUid, function () {
+    return mintSupabaseSessionRaw(authBridgeUrl, firebaseIdToken);
+  });
+}
+
+async function mintSupabaseSessionRaw(authBridgeUrl, firebaseIdToken) {
   const url = authBridgeUrl.replace(/\/+$/, '');
   const res = await fetch(url, {
     method: 'POST',
@@ -651,11 +728,7 @@ export async function syncSupabaseSessionFromBridge() {
       return existing.session;
     }
   }
-  const idToken = await getFirebaseIdToken();
-  const minted = await fetchSupabaseSessionFromBridge(
-    cfg.authBridgeUrl,
-    idToken
-  );
+  const minted = await getMintedSupabaseSession();
   const { data, error } = await supabase.auth.setSession({
     access_token: minted.access_token,
     refresh_token: minted.refresh_token,
@@ -694,10 +767,7 @@ async function getFreshRpcAccessToken() {
   if (cached && cached.fbUid === fbUid && cached.token && Number(cached.exp) > nowSec + 120) {
     return cached.token;
   }
-  const cfg = getConfig();
-  if (!cfg.authBridgeUrl) throw new Error('authBridgeUrl 미설정');
-  const idToken = await getFirebaseIdToken();
-  const minted = await fetchSupabaseSessionFromBridge(cfg.authBridgeUrl, idToken);
+  const minted = await getMintedSupabaseSession();
   const entry = { fbUid, token: minted.access_token, exp: nowSec + (Number(minted.expires_in) || 3600) };
   try { localStorage.setItem(RPC_TOKEN_CACHE_KEY, JSON.stringify(entry)); } catch (e) {}
   return entry.token;
@@ -994,5 +1064,6 @@ if (typeof window !== 'undefined') {
   window.refreshDualRunFromRemoteConfig = refreshDualRunFromRemoteConfig;
   window.shouldRunSupabaseDualWrite = shouldRunSupabaseDualWrite;
   window.syncSupabaseSessionFromBridge = syncSupabaseSessionFromBridge;
+  window.stelvioGetMintedSupabaseSession = getMintedSupabaseSession;
   window.stelvioSupabaseRpc = callSupabaseRpcAsUser;
 }

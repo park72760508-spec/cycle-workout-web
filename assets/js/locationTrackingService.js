@@ -202,6 +202,22 @@
       return supabase;
     }
 
+    var sharedSession = null;
+    if (typeof global.stelvioGetMintedSupabaseSession === 'function') {
+      /* 앱 전체 공유 토큰 캐시·발급 1회 (supabaseDualWrite.getMintedSupabaseSession) */
+      try { sharedSession = await global.stelvioGetMintedSupabaseSession(); } catch (eShared) { sharedSession = null; }
+    }
+    if (sharedSession && sharedSession.access_token) {
+      var sharedSet = await supabase.auth.setSession({
+        access_token: sharedSession.access_token,
+        refresh_token: sharedSession.refresh_token,
+      });
+      if (sharedSet.error || !sharedSet.data.session) {
+        throw new Error('Supabase setSession 실패');
+      }
+      return supabase;
+    }
+
     var bridgeUrl = sbCfg.authBridgeUrl.replace(/\/+$/, '');
     var idToken = await getFirebaseIdToken();
     var res = await fetch(bridgeUrl, {
