@@ -338,7 +338,8 @@
    * 종합·구간·크루 = 생존 코호트 재순위(모집단 증가 편향 제거).
    */
   function useAbsoluteMovementForTab(tabId) {
-    return tabId === 'tss' || tabId === 'weekly_distance';
+    /* 종합(overall): CYCLE GC 와 동일하게 신규 진입으로 밀려난 하락도 실제 등락으로 표기 */
+    return tabId === 'tss' || tabId === 'weekly_distance' || tabId === 'overall';
   }
 
   function applyMovementForTab(list, baseline, tabId) {
@@ -461,7 +462,7 @@
      * 생존 코호트 탭은 순서 불변 시 전원 보합(-)이 정상이므로 가드에서 제외한다.
      * (CYCLE stelvioPeakRankMovementIsAllFlat 방어와 동일한 취지)
      */
-    if (useAbsoluteMovementForTab(tabId) && mv.filled >= 3 && mv.up === 0 && mv.down === 0) {
+    if ((tabId === 'tss' || tabId === 'weekly_distance') && mv.filled >= 3 && mv.up === 0 && mv.down === 0) {
       clearRankMovementFields(list);
       return false;
     }

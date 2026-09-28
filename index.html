@@ -20448,18 +20448,19 @@
         return;
       }
       if (prev - rc !== curr) {
-        var impliedCurr = prev - rc;
-        if (impliedCurr >= 1 && row.rankChange != null && row.previousBoardRank != null) {
-          row.rankChange = rc;
-          row.previousBoardRank = prev;
-          if (curr !== impliedCurr) {
-            row.rank = impliedCurr;
-          }
-          return;
+        /*
+         * 표시 순위(row.rank)는 보드 정렬 결과이므로 절대 덮어쓰지 않는다.
+         * (과거: rank = prev − rc 로 덮어써 신규 진입 시 같은 순위 2명·이후 1칸씩 밀림 오류)
+         * 등락값(rc)은 유지하고 previousBoardRank 를 현재 표시 순위 기준으로 맞춘다
+         * (생존 코호트 등락 보드는 rc 가 공식값, 절대순위 보드는 항상 prev − curr 로 일치).
+         */
+        row.rankChange = rc;
+        row.previousBoardRank = curr + rc;
+        if (row.previousBoardRank < 1) {
+          delete row.rankChange;
+          delete row.previousBoardRank;
         }
-        row.rankChange = prev - curr;
-        row.previousBoardRank = prev;
-        rc = row.rankChange;
+        return;
       }
       if (prev === curr && rc < 0 && Math.abs(rc) === curr) {
         delete row.rankChange;
@@ -21062,6 +21063,8 @@
         data.durationType === 'tss' ||
         (typeof stelvioIsTssWeeklyRankMovementScope === 'function' &&
           stelvioIsTssWeeklyRankMovementScope(data));
+      /* GC: 신규 진입으로 밀려난 순위도 실제 하락으로 표기 — 전일 절대순위 − 현재 절대순위 */
+      var gcAbsolute = data.durationType === 'gc';
       var categoriesToProcess = tssWeeklyAbsolute ? ['Supremo'] : STELVIO_RANK_BOARD_CATS.slice();
       var ci, ri, cat, rows, baseline, uid, mv;
       for (ci = 0; ci < categoriesToProcess.length; ci++) {
@@ -21091,7 +21094,7 @@
         }
         if (!baseline || !Object.keys(baseline).length) continue;
         mv =
-          tssWeeklyAbsolute && cat === 'Supremo' && typeof stelvioComputeAbsoluteTssWeeklyRankMovementForRows === 'function'
+          (tssWeeklyAbsolute && cat === 'Supremo' || gcAbsolute) && typeof stelvioComputeAbsoluteTssWeeklyRankMovementForRows === 'function'
             ? stelvioComputeAbsoluteTssWeeklyRankMovementForRows(rows, baseline)
             : stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline);
         for (ri = 0; ri < rows.length; ri++) {
@@ -29140,7 +29143,7 @@
   <script defer src="assets/js/runningRanking/runningRankingFormat.js"></script>
   <script defer src="assets/js/runningRanking/runningRankingApi.js"></script>
   <script defer src="assets/js/runningRanking/runningRankingData.js"></script>
-  <script defer src="assets/js/runningRanking/runningRankingMovement.js?v=run-rank-movement-weeklydist-absolute-20260706f"></script>
+  <script defer src="assets/js/runningRanking/runningRankingMovement.js?v=run-rank-movement-overall-absolute-20260928a"></script>
   <script defer src="assets/js/runningRanking/runningRankingRankChange.js?v=run-rank-change-20260706e"></script>
   <script defer src="assets/js/runningRanking/runningRankingAvatarOverlay.js?v=viewer-identity-fix-20260818v1"></script>
   <script defer src="assets/js/runningRanking/runningRankingSocial.js"></script>

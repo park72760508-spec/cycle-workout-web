@@ -1083,8 +1083,13 @@ function rerankGcBoardRows(rows) {
     delete sorted[i].previousBoardRank;
   }
 
-  if (Object.keys(baseline).length && typeof peakMovement.computeSurvivorAwareRankMovementForRows === "function") {
-    const mv = peakMovement.computeSurvivorAwareRankMovementForRows(sorted, baseline);
+  /*
+   * GC 등락 = 전일 절대순위 − 현재 절대순위.
+   * (생존 코호트 방식은 신규 진입자 아래 사용자의 실제 하락을 보합으로 지워, 클라이언트에서
+   *  순위·등락 불일치 → 같은 순위 2명 표시 오류를 유발했다.)
+   */
+  if (Object.keys(baseline).length && typeof peakMovement.computeAbsoluteBoardRankMovementForRows === "function") {
+    const mv = peakMovement.computeAbsoluteBoardRankMovementForRows(sorted, baseline);
     for (let j = 0; j < sorted.length; j++) {
       const row = sorted[j];
       if (!row || row.userId == null) continue;

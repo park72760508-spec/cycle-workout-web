@@ -158,6 +158,8 @@ function recomputePeakRankMovementAfterEligibleFilter(payload) {
   if (!payload || !payload.byCategory || typeof payload.byCategory !== "object") return payload;
 
   const tssWeeklyAbsolute = String(payload.durationType || "").trim() === "tss";
+  /* GC: 신규 진입으로 밀려난 순위도 실제 하락으로 표기(절대순위 비교, 전 부문) */
+  const gcAbsolute = String(payload.durationType || "").trim() === "gc";
   const categoriesToProcess = tssWeeklyAbsolute ? ["Supremo"] : PEAK_RANK_BOARD_CATEGORIES;
 
   for (let ci = 0; ci < categoriesToProcess.length; ci++) {
@@ -187,7 +189,7 @@ function recomputePeakRankMovementAfterEligibleFilter(payload) {
     if (!baseline || !Object.keys(baseline).length) continue;
 
     const computeMv =
-      tssWeeklyAbsolute && cat === "Supremo"
+      (tssWeeklyAbsolute && cat === "Supremo") || gcAbsolute
         ? computeAbsoluteBoardRankMovementForRows
         : computeSurvivorAwareRankMovementForRows;
     const { rankChanges, previousRanks } = computeMv(rows, baseline);
