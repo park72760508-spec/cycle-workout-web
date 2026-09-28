@@ -1673,7 +1673,7 @@ const GC_BATCH_BOUNDARIES_KST = ["01:15", "03:30"];
 async function fetchGcRankingCoreCached(admin, monthKey, queryGender) {
   const fg = queryGender === "M" || queryGender === "F" ? queryGender : "all";
   const epoch = currentBatchEpochKeyKst(GC_BATCH_BOUNDARIES_KST);
-  const cacheKey = "gc_cohort_core_v2__" + epoch + "__" + monthKey + "__" + fg;
+  const cacheKey = "gc_cohort_core_v3__" + epoch + "__" + monthKey + "__" + fg;
   const t0 = Date.now();
   const cached = await readRankingComputeCache(admin, cacheKey, BATCH_EPOCH_CACHE_SAFETY_TTL_MS);
   if (cached) {
