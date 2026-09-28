@@ -22512,14 +22512,21 @@ if (originalCleanupMobileDashboard) {
     _fetchBadgeCounts();
     _pollTimer = setInterval(function () {
       if (document.visibilityState === 'hidden') return;
+      if (typeof window.stelvioIsUserIdle === 'function' && window.stelvioIsUserIdle()) return; /* 10분 무조작 */
       _fetchBadgeCounts();
     }, POLL_MS);
     document.addEventListener('visibilitychange', _onVisibilityChange);
+    window.addEventListener('stelvio:user-resume', _onUserResume);
+  }
+
+  function _onUserResume() {
+    if (_getUid()) _fetchBadgeCounts();
   }
 
   function _stopPolling() {
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     document.removeEventListener('visibilitychange', _onVisibilityChange);
+    window.removeEventListener('stelvio:user-resume', _onUserResume);
     _clearAll();
   }
 

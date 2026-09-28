@@ -33,6 +33,8 @@ const MY_MEMBERSHIPS_POLL_MS = 30000;
 function stelvioVisibilityGatedPoll(fn) {
   return function () {
     if (typeof document !== 'undefined' && document.hidden) return;
+    /* 10분 무조작(화면에 켜둔 채 방치) 시에도 건너뜀 — stelvioIdleGate.js. 조작 재개 시 다음 tick 부터 재개 */
+    if (typeof window !== 'undefined' && typeof window.stelvioIsUserIdle === 'function' && window.stelvioIsUserIdle()) return;
     fn();
   };
 }
