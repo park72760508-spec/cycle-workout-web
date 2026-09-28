@@ -6015,10 +6015,10 @@ function updateSegmentSummary() {
 
 function addQuickSegment(type) {
   const templates = {
-    warmup: { label: '워밍업', type: 'warmup', duration: 600, intensity: 60 },
+    warmup: { label: '워밍업', type: 'warmup', duration: 600, intensity: 50 },
     interval: { label: '인터벌', type: 'interval', duration: 300, intensity: 120 },
     rest: { label: '휴식', type: 'rest', duration: 300, intensity: 50 },
-    cooldown: { label: '쿨다운', type: 'cooldown', duration: 300, intensity: 60 }
+    cooldown: { label: '쿨다운', type: 'cooldown', duration: 300, intensity: 45 }
   };
   
   const template = templates[type];
@@ -6792,10 +6792,11 @@ function editRepeatSegment(index) {
   if (segmentMinutes) segmentMinutes.value = minutes;
   if (segmentSeconds) segmentSeconds.value = seconds;
   
-  // target_type 설정
-  const targetType = segment.target_type || 'ftp_pct';
+  // target_type 설정 — 'ftp_percent'(빠른 추가·새 반복 세그먼트)는 선택지에 없어 빈 칸이 되므로 %FTP(ftp_pct)로
+  const targetType = (segment.target_type === 'ftp_percent' ? 'ftp_pct' : segment.target_type) || 'ftp_pct';
   if (segmentTargetType) {
     segmentTargetType.value = targetType;
+    if (segmentTargetType.value !== targetType) segmentTargetType.value = 'ftp_pct';
   }
   
   // target_value 파싱 및 설정
