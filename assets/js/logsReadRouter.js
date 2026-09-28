@@ -4,6 +4,8 @@
 const API_BASE = 'https://us-central1-stelvio-ai.cloudfunctions.net';
 const LOGS_READ_ROUTING_URL = API_BASE + '/getLogsReadRoutingPublic';
 const CACHE_MS = 60 * 1000;
+const LOGS_ROUTING_LS_KEY = 'stelvio_logs_read_routing_v1';
+const LOGS_ROUTING_LS_MS = 60 * 60 * 1000;
 
 /** @type {{ useSupabaseLogsRead: boolean, parityFallbackToFirebase: boolean, loadedAt: number, loading: Promise<boolean>|null }} */
 const state = {
@@ -24,6 +26,19 @@ export async function refreshLogsReadRouting(force = false) {
   }
   if (state.loading && !force) return state.loading;
 
+  /* 트래픽 절감(2026-09-28): 라우팅 플래그는 거의 바뀌지 않으므로 앱 재시작 간 1시간 localStorage 캐시 */
+  if (!force) {
+    try {
+      const c = JSON.parse(localStorage.getItem(LOGS_ROUTING_LS_KEY) || 'null');
+      if (c && now - Number(c.at || 0) < LOGS_ROUTING_LS_MS) {
+        state.useSupabaseLogsRead = c.useSupabaseLogsRead === true;
+        state.parityFallbackToFirebase = c.parityFallbackToFirebase === true;
+        state.loadedAt = now;
+        return state.useSupabaseLogsRead;
+      }
+    } catch (eLs) {}
+  }
+
   state.loading = (async function () {
     try {
       const res = await fetch(LOGS_READ_ROUTING_URL, {
@@ -34,6 +49,15 @@ export async function refreshLogsReadRouting(force = false) {
       const json = res.ok ? await res.json().catch(function () { return null; }) : null;
       state.useSupabaseLogsRead = !!(json && json.success && json.useSupabaseLogsRead);
       state.parityFallbackToFirebase = !!(json && json.success && json.parityFallbackToFirebase);
+      if (json && json.success) {
+        try {
+          localStorage.setItem(LOGS_ROUTING_LS_KEY, JSON.stringify({
+            at: Date.now(),
+            useSupabaseLogsRead: state.useSupabaseLogsRead,
+            parityFallbackToFirebase: state.parityFallbackToFirebase,
+          }));
+        } catch (eSet) {}
+      }
     } catch (e) {
       try {
         if (window.firestore) {

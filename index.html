@@ -355,11 +355,22 @@
         else console.warn('[Strava] appConfig/strava 로드 실패:', e && e.message);
       }
     };
+    /* 트래픽 절감(2026-09-28): Strava client_id·redirect_uri 는 거의 바뀌지 않으므로 24시간 localStorage 캐시 */
+    var STELVIO_APP_CONFIG_CACHE_KEY = 'stelvio_app_config_public_v1';
+    var STELVIO_APP_CONFIG_CACHE_MS = 24 * 60 * 60 * 1000;
     window.loadStravaConfigViaPublicEndpoint = async function () {
       try {
+        try {
+          var cachedCfg = JSON.parse(localStorage.getItem(STELVIO_APP_CONFIG_CACHE_KEY) || 'null');
+          if (cachedCfg && cachedCfg.strava && Date.now() - Number(cachedCfg.at || 0) < STELVIO_APP_CONFIG_CACHE_MS &&
+              applyStravaAppConfig(cachedCfg.strava)) {
+            return true;
+          }
+        } catch (eCache) {}
         var res = await fetch(STELVIO_APP_CONFIG_PUBLIC_URL, { method: 'GET', mode: 'cors', cache: 'no-store' });
         var json = res.ok ? await res.json().catch(function () { return null; }) : null;
         if (json && json.success && applyStravaAppConfig(json.strava)) {
+          try { localStorage.setItem(STELVIO_APP_CONFIG_CACHE_KEY, JSON.stringify({ at: Date.now(), strava: json.strava })); } catch (eSet) {}
           if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Strava 설정 getAppConfigPublic에서 로드됨');
           else console.log('✅ Strava 설정 getAppConfigPublic에서 로드됨');
           return true;

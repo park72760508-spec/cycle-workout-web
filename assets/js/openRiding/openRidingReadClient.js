@@ -57,6 +57,18 @@ export async function stelvioEnsureGroupsReadSource(force) {
   }
   if (groupsReadState.loading && !force) return groupsReadState.loading;
 
+  /* 트래픽 절감(2026-09-28): 라우팅 플래그는 앱 재시작 간 1시간 localStorage 캐시 */
+  if (!force) {
+    try {
+      const c = JSON.parse(localStorage.getItem('stelvio_groups_read_routing_v1') || 'null');
+      if (c && now - Number(c.at || 0) < 60 * 60 * 1000 && (c.source === 'supabase' || c.source === 'firebase')) {
+        groupsReadState.source = c.source;
+        groupsReadState.loadedAt = now;
+        return stelvioGetGroupsReadSourceSync();
+      }
+    } catch (eLs) {}
+  }
+
   groupsReadState.loading = (async function () {
     try {
       const res = await fetch(GROUPS_READ_ROUTING_URL, {
@@ -69,6 +81,11 @@ export async function stelvioEnsureGroupsReadSource(force) {
         groupsReadState.source = 'supabase';
       } else {
         groupsReadState.source = 'firebase';
+      }
+      if (json && json.success) {
+        try {
+          localStorage.setItem('stelvio_groups_read_routing_v1', JSON.stringify({ at: Date.now(), source: groupsReadState.source }));
+        } catch (eSet) {}
       }
     } catch (e) {
       /* 오프라인 시 마지막 값 유지 */

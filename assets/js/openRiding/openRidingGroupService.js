@@ -38,7 +38,7 @@ import {
   postRidingGroupWriteRouted,
   subscribeMyInvitedRidesCountRouted,
   fetchClubWorkoutsRouted,
-} from './openRidingReadClient.js?v=idle10m-20260928';
+} from './openRidingReadClient.js?v=routing-ls-20260928';
 import { scheduleRidingGroupDualWriteFromFirestore } from '../openRidingDualWrite.js?v=sync-fix-20260803v2';
 
 export const RIDING_GROUP_COLLECTION = 'stelvio_riding_groups';
