@@ -6739,7 +6739,8 @@ function ClubPtLessonFormModal(props) {
         ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
         : Promise.resolve([]);
     Promise.all([gasPromise, clubPromise]).then(function (r) {
-      if (!cancelled) setLists({ gas: r[0] || [], club: r[1] || [], loading: false });
+      /* 클럽 전용: 최신 작성이 맨 뒤로(서버는 created_at DESC) */
+      if (!cancelled) setLists({ gas: r[0] || [], club: (r[1] || []).slice().reverse(), loading: false });
     });
     return function () { cancelled = true; };
   }, [groupId]);
@@ -6917,6 +6918,7 @@ function ClubPtLessonFormModal(props) {
                       lists={lists}
                       gasSegs={gasSegs}
                       selected={w}
+                      defaultTab="club"
                       onSelect={function (wk, source) { selectWorkout(i, wk, source); }}
                     />
                   ) : null}
@@ -7189,7 +7191,8 @@ function ClubPtLessonEditModal(props) {
         ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
         : Promise.resolve([]);
     Promise.all([gasPromise, clubPromise]).then(function (r) {
-      if (!cancelled) setLists({ gas: r[0] || [], club: r[1] || [], loading: false });
+      /* 클럽 전용: 최신 작성이 맨 뒤로(서버는 created_at DESC) */
+      if (!cancelled) setLists({ gas: r[0] || [], club: (r[1] || []).slice().reverse(), loading: false });
     });
     return function () { cancelled = true; };
   }, [groupId]);
@@ -7264,7 +7267,7 @@ function ClubPtLessonEditModal(props) {
               <span className="shrink-0 text-slate-400 text-xs">{pickerOpen ? '닫기 ▲' : '변경 ▼'}</span>
             </button>
             {pickerOpen ? (
-              <ClubMissionWorkoutPicker lists={lists} gasSegs={gasSegs} selected={workout} onSelect={selectWorkout} />
+              <ClubMissionWorkoutPicker lists={lists} gasSegs={gasSegs} selected={workout} defaultTab="club" onSelect={selectWorkout} />
             ) : null}
             <StelvioDateFieldButton
               tone="sky"
