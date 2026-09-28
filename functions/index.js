@@ -17844,7 +17844,7 @@ exports.applyForCompetition = onRequest(applyForCompetitionOptions, async (req, 
         return;
       }
 
-      // 입금 기한이 지난 대기중 건 — cancelUnpaidCompetitionApplications(5분 주기) 처리 전에 재신청한 경우,
+      // 입금 기한이 지난 대기중 건 — cancelUnpaidCompetitionApplications(15분 주기) 처리 전에 재신청한 경우,
       // 만료된 옛 가상계좌를 그대로 돌려주지 않도록 즉시 취소 처리하고 슬롯을 반환한 뒤 아래에서 새로 발급한다.
       let releasedExpiredSlot = false;
       await db.runTransaction(async (tx) => {
@@ -20176,11 +20176,11 @@ exports.updateCompetitionApplication = onRequest(updateCompetitionApplicationOpt
 });
 
 /**
- * 미입금 자동 취소 — 5분마다(서울) paymentDueAt이 지난 PAYMENT_WAITING 건을 CANCELED_UNPAID로 전환하고
+ * 미입금 자동 취소 — 15분마다(서울, 2026-09-28 트래픽 절감으로 5분→15분) paymentDueAt이 지난 PAYMENT_WAITING 건을 CANCELED_UNPAID로 전환하고
  * Redis 슬롯을 반환한다. 토스 가상계좌는 기한 후 자동 소멸하므로 별도 취소 API 호출은 하지 않는다.
  */
 const cancelUnpaidCompetitionApplicationsOptions = appendRaceSecrets({
-  schedule: "*/5 * * * *",
+  schedule: "*/15 * * * *",
   timeZone: "Asia/Seoul",
   timeoutSeconds: 300,
   memory: "256MiB",

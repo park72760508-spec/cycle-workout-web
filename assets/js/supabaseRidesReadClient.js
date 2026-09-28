@@ -4,7 +4,50 @@
  * 보조: 이미 유효한 Supabase 클라이언트 세션이 있을 때만 direct RLS 조회 (Bridge setSession 호출 안 함).
  * @see functions/supabaseGroupReader.js fetchUserRideLogsRecent
  */
-import { getSupabaseClient } from './supabaseDualWrite.js';
+import { getSupabaseClient, callSupabaseRpcAsUser } from './supabaseDualWrite.js';
+
+/*
+ * 비용 절감(2026-09-28): Cloud Run relay(getTrainingLogsForRead·getYearlyPeaksForRead) 전에
+ * 로그인 토큰 RPC(fn_my_ride_logs·fn_my_yearly_peaks)로 본인 기록을 직접 조회한다.
+ * 실패 시에만 기존 relay 로 폴백.
+ */
+async function tryRideLogsRpc(args) {
+  try {
+    const data = await callSupabaseRpcAsUser('fn_my_ride_logs', args);
+    if (!data || data.success !== true || !Array.isArray(data.rows)) return null;
+    return rowsToTrainingLogs(data.rows);
+  } catch (e) {
+    console.warn('[supabaseRidesRead] rpc → relay 폴백:', e && e.message ? e.message : e);
+    return null;
+  }
+}
+
+function mapYearlyPeaksRow(row) {
+  if (!row) return null;
+  const n = function (v) { return v != null ? Number(v) : null; };
+  return {
+    year: n(row.year),
+    weight: n(row.weight_kg),
+    max_hr: n(row.max_hr),
+    max_hr_date: row.max_hr_date || null,
+    max_1min_watts: n(row.max_1min_watts),
+    max_1min_wkg: n(row.max_1min_wkg),
+    max_5min_watts: n(row.max_5min_watts),
+    max_5min_wkg: n(row.max_5min_wkg),
+    max_10min_watts: n(row.max_10min_watts),
+    max_10min_wkg: n(row.max_10min_wkg),
+    max_20min_watts: n(row.max_20min_watts),
+    max_20min_wkg: n(row.max_20min_wkg),
+    max_40min_watts: n(row.max_40min_watts),
+    max_40min_wkg: n(row.max_40min_wkg),
+    max_60min_watts: n(row.max_60min_watts),
+    max_60min_wkg: n(row.max_60min_wkg),
+    max_watts: n(row.max_watts),
+    max_wkg: n(row.max_wkg),
+    updated_at: row.updated_at || null,
+    readBackend: 'supabase',
+  };
+}
 
 const TRAINING_LOGS_READ_RELAY_DEFAULT =
   'https://us-central1-stelvio-ai.cloudfunctions.net/getTrainingLogsForRead';
@@ -264,6 +307,9 @@ export async function getUserTrainingLogsFromSupabase(userId, options = {}) {
     return direct;
   }
 
+  const viaRpc = await tryRideLogsRpc({ p_limit: limitValue });
+  if (viaRpc) return viaRpc;
+
   return fetchTrainingLogsViaReadRelay(userId, { limit: limitValue });
 }
 
@@ -292,6 +338,9 @@ export async function getTrainingLogsByDateRangeFromSupabase(userId, year, month
     });
     return direct;
   }
+
+  const viaRpc = await tryRideLogsRpc({ p_start: startStr, p_end: endStr, p_ascending: true });
+  if (viaRpc) return viaRpc;
 
   return fetchTrainingLogsViaReadRelay(userId, { year, month });
 }
@@ -326,12 +375,21 @@ export async function getTrainingLogsInRangeFromSupabase(userId, startStr, endSt
     return direct;
   }
 
+  const viaRpc = await tryRideLogsRpc({ p_start: startStr, p_end: endStr, p_ascending: false });
+  if (viaRpc) return viaRpc;
+
   return fetchTrainingLogsViaReadRelay(userId, { start: startStr, end: endStr });
 }
 
 /** PR 표시 — Supabase yearly_peaks relay (Auth Bridge 불필요) */
 export async function fetchYearlyPeaksForYearFromSupabase(userId, year) {
   if (!userId || year == null) return null;
+  try {
+    const data = await callSupabaseRpcAsUser('fn_my_yearly_peaks', { p_year: Number(year) });
+    if (data && data.success === true) return mapYearlyPeaksRow(data.row);
+  } catch (eRpc) {
+    console.warn('[supabaseRidesRead] yearly_peaks rpc → relay 폴백:', eRpc && eRpc.message ? eRpc.message : eRpc);
+  }
   const url = new URL(getYearlyPeaksReadRelayUrl());
   url.searchParams.set('uid', String(userId).trim());
   url.searchParams.set('year', String(year));
