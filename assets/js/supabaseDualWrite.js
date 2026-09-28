@@ -759,7 +759,8 @@ function currentFirebaseUid() {
 }
 
 async function getFreshRpcAccessToken() {
-  const fbUid = currentFirebaseUid();
+  /* authV9 만 보면 compat(window.auth) 로그인 화면에서 uid 가 비어 RPC 가 늘 Cloud Run 으로 폴백됐다 */
+  const fbUid = currentFirebaseUidAny();
   if (!fbUid) throw new Error('Firebase 로그인 필요');
   const nowSec = Math.floor(Date.now() / 1000);
   let cached = null;
