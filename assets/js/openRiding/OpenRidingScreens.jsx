@@ -6363,7 +6363,10 @@ function ClubMissionWorkoutPicker(props) {
   var gasSegs = props.gasSegs || {};
   var selected = props.selected || null;
   var onSelect = props.onSelect || function () {};
-  var _tab = useState(selected && selected.workoutSource === 'club' ? 'club' : 'gas');
+  /* 선택된 워크아웃이 없으면 props.defaultTab(미션: 'club') → 없으면 STELVIO */
+  var _tab = useState(
+    selected && selected.workoutSource ? (selected.workoutSource === 'club' ? 'club' : 'gas') : props.defaultTab === 'club' ? 'club' : 'gas'
+  );
   var tab = _tab[0];
   var setTab = _tab[1];
   var items = tab === 'gas' ? lists.gas : lists.club;
@@ -6492,7 +6495,8 @@ function ClubMissionFormModal(props) {
         ? svc.fetchClubWorkouts(groupId).catch(function () { return []; })
         : Promise.resolve([]);
     Promise.all([gasPromise, clubPromise]).then(function (res) {
-      if (!cancelled) setLists({ gas: res[0] || [], club: res[1] || [], loading: false });
+      /* 클럽 전용은 서버가 최신 작성순(created_at DESC) — 미션 선택기에서는 최신 작성이 맨 뒤로 */
+      if (!cancelled) setLists({ gas: res[0] || [], club: (res[1] || []).slice().reverse(), loading: false });
     });
     return function () { cancelled = true; };
   }, [groupId]);
@@ -6653,6 +6657,7 @@ function ClubMissionFormModal(props) {
                       lists={lists}
                       gasSegs={gasSegs}
                       selected={s}
+                      defaultTab="club"
                       onSelect={function (w, source) { selectWorkout(i, w, source); }}
                     />
                   ) : null}
