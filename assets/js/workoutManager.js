@@ -6049,12 +6049,13 @@ function addQuickSegment(type) {
 // ==========================================================
 const SEGMENT_EDITOR_ITEMS = {
   warmup: ['warmup'],
-  interval: ['sst', 'threshold', 'overunder', 'vo2max', 'anaerobic', 'microburst', 'sprint'],
+  interval: ['interval', 'sst', 'threshold', 'overunder', 'vo2max', 'anaerobic', 'microburst', 'sprint'],
   rest: ['rest'],
   cooldown: ['cooldown']
 };
 const SEGMENT_EDITOR_TYPES = {
   warmup: { name: '워밍업', segType: 'warmup', durSec: 600, low: 45, high: 75, guide: '워밍업 (Warm-up)', detail: ['Z1 ~ Z2', '45% ~ 75%'] },
+  interval: { name: '인터벌', segType: 'interval', durSec: 300, low: 100, high: 120, guide: '인터벌 (Interval)', detail: ['Z4 ~ Z5', '100% ~ 120%', '강도·시간 자유 설정'] },
   sst: { name: 'SST', segType: 'sweetspot', durSec: 600, low: 88, high: 94, guide: 'SST (Sweet Spot)', detail: ['Z3 상단 ~ Z4 하단', '88% ~ 94%', '10 ~ 30분'] },
   threshold: { name: '역치', segType: 'threshold', durSec: 480, low: 95, high: 105, guide: '역치 (Threshold / FTP)', detail: ['Z4', '95% ~ 105%', '8 ~ 20분'] },
   overunder: { name: '오버/언더', segType: 'interval', durSec: 480, low: 88, high: 110, guide: '오버/언더 (Over-Under)', detail: ['Z4 ~ Z5 반복', 'Over: 105% ~ 110%/Under: 88% ~ 92%', '8 ~ 15분'] },
@@ -6683,12 +6684,12 @@ function closeRepeatModal() {
 function addRepeatSegment() {
   const newSegment = {
     id: Date.now(),
-    // 반복 세그먼트 기본값 = 인터벌 첫 타입(SST) — 타입 목록에 "새 세그먼트" 대신 인터벌 목록이 표시되게
-    label: SEGMENT_EDITOR_TYPES.sst.name,
-    segment_type: SEGMENT_EDITOR_TYPES.sst.segType,
-    duration_sec: SEGMENT_EDITOR_TYPES.sst.durSec,
+    // 반복 세그먼트 기본값 = 인터벌 목록 첫 타입(인터벌) — 타입 목록에 "새 세그먼트" 대신 인터벌 목록 표시
+    label: SEGMENT_EDITOR_TYPES.interval.name,
+    segment_type: SEGMENT_EDITOR_TYPES.interval.segType,
+    duration_sec: SEGMENT_EDITOR_TYPES.interval.durSec,
     target_type: 'ftp_percent',
-    target_value: SEGMENT_EDITOR_TYPES.sst.low,
+    target_value: SEGMENT_EDITOR_TYPES.interval.low,
     ramp: 'none',
     ramp_to_value: null
   };
