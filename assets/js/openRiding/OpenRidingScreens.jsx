@@ -4054,6 +4054,22 @@ function OpenRidingGlassNavSlot(p) {
   return <div className="open-riding-bottom-glass-nav__slot">{p.children}</div>;
 }
 
+/** 라이딩 모임 호스트 화면(#openRidingRoomScreen)이 지금 보이는지 */
+function openRidingHostScreenVisible() {
+  if (typeof document === 'undefined') return true;
+  var host = document.getElementById('openRidingRoomScreen');
+  if (!host) return true;
+  if (host.hidden) return false;
+  var disp = host.style && host.style.display;
+  if (disp === 'none') return false;
+  if (disp) return true;
+  try {
+    return window.getComputedStyle(host).display !== 'none';
+  } catch (e) {
+    return true;
+  }
+}
+
 /** body 포털 + 동일 글래스 DOM — 터치 레이어 규칙은 style.css(#openRidingBottomGlassNavRoot)에 일괄 정의 */
 function OpenRidingGlassNavPortal(p) {
   var innerContent = p.innerContent;
@@ -4061,6 +4077,22 @@ function OpenRidingGlassNavPortal(p) {
   var enableScrollStrip = !!p.enableScrollStrip;
   var scrollSyncKey = p.scrollSyncKey;
   var navRef = useRef(null);
+  /*
+   * body 포털이라 #openRidingRoomScreen 이 숨겨져도(미션 워크아웃 → 훈련 준비·훈련 화면 등) 남아 보이던 문제 —
+   * 호스트 화면이 실제로 보일 때만 렌더한다(showScreen 이 바꾸는 style·class 를 감시).
+   */
+  var _hostVisible = useState(openRidingHostScreenVisible);
+  var hostVisible = _hostVisible[0];
+  var setHostVisible = _hostVisible[1];
+  useEffect(function () {
+    var host = typeof document !== 'undefined' ? document.getElementById('openRidingRoomScreen') : null;
+    if (!host || typeof MutationObserver === 'undefined') return undefined;
+    var sync = function () { setHostVisible(openRidingHostScreenVisible()); };
+    var mo = new MutationObserver(sync);
+    mo.observe(host, { attributes: true, attributeFilter: ['style', 'class', 'hidden'] });
+    sync();
+    return function () { mo.disconnect(); };
+  }, []);
 
   useEffect(
     function () {
@@ -4116,7 +4148,7 @@ function OpenRidingGlassNavPortal(p) {
         root.removeAttribute('data-open-riding-scroll-hint');
       };
     },
-    [enableScrollStrip]
+    [enableScrollStrip, hostVisible]
   );
 
   useEffect(
@@ -4132,7 +4164,7 @@ function OpenRidingGlassNavPortal(p) {
         });
       });
     },
-    [enableScrollStrip, scrollSyncKey]
+    [enableScrollStrip, scrollSyncKey, hostVisible]
   );
 
   var edgeLeft = (
@@ -4187,6 +4219,8 @@ function OpenRidingGlassNavPortal(p) {
   ) : (
     <div className="open-riding-bottom-glass-nav__inner">{innerContent}</div>
   );
+
+  if (!hostVisible) return null;
 
   var navEl = (
     <nav
