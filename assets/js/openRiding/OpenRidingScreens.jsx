@@ -7426,8 +7426,14 @@ function ClubMissionDetailModal(props) {
     var cancelled = false;
     clubPtRpc('fn_my_mission_step_actual_power', { p_mission_id: String(mission.id), p_step_ord: Number(step.ord) })
       .then(function (res) {
-        if (cancelled || !res || !Array.isArray(res.segmentAvgWatts) || !res.segmentAvgWatts.length) return;
-        setActual({ watts: res.segmentAvgWatts, ftp: Number(res.ftp) || null });
+        if (cancelled || !res) return;
+        var hasWatts = Array.isArray(res.segmentAvgWatts) && res.segmentAvgWatts.length > 0;
+        if (!hasWatts && !res.completedDateKst) return;
+        setActual({
+          watts: hasWatts ? res.segmentAvgWatts : null,
+          ftp: Number(res.ftp) || null,
+          completedDate: res.completedDateKst || ''
+        });
       })
       .catch(function () {});
     return function () { cancelled = true; };
@@ -7439,7 +7445,7 @@ function ClubMissionDetailModal(props) {
     var segs = workout && Array.isArray(workout.segments) ? workout.segments : [];
     if (segs.length && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
       var gopts = { maxHeight: 200 };
-      if (actual) {
+      if (actual && actual.watts) {
         gopts.actualSegmentAvgWatts = actual.watts;
         gopts.actualFtp = actual.ftp;
       }
@@ -7451,7 +7457,13 @@ function ClubMissionDetailModal(props) {
 
   var minutes = workout ? clubMissionWorkoutMinutes(workout) : Math.round((Number(step && step.totalSeconds) || 0) / 60);
   var tss = workout && typeof window !== 'undefined' && typeof window.estimateWorkoutTSS === 'function' ? window.estimateWorkoutTSS(workout) : null;
-  var stateLabel = state === 'done' ? '완료' : state === 'next' ? '수행할 미션' : '대기';
+  /* 완료: "(9/29 완료)" — 완료일은 fn_my_mission_step_actual_power 의 completedDateKst */
+  var doneDateLabel = '';
+  if (state === 'done' && actual && actual.completedDate) {
+    var dp = String(actual.completedDate).split('-');
+    if (dp.length === 3) doneDateLabel = Number(dp[1]) + '/' + Number(dp[2]) + ' ';
+  }
+  var stateLabel = state === 'done' ? doneDateLabel + '완료' : state === 'next' ? '수행할 미션' : '대기';
 
   function start() {
     if (!canStart || !workout) return;
