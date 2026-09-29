@@ -4191,6 +4191,7 @@
   <script defer src="assets/js/vo2maxCalculator.js"></script>
   <script defer src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
   <script defer src="assets/js/reactPropTypesBridge.js"></script>
+  <script defer src="assets/js/stelvioScreenErrorBoundary.js?v=20260930a"></script>
   <script defer src="https://unpkg.com/recharts@2.10.0/umd/Recharts.js"></script>
   <script defer src="assets/js/useRiderAnalysis.js"></script>
   <script defer src="assets/js/stelvio/stelvioOneHourAbility.js"></script>
@@ -29220,12 +29221,12 @@
         if (!root._runningRankingRoot) {
           root._runningRankingRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
           if (root._runningRankingRoot) {
-            root._runningRankingRoot.render(runningRankingScreenElement());
+            root._runningRankingRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(runningRankingScreenElement(), '러닝 랭킹') : runningRankingScreenElement()));
           } else if (typeof ReactDOM.render === 'function') {
-            ReactDOM.render(runningRankingScreenElement(), root);
+            ReactDOM.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(runningRankingScreenElement(), '러닝 랭킹') : runningRankingScreenElement()), root);
           }
         } else if (opts.forceRemount && root._runningRankingRoot.render) {
-          root._runningRankingRoot.render(runningRankingScreenElement());
+          root._runningRankingRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(runningRankingScreenElement(), '러닝 랭킹') : runningRankingScreenElement()));
         }
         if (window.runningRankingSocial && typeof window.runningRankingSocial.ensureUiListeners === 'function') {
           window.runningRankingSocial.ensureUiListeners();
@@ -29285,10 +29286,10 @@
         if (monthlyRoot) monthlyRoot.style.display = 'none';
         if (!root._journalRoot) {
           root._journalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
-          if (root._journalRoot) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
-          else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.TrainingJournalScreen), root);
+          if (root._journalRoot) root._journalRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(React.createElement(window.TrainingJournalScreen), '라이딩 기록') : React.createElement(window.TrainingJournalScreen)));
+          else if (typeof ReactDOM.render === 'function') ReactDOM.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(React.createElement(window.TrainingJournalScreen), '라이딩 기록') : React.createElement(window.TrainingJournalScreen)), root);
         } else {
-          if (root._journalRoot.render) root._journalRoot.render(React.createElement(window.TrainingJournalScreen));
+          if (root._journalRoot.render) root._journalRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(React.createElement(window.TrainingJournalScreen), '라이딩 기록') : React.createElement(window.TrainingJournalScreen)));
         }
       }
       window.initTrainingJournalReact = initTrainingJournalReact;
@@ -29328,8 +29329,8 @@
         root.style.display = 'block';
         if (!root._runJournalRoot) {
           root._runJournalRoot = ReactDOM.createRoot ? ReactDOM.createRoot(root) : null;
-          if (root._runJournalRoot) root._runJournalRoot.render(React.createElement(window.RunTrainingJournalScreen));
-          else if (typeof ReactDOM.render === 'function') ReactDOM.render(React.createElement(window.RunTrainingJournalScreen), root);
+          if (root._runJournalRoot) root._runJournalRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(React.createElement(window.RunTrainingJournalScreen), '러닝 기록') : React.createElement(window.RunTrainingJournalScreen)));
+          else if (typeof ReactDOM.render === 'function') ReactDOM.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(React.createElement(window.RunTrainingJournalScreen), '러닝 기록') : React.createElement(window.RunTrainingJournalScreen)), root);
         }
         return true;
       }
@@ -29470,8 +29471,19 @@
           rootEl.innerHTML = '<p class="text-sm text-red-700 px-2">오픈 라이딩 모듈을 불러오지 못했습니다.</p>';
           return;
         }
+        /*
+         * 2026-09-30 백색 화면 수정: 화면 코드(OpenRidingScreens.compiled.js, defer·약 640KB)가 아직 실행 전이면
+         * 예전엔 경고만 남기고 끝나 다시 들어오기 전까지 빈 화면이었다 → 로딩 표시 후 최대 20초 기다린다.
+         */
+        if (!openRidingReactRoot) {
+          rootEl.innerHTML = '<div style="padding:48px 16px;text-align:center;color:#64748b;font-size:14px;"><div class="loading-spinner" style="margin:0 auto 12px;"></div>불러오는 중…</div>';
+        }
+        for (var waitI = 0; waitI < 100 && typeof window.OpenRidingRoomApp !== 'function'; waitI++) {
+          await new Promise(function (r) { setTimeout(r, 200); });
+        }
         if (typeof window.OpenRidingRoomApp !== 'function') {
           console.warn('[OpenRiding] OpenRidingRoomApp 없음');
+          rootEl.innerHTML = '<div style="padding:48px 16px;text-align:center;color:#334155;font-size:14px;">화면을 불러오지 못했습니다.<br><button type="button" onclick="location.reload()" style="margin-top:14px;padding:10px 18px;border-radius:12px;border:0;background:#7c3aed;color:#fff;font-weight:700;">새로고침</button></div>';
           return;
         }
         if (typeof window.useOpenRiding !== 'function') {
@@ -29512,7 +29524,9 @@
           initialView: initialView,
           clubCategory: clubCategory
         });
+        if (window.stelvioSafeScreen) el = window.stelvioSafeScreen(el, '클럽 하우스');
         if (!openRidingReactRoot) {
+          rootEl.innerHTML = ''; // 로딩 표시 제거 후 React 루트 생성
           openRidingReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
         }
         if (openRidingReactRoot && openRidingReactRoot.render) {
@@ -30714,7 +30728,7 @@
         });
         if (ReactDOM.createRoot) {
           if (!root._monthlyDashboardRoot) root._monthlyDashboardRoot = ReactDOM.createRoot(root);
-          root._monthlyDashboardRoot.render(el);
+          root._monthlyDashboardRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(el, '월간 분석') : el));
         } else {
           ReactDOM.render(el, root);
         }
@@ -42885,7 +42899,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           affiliateReactRoot = ReactDOM.createRoot ? ReactDOM.createRoot(rootEl) : null;
         }
         if (affiliateReactRoot && affiliateReactRoot.render) {
-          affiliateReactRoot.render(el);
+          affiliateReactRoot.render((window.stelvioSafeScreen ? window.stelvioSafeScreen(el, '제휴 할인') : el));
         } else if (typeof ReactDOM.render === 'function') {
           ReactDOM.render(el, rootEl);
         }
