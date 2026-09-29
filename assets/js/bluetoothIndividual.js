@@ -2,6 +2,14 @@
 
 // 통합 스크린(id=bluetoothIndividualScreen)용 ID 접두사: index.html에서는 'indiv-', bluetoothIndividual.html에서는 ''
 var __indivIdPrefix = (typeof window.__bluetoothIndividualIdPrefix === 'string') ? window.__bluetoothIndividualIdPrefix : '';
+/*
+ * 2026-09-30: 전역 이름 충돌 방지 — indoorTrainingDashboard.js(나중에 로드)의 showSegmentCountdown(startCount)가
+ * 이 파일의 카운트다운 함수를 덮어써 그룹 훈련 시작 5·4·3·2·1·GO!! 오버레이가 사용자 화면에 전혀 표시되지 않았다.
+ * (반대로 이 파일의 stopSegmentCountdown 이 app.js 의 같은 이름 함수를 덮어쓰고 있었음) → indiv* 고유 이름 사용.
+ * currentUserIdForSession 은 individual.js 에만 선언돼 SPA 에서 ReferenceError 가 나던 변수 — 전역에 안전하게 준비.
+ */
+if (typeof window !== 'undefined' && typeof window.currentUserIdForSession === 'undefined') window.currentUserIdForSession = null;
+
 function __indivEl(id) {
   var mapped = (id === 'bluetoothUserName') ? 'bluetooth-dashboard-user-name' : id;
   return document.getElementById(__indivIdPrefix + mapped);
@@ -1662,7 +1670,7 @@ _refStatus.on('value', (snapshot) => {
             }
             // 카운트다운 오버레이 숨김
             if (indivSegmentCountdownActive) {
-                stopSegmentCountdown();
+                indivStopSegmentCountdown();
             }
             // 더 이상 업데이트하지 않음 (return으로 함수 종료)
             return;
@@ -2150,12 +2158,12 @@ function updateLapTime(status = null) {
     
     // 5초 카운트다운 오버레이 처리
     if (status) {
-        handleSegmentCountdown(countdownValue, status);
+        indivHandleSegmentCountdown(countdownValue, status);
     }
 }
 
 // 5초 카운트다운 오버레이 처리 함수
-function handleSegmentCountdown(countdownValue, status) {
+function indivHandleSegmentCountdown(countdownValue, status) {
     // 시작 카운트다운인지 세그먼트 카운트다운인지 구분
     const isStartCountdown = status.state === 'countdown' || 
                              (status.countdownRemainingSec !== undefined && 
@@ -2174,7 +2182,7 @@ function handleSegmentCountdown(countdownValue, status) {
                 lastCountdownValue = countdownValue;
                 // 0일 때는 "GO!!" 표시
                 const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
-                showSegmentCountdown(displayValue);
+                indivShowSegmentCountdown(displayValue);
                 
                 // GO!! 표시 시 시간 기록
                 if (displayValue === 'GO!!') {
@@ -2210,7 +2218,7 @@ function handleSegmentCountdown(countdownValue, status) {
     // countdownValue가 null이면 세그먼트가 완료되었으므로 오버레이 숨김
     if (countdownValue === null) {
         if (indivSegmentCountdownActive && !startCountdownActive) {
-            stopSegmentCountdown();
+            indivStopSegmentCountdown();
         }
         lastCountdownValue = null;
         return;
@@ -2221,7 +2229,7 @@ function handleSegmentCountdown(countdownValue, status) {
     if (isLastSegment) {
         // 마지막 세그먼트에서는 5초 카운트다운 표시하지 않음
         if (indivSegmentCountdownActive && !startCountdownActive) {
-            stopSegmentCountdown();
+            indivStopSegmentCountdown();
         }
         lastCountdownValue = null;
         return;
@@ -2230,7 +2238,7 @@ function handleSegmentCountdown(countdownValue, status) {
     // countdownValue가 유효하지 않거나 5초보다 크면 오버레이 숨김
     if (countdownValue > 5) {
         if (indivSegmentCountdownActive && !startCountdownActive) {
-            stopSegmentCountdown();
+            indivStopSegmentCountdown();
         }
         lastCountdownValue = null;
         return;
@@ -2241,19 +2249,19 @@ function handleSegmentCountdown(countdownValue, status) {
         // 이전 값과 다르거나 카운트다운이 시작되지 않은 경우
         if (lastCountdownValue !== countdownValue || !indivSegmentCountdownActive) {
             lastCountdownValue = countdownValue;
-            showSegmentCountdown(countdownValue);
+            indivShowSegmentCountdown(countdownValue);
         }
     } else if (countdownValue < 0) {
         // 0 미만이면 오버레이 숨김 (시작 카운트다운이 아닐 때만)
         if (indivSegmentCountdownActive && !startCountdownActive) {
-            stopSegmentCountdown();
+            indivStopSegmentCountdown();
         }
         lastCountdownValue = null;
     }
 }
 
 // 세그먼트 카운트다운 오버레이 표시
-function showSegmentCountdown(value) {
+function indivShowSegmentCountdown(value) {
     const overlay = __indivEl('countdownOverlay');
     const numEl = __indivEl('countdownNumber');
     
@@ -2310,27 +2318,27 @@ function showSegmentCountdown(value) {
             if (goDisplayTime !== null) {
                 const elapsedSinceGo = Date.now() - goDisplayTime;
                 if (elapsedSinceGo >= 1000) {
-                    stopSegmentCountdown();
+                    indivStopSegmentCountdown();
                     goDisplayTime = null;
                     startCountdownActive = false;
                 } else {
                     // 아직 1초가 안 지났으면 추가 대기
                     const remainingTime = 1000 - elapsedSinceGo;
                     indivSegmentCountdownTimer = setTimeout(() => {
-                        stopSegmentCountdown();
+                        indivStopSegmentCountdown();
                         goDisplayTime = null;
                         startCountdownActive = false;
                     }, remainingTime);
                 }
             } else {
-                stopSegmentCountdown();
+                indivStopSegmentCountdown();
             }
         }, 1000); // 1초로 증가
     }
 }
 
 // 세그먼트 카운트다운 오버레이 숨김
-function stopSegmentCountdown() {
+function indivStopSegmentCountdown() {
     // 시작 카운트다운 중이거나 GO!! 표시 후 1초가 안 지났으면 숨기지 않음
     if (startCountdownActive || (goDisplayTime !== null && (Date.now() - goDisplayTime) < 1000)) {
         return;

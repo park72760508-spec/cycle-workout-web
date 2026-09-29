@@ -312,9 +312,15 @@
         var overlay = $('coachmCountdownOverlay');
         if (!overlay) return;
         var n = s && s.state === 'countdown' ? Number(s.countdownRemainingSec) : NaN;
+        clearTimeout(st.cdHideTimer);
         if (Number.isFinite(n) && n > 0) {
           setText('coachmCountdownNumber', n);
           overlay.style.display = 'flex';
+        } else if ((Number.isFinite(n) && n === 0) || (overlay.style.display === 'flex' && s && s.state === 'running')) {
+          // 5·4·3·2·1 다음 "Go!" 1초 표시
+          setText('coachmCountdownNumber', 'Go!');
+          overlay.style.display = 'flex';
+          st.cdHideTimer = setTimeout(function () { overlay.style.display = 'none'; }, 1000);
         } else {
           overlay.style.display = 'none';
         }
