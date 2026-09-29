@@ -6547,11 +6547,25 @@ function ClubMissionFormModal(props) {
     if (raw !== '' && Number(raw) >= 1) setCount(raw);
   }
 
+  /*
+   * 개수를 줄였다 늘려도(예: 15 → 입력 중 "3" → "30") 이미 지정한 워크아웃이 사라지지 않도록
+   * 지정 내역을 보관해 두고, 늘어난 칸은 보관분 → 없으면 빈 칸(워크아웃 선택)으로 채운다.
+   */
+  var stepsBankRef = useRef([]);
+  useEffect(function () {
+    var bank = stepsBankRef.current.slice();
+    for (var bi = 0; bi < steps.length; bi++) bank[bi] = steps[bi];
+    stepsBankRef.current = bank;
+  }, [steps]);
+
   function setCount(nRaw) {
     var n = Math.max(1, Math.min(60, Math.floor(Number(nRaw) || 1)));
     setSteps(function (prev) {
-      var next = prev.slice(0, n);
-      while (next.length < n) next.push(null);
+      var bank = stepsBankRef.current.slice();
+      for (var pi = 0; pi < prev.length; pi++) bank[pi] = prev[pi];
+      stepsBankRef.current = bank;
+      var next = [];
+      for (var i = 0; i < n; i++) next.push(bank[i] != null ? bank[i] : null);
       return next;
     });
     setOpenIdx(-1);
