@@ -29464,6 +29464,10 @@
           console.warn('[OpenRiding] React 또는 root 없음');
           return;
         }
+        // 첫 진입: 모듈 로드·로그인 확인 동안 빈 화면 대신 로딩 표시(React 루트 생성 시 제거)
+        if (!openRidingReactRoot) {
+          rootEl.innerHTML = '<div style="padding:48px 16px;text-align:center;color:#64748b;font-size:14px;"><div class="loading-spinner" style="margin:0 auto 12px;"></div>불러오는 중…</div>';
+        }
         try {
           await import('./assets/js/openRiding/openRidingBoot.js?v=cost-rpc-20260925b');
         } catch (bootErr) {
@@ -29475,9 +29479,6 @@
          * 2026-09-30 백색 화면 수정: 화면 코드(OpenRidingScreens.compiled.js, defer·약 640KB)가 아직 실행 전이면
          * 예전엔 경고만 남기고 끝나 다시 들어오기 전까지 빈 화면이었다 → 로딩 표시 후 최대 20초 기다린다.
          */
-        if (!openRidingReactRoot) {
-          rootEl.innerHTML = '<div style="padding:48px 16px;text-align:center;color:#64748b;font-size:14px;"><div class="loading-spinner" style="margin:0 auto 12px;"></div>불러오는 중…</div>';
-        }
         for (var waitI = 0; waitI < 100 && typeof window.OpenRidingRoomApp !== 'function'; waitI++) {
           await new Promise(function (r) { setTimeout(r, 200); });
         }
