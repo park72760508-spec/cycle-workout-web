@@ -25,13 +25,36 @@
     var actualFtp = p.actualFtp != null ? Number(p.actualFtp) : null;
     var graphRef = useRef(null);
 
-    var _st = useState({ loading: !!workoutId, title: '', segments: null, error: null });
+    var utils = window.journalWorkoutGraphUtils || {};
+    function cachedFor(wid) {
+      var c = wid && typeof utils.getCachedWorkoutSegmentsForJournal === 'function'
+        ? utils.getCachedWorkoutSegmentsForJournal(wid)
+        : null;
+      return c && c.segments && c.segments.length ? c : null;
+    }
+
+    /* 이미 불러온 워크아웃이면 첫 렌더부터 바로 그래프(로딩 표시 없음) */
+    var _st = useState(function () {
+      var c = cachedFor(workoutId);
+      return c
+        ? { loading: false, title: c.title || '', segments: c.segments, error: null }
+        : { loading: !!workoutId, title: '', segments: null, error: null };
+    });
     var state = _st[0];
     var setState = _st[1];
 
     useEffect(function () {
       if (!workoutId) {
         setState({ loading: false, title: '', segments: null, error: 'no-id' });
+        return;
+      }
+      var hit = cachedFor(workoutId);
+      if (hit) {
+        setState(function (prev) {
+          return prev.segments === hit.segments && !prev.loading
+            ? prev
+            : { loading: false, title: hit.title || '', segments: hit.segments, error: null };
+        });
         return;
       }
       var cancelled = false;

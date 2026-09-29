@@ -189,7 +189,33 @@
     return out;
   }
 
-  async function loadWorkoutSegmentsForJournal(workoutId) {
+  /*
+   * 2026-09-29: 한 번 불러온 워크아웃 세그먼트는 세션 동안 기억 — 라이딩 기록 탭 이동 후 다시 들어와도
+   * (같은 날짜·같은 워크아웃) 재조회·로딩 표시 없이 바로 그린다. 동시 요청은 하나로 합친다.
+   */
+  var segCache = {};
+  var segInflight = {};
+
+  function getCachedWorkoutSegmentsForJournal(workoutId) {
+    var wid = workoutId != null ? String(workoutId).trim() : '';
+    return wid && segCache[wid] ? segCache[wid] : null;
+  }
+
+  function loadWorkoutSegmentsForJournal(workoutId) {
+    if (!workoutId) return Promise.resolve({ segments: [], title: '' });
+    var wid = String(workoutId).trim();
+    if (segCache[wid]) return Promise.resolve(segCache[wid]);
+    if (segInflight[wid]) return segInflight[wid];
+    segInflight[wid] = loadWorkoutSegmentsForJournalUncached(wid)
+      .then(function (res) {
+        if (res && Array.isArray(res.segments) && res.segments.length) segCache[wid] = res; // 성공만 기억
+        return res;
+      })
+      .finally(function () { delete segInflight[wid]; });
+    return segInflight[wid];
+  }
+
+  async function loadWorkoutSegmentsForJournalUncached(workoutId) {
     if (!workoutId) return { segments: [], title: '' };
     var wid = String(workoutId).trim();
 
@@ -276,7 +302,8 @@
       resolveStelvioLogWithActualPower: resolveStelvioLogWithActualPower,
       shouldShowWorkoutGraphInsteadOfMap: shouldShowWorkoutGraphInsteadOfMap,
       enrichLogsWithStelvioWorkoutFromFirestore: enrichLogsWithStelvioWorkoutFromFirestore,
-      loadWorkoutSegmentsForJournal: loadWorkoutSegmentsForJournal
+      loadWorkoutSegmentsForJournal: loadWorkoutSegmentsForJournal,
+      getCachedWorkoutSegmentsForJournal: getCachedWorkoutSegmentsForJournal
     };
   }
 })();
