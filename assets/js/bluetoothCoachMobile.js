@@ -647,13 +647,24 @@
     }
   };
 
-  window.exitCoachMobileScreen = function () {
-    var state = coachState().trainingState;
-    if ((state === 'running' || state === 'paused') && !confirm('훈련이 진행 중입니다. Coach 화면을 나갈까요?')) return;
+  /** 연결 > 종료 — STELVIO 확인창 후 CYCLE 베이스캠프로 */
+  window.exitCoachMobileScreen = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
     closeMenu();
-    // 종료 → CYCLE 베이스캠프
-    if (typeof window.enterCycleBasecamp === 'function') window.enterCycleBasecamp();
-    else if (typeof window.showScreen === 'function') window.showScreen('basecampScreen');
+    var state = coachState().trainingState;
+    var msg = (state === 'running' || state === 'paused')
+      ? '훈련이 진행 중입니다. Coach 화면을 종료하시겠습니까?'
+      : 'Coach 화면을 종료하시겠습니까?';
+    var run = function () {
+      // 종료 → CYCLE 베이스캠프
+      if (typeof window.enterCycleBasecamp === 'function') window.enterCycleBasecamp();
+      else if (typeof window.showScreen === 'function') window.showScreen('basecampScreen');
+    };
+    if (typeof window.showStelvioExitConfirmPopup === 'function') {
+      window.showStelvioExitConfirmPopup(run, { message: msg, cancelText: '취소', okText: '종료' });
+    } else if (window.confirm(msg)) {
+      run();
+    }
   };
 
   /* ---------- 라우팅: 휴대폰에서 Coach 화면 진입 시 전용 화면으로 ----------

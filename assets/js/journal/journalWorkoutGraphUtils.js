@@ -238,7 +238,34 @@
       }
     }
 
+    // 클럽 전용 워크아웃(미션·그룹세션·개인레슨) — STELVIO 목록에 없음 → 이미 받아둔 목록 → Supabase RPC
+    var clubHit = loadClubWorkoutFromCache(wid);
+    if (clubHit) return clubHit;
+    try {
+      var rpc = typeof window.stelvioSupabaseRpc === 'function'
+        ? window.stelvioSupabaseRpc
+        : (await import('/assets/js/supabaseDualWrite.js')).callSupabaseRpcAsUser;
+      var cres = await rpc('fn_club_workout_detail', { p_workout_id: wid });
+      var citem = cres && cres.success ? cres.item : null;
+      if (citem && Array.isArray(citem.segments) && citem.segments.length) {
+        return { segments: citem.segments, title: String(citem.title || '').trim() };
+      }
+    } catch (e3) {
+      console.warn('[journalWorkoutGraph] 클럽 전용 워크아웃 조회 실패:', wid, e3 && e3.message);
+    }
+
     return { segments: [], title: '' };
+  }
+
+  function loadClubWorkoutFromCache(wid) {
+    try {
+      var byId = window.__clubWorkoutsById;
+      var w = byId && byId[wid];
+      if (w && Array.isArray(w.segments) && w.segments.length) {
+        return { segments: w.segments, title: String(w.title || '').trim() };
+      }
+    } catch (e) {}
+    return null;
   }
 
   if (typeof window !== 'undefined') {

@@ -29134,7 +29134,7 @@
   <script src="assets/js/journal/JournalCalendarWidget.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/journal/journalWorkoutGraphUtils.js?v=actual-power-overlay-20260819a"></script>
+  <script src="assets/js/journal/journalWorkoutGraphUtils.js?v=club-workout-graph-20260929"></script>
   <script src="assets/js/journal/JournalWorkoutGraphPreview.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalDetailBottomSheet.jsx?v=avg-power-guide-label-20260820b" type="text/babel" data-presets="stelvio-react-classic"></script>
@@ -29382,7 +29382,7 @@
        React/ReactDOM보다 항상 늦게 실행됐다. 일반 스크립트로 바꾼 뒤에도 같은 순서를 유지하려면
        defer가 반드시 필요 — 없으면 이 스크립트가 문서 위치에서 즉시(React 로드 전에) 실행되어
        "React is not defined" 등 오류가 난다. -->
-  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=mission-ftp-wkg-20260929"></script>
+  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=mission-actual-power-20260929"></script>
   <script>
     (function() {
       var openRidingReactRoot = null;
@@ -35015,7 +35015,7 @@
               <img src="assets/img/pt.svg" alt="" style="filter: brightness(0) invert(1);">
               <span>워크아웃 선택 (일반 워크아웃)</span>
             </div>
-            <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitCoachMobileScreen()">
+            <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitCoachMobileScreen(event)">
               <img src="assets/img/logout.png" alt="">
               <span>종료</span>
             </div>
@@ -35207,7 +35207,7 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js?v=20260929coachm7"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20260929coachm18"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20260929coachm19"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js?v=shared-mint-20260928"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

@@ -7367,16 +7367,38 @@ function ClubMissionDetailModal(props) {
     return function () { cancelled = true; };
   }, [groupId, step && step.workoutId]);
 
+  /* 완료한 미션: 라이딩 기록 워크아웃 그래프처럼 세그먼트별 달성 파워 표시 — 본인 완료 기록의 구간 평균 파워·FTP */
+  var _actual = useState(null);
+  var actual = _actual[0];
+  var setActual = _actual[1];
+  useEffect(function () {
+    setActual(null);
+    if (state !== 'done' || props.ptLessonId || !mission || !mission.id || !step) return undefined;
+    var cancelled = false;
+    clubPtRpc('fn_my_mission_step_actual_power', { p_mission_id: String(mission.id), p_step_ord: Number(step.ord) })
+      .then(function (res) {
+        if (cancelled || !res || !Array.isArray(res.segmentAvgWatts) || !res.segmentAvgWatts.length) return;
+        setActual({ watts: res.segmentAvgWatts, ftp: Number(res.ftp) || null });
+      })
+      .catch(function () {});
+    return function () { cancelled = true; };
+  }, [state, mission && mission.id, step && step.ord, props.ptLessonId]);
+
   useEffect(function () {
     if (!graphRef.current) return;
     graphRef.current.innerHTML = '';
     var segs = workout && Array.isArray(workout.segments) ? workout.segments : [];
     if (segs.length && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') {
-      window.renderSegmentedWorkoutGraph(graphRef.current, segs, { maxHeight: 200 });
+      var gopts = { maxHeight: 200 };
+      if (actual) {
+        gopts.actualSegmentAvgWatts = actual.watts;
+        gopts.actualFtp = actual.ftp;
+      }
+      window.renderSegmentedWorkoutGraph(graphRef.current, segs, gopts);
     } else if (!loading) {
       graphRef.current.innerHTML = '<div class="segmented-workout-graph-empty">그래프를 표시할 수 없습니다</div>';
     }
-  }, [workout, loading]);
+  }, [workout, loading, actual]);
 
   var minutes = workout ? clubMissionWorkoutMinutes(workout) : Math.round((Number(step && step.totalSeconds) || 0) / 60);
   var tss = workout && typeof window !== 'undefined' && typeof window.estimateWorkoutTSS === 'function' ? window.estimateWorkoutTSS(workout) : null;
