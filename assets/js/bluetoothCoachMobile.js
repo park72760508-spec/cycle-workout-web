@@ -272,7 +272,14 @@
       st.lastTextAt = now;
       renderTexts(pm);
       var menu = $('coachmMenu');
-      if (menu && menu.classList.contains('show')) updateSlotAchievementDots();
+      if (menu && menu.classList.contains('show')) {
+        /*
+         * 2026-09-30: 메뉴를 연 뒤 슬롯이 준비되거나(첫 진입 직후 연결 메뉴를 누른 경우) 접속자가 바뀌면 목록을 다시 그림.
+         * 예전에는 메뉴를 여는 순간 한 번만 그려, 트랙 데이터가 1초 뒤 준비돼도 "슬롯 정보를 불러오는 중..."에 머물렀다.
+         */
+        if (slotListSignature() !== st.slotListSig) renderSlotList();
+        else updateSlotAchievementDots();
+      }
     }
     if (now - st.lastGraphAt >= 1000) {
       st.lastGraphAt = now;
@@ -410,9 +417,17 @@
       if (dot.className !== cls) dot.className = cls;
     });
   }
+  /** 슬롯 목록 구성(트랙 수·접속자 이름·선택 슬롯) — 바뀌었을 때만 다시 그리기 위한 비교값 */
+  function slotListSignature() {
+    var pms = powerMeters();
+    var sel = selectedPm();
+    return pms.length + '|' + (sel ? sel.id : '') + '|' + pms.map(function (p) { return p && p.userName ? p.userName : ''; }).join(',');
+  }
+
   function renderSlotList() {
     var list = $('coachmSlotList');
     if (!list) return;
+    st.slotListSig = slotListSignature();
     var pms = powerMeters();
     var sel = selectedPm();
     if (!pms.length) {
