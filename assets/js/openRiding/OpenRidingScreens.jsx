@@ -6382,6 +6382,41 @@ function loadClubMissionStepWorkout(groupId, step) {
 }
 
 /** 번호 칸 색상: 완료 녹색 · 수행할 미션(다음 순서) 오렌지 · 미수행 하늘색 */
+/** 미션 워크아웃 난이도 별(1~5) — assets/js/workoutDifficulty.js (아마추어 FTP 2.0~4.0 W/kg 기준) */
+function clubMissionStepDifficulty(step) {
+  var api = typeof window !== 'undefined' ? window.stelvioWorkoutDifficulty : null;
+  if (!api || !step || !Array.isArray(step.segments) || !step.segments.length) return null;
+  var r = api.computeWorkoutDifficulty(step.segments);
+  return r ? r.stars : null;
+}
+
+/** 둥근 모서리 별 5개 — 채운 별 = 난이도, 빈 별은 테두리만. 색은 미션 번호 색과 동일 */
+function ClubMissionDifficultyStars(props) {
+  var n = Math.max(0, Math.min(5, Number(props.stars) || 0));
+  var color = props.color || '#0369a1';
+  var size = props.size || 8;
+  var items = [];
+  for (var i = 1; i <= 5; i++) {
+    items.push(
+      <svg key={i} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ display: 'block' }}>
+        <path
+          d="M12 2.8l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 16.8l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"
+          fill={i <= n ? color : 'none'}
+          stroke={color}
+          strokeWidth="2.4"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+  return (
+    <span className="inline-flex items-center mt-0.5" style={{ gap: '1px' }} title={'난이도 ' + n + ' / 5'} aria-label={'난이도 별 ' + n + '개'}>
+      {items}
+    </span>
+  );
+}
+
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
   if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
@@ -7603,6 +7638,9 @@ function ClubMissionPanel(props) {
           var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
           var res = myResults[o];
           var scoreTxt = st === 'done' && res && res.score != null ? String(Math.round(res.score)) : '';
+          var stepObj = mission.steps.find(function (x) { return Number(x.ord) === o; });
+          var diffStars = clubMissionStepDifficulty(stepObj);
+          var numColor = clubMissionStepStyle(st).color;
           return (
             <button
               key={o}
@@ -7613,6 +7651,7 @@ function ClubMissionPanel(props) {
               aria-label={o + '번 미션 ' + (st === 'done' ? '완료' + (scoreTxt ? ' ' + scoreTxt + '점' : '') : st === 'next' ? '수행할 미션' : '미수행')}
             >
               <span className="text-sm">{o}</span>
+              {diffStars ? <ClubMissionDifficultyStars stars={diffStars} color={numColor} size={7} /> : null}
               {scoreTxt ? <span className="text-[10px] font-semibold mt-0.5" style={{ opacity: 0.9 }}>{scoreTxt}점</span> : null}
             </button>
           );
