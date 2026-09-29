@@ -6390,18 +6390,18 @@ function clubMissionStepDifficulty(step) {
   return r ? r.stars : null;
 }
 
-/** 둥근 모서리 별 5개 — 채운 별 = 난이도, 빈 별은 테두리만. 색은 미션 번호 색과 동일 */
+/** 둥근 모서리 별 — 난이도 개수만큼 채운 별만 표시(빈 별 없음). 색은 미션 번호 색과 동일 */
 function ClubMissionDifficultyStars(props) {
   var n = Math.max(0, Math.min(5, Number(props.stars) || 0));
   var color = props.color || '#0369a1';
   var size = props.size || 8;
   var items = [];
-  for (var i = 1; i <= 5; i++) {
+  for (var i = 1; i <= n; i++) {
     items.push(
       <svg key={i} width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ display: 'block' }}>
         <path
           d="M12 2.8l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 16.8l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"
-          fill={i <= n ? color : 'none'}
+          fill={color}
           stroke={color}
           strokeWidth="2.4"
           strokeLinejoin="round"
