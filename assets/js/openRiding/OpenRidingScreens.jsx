@@ -15964,7 +15964,9 @@ function OpenRidingGroupDetailView(props) {
               firebaseUid: String(row.uid),
               socialUserId: String(row.uid),
               value: Number(row.total) || 0,
-              valueLabel: (Number(row.total) || 0).toFixed(1),
+              /* 성장 보너스(FTP W/kg 향상)가 있으면 점수 옆에 함께 표시 */
+              valueLabel: (Number(row.total) || 0).toFixed(1) + (Number(row.growthBonus) > 0 ? ' (성장+' + Number(row.growthBonus).toFixed(1) + ')' : ''),
+              missionGrowthBonus: Number(row.growthBonus) || 0,
               missionCompleted: row.completed,
               missionCompletionRate: row.completionRate,
               boardRank: row.rank,
@@ -16819,7 +16821,7 @@ function OpenRidingGroupDetailView(props) {
         /* 미션 순위 기준 안내 — 진행 중 미션이 없으면 그 사실을 알린다 */
         <p className="text-[11px] text-slate-500 text-center m-0 px-3 leading-snug">
           {missionBoard.mission
-            ? '「' + missionBoard.mission.title + '」 달성도 순위 · 점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (인터벌 달성률 × FTP W/kg 가중치 80~100%)'
+            ? '「' + missionBoard.mission.title + '」 달성도 순위 · 점수 = 전체 미션 수행률 40% + 미션 달성 점수 60% (인터벌 달성률 × FTP W/kg 가중치 95~100%) + FTP 성장 보너스(향상 1%당 0.5점, 최대 5점)'
             : missionBoard.error
               ? '미션 순위를 불러오지 못했습니다.'
               : '진행 중인 클럽 미션이 없습니다.'}

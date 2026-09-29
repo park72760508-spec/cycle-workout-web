@@ -18,10 +18,10 @@ const SEGS = [
   { segment_type: 'cooldown', duration_sec: 600, target_type: 'ftp_pct', target_value: '40' },
 ];
 
-test('W/kg 가중치: 2.0 이하 0.8, 3.0 → 0.9, 4.0 이상 1.0', () => {
-  assert.equal(wkgFactor(1.5), 0.8);
-  assert.equal(wkgFactor(2.0), 0.8);
-  assert.ok(Math.abs(wkgFactor(3.0) - 0.9) < 1e-9);
+test('W/kg 가중치: 2.0 이하 0.95, 3.0 → 0.975, 4.0 이상 1.0', () => {
+  assert.equal(wkgFactor(1.5), 0.95);
+  assert.equal(wkgFactor(2.0), 0.95);
+  assert.ok(Math.abs(wkgFactor(3.0) - 0.975) < 1e-9);
   assert.equal(wkgFactor(4.0), 1);
   assert.equal(wkgFactor(4.5), 1);
 });
@@ -42,22 +42,22 @@ test('워밍업·쿨다운·휴식은 제외하고 인터벌만 평가 (FTP 250W
   assert.equal(r.intervalAchievement, 90);
   assert.equal(r.intervalAvgWatts, 225);
   assert.equal(r.wkg, 3.57); // FTP 250W ÷ 70kg
-  assert.equal(r.wkgFactor, 0.957);
-  assert.equal(r.score, 86.1); // 90 × 0.957
+  assert.equal(r.wkgFactor, 0.989);
+  assert.equal(r.score, 89); // 90 × 0.989
 });
 
 test('목표 초과 수행은 세그먼트별 100% 상한', () => {
   const r = computeStepAchievement(SEGS, [0, 400, 0, 400, 0], 250, 70);
   assert.equal(r.intervalAchievement, 100);
-  assert.equal(r.wkgFactor, 0.957); // 가중치는 FTP W/kg(250/70=3.57) — 초과 수행 파워와 무관
-  assert.equal(r.score, 95.7);
+  assert.equal(r.wkgFactor, 0.989); // 가중치는 FTP W/kg(250/70=3.57) — 초과 수행 파워와 무관
+  assert.equal(r.score, 98.9);
 });
 
-test('같은 달성률이면 FTP W/kg 가 높을수록 점수 높음 (2.0 → 80%, 4.0 → 100%)', () => {
+test('같은 달성률이면 FTP W/kg 가 높을수록 점수 높음 (2.0 → 95%, 4.0 → 100%)', () => {
   const segs = [{ segment_type: 'interval', duration_sec: 600, target_type: 'ftp_pct', target_value: '100' }];
   const low = computeStepAchievement(segs, [140], 140, 70); // FTP 2.0 W/kg, 100% 달성
   const high = computeStepAchievement(segs, [280], 280, 70); // FTP 4.0 W/kg, 100% 달성
-  assert.equal(low.score, 80);
+  assert.equal(low.score, 95);
   assert.equal(high.score, 100);
 });
 
@@ -106,4 +106,21 @@ test('저강도 미션도 가중치는 FTP W/kg — 박지성 사례(FTP 245W, 5
   assert.equal(r.wkg, 4.54);
   assert.equal(r.wkgFactor, 1);
   assert.equal(r.score, 100);
+});
+
+test('성장 보너스: FTP W/kg 향상 1%당 0.5점, 최대 5점, 합계 100점 상한', () => {
+  const rows = rankMissionUsers(15, [
+    { userId: 'grow', stepScores: [95, 95], firstWkg: 2.5, lastWkg: 2.6 }, // +4% → +2점
+    { userId: 'big', stepScores: [95, 95], firstWkg: 2.0, lastWkg: 2.4 }, // +20% → 상한 5점
+    { userId: 'drop', stepScores: [95, 95], firstWkg: 3.0, lastWkg: 2.8 }, // 하락은 0점(감점 없음)
+    { userId: 'one', stepScores: [95] }, // 기록 1개면 보너스 없음
+  ]);
+  const by = Object.fromEntries(rows.map((r) => [r.userId, r]));
+  assert.equal(by.grow.growthBonus, 2);
+  assert.equal(by.big.growthBonus, 5);
+  assert.equal(by.drop.growthBonus, 0);
+  assert.equal(by.one.growthBonus, 0);
+  assert.equal(by.big.rank, 1);
+  const full = rankMissionUsers(1, [{ userId: 'x', stepScores: [100], firstWkg: 2, lastWkg: 3 }]);
+  assert.equal(full[0].total, 100);
 });

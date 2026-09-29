@@ -177,10 +177,17 @@ async function handleGetClubMission(admin, uid, body) {
     (allComps || []).forEach((c) => {
       if (!validOrds.has(Number(c.step_ord))) return;
       const key = String(c.user_id);
-      if (!byUser.has(key)) byUser.set(key, { userId: key, stepScores: [], lastCompletedAt: "" });
+      if (!byUser.has(key)) byUser.set(key, { userId: key, stepScores: [], lastCompletedAt: "", firstAt: "", firstWkg: null, lastWkg: null });
       const u = byUser.get(key);
       u.stepScores.push(c.step_score != null ? Number(c.step_score) : null);
-      if (String(c.completed_at || "") > u.lastCompletedAt) u.lastCompletedAt = String(c.completed_at || "");
+      const at = String(c.completed_at || "");
+      const wkg = c.wkg != null ? Number(c.wkg) : null;
+      // 성장 보너스용: 가장 먼저 완료한 단계·가장 최근 완료한 단계의 FTP W/kg
+      if (wkg > 0 && (!u.firstAt || at < u.firstAt)) { u.firstAt = at; u.firstWkg = wkg; }
+      if (at > u.lastCompletedAt) {
+        u.lastCompletedAt = at;
+        if (wkg > 0) u.lastWkg = wkg;
+      }
       if (userUuid && key === String(userUuid)) {
         completedOrds.push(Number(c.step_ord));
         myResults[c.step_ord] = {
@@ -226,6 +233,8 @@ async function handleGetClubMission(admin, uid, body) {
         completed: r.completed,
         completionRate: r.completionRate,
         avgStepScore: r.avgStepScore,
+        growthPct: r.growthPct,
+        growthBonus: r.growthBonus,
         total: r.total,
       };
     });

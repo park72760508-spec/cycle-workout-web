@@ -5,18 +5,24 @@
  *  - A: 워밍업·쿨다운·휴식 세그먼트를 뺀 "인터벌" 세그먼트의 (실제 평균 W ÷ 목표 W)를
  *       세그먼트별 100% 상한으로 자른 뒤 시간(초) 가중 평균. 목표 W = FTP × 목표%.
  *       구간 목표(ftp_pctz "56~75")는 하한을 목표로, 램프는 시작·끝 평균을 목표로 본다.
- *  - F: 사용자 FTP W/kg(훈련 당시 저장된 FTP ÷ 체중) 기준 0.80(2.0 W/kg 이하) ~ 1.00(4.0 W/kg 이상) 선형.
+ *  - F: 사용자 FTP W/kg(훈련 당시 저장된 FTP ÷ 체중) 기준 0.95(2.0 W/kg 이하) ~ 1.00(4.0 W/kg 이상) 선형.
+ *       (2026-09-30: 0.80~1.00 → 0.95~1.00. 목표가 FTP 대비 %라 성실히 하면 누구나 달성률 95~100% 가 나와
+ *        W/kg 가중치가 순위를 좌우했다 — 15개 완주 기준 FTP 로 인한 최대 차이 12점 → 3점(미션 1개 6.7점의 절반 미만))
  *       (2026-09-29: 인터벌 평균 W/kg → FTP W/kg. 인터벌 강도는 목표 대비 달성률 A 로만 평가하고,
  *        가중치는 선수의 체력 수준(FTP W/kg)으로 반영 — 쉬운 저강도 미션에서 강한 선수가 손해 보지 않게)
  *
- * 순위 점수 T (0~100) = 40 × 수행률(완료 단계 ÷ 전체 단계) + 60 × (단계 점수 합 ÷ 전체 단계)
+ * 순위 점수 T (0~100) = 40 × 수행률(완료 단계 ÷ 전체 단계) + 60 × (단계 점수 합 ÷ 전체 단계) + 성장 보너스 G
+ *  - G (0~5점): 미션 중 FTP W/kg 향상률 — 첫 완료 단계의 FTP W/kg 대비 가장 최근 완료 단계의 FTP W/kg 가
+ *    오른 만큼 1%당 0.5점(10% 향상 = 5점 상한). 실력이 낮은 회원도 성장으로 역전할 수 있게. 합계는 100점 상한.
  *  - 미완료 단계는 0점 → 성실도(수행률)와 변별력(달성 점수)을 함께 반영.
  *  - 동점: 완료 단계 수 ↓ → 평균 달성 점수 ↓ → 마지막 완료 시각 ↑(먼저 끝낸 사람).
  */
 
 const WKG_FLOOR = 2.0;
 const WKG_FULL = 4.0;
-const WKG_FACTOR_MIN = 0.8;
+const WKG_FACTOR_MIN = 0.95;
+const GROWTH_POINTS_PER_PCT = 0.5;
+const GROWTH_MAX = 5;
 const RATE_WEIGHT = 40;
 const SCORE_WEIGHT = 60;
 const EXCLUDED_TYPES = new Set(["warmup", "cooldown", "rest"]);
@@ -148,11 +154,17 @@ function rankMissionUsers(totalSteps, users) {
     const completed = (u.stepScores || []).length;
     const scoreSum = scores.reduce((a, b) => a + b, 0);
     const rate = Math.min(1, completed / n);
+    const first = Number(u.firstWkg);
+    const last = Number(u.lastWkg);
+    const growthPct = first > 0 && last > 0 ? ((last - first) / first) * 100 : 0;
+    const growthBonus = round1(Math.min(GROWTH_MAX, Math.max(0, growthPct * GROWTH_POINTS_PER_PCT)));
     return Object.assign({}, u, {
       completed,
       completionRate: round1(rate * 100),
       avgStepScore: completed ? round1(scoreSum / completed) : 0,
-      total: round1(RATE_WEIGHT * rate + SCORE_WEIGHT * (scoreSum / n / 100)),
+      growthPct: round1(Math.max(0, growthPct)),
+      growthBonus,
+      total: round1(Math.min(100, RATE_WEIGHT * rate + SCORE_WEIGHT * (scoreSum / n / 100) + growthBonus)),
     });
   });
   rows.sort((a, b) => {
