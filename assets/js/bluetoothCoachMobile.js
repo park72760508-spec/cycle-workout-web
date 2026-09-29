@@ -340,9 +340,30 @@
     closeMenu();
     subscribeStatus();
     startLoop();
+    armSlotWatchdog();
+  }
+
+  /*
+   * 안전장치(2026-09-29): 진입 후에도 슬롯(트랙)이 만들어지지 않으면 엔진 초기화를 다시 호출.
+   * 트랙 구성 조회가 네트워크 재연결 중 멈추거나 초기화 호출이 누락돼 "슬롯 정보를 불러오는 중..."에 머물던 문제.
+   */
+  var slotWatchdogTimer = null;
+  function armSlotWatchdog() {
+    if (slotWatchdogTimer) clearTimeout(slotWatchdogTimer);
+    var tries = 0;
+    function check() {
+      slotWatchdogTimer = null;
+      if (!isActive()) return;
+      if (powerMeters().length) return;
+      tries++;
+      if (typeof window.initBluetoothCoachDashboard === 'function') window.initBluetoothCoachDashboard();
+      if (tries < 3) slotWatchdogTimer = setTimeout(check, 20000);
+    }
+    slotWatchdogTimer = setTimeout(check, 20000); // 첫 초기화(구성 조회 최대 ~13초)가 끝날 시간을 준 뒤
   }
 
   function onLeave() {
+    if (slotWatchdogTimer) { clearTimeout(slotWatchdogTimer); slotWatchdogTimer = null; }
     unsubscribeStatus();
     closeMenu();
     closeCoachMobileWorkoutPicker();

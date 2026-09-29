@@ -126,6 +126,32 @@ function getBluetoothCoachSessionId() {
 }
 
 /**
+ * RTDB once('value') 에 시간 제한 — 연결 재수립 중(모바일 네트워크 전환·앱 복귀 직후)에는 once 가
+ * 성공도 실패도 하지 않고 계속 대기해, 트랙 구성 조회가 끝나지 않으면 슬롯 목록이 영영 만들어지지 않았다(2026-09-29).
+ */
+function bluetoothCoachOnceWithTimeout(ref, ms) {
+  return new Promise(function (resolve, reject) {
+    var done = false;
+    var tid = setTimeout(function () {
+      if (done) return;
+      done = true;
+      reject(new Error('rtdb_once_timeout'));
+    }, ms || 5000);
+    ref.once('value').then(function (snap) {
+      if (done) return;
+      done = true;
+      clearTimeout(tid);
+      resolve(snap);
+    }, function (err) {
+      if (done) return;
+      done = true;
+      clearTimeout(tid);
+      reject(err);
+    });
+  });
+}
+
+/**
  * Realtime Database 규칙이 sessions에 대해 auth != null 일 때,
  * 로그인 세션 복구보다 RTDB를 먼저 읽으면 permission_denied가 납니다.
  * @returns {Promise<boolean>} 로그인된 사용자가 있으면 true
@@ -214,7 +240,7 @@ async function getTrackConfigFromFirebase() {
 
   try {
     // Firebase devices DB에서 track 값 가져오기
-    const devicesSnapshot = await dbInstance.ref(`sessions/${sessionId}/devices`).once('value');
+    const devicesSnapshot = await bluetoothCoachOnceWithTimeout(dbInstance.ref(`sessions/${sessionId}/devices`), 5000);
     const devicesData = devicesSnapshot.val();
     
     if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
@@ -227,7 +253,7 @@ async function getTrackConfigFromFirebase() {
   
   // Fallback: 기존 trackConfig 확인 (하위 호환성)
   try {
-    const snapshot = await dbInstance.ref(`sessions/${sessionId}/trackConfig`).once('value');
+    const snapshot = await bluetoothCoachOnceWithTimeout(dbInstance.ref(`sessions/${sessionId}/trackConfig`), 4000);
     const config = snapshot.val();
     if (config && typeof config.maxTracks === 'number' && config.maxTracks > 0) {
       console.log('[Bluetooth Coach] ✅ trackConfig에서 트랙 개수 가져옴:', config.maxTracks);
@@ -239,7 +265,7 @@ async function getTrackConfigFromFirebase() {
   
   // Fallback: Firebase users 데이터에서 실제 사용 중인 트랙 수 확인
   try {
-    const usersSnapshot = await dbInstance.ref(`sessions/${sessionId}/users`).once('value');
+    const usersSnapshot = await bluetoothCoachOnceWithTimeout(dbInstance.ref(`sessions/${sessionId}/users`), 4000);
     const users = usersSnapshot.val();
     if (users) {
       const trackNumbers = Object.keys(users).map(key => parseInt(key)).filter(num => !isNaN(num) && num > 0);
@@ -1087,7 +1113,22 @@ async function setupFirebaseSubscriptions() {
 
   var authed = await waitForFirebaseAuthForRealtimeDb(12000);
   if (!authed) {
-    console.warn('[Bluetooth Coach] 미인증 상태라 Firebase 실시간 구독을 시작하지 않습니다.');
+    console.warn('[Bluetooth Coach] 미인증 상태라 Firebase 실시간 구독을 보류 — 로그인 복구되면 자동으로 다시 구독합니다.');
+    /* 아침 첫 실행 등 토큰 복구가 12초를 넘기면 구독이 영영 시작되지 않아 슬롯 사용자 정보가 비어 있었다 */
+    try {
+      var authLate = typeof window !== 'undefined' && window.auth ? window.auth : (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null);
+      if (authLate && !window.__bluetoothCoachAuthRetryBound) {
+        window.__bluetoothCoachAuthRetryBound = true;
+        var unsubLate = authLate.onAuthStateChanged(function (user) {
+          if (!user) return;
+          window.__bluetoothCoachAuthRetryBound = false;
+          try { if (typeof unsubLate === 'function') unsubLate(); } catch (eU) {}
+          setupFirebaseSubscriptions().catch(function (e) {
+            console.warn('[Bluetooth Coach] 지연 구독 실패:', e);
+          });
+        });
+      }
+    } catch (eRetry) {}
     return;
   }
   
