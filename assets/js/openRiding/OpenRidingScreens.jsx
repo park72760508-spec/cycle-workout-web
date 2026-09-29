@@ -7523,16 +7523,19 @@ function ClubMissionDetailModal(props) {
             ) : null}
             {!canStart && blockedReason ? <p style={{ color: '#ea580c' }}>{blockedReason}</p> : null}
           </div>
-          <div className="schedule-detail-graph schedule-detail-graph-with-start">
-            <button
-              type="button"
-              className="btn btn-schedule-start btn-schedule-start-on-graph"
-              disabled={!canStart || !workout}
-              onClick={start}
-              title={props.ptLessonId ? '개인레슨 훈련 시작' : '미션 훈련 시작'}
-            >
-              <img src="assets/img/start.png" alt="훈련 시작" />
-            </button>
+          {/* 완료한 미션은 다시 수행할 수 없으므로 그래프 위 START 버튼을 표시하지 않음 */}
+          <div className={'schedule-detail-graph' + (state === 'done' ? '' : ' schedule-detail-graph-with-start')}>
+            {state === 'done' ? null : (
+              <button
+                type="button"
+                className="btn btn-schedule-start btn-schedule-start-on-graph"
+                disabled={!canStart || !workout}
+                onClick={start}
+                title={props.ptLessonId ? '개인레슨 훈련 시작' : '미션 훈련 시작'}
+              >
+                <img src="assets/img/start.png" alt="훈련 시작" />
+              </button>
+            )}
             {/* graphRef 안은 renderSegmentedWorkoutGraph가 innerHTML로 직접 그리므로 React 자식을 두지 않는다
                 (React 자식을 함께 두면 innerHTML 초기화 후 언마운트 시 removeChild NotFoundError 발생) */}
             {loading ? <div className="segmented-workout-graph-empty">불러오는 중…</div> : null}
