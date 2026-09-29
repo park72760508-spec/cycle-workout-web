@@ -2181,11 +2181,11 @@ function indivHandleSegmentCountdown(countdownValue, status) {
             if (lastCountdownValue !== countdownValue || !indivSegmentCountdownActive) {
                 lastCountdownValue = countdownValue;
                 // 0일 때는 "GO!!" 표시
-                const displayValue = countdownValue === 0 ? 'GO!!' : countdownValue;
+                const displayValue = countdownValue === 0 ? 'Go!' : countdownValue;
                 indivShowSegmentCountdown(displayValue);
                 
                 // GO!! 표시 시 시간 기록
-                if (displayValue === 'GO!!') {
+                if (displayValue === 'Go!') {
                     goDisplayTime = Date.now();
                 }
             }
@@ -2277,7 +2277,7 @@ function indivShowSegmentCountdown(value) {
     numEl.textContent = String(value);
     
     // "GO!!"일 때 스타일 조정
-    if (value === 'GO!!') {
+    if (value === 'Go!') {
         numEl.style.fontSize = '150px'; // GO!!는 조금 작게
         numEl.style.color = '#00d4aa'; // 민트색
         goDisplayTime = Date.now(); // GO!! 표시 시간 기록
@@ -2293,7 +2293,7 @@ function indivShowSegmentCountdown(value) {
     }, 10);
     
     // 벨소리 재생
-    if (value === 'GO!!' || value === 0) {
+    if (value === 'Go!' || value === 0) {
         // GO!! 또는 0일 때: 강조 벨소리 (높은 주파수, 긴 지속시간)
         playBeep(1500, 700, 0.35, "square").catch(err => {
             console.warn('[Bluetooth 개인 훈련] 벨소리 재생 실패:', err);
@@ -2308,7 +2308,7 @@ function indivShowSegmentCountdown(value) {
     indivSegmentCountdownActive = true;
     
     // 0 또는 "GO!!"일 때 1초 후 오버레이 숨김 (GO!!는 더 길게 표시)
-    if (value === 0 || value === 'GO!!') {
+    if (value === 0 || value === 'Go!') {
         // 기존 타이머가 있으면 제거
         if (indivSegmentCountdownTimer) {
             clearTimeout(indivSegmentCountdownTimer);
