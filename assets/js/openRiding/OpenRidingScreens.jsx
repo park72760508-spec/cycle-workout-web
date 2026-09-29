@@ -7537,6 +7537,8 @@ function ClubMissionPanel(props) {
 
   var done = new Set((data.completedOrds || []).map(Number));
   var myResults = data.myResults || {};
+  /* 진도(완료 n / N) 옆 굵게: 내 누적 순위 점수(진도 40 + 달성 60)·순위 — 서버 leaderboard 의 내 행 */
+  var myBoardRow = (data.leaderboard || []).find(function (r) { return r && r.isMe; }) || null;
   var ords = mission.steps.map(function (s) { return Number(s.ord); }).sort(function (a, b) { return a - b; });
   var nextOrd = ords.find(function (o) { return !done.has(o); });
   var today = clubMissionTodayYmd();
@@ -7588,6 +7590,12 @@ function ClubMissionPanel(props) {
       </p>
       <p className="text-xs text-slate-500 m-0 mb-3">
         완료 {done.size} / {ords.length}
+        {myBoardRow ? (
+          <strong className="text-slate-900 font-extrabold ml-2" style={{ fontSize: '13px' }}>
+            {myBoardRow.total != null ? Number(myBoardRow.total).toFixed(1) + '점' : ''}
+            {data.myRank ? ' · ' + data.myRank + '위' : ''}
+          </strong>
+        ) : null}
         {nextOrd == null ? ' · 모든 미션을 완료했습니다! 🎉' : ''}
       </p>
       <div className="grid grid-cols-6 sm:grid-cols-8 gap-2">
