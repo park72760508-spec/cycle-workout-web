@@ -40,23 +40,23 @@ test('워밍업·쿨다운·휴식은 제외하고 인터벌만 평가 (FTP 250W
   const r = computeStepAchievement(SEGS, [0, 250, 0, 200, 0], 250, 70);
   assert.equal(r.method, 'segments');
   assert.equal(r.intervalAchievement, 90);
-  assert.equal(r.intervalAvgWatts, 225); // 3.21 W/kg
-  assert.equal(r.wkg, 3.21);
-  assert.equal(r.wkgFactor, 0.921);
-  assert.equal(r.score, 82.9); // 90 × 0.921
+  assert.equal(r.intervalAvgWatts, 225);
+  assert.equal(r.wkg, 3.57); // FTP 250W ÷ 70kg
+  assert.equal(r.wkgFactor, 0.957);
+  assert.equal(r.score, 86.1); // 90 × 0.957
 });
 
 test('목표 초과 수행은 세그먼트별 100% 상한', () => {
   const r = computeStepAchievement(SEGS, [0, 400, 0, 400, 0], 250, 70);
   assert.equal(r.intervalAchievement, 100);
-  assert.equal(r.wkgFactor, 1); // 400W/70kg = 5.7 W/kg
-  assert.equal(r.score, 100);
+  assert.equal(r.wkgFactor, 0.957); // 가중치는 FTP W/kg(250/70=3.57) — 초과 수행 파워와 무관
+  assert.equal(r.score, 95.7);
 });
 
-test('같은 달성률이면 W/kg 가 높을수록 점수 높음 (2.0 → 80%, 4.0 → 100%)', () => {
+test('같은 달성률이면 FTP W/kg 가 높을수록 점수 높음 (2.0 → 80%, 4.0 → 100%)', () => {
   const segs = [{ segment_type: 'interval', duration_sec: 600, target_type: 'ftp_pct', target_value: '100' }];
-  const low = computeStepAchievement(segs, [140], 140, 70); // 2.0 W/kg, 100% 달성
-  const high = computeStepAchievement(segs, [280], 280, 70); // 4.0 W/kg, 100% 달성
+  const low = computeStepAchievement(segs, [140], 140, 70); // FTP 2.0 W/kg, 100% 달성
+  const high = computeStepAchievement(segs, [280], 280, 70); // FTP 4.0 W/kg, 100% 달성
   assert.equal(low.score, 80);
   assert.equal(high.score, 100);
 });
@@ -93,4 +93,17 @@ test('동점이면 완료 수 → 평균 점수 → 먼저 끝낸 사람', () =>
     { userId: 'early', stepScores: [50, 50], lastCompletedAt: '2026-10-05' },
   ]);
   assert.deepEqual(rows.map((r) => r.userId), ['early', 'late']);
+});
+
+test('저강도 미션도 가중치는 FTP W/kg — 박지성 사례(FTP 245W, 54kg = 4.54 W/kg, 달성 100%)', () => {
+  const segs = [
+    { segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: '50' },
+    { segment_type: 'interval', duration_sec: 2100, target_type: 'ftp_pct', target_value: '65' },
+    { segment_type: 'cooldown', duration_sec: 300, target_type: 'ftp_pct', target_value: '40' },
+  ];
+  const r = computeStepAchievement(segs, [134, 175, 124], 245, 54, 162);
+  assert.equal(r.intervalAchievement, 100);
+  assert.equal(r.wkg, 4.54);
+  assert.equal(r.wkgFactor, 1);
+  assert.equal(r.score, 100);
 });

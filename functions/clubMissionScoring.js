@@ -5,7 +5,9 @@
  *  - A: 워밍업·쿨다운·휴식 세그먼트를 뺀 "인터벌" 세그먼트의 (실제 평균 W ÷ 목표 W)를
  *       세그먼트별 100% 상한으로 자른 뒤 시간(초) 가중 평균. 목표 W = FTP × 목표%.
  *       구간 목표(ftp_pctz "56~75")는 하한을 목표로, 램프는 시작·끝 평균을 목표로 본다.
- *  - F: 인터벌 평균 W/kg 기준 0.80(2.0 W/kg 이하) ~ 1.00(4.0 W/kg 이상) 선형.
+ *  - F: 사용자 FTP W/kg(훈련 당시 저장된 FTP ÷ 체중) 기준 0.80(2.0 W/kg 이하) ~ 1.00(4.0 W/kg 이상) 선형.
+ *       (2026-09-29: 인터벌 평균 W/kg → FTP W/kg. 인터벌 강도는 목표 대비 달성률 A 로만 평가하고,
+ *        가중치는 선수의 체력 수준(FTP W/kg)으로 반영 — 쉬운 저강도 미션에서 강한 선수가 손해 보지 않게)
  *
  * 순위 점수 T (0~100) = 40 × 수행률(완료 단계 ÷ 전체 단계) + 60 × (단계 점수 합 ÷ 전체 단계)
  *  - 미완료 단계는 0점 → 성실도(수행률)와 변별력(달성 점수)을 함께 반영.
@@ -121,7 +123,8 @@ function computeStepAchievement(segments, segmentAvgWatts, ftp, weightKg, fallba
   }
 
   const kg = Number(weightKg);
-  const wkg = kg > 0 ? avgW / kg : 0;
+  const wkg = kg > 0 ? ftpW / kg : 0; // FTP W/kg
+
   const factor = wkgFactor(wkg);
   return {
     intervalAchievement: round1(achievement * 100),
