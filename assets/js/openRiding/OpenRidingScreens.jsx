@@ -15720,14 +15720,14 @@ function OpenRidingGroupDetailView(props) {
   var showRankFilter = isRunGroup || isCycleGroup;
   var rankMetricOptions = isRunGroup
     ? (window.runningRankingConfig && window.runningRankingConfig.CREW_METRIC_OPTIONS) || []
-    : ((window.openRidingCycleClubRanking && window.openRidingCycleClubRanking.METRIC_OPTIONS) || []).concat([
-        /* 클럽 챌린지 미션 달성도 순위(수행률 40% + 달성 점수 60%) — 클럽 상세 전용 항목 */
+    : [
+        /* 클럽 챌린지 미션 달성도 순위(수행률 40% + 달성 점수 60%) — 클럽 상세 전용 항목, 맨 위 + 기본 선택 */
         { value: 'mission', label: '미션' }
-      ]);
+      ].concat((window.openRidingCycleClubRanking && window.openRidingCycleClubRanking.METRIC_OPTIONS) || []);
   var _missionBoard = useState(null);
   var missionBoard = _missionBoard[0];
   var setMissionBoard = _missionBoard[1];
-  var _rankMetric = useState(function () { return isRunGroup ? 'overall' : 'gc'; });
+  var _rankMetric = useState(function () { return isRunGroup ? 'overall' : 'mission'; });
   var rankMetric = _rankMetric[0];
   var setRankMetric = _rankMetric[1];
   var _rankGender = useState('all');
