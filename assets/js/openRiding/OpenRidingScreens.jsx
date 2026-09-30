@@ -6417,6 +6417,99 @@ function ClubMissionDifficultyStars(props) {
   );
 }
 
+/** 미션 상태 배지 색 */
+function clubMissionPhaseBadge(phase) {
+  if (phase === 'current') return { label: '진행 중', bg: '#dcfce7', color: '#15803d', border: '#86efac' };
+  if (phase === 'upcoming') return { label: '예정', bg: '#e0f2fe', color: '#0369a1', border: '#7dd3fc' };
+  if (phase === 'ended') return { label: '종료', bg: '#f1f5f9', color: '#64748b', border: '#cbd5e1' };
+  return null;
+}
+
+/** 클럽 미션명 선택 — STELVIO 보라 그라데이션 헤더·둥근 카드형 펼침 목록
+ * (카드 section 이 overflow-hidden 이라 떠 있는 드롭다운은 잘릴 수 있어, 아래로 펼쳐 내용을 밀어내는 방식) */
+function ClubMissionPicker(props) {
+  var missions = props.missions || [];
+  var selectedId = String(props.selectedId || '');
+  var onSelect = props.onSelect || function () {};
+  var _open = useState(false);
+  var open = _open[0];
+  var setOpen = _open[1];
+  var wrapRef = useRef(null);
+  useEffect(function () {
+    if (!open) return undefined;
+    function onDoc(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('touchstart', onDoc, { passive: true });
+    return function () {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('touchstart', onDoc);
+    };
+  }, [open]);
+  var sel = missions.find(function (m) { return String(m.id) === selectedId; }) || missions[0] || {};
+  var selBadge = clubMissionPhaseBadge(sel.phase);
+  function badgeEl(b) {
+    return b ? (
+      <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: b.bg, color: b.color, border: '1px solid ' + b.border }}>{b.label}</span>
+    ) : null;
+  }
+  return (
+    <div ref={wrapRef} className="relative min-w-0 flex-1">
+      <button
+        type="button"
+        className="w-full min-w-0 flex items-center gap-2 rounded-xl bg-white px-3 py-1.5 text-left"
+        style={{ border: '1.5px solid #a78bfa', boxShadow: open ? '0 0 0 3px rgba(124,58,237,0.15)' : 'none' }}
+        onClick={function () { setOpen(!open); }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <strong className="min-w-0 flex-1 truncate text-slate-800 text-sm">{sel.title || ''}</strong>
+        {badgeEl(selBadge)}
+        <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true">
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open ? (
+        <div
+          className="mt-1.5 rounded-2xl bg-white overflow-hidden"
+          style={{ border: '1px solid #ddd6fe', boxShadow: '0 8px 20px rgba(76, 29, 149, 0.14)' }}
+          role="listbox"
+        >
+          <div className="px-3 py-2 text-[11px] font-bold text-white" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            미션 목록
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {missions.map(function (m) {
+              var isSel = String(m.id) === selectedId;
+              var b = clubMissionPhaseBadge(m.phase);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSel}
+                  className={'w-full text-left px-3 py-2.5 flex items-center gap-2 ' + (isSel ? 'bg-violet-50' : 'bg-white hover:bg-slate-50')}
+                  onClick={function () { setOpen(false); if (!isSel) onSelect(m.id); }}
+                >
+                  <span className="shrink-0 w-4 text-violet-600 font-bold text-sm" aria-hidden="true">{isSel ? '✓' : ''}</span>
+                  <span className="min-w-0 flex-1">
+                    <span className={'block truncate text-sm ' + (isSel ? 'font-bold text-violet-900' : 'font-medium text-slate-800')}>{m.title}</span>
+                    {m.startDate ? (
+                      <span className="block text-[11px] text-slate-500 mt-0.5">{formatClubMissionDate(m.startDate)} ~ {formatClubMissionDate(m.endDate)}</span>
+                    ) : null}
+                  </span>
+                  {badgeEl(b)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
   if (state === 'doneLow') return { background: '#7fe0a2', color: '#14532d', border: '1px solid #4ade80' }; // 완료·95점 미만: 녹색(#22c55e)과 연한 녹색(#dcfce7)의 중간 톤, 진녹색 글자
@@ -7612,21 +7705,15 @@ function ClubMissionPanel(props) {
   return (
     <div>
       <div className="flex items-start justify-between gap-2 mb-1">
-        <label className="text-sm m-0 min-w-0 flex items-center gap-1 flex-1">
+        <div className="text-sm m-0 min-w-0 flex items-center gap-1 flex-1">
           <span className="text-slate-500 shrink-0">미션명 :</span>
-          {/* 미션 목록 콤보 — 오늘 기준 진행 중 미션이 기본 선택, 이전·예정 미션도 선택해서 보기 */}
-          <select
-            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-800"
-            value={String(mission.id)}
-            onChange={function (e) { onSelectMission(e.target.value); }}
-            aria-label="미션 선택"
-          >
-            {(Array.isArray(data.missions) && data.missions.length ? data.missions : [{ id: mission.id, title: mission.title, phase: '' }]).map(function (mi) {
-              var tag = mi.phase === 'current' ? ' (진행 중)' : mi.phase === 'upcoming' ? ' (예정)' : mi.phase === 'ended' ? ' (종료)' : '';
-              return <option key={mi.id} value={String(mi.id)}>{mi.title + tag}</option>;
-            })}
-          </select>
-        </label>
+          {/* 미션 목록 — STELVIO 스타일 펼침 목록(오늘 기준 진행 중 미션 기본, 이전·예정 미션 선택) */}
+          <ClubMissionPicker
+            missions={Array.isArray(data.missions) && data.missions.length ? data.missions : [{ id: mission.id, title: mission.title, startDate: mission.startDate, endDate: mission.endDate, phase: '' }]}
+            selectedId={String(mission.id)}
+            onSelect={onSelectMission}
+          />
+        </div>
         {canManage ? (
           <div className="shrink-0 flex items-center gap-1">
             <button
