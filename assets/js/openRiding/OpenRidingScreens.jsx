@@ -10867,6 +10867,33 @@ function OpenRidingDetail(props) {
     ride &&
     String(ride.hostUserId != null ? ride.hostUserId : '').trim() === String(userId != null ? userId : '').trim()
   );
+  /*
+   * 2026-09-30 멤버십 클럽 그룹세션: 미가입자(멤버십 만료 포함)는 참석 신청 불가, 회원은 10SP 차감 없이 신청.
+   * (최종 판단은 joinRideTransaction 이 Firestore 로 다시 확인) — 일반 라이딩 모임은 기존 동작 유지.
+   */
+  var _clubAccess = useState({ checked: false, paid: false, member: false });
+  var clubAccess = _clubAccess[0];
+  var setClubAccess = _clubAccess[1];
+  var clubSessionGid = ride && ride.isGroupSession ? String(ride.groupId || '').trim() : '';
+  useEffect(function () {
+    if (!clubSessionGid) { setClubAccess({ checked: true, paid: false, member: false }); return undefined; }
+    var cancelled = false;
+    var svc = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+    var gP = typeof svc.fetchRidingGroupById === 'function' ? svc.fetchRidingGroupById(firestore, clubSessionGid).catch(function () { return null; }) : Promise.resolve(null);
+    var mP = typeof svc.fetchRidingGroupMembersList === 'function' ? svc.fetchRidingGroupMembersList(firestore, clubSessionGid).catch(function () { return []; }) : Promise.resolve([]);
+    Promise.all([gP, mP]).then(function (res) {
+      if (cancelled) return;
+      var g = res[0] || {};
+      var paid = g.isPaid === true;
+      var me = (res[1] || []).find(function (m) { return m && String(m.userId || m.uid || '') === String(userId || ''); });
+      var today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      var exp = me && me.membershipExpiresAt ? String(me.membershipExpiresAt).slice(0, 10) : '';
+      setClubAccess({ checked: true, paid: paid, member: !!me && (!exp || exp >= today) });
+    });
+    return function () { cancelled = true; };
+  }, [clubSessionGid, userId]);
+  var clubSessionFree = !!(clubSessionGid && clubAccess.paid && clubAccess.member);
+  var clubSessionBlocked = !!(clubSessionGid && clubAccess.paid && !clubAccess.member && !isHost);
   var hostIdpSyncTmRef = useRef(null);
 
   /** 그룹세션(인도어 훈련 모임) 상세 — 워크아웃 정보(제목·세그먼트)를 workoutId/workoutSource로
@@ -11955,6 +11982,15 @@ function OpenRidingDetail(props) {
     }
   }
   async function openJoinChargeConfirmModal() {
+    if (clubSessionBlocked) {
+      if (typeof window !== 'undefined' && typeof window.alert === 'function') window.alert('멤버십 클럽 회원만 그룹세션에 참석 신청할 수 있습니다.');
+      return;
+    }
+    if (clubSessionFree) {
+      setJoinChargeRemain(null);
+      setJoinShareModalOpen(true);
+      return;
+    }
     var acc = null;
     try {
       if (typeof window !== 'undefined' && typeof window.getUserByUid === 'function' && userId) {
@@ -13083,9 +13119,11 @@ function OpenRidingDetail(props) {
                   <button
                     type="button"
                     className="open-riding-action-btn h-11 inline-flex items-center justify-center flex-1 px-4 bg-violet-600 text-white rounded-xl font-medium leading-none disabled:opacity-50"
-                    disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule}
+                    disabled={isActionBusy || !userId || !joinInviteOk || joinApplyClosedBySchedule || clubSessionBlocked}
                     title={
-                      joinApplyClosedBySchedule
+                      clubSessionBlocked
+                        ? '멤버십 클럽 회원만 참석 신청할 수 있습니다'
+                        : joinApplyClosedBySchedule
                         ? '일정이 지났거나 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다'
                         : !joinInviteOk
                           ? '초대된 연락처 또는 입장 비밀번호가 필요합니다'
@@ -13096,7 +13134,9 @@ function OpenRidingDetail(props) {
                       openJoinChargeConfirmModal();
                     }}
                   >
-                    {joinApplyClosedBySchedule
+                    {clubSessionBlocked
+                      ? '멤버십 회원 전용'
+                      : joinApplyClosedBySchedule
                       ? '참석 신청 마감'
                       : joinInviteOk
                         ? '참석 신청'
@@ -13167,10 +13207,16 @@ function OpenRidingDetail(props) {
               </button>
             </div>
             <div className="p-4 space-y-3">
-              <p className="text-sm text-slate-800 font-medium m-0">라이딩 모임 참석 시 TSS 마일리지 누적 포인트에서 10SP 차감됩니다.</p>
-              <p className="text-xs text-slate-500 m-0 leading-relaxed">
-                {joinChargeRemain == null ? '(차감 후 잔여 포인트는 신청 후 반영됩니다.)' : '(차감후 잔여 포인트는 ' + joinChargeRemain + ' SP)'}
-              </p>
+              {clubSessionFree ? (
+                <p className="text-sm text-slate-800 font-medium m-0">멤버십 클럽 회원은 포인트 차감 없이 그룹세션에 참석 신청됩니다.</p>
+              ) : (
+                <>
+                  <p className="text-sm text-slate-800 font-medium m-0">라이딩 모임 참석 시 TSS 마일리지 누적 포인트에서 10SP 차감됩니다.</p>
+                  <p className="text-xs text-slate-500 m-0 leading-relaxed">
+                    {joinChargeRemain == null ? '(차감 후 잔여 포인트는 신청 후 반영됩니다.)' : '(차감후 잔여 포인트는 ' + joinChargeRemain + ' SP)'}
+                  </p>
+                </>
+              )}
               <p className="text-xs text-slate-500 m-0 leading-relaxed">(참석자에게 연락처를 공개할지 선택해 주세요.)</p>
               <div className="flex gap-2 pt-1">
                 <button
@@ -13218,10 +13264,16 @@ function OpenRidingDetail(props) {
                 참석 취소
               </h2>
             </div>
-            <p className="stelvio-exit-confirm-message text-center m-0">참석 취소 시 차감된 누적 포인트 10SP가 환급 처리됩니다.</p>
-            <p className="text-xs text-slate-500 mt-2 mb-5 leading-snug text-center">
-              {leaveRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + leaveRefundRemain + ' SP)'}
-            </p>
+            {clubSessionFree ? (
+              <p className="stelvio-exit-confirm-message text-center m-0 mb-5">그룹세션 참석을 취소하시겠습니까?</p>
+            ) : (
+              <>
+                <p className="stelvio-exit-confirm-message text-center m-0">참석 취소 시 차감된 누적 포인트 10SP가 환급 처리됩니다.</p>
+                <p className="text-xs text-slate-500 mt-2 mb-5 leading-snug text-center">
+                  {leaveRefundRemain == null ? '(환급 후 포인트는 처리 후 반영됩니다.)' : '(환급 후 누적 포인트는 ' + leaveRefundRemain + ' SP)'}
+                </p>
+              </>
+            )}
             <div className="stelvio-exit-confirm-buttons">
               <button
                 type="button"

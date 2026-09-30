@@ -16,7 +16,8 @@ import {
   runTransaction,
   onSnapshot,
   Timestamp,
-  serverTimestamp
+  serverTimestamp,
+  deleteField
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
 import {
   ref as storageRef,
@@ -1001,7 +1002,7 @@ function shouldRefundHostPointsOnCancel(data) {
  * @param {Record<string, unknown>} data
  * @param {string} hostUserId
  */
-async function readRideHostRefundUserSnaps(transaction, db, data, hostUserId) {
+async function readRideHostRefundUserSnaps(transaction, db, data, hostUserId, rideId) {
   const joinRefundSp =
     Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
   const shouldRefundHost = shouldRefundHostPointsOnCancel(data);
@@ -1015,7 +1016,13 @@ async function readRideHostRefundUserSnaps(transaction, db, data, hostUserId) {
       if (!userSnap.exists()) continue;
       const userData = userSnap.data() || {};
       const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
-      participantRefunds.push({ ref: userRef, acc: userAcc });
+      // 멤버십 클럽 그룹세션 무료 참석(사용자 문서에 0 기록)은 환급 없음
+      const log = userData.groupSessionJoinCharges && typeof userData.groupSessionJoinCharges === 'object'
+        ? userData.groupSessionJoinCharges : {};
+      const amount = rideId && Object.prototype.hasOwnProperty.call(log, String(rideId))
+        ? Math.max(0, Number(log[String(rideId)]) || 0)
+        : joinRefundSp;
+      if (amount > 0) participantRefunds.push({ ref: userRef, acc: userAcc, amount });
     }
   }
 
@@ -1043,9 +1050,9 @@ async function readRideHostRefundUserSnaps(transaction, db, data, hostUserId) {
  */
 function applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund) {
   if (joinRefundSp > 0) {
-    for (const { ref, acc } of participantRefunds) {
+    for (const { ref, acc, amount } of participantRefunds) {
       transaction.update(ref, {
-        acc_points: acc + joinRefundSp,
+        acc_points: acc + (amount != null ? amount : joinRefundSp),
         openRidingPointUpdatedAt: serverTimestamp()
       });
     }
@@ -1081,7 +1088,8 @@ export async function cancelRideByHost(db, rideId, hostUserId) {
         transaction,
         db,
         data,
-        hostUserId
+        hostUserId,
+        rideRef.id
       );
       applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
 
@@ -1123,7 +1131,8 @@ export async function deleteRideByHost(db, rideId, hostUserId) {
         transaction,
         db,
         data,
-        hostUserId
+        hostUserId,
+        rideRef.id
       );
       applyRideHostRefundWrites(transaction, joinRefundSp, participantRefunds, hostRefund);
       transaction.delete(rideRef);
@@ -1472,6 +1481,35 @@ export function subscribeParticipantStravaReviewSumKm(db, rideId, rideDateYmd, h
  * @param {{ contactPublicToParticipants?: boolean, joinPasswordAttempt?: string }} [joinOpts]
  * @returns {Promise<{ status: string, role?: string, position?: number }>}
  */
+/** 참석 신청 시 사용자 문서 갱신 — 차감이 있으면 포인트 차감, 멤버십 그룹세션 무료 참석은 기록만 */
+function joinUserUpdate(userAcc, chargeSp, freeClubSession, rideId) {
+  const upd = {};
+  if (chargeSp > 0) {
+    upd.acc_points = userAcc - chargeSp;
+    upd.openRidingPointUpdatedAt = serverTimestamp();
+  }
+  if (freeClubSession) upd[`groupSessionJoinCharges.${String(rideId)}`] = 0;
+  if (!Object.keys(upd).length) upd.openRidingPointUpdatedAt = serverTimestamp();
+  return upd;
+}
+
+/** 멤버십 클럽 회원 문서가 유효한지(존재 + 가입 기간 만료 전, KST 날짜 기준) */
+function isActiveClubMemberDoc(mSnap) {
+  if (!mSnap || !mSnap.exists()) return false;
+  const m = mSnap.data() || {};
+  let exp = m.membershipExpiresAt;
+  if (exp && typeof exp.toDate === 'function') exp = exp.toDate();
+  if (!exp) return true;
+  let ymd = '';
+  if (exp instanceof Date) {
+    ymd = new Date(exp.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  } else {
+    ymd = String(exp).slice(0, 10);
+  }
+  const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return !ymd || ymd >= todayKst;
+}
+
 export async function joinRideTransaction(db, rideId, userId, displayName, participantPhone, joinOpts) {
   const opt = joinOpts && typeof joinOpts === 'object' ? joinOpts : {};
   const contactPublicToParticipants =
@@ -1491,8 +1529,25 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
     if (!userSnap.exists()) throw new Error('USER_NOT_FOUND');
     const userData = userSnap.data() || {};
     const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
-    const chargeSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
-    if (userAcc < chargeSp) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
+    let chargeSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
+    /*
+     * 2026-09-30 멤버십 클럽 그룹세션: 클럽 회원(멤버십 유효)만 참석 가능하고 10SP 차감 없이 신청.
+     * 일반 라이딩 모임·비멤버십 클럽 그룹세션은 기존대로(10SP 차감).
+     */
+    const sessionGid = data.isGroupSession ? String(data.groupId || '').trim() : '';
+    let freeClubSession = false;
+    if (sessionGid) {
+      const gSnap = await transaction.get(doc(db, 'stelvio_riding_groups', sessionGid));
+      if (gSnap.exists() && (gSnap.data() || {}).isPaid === true) {
+        const mSnap = await transaction.get(doc(db, 'stelvio_riding_groups', sessionGid, 'members', String(userId).trim()));
+        if (String(data.hostUserId || '') !== String(userId) && !isActiveClubMemberDoc(mSnap)) {
+          throw new Error('MEMBERSHIP_REQUIRED');
+        }
+        chargeSp = 0;
+        freeClubSession = true;
+      }
+    }
+    if (chargeSp > 0 && userAcc < chargeSp) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
     if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');
     const isPrivate = !!data.isPrivate;
@@ -1540,11 +1595,8 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         inviteDisplayByPhone,
         updatedAt: serverTimestamp()
       });
-      transaction.update(userRef, {
-        acc_points: userAcc - chargeSp,
-        openRidingPointUpdatedAt: serverTimestamp()
-      });
-      return { status: 'joined', role: 'participant' };
+      transaction.update(userRef, joinUserUpdate(userAcc, chargeSp, freeClubSession, rideId));
+      return { status: 'joined', role: 'participant', chargedSp: chargeSp };
     }
 
     waitlist = [...waitlist, userId];
@@ -1557,11 +1609,8 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       inviteDisplayByPhone,
       updatedAt: serverTimestamp()
     });
-    transaction.update(userRef, {
-      acc_points: userAcc - chargeSp,
-      openRidingPointUpdatedAt: serverTimestamp()
-    });
-    return { status: 'joined', role: 'waitlist', position: waitlist.length };
+    transaction.update(userRef, joinUserUpdate(userAcc, chargeSp, freeClubSession, rideId));
+    return { status: 'joined', role: 'waitlist', position: waitlist.length, chargedSp: chargeSp };
   });
   scheduleOpenRideDualWriteFromFirestore(db, rideId, userId);
   return result;
@@ -1588,8 +1637,20 @@ export async function leaveRideTransaction(db, rideId, userId) {
     if (!userSnap.exists()) throw new Error('USER_NOT_FOUND');
     const userData = userSnap.data() || {};
     const userAcc = Number(userData.acc_points != null ? userData.acc_points : 0) || 0;
-    const refundSp = Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP;
+    /*
+     * 신청 때 실제 차감한 SP 만 환급 — 멤버십 클럽 그룹세션 무료 참석은 사용자 문서
+     * groupSessionJoinCharges.{rideId} 에 0 으로 기록돼 환급 없음. 기록 없는 신청(일반 모임·이전 신청)은 기본값.
+     */
+    const chargeLog = userData.groupSessionJoinCharges && typeof userData.groupSessionJoinCharges === 'object'
+      ? userData.groupSessionJoinCharges : {};
+    const hasChargeLog = Object.prototype.hasOwnProperty.call(chargeLog, String(rideId));
+    const refundSp = hasChargeLog
+      ? Math.max(0, Number(chargeLog[String(rideId)]) || 0)
+      : (Number(data.participantJoinChargeSp != null ? data.participantJoinChargeSp : JOIN_CHARGE_SP) || JOIN_CHARGE_SP);
     const shouldRefund = refundSp > 0;
+    if (hasChargeLog && !shouldRefund) {
+      transaction.update(userRef, { [`groupSessionJoinCharges.${String(rideId)}`]: deleteField() });
+    }
 
     const inWait = waitlist.includes(userId);
     const inPart = participants.includes(userId);

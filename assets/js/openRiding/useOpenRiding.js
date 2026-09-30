@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=cost-rpc-20260925b';
+} from './openRidingService.js?v=club-session-member-20260930';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db
@@ -329,6 +329,8 @@ export function useOpenRideDetail(db, rideId, userId) {
           ? '취소된 라이딩에는 참석할 수 없습니다.'
           : raw === 'INVITE_ONLY'
             ? '초대받은 사용자만 참석 신청할 수 있습니다.'
+            : raw === 'MEMBERSHIP_REQUIRED'
+              ? '멤버십 클럽 회원(가입 기간 유효)만 그룹세션에 참석 신청할 수 있습니다.'
             : raw === 'INSUFFICIENT_ACC_POINTS_JOIN'
               ? '누적 포인트가 부족합니다. 참석 신청에는 10SP가 필요합니다.'
               : raw === 'USER_NOT_FOUND'
