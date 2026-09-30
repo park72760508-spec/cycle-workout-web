@@ -6448,7 +6448,6 @@ function ClubMissionPicker(props) {
     };
   }, [open]);
   var sel = missions.find(function (m) { return String(m.id) === selectedId; }) || missions[0] || {};
-  var selBadge = clubMissionPhaseBadge(sel.phase);
   function badgeEl(b) {
     return b ? (
       <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: b.bg, color: b.color, border: '1px solid ' + b.border }}>{b.label}</span>
@@ -6464,8 +6463,8 @@ function ClubMissionPicker(props) {
         aria-haspopup="listbox"
         aria-expanded={open}
       >
+        {/* 닫힌 상태는 미션명만(상태 배지는 펼친 목록에서만 표시) */}
         <strong className="min-w-0 flex-1 truncate text-slate-800 text-sm">{sel.title || ''}</strong>
-        {badgeEl(selBadge)}
         <svg className="shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} aria-hidden="true">
           <path d="M6 9l6 6 6-6" />
         </svg>
