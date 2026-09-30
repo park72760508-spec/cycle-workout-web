@@ -6419,7 +6419,7 @@ function ClubMissionDifficultyStars(props) {
 
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
-  if (state === 'doneLow') return { background: '#e2e8f0', color: '#475569', border: '1px solid #cbd5e1' }; // 완료·95점 미만
+  if (state === 'doneLow') return { background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }; // 완료·95점 미만: 연한 녹색 바탕·진녹색 글자
   if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
@@ -7654,7 +7654,7 @@ function ClubMissionPanel(props) {
           var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
           var res = myResults[o];
           var scoreTxt = st === 'done' && res && res.score != null ? String(Math.round(res.score)) : '';
-          /* 완료 색 구분: 달성 점수 95점 이상 녹색, 95점 미만 회색 바탕 (점수 없으면 녹색 유지) */
+          /* 완료 색 구분: 달성 점수 95점 이상 녹색, 95점 미만 연한 녹색 바탕·진녹색 글자 (점수 없으면 녹색 유지) */
           var styleKey = st === 'done' && res && res.score != null && Number(res.score) < 95 ? 'doneLow' : st;
           var stepObj = mission.steps.find(function (x) { return Number(x.ord) === o; });
           var diffStars = clubMissionStepDifficulty(stepObj);
