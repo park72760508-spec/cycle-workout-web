@@ -6419,6 +6419,7 @@ function ClubMissionDifficultyStars(props) {
 
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
+  if (state === 'doneLow') return { background: '#e2e8f0', color: '#475569', border: '1px solid #cbd5e1' }; // 완료·95점 미만
   if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
@@ -7653,15 +7654,17 @@ function ClubMissionPanel(props) {
           var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
           var res = myResults[o];
           var scoreTxt = st === 'done' && res && res.score != null ? String(Math.round(res.score)) : '';
+          /* 완료 색 구분: 달성 점수 95점 이상 녹색, 95점 미만 회색 바탕 (점수 없으면 녹색 유지) */
+          var styleKey = st === 'done' && res && res.score != null && Number(res.score) < 95 ? 'doneLow' : st;
           var stepObj = mission.steps.find(function (x) { return Number(x.ord) === o; });
           var diffStars = clubMissionStepDifficulty(stepObj);
-          var numColor = clubMissionStepStyle(st).color;
+          var numColor = clubMissionStepStyle(styleKey).color;
           return (
             <button
               key={o}
               type="button"
               className="aspect-square rounded-xl inline-flex flex-col items-center justify-center font-bold leading-none"
-              style={clubMissionStepStyle(st)}
+              style={clubMissionStepStyle(styleKey)}
               onClick={function () { setDetailOrd(o); }}
               aria-label={o + '번 미션 ' + (st === 'done' ? '완료' + (scoreTxt ? ' ' + scoreTxt + '점' : '') : st === 'next' ? '수행할 미션' : '미수행')}
             >
@@ -7674,7 +7677,8 @@ function ClubMissionPanel(props) {
       </div>
       <div className="flex items-center gap-3 mt-3 text-[11px] text-slate-500">
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('next')} />수행할 미션</span>
-        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료(95점↑)</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('doneLow')} />완료(95점↓)</span>
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('todo')} />미수행</span>
       </div>
       <p className="text-[11px] text-slate-500 m-0 mt-3 leading-snug">
