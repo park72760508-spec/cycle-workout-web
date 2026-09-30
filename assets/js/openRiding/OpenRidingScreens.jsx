@@ -6419,7 +6419,7 @@ function ClubMissionDifficultyStars(props) {
 
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
-  if (state === 'doneLow') return { background: '#dcfce7', color: '#166534', border: '1px solid #86efac' }; // 완료·95점 미만: 연한 녹색 바탕·진녹색 글자
+  if (state === 'doneLow') return { background: '#7fe0a2', color: '#14532d', border: '1px solid #4ade80' }; // 완료·95점 미만: 녹색(#22c55e)과 연한 녹색(#dcfce7)의 중간 톤, 진녹색 글자
   if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
