@@ -17010,6 +17010,11 @@ function OpenRidingGroupDetailView(props) {
                       ? window.runningRankingCrewTab.buildCrewMemberRankMetaHtml
                       : null;
                     rankMetaHtml = typeof metaFn === 'function' ? metaFn(m) : '';
+                    /* 미션 순위: 이름(순위) 대신 이름(미션 달성 건수/전체) — 예: 홍길동(2/30) */
+                    if (rankMetric === 'mission' && missionBoard && missionBoard.mission) {
+                      var mTotal = Array.isArray(missionBoard.mission.steps) ? missionBoard.mission.steps.length : 0;
+                      rankMetaHtml = '<span class="stelvio-rank-name-meta">(' + (Number(m.missionCompleted) || 0) + '/' + mTotal + ')</span>';
+                    }
                     /* 보드 순위가 없는(플레이스홀더) 멤버는 전체순위를 '-'로 표기 */
                     if (!rankMetaHtml) {
                       rankMetaHtml = '<span class="stelvio-rank-name-meta">(-)</span>';
