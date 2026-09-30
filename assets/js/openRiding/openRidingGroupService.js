@@ -459,9 +459,11 @@ export async function createClubWorkout(moderatorUid, groupId, payload) {
  * 클럽 챌린지 미션 — 진행 중 미션 + 내 완료 단계(completedOrds) + 관리 권한(canManage).
  * @param {string} groupId
  */
-export async function fetchClubMission(groupId) {
+export async function fetchClubMission(groupId, missionId) {
   if (!groupId) return { mission: null, completedOrds: [], canManage: false };
-  return postRidingGroupWriteRouted('getClubMission', { groupId: String(groupId).trim() });
+  var body = { groupId: String(groupId).trim() };
+  if (missionId) body.missionId = String(missionId); // 이전·예정 미션 보기(없으면 오늘 기준 현재 미션)
+  return postRidingGroupWriteRouted('getClubMission', body);
 }
 
 /**

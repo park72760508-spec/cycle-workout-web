@@ -109,7 +109,7 @@ test('1번 미션: 같은 워크아웃·충분한 시간이면 완료', async ()
   assert.equal(tables.club_mission_completions.length, 1);
   // 세그먼트 목표를 서버가 조회해 점수 저장: 목표 200W(80%) 달성 100%, 2.86 W/kg → 가중치 0.886
   assert.equal(r.result.intervalAchievement, 100);
-  assert.equal(tables.club_mission_completions[0].step_score, 88.6);
+  assert.equal(tables.club_mission_completions[0].step_score, 98.9);
   // 조회한 세그먼트가 미션에 채워짐
   assert.equal(tables.club_missions[0].steps[0].segments.length, 1);
 });

@@ -6648,8 +6648,10 @@ function ClubMissionFormModal(props) {
     }
     setBusy(true);
     setErr('');
-    svc.saveClubMission(groupId, { title: title.trim(), startDate: startDate, endDate: endDate, steps: steps })
-      .then(function () { onSaved(); })
+    var savePayload = { title: title.trim(), startDate: startDate, endDate: endDate, steps: steps };
+    if (initial && initial.id) savePayload.missionId = String(initial.id); // 수정 — 없으면 새 미션 생성
+    svc.saveClubMission(groupId, savePayload)
+      .then(function (res) { onSaved(res); })
       .catch(function (e) { setErr((e && e.message) || '미션 저장에 실패했습니다.'); })
       .then(function () { setBusy(false); });
   }
@@ -7556,6 +7558,8 @@ function ClubMissionPanel(props) {
   var error = props.error || '';
   var canPerform = !!props.canPerform;
   var onCreateOrEdit = props.onCreateOrEdit || function () {};
+  var onCreateNew = props.onCreateNew || onCreateOrEdit;
+  var onSelectMission = props.onSelectMission || function () {};
   var onDelete = props.onDelete || function () {};
   var _detail = useState(null);
   var detailOrd = _detail[0];
@@ -7578,7 +7582,7 @@ function ClubMissionPanel(props) {
       <div className="text-center py-8">
         <p className="text-sm text-slate-500 m-0">진행 중인 미션이 없습니다.</p>
         {canManage ? (
-          <button type="button" className="mt-3 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium" onClick={onCreateOrEdit}>
+          <button type="button" className="mt-3 px-4 py-2 rounded-xl bg-violet-600 text-white text-sm font-medium" onClick={onCreateNew}>
             미션 만들기
           </button>
         ) : null}
@@ -7608,12 +7612,32 @@ function ClubMissionPanel(props) {
   return (
     <div>
       <div className="flex items-start justify-between gap-2 mb-1">
-        <p className="text-sm m-0 min-w-0">
-          <span className="text-slate-500">미션명 : </span>
-          <strong className="text-slate-800 break-words">{mission.title}</strong>
-        </p>
+        <label className="text-sm m-0 min-w-0 flex items-center gap-1 flex-1">
+          <span className="text-slate-500 shrink-0">미션명 :</span>
+          {/* 미션 목록 콤보 — 오늘 기준 진행 중 미션이 기본 선택, 이전·예정 미션도 선택해서 보기 */}
+          <select
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm font-bold text-slate-800"
+            value={String(mission.id)}
+            onChange={function (e) { onSelectMission(e.target.value); }}
+            aria-label="미션 선택"
+          >
+            {(Array.isArray(data.missions) && data.missions.length ? data.missions : [{ id: mission.id, title: mission.title, phase: '' }]).map(function (mi) {
+              var tag = mi.phase === 'current' ? ' (진행 중)' : mi.phase === 'upcoming' ? ' (예정)' : mi.phase === 'ended' ? ' (종료)' : '';
+              return <option key={mi.id} value={String(mi.id)}>{mi.title + tag}</option>;
+            })}
+          </select>
+        </label>
         {canManage ? (
           <div className="shrink-0 flex items-center gap-1">
+            <button
+              type="button"
+              className="inline-flex items-center justify-center rounded-lg border-0 bg-violet-600 text-white w-7 h-7 text-lg leading-none font-bold hover:bg-violet-700"
+              onClick={onCreateNew}
+              title="새 미션 만들기"
+              aria-label="새 미션 만들기"
+            >
+              +
+            </button>
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1.5 hover:bg-violet-50"
@@ -7736,11 +7760,22 @@ function OpenRidingGroupCalendarSection(props) {
       .then(function (res) {
         if (!res || res.success !== true) throw new Error((res && res.error) || '미션을 삭제하지 못했습니다.');
         if (typeof window.showToast === 'function') window.showToast('미션이 삭제되었습니다.');
+        selectedMissionIdRef.current = '';
         reloadMission();
       })
       .catch(function (e) {
         if (typeof window.showToast === 'function') window.showToast((e && e.message) || '미션을 삭제하지 못했습니다.');
       });
+  }
+
+  /* 미션 선택(이전·진행 중·예정) — 빈 값이면 오늘 기준 현재 미션 */
+  var selectedMissionIdRef = useRef('');
+  var _missionFormMode = useState('edit');
+  var missionFormMode = _missionFormMode[0];
+  var setMissionFormMode = _missionFormMode[1];
+  function selectMission(id) {
+    selectedMissionIdRef.current = id ? String(id) : '';
+    reloadMission();
   }
 
   function reloadMission() {
@@ -7750,7 +7785,7 @@ function OpenRidingGroupCalendarSection(props) {
       return;
     }
     setMissionState(function (prev) { return Object.assign({}, prev, { loading: !prev.loaded, error: '' }); });
-    svc.fetchClubMission(groupId)
+    svc.fetchClubMission(groupId, selectedMissionIdRef.current || '')
       .then(function (res) { setMissionState({ data: res || null, loading: false, error: '', loaded: true }); })
       .catch(function (e) {
         setMissionState({ data: null, loading: false, error: (e && e.message) || '미션 정보를 불러오지 못했습니다.', loaded: true });
@@ -8197,7 +8232,9 @@ function OpenRidingGroupCalendarSection(props) {
             loading={missionState.loading}
             error={missionState.error}
             canPerform={canCreate}
-            onCreateOrEdit={function () { setMissionFormOpen(true); }}
+            onCreateOrEdit={function () { setMissionFormMode('edit'); setMissionFormOpen(true); }}
+            onCreateNew={function () { setMissionFormMode('create'); setMissionFormOpen(true); }}
+            onSelectMission={selectMission}
             onDelete={deleteMission}
           />
         ) : (
@@ -8453,10 +8490,11 @@ function OpenRidingGroupCalendarSection(props) {
       {missionFormOpen ? (
         <ClubMissionFormModal
           groupId={groupId}
-          mission={missionState.data && missionState.data.mission}
+          mission={missionFormMode === 'create' ? null : missionState.data && missionState.data.mission}
           onClose={function () { setMissionFormOpen(false); }}
-          onSaved={function () {
+          onSaved={function (res) {
             setMissionFormOpen(false);
+            if (res && res.id) selectedMissionIdRef.current = String(res.id); // 저장한 미션을 선택
             reloadMission();
             if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('미션을 저장했습니다.', 'success');
           }}

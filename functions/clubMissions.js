@@ -136,15 +136,53 @@ function mapMissionRow(row) {
   };
 }
 
-async function fetchActiveMissionRow(supabase, groupUuid) {
+/*
+ * 2026-10-01: 클럽당 미션 여러 개(이전·진행 중·예정). is_active = 삭제되지 않은 미션.
+ * 기간은 서로 겹칠 수 없고, "현재 미션" = 오늘이 기간에 속하는 미션(없으면 가장 가까운 예정 → 가장 최근 종료).
+ */
+async function fetchClubMissionRows(supabase, groupUuid) {
   const { data, error } = await supabase
     .from("club_missions")
     .select("*")
     .eq("group_id", groupUuid)
     .eq("is_active", true)
+    .order("start_date", { ascending: true });
+  if (error) throw error;
+  return data || [];
+}
+
+function pickCurrentMissionRow(rows, today) {
+  if (!rows || !rows.length) return null;
+  const inPeriod = rows.filter((r) => String(r.start_date).slice(0, 10) <= today && today <= String(r.end_date).slice(0, 10));
+  if (inPeriod.length) return inPeriod[inPeriod.length - 1];
+  const upcoming = rows.filter((r) => String(r.start_date).slice(0, 10) > today);
+  if (upcoming.length) return upcoming[0];
+  return rows[rows.length - 1];
+}
+
+async function fetchMissionRowById(supabase, groupUuid, missionId) {
+  if (!missionId) return null;
+  const { data, error } = await supabase
+    .from("club_missions")
+    .select("*")
+    .eq("id", missionId)
+    .eq("group_id", groupUuid)
+    .eq("is_active", true)
     .maybeSingle();
   if (error) throw error;
   return data || null;
+}
+
+function missionListItem(r, today) {
+  const sd = String(r.start_date).slice(0, 10);
+  const ed = String(r.end_date).slice(0, 10);
+  return {
+    id: r.id,
+    title: r.title,
+    startDate: sd,
+    endDate: ed,
+    phase: today < sd ? "upcoming" : today > ed ? "ended" : "current",
+  };
 }
 
 /**
@@ -160,7 +198,11 @@ async function handleGetClubMission(admin, uid, body) {
   if (!groupUuid) return { success: true, mission: null, completedOrds: [], canManage: false };
 
   const userUuid = supabaseGroupDualWrite.resolveUserUuid(uid);
-  const row = await fetchActiveMissionRow(supabase, groupUuid);
+  const todayYmd = seoulTodayYmd();
+  const allRows = await fetchClubMissionRows(supabase, groupUuid);
+  const wantId = String((body && body.missionId) || "").trim();
+  const row = (wantId && allRows.find((r) => String(r.id) === wantId)) || pickCurrentMissionRow(allRows, todayYmd);
+  const missions = allRows.map((r) => missionListItem(r, todayYmd));
 
   let completedOrds = [];
   const myResults = {};
@@ -253,6 +295,7 @@ async function handleGetClubMission(admin, uid, body) {
   return {
     success: true,
     mission: mapMissionRow(row),
+    missions,
     completedOrds,
     myResults,
     leaderboard,
@@ -279,7 +322,15 @@ async function handleSaveClubMission(admin, uid, body) {
   const group = await assertGroupWriteAuthority(admin, supabase, uid, gid);
   // 달성 점수용 세그먼트 목표를 서버가 원본에서 조회해 단계에 저장(실패한 단계는 완료 시 재조회)
   const steps = await attachStepSegments(supabase, sanitizeSteps(body && body.steps));
-  const existing = await fetchActiveMissionRow(supabase, group.id);
+  const missionId = String((body && body.missionId) || "").trim();
+  const existing = missionId ? await fetchMissionRowById(supabase, group.id, missionId) : null;
+  if (missionId && !existing) throw new WriteError(404, "미션을 찾을 수 없습니다.");
+  // 같은 클럽의 다른 미션과 기간이 겹치면 안 됨(현재 미션·자동 완료 판정이 하나로 정해지도록)
+  const others = (await fetchClubMissionRows(supabase, group.id)).filter((r) => !existing || String(r.id) !== String(existing.id));
+  const overlap = others.find((r) => !(endDate < String(r.start_date).slice(0, 10) || startDate > String(r.end_date).slice(0, 10)));
+  if (overlap) {
+    throw new WriteError(400, "다른 미션(" + overlap.title + ", " + String(overlap.start_date).slice(0, 10) + " ~ " + String(overlap.end_date).slice(0, 10) + ")과 기간이 겹칩니다.");
+  }
   const fields = {
     title: title.slice(0, 100),
     start_date: startDate,
@@ -324,8 +375,8 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     throw new WriteError(403, "클럽 회원만 미션을 수행할 수 있습니다.");
   }
 
-  const row = await fetchActiveMissionRow(supabase, groupUuid);
-  if (!row || String(row.id) !== missionId) throw new WriteError(404, "진행 중인 미션이 아닙니다.");
+  const row = await fetchMissionRowById(supabase, groupUuid, missionId);
+  if (!row) throw new WriteError(404, "진행 중인 미션이 아닙니다.");
   const mission = mapMissionRow(row);
   const today = seoulTodayYmd();
   if (today < mission.startDate || today > mission.endDate) {
