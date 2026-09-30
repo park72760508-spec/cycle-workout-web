@@ -7631,15 +7631,6 @@ function ClubMissionPanel(props) {
           <div className="shrink-0 flex items-center gap-1">
             <button
               type="button"
-              className="inline-flex items-center justify-center rounded-lg border-0 bg-violet-600 text-white w-7 h-7 text-lg leading-none font-bold hover:bg-violet-700"
-              onClick={onCreateNew}
-              title="새 미션 만들기"
-              aria-label="새 미션 만들기"
-            >
-              +
-            </button>
-            <button
-              type="button"
               className="inline-flex items-center justify-center rounded-lg border-0 bg-transparent p-1.5 hover:bg-violet-50"
               onClick={onCreateOrEdit}
               title="미션 수정"
@@ -8189,9 +8180,9 @@ function OpenRidingGroupCalendarSection(props) {
                 minWidth: '32px',
                 minHeight: '32px'
               }}
-              onClick={function () { if (missionState.data) setMissionFormOpen(true); }}
-              title={missionState.data && missionState.data.mission ? '미션 수정' : '미션 생성'}
-              aria-label={missionState.data && missionState.data.mission ? '미션 수정' : '미션 생성'}
+              onClick={function () { if (missionState.data) { setMissionFormMode('create'); setMissionFormOpen(true); } }}
+              title="새 미션 만들기"
+              aria-label="새 미션 만들기"
             >
               <svg className="w-[18px] h-[18px]" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.6" d="M12 4v16m8-8H4" />
