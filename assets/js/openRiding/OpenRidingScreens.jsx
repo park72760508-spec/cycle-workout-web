@@ -9374,7 +9374,7 @@ function OpenRidingCreateForm(props) {
     }
     if (!editRideId && !skipHostChargeConfirm) {
       var hostAcc = await fetchUserAccPointsForOpenRiding(hostUserId);
-      if (Number.isFinite(hostAcc) && hostAcc < 100) {
+      if (Number.isFinite(hostAcc) && hostAcc < 100 && !openRidingIsPointExemptViewer()) {
         showFormValidationMessages(['누적 포인트가 부족합니다. 모임 주최에는 100SP가 필요합니다.']);
         return;
       }
@@ -10958,6 +10958,16 @@ function OpenRidingRideReviewSummaryContent(props) {
 }
 
 /** 상세 + 참석/취소 (Transaction) */
+/** 부관리자(grade=3)는 포인트 보유와 관계없이 모임 참석·생성 가능(차감은 그대로) — 서버 트랜잭션도 같은 규칙 */
+function openRidingIsPointExemptViewer() {
+  try {
+    var cu = (typeof window !== 'undefined' && window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    return !!cu && String(cu.grade != null ? cu.grade : '').trim() === '3';
+  } catch (e) {
+    return false;
+  }
+}
+
 function OpenRidingDetail(props) {
   var firestore = props.firestore;
   var storage = props.storage || null;
@@ -12127,7 +12137,7 @@ function OpenRidingDetail(props) {
       } catch (_e2) {}
     }
     // 초기 활성화: -100SP 까지 외상 참석 허용(차감 후 -100 미만이면 불가)
-    if (Number.isFinite(acc) && acc - 10 < -100) {
+    if (Number.isFinite(acc) && acc - 10 < -100 && !openRidingIsPointExemptViewer()) {
       if (typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert('누적 포인트가 부족합니다. 참석 신청은 차감 후 -100SP까지 가능합니다.');
       }

@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=join-credit-20261002';
+} from './openRidingService.js?v=grade3-point-exempt-20261002';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db
