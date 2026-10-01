@@ -42,9 +42,10 @@ function asStringArray(v) {
 
 const HOST_CREATE_CHARGE_SP = 100;
 const JOIN_CHARGE_SP = 10;
-/** 포인트 보유 확인 면제 등급 — 부관리자(grade=3). 차감은 동일하게 적용 */
+/** 포인트 보유 확인 면제 등급 — 사이트 관리자(grade=1)·부관리자(grade=3). 차감은 동일하게 적용 */
 function isPointExemptGrade(userData) {
-  return String((userData && userData.grade) != null ? userData.grade : '').trim() === '3';
+  const g = String((userData && userData.grade) != null ? userData.grade : '').trim();
+  return g === '1' || g === '3';
 }
 /** 모임 참석 외상 한도 — 차감 후 누적 포인트가 이 값 이상이면 신청 가능 */
 const JOIN_CREDIT_FLOOR_SP = -100;
@@ -765,7 +766,7 @@ export async function createRide(db, hostUserId, input) {
     if (!hostSnap.exists()) throw new Error('HOST_USER_NOT_FOUND');
     const hostData = hostSnap.data() || {};
     const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
-    // 2026-10-02 부관리자(grade=3)는 포인트 보유와 관계없이 생성 가능(차감은 그대로 — 잔액 마이너스 허용)
+    // 2026-10-02 관리자(grade=1)·부관리자(grade=3)는 포인트 보유와 관계없이 생성 가능(차감은 그대로 — 잔액 마이너스 허용)
     if (!isPointExemptGrade(hostData) && hostAcc < HOST_CREATE_CHARGE_SP) throw new Error('INSUFFICIENT_ACC_POINTS_HOST');
     transaction.set(rideRef, payload);
     transaction.update(hostRef, {
@@ -1555,7 +1556,7 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
       }
     }
     // 2026-10-02 초기 활성화: 참석 포인트는 -100SP 까지 외상 허용(차감 후 잔액이 -100 미만이면 불가)
-    // 부관리자(grade=3)는 포인트 보유와 관계없이 참석 가능(차감은 그대로)
+    // 관리자(grade=1)·부관리자(grade=3)는 포인트 보유와 관계없이 참석 가능(차감은 그대로)
     if (chargeSp > 0 && !isPointExemptGrade(userData) && userAcc - chargeSp < JOIN_CREDIT_FLOOR_SP) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
     if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');

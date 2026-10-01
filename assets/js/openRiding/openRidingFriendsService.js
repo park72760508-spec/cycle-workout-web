@@ -17,7 +17,7 @@ import {
   writeBatch,
   serverTimestamp
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
-import { normalizePhoneDigits } from './openRidingService.js?v=grade3-point-exempt-20261002';
+import { normalizePhoneDigits } from './openRidingService.js?v=admin-point-exempt-20261002';
 
 /** @param {string} a @param {string} b */
 export function friendRequestDocId(fromUid, toUid) {

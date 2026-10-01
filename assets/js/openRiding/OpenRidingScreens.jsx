@@ -10958,11 +10958,12 @@ function OpenRidingRideReviewSummaryContent(props) {
 }
 
 /** 상세 + 참석/취소 (Transaction) */
-/** 부관리자(grade=3)는 포인트 보유와 관계없이 모임 참석·생성 가능(차감은 그대로) — 서버 트랜잭션도 같은 규칙 */
+/** 관리자(grade=1)·부관리자(grade=3)는 포인트 보유와 관계없이 모임 참석·생성 가능(차감은 그대로) — 서버 트랜잭션도 같은 규칙 */
 function openRidingIsPointExemptViewer() {
   try {
     var cu = (typeof window !== 'undefined' && window.currentUser) || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    return !!cu && String(cu.grade != null ? cu.grade : '').trim() === '3';
+    var g = cu ? String(cu.grade != null ? cu.grade : '').trim() : '';
+    return g === '1' || g === '3';
   } catch (e) {
     return false;
   }
