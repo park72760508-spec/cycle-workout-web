@@ -42,6 +42,8 @@ function asStringArray(v) {
 
 const HOST_CREATE_CHARGE_SP = 100;
 const JOIN_CHARGE_SP = 10;
+/** 모임 참석 외상 한도 — 차감 후 누적 포인트가 이 값 이상이면 신청 가능 */
+const JOIN_CREDIT_FLOOR_SP = -100;
 
 /** @param {unknown} v @param {number} maxLen */
 function trimPackText(v, maxLen) {
@@ -1547,7 +1549,8 @@ export async function joinRideTransaction(db, rideId, userId, displayName, parti
         freeClubSession = true;
       }
     }
-    if (chargeSp > 0 && userAcc < chargeSp) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
+    // 2026-10-02 초기 활성화: 참석 포인트는 -100SP 까지 외상 허용(차감 후 잔액이 -100 미만이면 불가)
+    if (chargeSp > 0 && userAcc - chargeSp < JOIN_CREDIT_FLOOR_SP) throw new Error('INSUFFICIENT_ACC_POINTS_JOIN');
     if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
     if (isOpenRidingScheduleEnded(data)) throw new Error('RIDE_JOIN_CLOSED');
     const isPrivate = !!data.isPrivate;

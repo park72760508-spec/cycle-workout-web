@@ -12126,13 +12126,14 @@ function OpenRidingDetail(props) {
         }
       } catch (_e2) {}
     }
-    if (Number.isFinite(acc) && acc < 10) {
+    // 초기 활성화: -100SP 까지 외상 참석 허용(차감 후 -100 미만이면 불가)
+    if (Number.isFinite(acc) && acc - 10 < -100) {
       if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert('누적 포인트가 부족합니다. 참석 신청에는 10SP가 필요합니다.');
+        window.alert('누적 포인트가 부족합니다. 참석 신청은 차감 후 -100SP까지 가능합니다.');
       }
       return;
     }
-    setJoinChargeRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc - 10)) : null);
+    setJoinChargeRemain(Number.isFinite(acc) ? Math.floor(acc - 10) : null);
     setJoinShareModalOpen(true);
   }
   async function onLeave() {
@@ -12166,7 +12167,7 @@ function OpenRidingDetail(props) {
         }
       } catch (_e2) {}
     }
-    setLeaveRefundRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc + 10)) : null);
+    setLeaveRefundRemain(Number.isFinite(acc) ? Math.floor(acc + 10) : null); // 외상(-) 잔액도 그대로 표시
     setLeaveRefundModalOpen(true);
   }
 
@@ -12238,7 +12239,7 @@ function OpenRidingDetail(props) {
         }
       } catch (_e2) {}
     }
-    setHostRefundRemain(Number.isFinite(acc) ? Math.max(0, Math.floor(acc + 100)) : null);
+    setHostRefundRemain(Number.isFinite(acc) ? Math.floor(acc + 100) : null);
     if (kind === 'delete') setDeleteModalOpen(true);
     else setBombOpen(true);
   }
