@@ -1331,7 +1331,8 @@ async function loadInitialUserDataForTracks() {
  */
 /**
  * 하단 정보바(rpm·랩파워·bpm) 바탕색 — 2026-10-02
- *  - 흰색: 대기(사용자 없음 또는 최근 10초 데이터 미수신, 훈련 전)
+ *  - 흰색: 접속한 사용자 없음
+ *  - 연한 하늘색: 접속한 사용자 있음 + (최근 10초 데이터 미수신 또는 훈련 시작 전)
  *  - 초록: 훈련 중 랩파워 달성도 98.5% 이상(목표 파워가 없는 구간은 충족으로 간주) — 궤적색 기준과 동일
  *  - 주황: 훈련 중 랩파워 달성도 98.5% 미만
  */
@@ -1343,7 +1344,8 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
   const hasData = !!powerMeter.userName && fresh &&
     ((Number(powerMeter.currentPower) || 0) > 0 || (Number(powerMeter.cadence) || 0) > 0 || (Number(powerMeter.heartRate) || 0) > 0);
   const running = window.bluetoothCoachState && window.bluetoothCoachState.trainingState === 'running';
-  let state = 'idle';
+  // 흰색: 접속자 없음 / 연한 하늘색: 접속자 있으나 데이터 미수신(10초)·훈련 시작 전 / 초록·주황: 훈련 중 달성도
+  let state = powerMeter.userName ? 'waiting' : 'idle';
   if (hasData && running) {
     const target = Number(powerMeter.targetPower) || 0;
     const lap = Number(powerMeter.segmentPower) || 0;
@@ -1360,6 +1362,10 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
     infoEl.style.backgroundColor = '#ff8c00';
     infoEl.style.borderColor = '#ff8c00';
     infoEl.style.color = '#ffffff';
+  } else if (state === 'waiting') {
+    infoEl.style.backgroundColor = '#e0f2fe';
+    infoEl.style.borderColor = '#bae6fd';
+    infoEl.style.color = '#334155';
   } else {
     infoEl.style.backgroundColor = '#ffffff';
     infoEl.style.borderColor = '#e2e8f0';
