@@ -518,6 +518,8 @@ function createBluetoothCoachPowerMeterGrid() {
   }
 
   console.log(`📌 [Step 4] 로직 완료. 생성된 트랙: ${successCount} / ${maxTracks}`);
+
+  placeBluetoothCoachGridLogo(gridEl, maxTracks);
   
   if (successCount === 0) {
     console.error('🚨 [결과] 트랙이 하나도 생성되지 않았습니다! createPowerMeterElement 내부 로직을 점검하세요.');
@@ -535,6 +537,25 @@ function createBluetoothCoachPowerMeterGrid() {
     });
     updateBluetoothCoachSegmentInfoBar();
   }, 100);
+}
+
+/**
+ * STELVIO 로고를 계기판 그리드 2번째 줄 맨 오른쪽 칸에 배치(2026-10-03).
+ * 10개 초과(1줄 10칸)면 20번째 칸, 10개 이하(1줄 5칸)면 10번째 칸. 그 칸까지 계기판이 생성되면 로고는 표시하지 않음.
+ */
+function placeBluetoothCoachGridLogo(gridEl, trackCount) {
+  if (!gridEl) return;
+  const old = gridEl.querySelector('.coach-grid-logo-cell');
+  if (old) old.remove();
+  const cols = gridEl.classList.contains('coach-grid-dense') ? 10 : 5;
+  if (Number(trackCount) >= cols * 2) return; // 2번째 줄 맨 오른쪽 칸까지 계기판이 있으면 로고 없음
+  const cell = document.createElement('div');
+  cell.className = 'coach-grid-logo-cell';
+  cell.setAttribute('aria-hidden', 'true');
+  cell.style.gridRow = '2';
+  cell.style.gridColumn = String(cols);
+  cell.innerHTML = '<img src="assets/img/stelvio_w.png" alt="" />';
+  gridEl.appendChild(cell);
 }
 
 /**

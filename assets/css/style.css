@@ -33426,6 +33426,25 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   width: auto;
   opacity: 0.12;
 }
+/* 2026-10-03: 로고는 계기판 그리드 2번째 줄 맨 오른쪽 칸(.coach-grid-logo-cell)으로 이동 — 하단 여백 로고는 숨김 */
+#bluetoothTrainingCoachScreen .coach-empty-logo {
+  display: none !important;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .coach-grid-logo-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  pointer-events: none;
+  user-select: none;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .coach-grid-logo-cell img {
+  max-width: 80%;
+  max-height: 120px;
+  width: auto;
+  height: auto;
+  opacity: 0.18;
+}
 
 
 /* ========== Live Training Room Coach — 휴대폰 전용 화면 (bluetoothCoachMobile.js) ========== */
