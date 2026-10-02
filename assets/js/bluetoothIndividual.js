@@ -2087,6 +2087,19 @@ function updateLapTime(status = null) {
         else if (status.segmentRemainingTime !== undefined && status.segmentRemainingTime !== null && Number.isFinite(Number(status.segmentRemainingTime))) {
             countdownValue = Math.max(0, Math.floor(Number(status.segmentRemainingTime)));
         }
+        // 2-1순위(2026-10-03): Coach 가 매초 기록하는 구간 내 경과(segmentElapsedSec) — Coach 랩카운트다운과 같은 값.
+        // 전체 경과 기반(아래 3순위)은 Coach 가 구간을 건너뛰면 어긋나므로 이 값이 있으면 우선 사용(훈련 도중 접속 포함)
+        else if (window.currentWorkout && window.currentWorkout.segments &&
+                 status.segmentElapsedSec !== undefined && status.segmentElapsedSec !== null && Number.isFinite(Number(status.segmentElapsedSec))) {
+            const segIndexS = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
+            const segS = window.currentWorkout.segments[segIndexS];
+            if (segS && segIndexS >= 0) {
+                const durS = segS.duration_sec || segS.duration || 0;
+                const elS = Math.max(0, Math.floor(Number(status.segmentElapsedSec)));
+                bluetoothIndividualSegmentElapsedTime = elS;
+                countdownValue = Math.max(0, durS - elS);
+            }
+        }
         // 3순위: elapsedTime 기반 계산 (경과시간과 동일한 실시간 동기화)
         else if (window.currentWorkout && window.currentWorkout.segments && status.elapsedTime !== undefined) {
             const segIndex = status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex;
