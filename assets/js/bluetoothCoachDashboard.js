@@ -1196,6 +1196,7 @@ async function setupFirebaseSubscriptions() {
       if (!snapshot) return;
       const status = snapshot.val();
       if (status) {
+        window.bluetoothCoachState._lastStatus = status;
         updateTrainingStatus(status);
       }
     } catch (e) {
@@ -1233,6 +1234,8 @@ async function setupFirebaseSubscriptions() {
             updateWorkoutSegmentGraphForBluetoothCoach(window.bluetoothCoachState.currentWorkout, segNow);
           }
           if (typeof updateBluetoothCoachTrainingButtons === 'function') updateBluetoothCoachTrainingButtons();
+          // 진행 중 접속: 상태가 워크아웃보다 먼저 와서 idle 로 처리됐다면 마지막 상태를 다시 적용해 바로 진행 화면으로
+          if (window.bluetoothCoachState._lastStatus) updateTrainingStatus(window.bluetoothCoachState._lastStatus);
           updateScoreboard();
         } else if (window.bluetoothCoachState.currentWorkout) {
           // 기존 currentWorkout이 있으면 segments만 업데이트 (다른 속성 보존)
@@ -2155,6 +2158,29 @@ function updateTrainingStatus(status) {
     updateCurrentSegmentInfo();
   }
   
+  // 다른 Coach 화면이 진행 중인 훈련을 보는 경우(이 화면은 타이머 미구동): 상태의 구간 내 경과로 랩카운트다운 계산
+  const isObserver = !window.bluetoothCoachState.startTime;
+  if (isObserver && hasWorkout && currentWorkout.segments && (firebaseState === 'running' || firebaseState === 'paused')) {
+    const seg = currentWorkout.segments[window.bluetoothCoachState.currentSegmentIndex || 0];
+    if (seg) {
+      const dur = Number(seg.duration_sec || seg.duration || 0) || 0;
+      let segEl = Number(status.segmentElapsedSec);
+      if (!Number.isFinite(segEl)) {
+        // 이전 버전 컨트롤러(구간 내 경과 미기록): 누적 시작 시각으로 추정
+        let cum = 0;
+        for (let i = 0; i < (window.bluetoothCoachState.currentSegmentIndex || 0); i++) {
+          const sgi = currentWorkout.segments[i];
+          cum += Number(sgi && (sgi.duration_sec || sgi.duration)) || 0;
+        }
+        segEl = Math.max(0, (Number(status.elapsedTime) || 0) - cum);
+      }
+      window.bluetoothCoachState.segmentElapsedTime = segEl;
+      const remain = Math.max(0, dur - segEl);
+      const lapEl = document.getElementById('bluetoothCoachLapCountdown');
+      if (lapEl) lapEl.textContent = `${String(Math.floor(remain / 60)).padStart(2, '0')}:${String(Math.floor(remain % 60)).padStart(2, '0')}`;
+    }
+  }
+
   // 랩카운트다운 업데이트 (워크아웃이 있을 때만)
   if (status.lapCountdown !== undefined && hasWorkout) {
     const countdownEl = document.getElementById('bluetoothCoachLapCountdown');
@@ -3688,7 +3714,9 @@ function startBluetoothCoachTrainingTimer() {
     
     const updateData = {
       elapsedTime: window.bluetoothCoachState.totalElapsedTime,
-      segmentIndex: currentSegIndex
+      segmentIndex: currentSegIndex,
+      // 나중에 접속한 다른 Coach 화면(휴대폰 등)이 랩카운트다운을 같은 값으로 표시하도록 구간 내 경과도 기록
+      segmentElapsedSec: Math.max(0, Math.floor(window.bluetoothCoachState.segmentElapsedTime || 0))
     };
     
     // 현재 세그먼트의 target_type과 target_value도 함께 업데이트
