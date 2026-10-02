@@ -1363,8 +1363,8 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
     infoEl.style.borderColor = '#ff8c00';
     infoEl.style.color = '#ffffff';
   } else if (state === 'waiting') {
-    infoEl.style.backgroundColor = '#e0f2fe';
-    infoEl.style.borderColor = '#bae6fd';
+    infoEl.style.backgroundColor = '#c2e9fd'; // 연한 하늘색(#e0f2fe)을 30% 더 진하게
+    infoEl.style.borderColor = '#93d5fb';
     infoEl.style.color = '#334155';
   } else {
     infoEl.style.backgroundColor = '#ffffff';
