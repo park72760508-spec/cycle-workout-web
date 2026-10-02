@@ -1394,6 +1394,29 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
   }
 }
 
+/** Coach PC 전광판 그래프: 훈련 중 진행 점 이동·펄스 애니메이션을 위해 주기적으로 다시 그림(휴대폰 화면과 동일 효과) */
+if (typeof window !== 'undefined' && !window.__bluetoothCoachGraphPulseTimer) {
+  window.__bluetoothCoachGraphPulseTimer = setInterval(function () {
+    try {
+      const st = window.bluetoothCoachState && window.bluetoothCoachState.trainingState;
+      if (st !== 'running' && st !== 'paused') return;
+      const scr = document.getElementById('bluetoothTrainingCoachScreen');
+      if (!scr || !scr.classList.contains('active') || document.hidden) return;
+      const w = window.bluetoothCoachState.currentWorkout;
+      const dims = window.__bluetoothCoachGraphDims;
+      if (!w || !Array.isArray(w.segments) || !w.segments.length || !dims || typeof drawSegmentGraphForScoreboard !== 'function') return;
+      // 레이아웃 재계산 없이 같은 크기로 캔버스만 다시 그림(진행 점 위치·펄스 링 갱신)
+      const saved = window.indoorTrainingState;
+      window.indoorTrainingState = window.bluetoothCoachState;
+      try {
+        drawSegmentGraphForScoreboard(w.segments, window.bluetoothCoachState.currentSegmentIndex ?? -1, 'bluetoothCoachSegmentGraphCanvas', dims.maxWidth, dims.maxHeight);
+      } finally {
+        if (saved !== undefined) window.indoorTrainingState = saved; else delete window.indoorTrainingState;
+      }
+    } catch (e) {}
+  }, 150);
+}
+
 /** 데이터가 끊기거나 훈련 상태·구간이 바뀌어도 색이 따라가도록 1초마다 재평가 */
 if (typeof window !== 'undefined' && !window.__bluetoothCoachInfoBarTimer) {
   window.__bluetoothCoachInfoBarTimer = setInterval(function () {
@@ -2404,6 +2427,7 @@ function updateWorkoutSegmentGraphForBluetoothCoach(workout, currentSegmentIndex
       
       try {
         drawSegmentGraphForScoreboard(w.segments, idx, 'bluetoothCoachSegmentGraphCanvas', maxWidth, maxHeight);
+        window.__bluetoothCoachGraphDims = { maxWidth: maxWidth, maxHeight: maxHeight }; // 펄스 재그리기용
       } finally {
         // 원래 상태 복원 (Indoor Training에 영향 없도록)
         if (originalIndoorState !== undefined) {

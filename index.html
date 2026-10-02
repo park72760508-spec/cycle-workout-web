@@ -3783,7 +3783,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261003coachLogo1" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261003coachPicker1" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35136,7 +35136,7 @@
       <!-- 중앙: 현재 세그먼트 정보 (dashboard-header 기준 중앙 배치) -->
       <span id="bluetoothCoachCurrentSegmentInfo" style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-weight: 500; color: #ffffff; white-space: nowrap; text-align: center; pointer-events: none;"></span>
       <div style="display: flex; gap: 12px; align-items: center; margin-left: auto;">
-        <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutBluetoothCoach" onclick="openWorkoutSelectionModalForBluetoothCoach()" title="워크아웃 선택">
+        <button class="enhanced-control-btn workout-select" id="btnSelectWorkoutBluetoothCoach" onclick="if (typeof openCoachPcWorkoutChooser === 'function') openCoachPcWorkoutChooser(); else openWorkoutSelectionModalForBluetoothCoach();" title="워크아웃 선택">
           <img src="assets/img/workout.png" alt="워크아웃 선택" style="width: 24px; height: 24px; object-fit: contain;">
         </button>
         <!-- 컨트롤 버튼 (상단 배치) -->
@@ -35219,11 +35219,11 @@
   <!-- 평로라 대회 대시보드 스크립트 -->
   <script src="assets/js/rollerRaceDashboard.js"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
-  <script src="assets/js/indoorTrainingDashboard.js"></script>
+  <script src="assets/js/indoorTrainingDashboard.js?v=20261003coachDot1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
-  <script src="assets/js/bluetoothCoachDashboard.js?v=20261003coachLogo1"></script>
+  <script src="assets/js/bluetoothCoachDashboard.js?v=20261003coachDot1"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20260930coachm21"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20261003coachm22"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js?v=shared-mint-20260928"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

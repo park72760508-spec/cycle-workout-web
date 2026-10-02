@@ -7141,6 +7141,34 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     const yRatio = targetFtpPercent / maxFtpPercent; // 0.875
     const xLabelY = padding.top + chartHeight - (yRatio * chartHeight);
     ctx.fillText(`${totalMinutes}분`, padding.left + chartWidth / 2, xLabelY);
+
+    // 2026-10-03 Coach PC 전광판 그래프: 휴대폰 Coach 화면과 같은 진행 위치 빨강 점 + 흰색 펄스 링
+    if (canvasId === 'bluetoothCoachSegmentGraphCanvas') {
+      const cs = window.bluetoothCoachState || {};
+      const st = cs.trainingState;
+      if (st === 'running' || st === 'paused') {
+        const elapsed = Math.max(0, Number(cs.totalElapsedTime) || 0);
+        const ratio = Math.min(1, elapsed / totalSeconds);
+        const mx = padding.left + ratio * chartWidth;
+        const my = padding.top + chartHeight;
+        const r = 4;
+        const t = Date.now() / 1000;
+        ctx.save();
+        for (let i = 0; i < 3; i++) {
+          const ph = ((t + (i / 3) * 1.5) % 1.5) / 1.5;
+          ctx.beginPath();
+          ctx.arc(mx, my, r + ph * r * 2, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - ph) * 0.8})`;
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        ctx.beginPath();
+        ctx.arc(mx, my, r * 0.85, 0, Math.PI * 2);
+        ctx.fillStyle = '#ef4444';
+        ctx.fill();
+        ctx.restore();
+      }
+    }
 }
 
 

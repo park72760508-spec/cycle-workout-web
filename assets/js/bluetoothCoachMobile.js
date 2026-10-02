@@ -601,9 +601,47 @@
     return items;
   }
 
+  /** 선택 창을 지금 보이는 Coach 화면(PC/휴대폰) 안으로 옮김 — 숨겨진 화면 안에 있으면 보이지 않으므로 */
+  function mountPickerToActiveScreen() {
+    var picker = $('coachmWorkoutPicker');
+    if (!picker) return null;
+    var pc = $(PC_SCREEN_ID);
+    var host = pc && pc.classList.contains('active') ? pc : $(SCREEN_ID);
+    if (host && picker.parentNode !== host) host.appendChild(picker);
+    return picker;
+  }
+
+  /**
+   * PC Coach 화면 "워크아웃 선택" — 그룹 전용 / 일반 워크아웃 중 선택(2026-10-03).
+   * 그룹 전용은 휴대폰 화면과 같은 목록(이 Training Room 에 연결된 클럽의 그룹 전용 워크아웃), 일반은 기존 PC 선택 창.
+   */
+  window.openCoachPcWorkoutChooser = function () {
+    var picker = mountPickerToActiveScreen();
+    var list = $('coachmWorkoutPickerList');
+    if (!picker || !list) {
+      if (typeof window.openWorkoutSelectionModalForBluetoothCoach === 'function') window.openWorkoutSelectionModalForBluetoothCoach();
+      return;
+    }
+    setText('coachmWorkoutPickerTitle', '워크아웃 선택');
+    list.innerHTML =
+      '<button type="button" class="coachm-picker__item" data-kind="group"><span class="coachm-picker__item-title">그룹 전용 워크아웃</span><span class="coachm-picker__item-min">클럽</span></button>' +
+      '<button type="button" class="coachm-picker__item" data-kind="general"><span class="coachm-picker__item-title">일반 워크아웃</span><span class="coachm-picker__item-min">STELVIO</span></button>';
+    picker.style.display = 'flex';
+    Array.prototype.forEach.call(list.querySelectorAll('[data-kind]'), function (btn) {
+      btn.addEventListener('click', function () {
+        if (btn.getAttribute('data-kind') === 'group') {
+          window.openCoachMobileWorkoutPicker('group');
+        } else {
+          closeCoachMobileWorkoutPicker();
+          if (typeof window.openWorkoutSelectionModalForBluetoothCoach === 'function') window.openWorkoutSelectionModalForBluetoothCoach();
+        }
+      });
+    });
+  };
+
   window.openCoachMobileWorkoutPicker = async function (kind) {
     closeMenu();
-    var picker = $('coachmWorkoutPicker');
+    var picker = mountPickerToActiveScreen();
     var list = $('coachmWorkoutPickerList');
     if (!picker || !list) return;
     var grouped = kind === 'group';

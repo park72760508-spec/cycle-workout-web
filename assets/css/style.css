@@ -33447,7 +33447,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 
 
-/* ========== Live Training Room Coach — 휴대폰 전용 화면 (bluetoothCoachMobile.js) ========== */
+/* ========== Live Training Room Coach — 휴대폰 전용 화면 (bluetoothCoachMobile.js) ==========
+   (워크아웃 선택 창 .coachm-picker 는 2026-10-03부터 PC Coach 화면에서도 사용 — 선택자 양쪽 지정) */
 #bluetoothCoachMobileScreen .coachm-menu {
   min-width: 250px;
   max-width: calc(100vw - 24px);
@@ -33537,7 +33538,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   color: #00d4aa;
   text-shadow: 0 0 24px rgba(0, 212, 170, 0.6);
 }
-#bluetoothCoachMobileScreen .coachm-picker {
+#bluetoothCoachMobileScreen .coachm-picker, #bluetoothTrainingCoachScreen .coachm-picker {
   position: fixed;
   inset: 0;
   z-index: 10060;
@@ -33546,7 +33547,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
 }
-#bluetoothCoachMobileScreen .coachm-picker__sheet {
+#bluetoothCoachMobileScreen .coachm-picker__sheet, #bluetoothTrainingCoachScreen .coachm-picker__sheet {
   width: 100%;
   max-width: 520px;
   max-height: 75vh;
@@ -33557,7 +33558,7 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   border-top-right-radius: 16px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-#bluetoothCoachMobileScreen .coachm-picker__head {
+#bluetoothCoachMobileScreen .coachm-picker__head, #bluetoothTrainingCoachScreen .coachm-picker__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33566,25 +33567,25 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-size: 16px;
   border-bottom: 1px solid #333;
 }
-#bluetoothCoachMobileScreen .coachm-picker__close {
+#bluetoothCoachMobileScreen .coachm-picker__close, #bluetoothTrainingCoachScreen .coachm-picker__close {
   background: none;
   border: none;
   color: #aaa;
   font-size: 18px;
   cursor: pointer;
 }
-#bluetoothCoachMobileScreen .coachm-picker__list {
+#bluetoothCoachMobileScreen .coachm-picker__list, #bluetoothTrainingCoachScreen .coachm-picker__list {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 6px 0 12px;
 }
-#bluetoothCoachMobileScreen .coachm-picker__group {
+#bluetoothCoachMobileScreen .coachm-picker__group, #bluetoothTrainingCoachScreen .coachm-picker__group {
   padding: 10px 16px 4px;
   font-size: 12px;
   color: #00d4aa;
   font-weight: 700;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item {
+#bluetoothCoachMobileScreen .coachm-picker__item, #bluetoothTrainingCoachScreen .coachm-picker__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33599,22 +33600,22 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   text-align: left;
   cursor: pointer;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item.selected {
+#bluetoothCoachMobileScreen .coachm-picker__item.selected, #bluetoothTrainingCoachScreen .coachm-picker__item.selected {
   background: rgba(0, 212, 170, 0.15);
 }
-#bluetoothCoachMobileScreen .coachm-picker__item-title {
+#bluetoothCoachMobileScreen .coachm-picker__item-title, #bluetoothTrainingCoachScreen .coachm-picker__item-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item-min {
+#bluetoothCoachMobileScreen .coachm-picker__item-min, #bluetoothTrainingCoachScreen .coachm-picker__item-min {
   flex-shrink: 0;
   font-size: 12px;
   color: #aaa;
 }
-#bluetoothCoachMobileScreen .coachm-picker__empty {
+#bluetoothCoachMobileScreen .coachm-picker__empty, #bluetoothTrainingCoachScreen .coachm-picker__empty {
   padding: 30px 16px;
   text-align: center;
   color: #888;
