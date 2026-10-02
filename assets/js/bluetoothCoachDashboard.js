@@ -1329,6 +1329,54 @@ async function loadInitialUserDataForTracks() {
 /**
  * Firebase 데이터로 파워계 업데이트
  */
+/**
+ * 하단 정보바(rpm·랩파워·bpm) 바탕색 — 2026-10-02
+ *  - 흰색: 대기(사용자 없음 또는 최근 10초 데이터 미수신, 훈련 전)
+ *  - 초록: 훈련 중 랩파워 달성도 95% 이상(목표 파워가 없는 구간은 충족으로 간주)
+ *  - 주황: 훈련 중 랩파워 달성도 95% 미만
+ */
+function updateBluetoothCoachInfoBarColor(powerMeter) {
+  if (!powerMeter) return;
+  const infoEl = document.querySelector(`#power-meter-${powerMeter.id} .speedometer-info`);
+  if (!infoEl) return;
+  const fresh = Date.now() - Number(powerMeter.lastUpdateTime || 0) <= 10000;
+  const hasData = !!powerMeter.userName && fresh &&
+    ((Number(powerMeter.currentPower) || 0) > 0 || (Number(powerMeter.cadence) || 0) > 0 || (Number(powerMeter.heartRate) || 0) > 0);
+  const running = window.bluetoothCoachState && window.bluetoothCoachState.trainingState === 'running';
+  let state = 'idle';
+  if (hasData && running) {
+    const target = Number(powerMeter.targetPower) || 0;
+    const lap = Number(powerMeter.segmentPower) || 0;
+    state = target <= 0 || (lap / target) * 100 >= 95 ? 'ok' : 'low';
+  }
+  if (infoEl.dataset.achState === state) return;
+  infoEl.dataset.achState = state;
+  infoEl.classList.remove('connected', 'disconnected', 'warning');
+  if (state === 'ok') {
+    infoEl.style.backgroundColor = '#22c55e';
+    infoEl.style.borderColor = '#22c55e';
+    infoEl.style.color = '#ffffff';
+  } else if (state === 'low') {
+    infoEl.style.backgroundColor = '#ff8c00';
+    infoEl.style.borderColor = '#ff8c00';
+    infoEl.style.color = '#ffffff';
+  } else {
+    infoEl.style.backgroundColor = '#ffffff';
+    infoEl.style.borderColor = '#e2e8f0';
+    infoEl.style.color = '#334155';
+  }
+}
+
+/** 데이터가 끊기거나 훈련 상태·구간이 바뀌어도 색이 따라가도록 1초마다 재평가 */
+if (typeof window !== 'undefined' && !window.__bluetoothCoachInfoBarTimer) {
+  window.__bluetoothCoachInfoBarTimer = setInterval(function () {
+    try {
+      const pms = (window.bluetoothCoachState && window.bluetoothCoachState.powerMeters) || [];
+      pms.forEach(updateBluetoothCoachInfoBarColor);
+    } catch (e) {}
+  }, 1000);
+}
+
 function updatePowerMeterDataFromFirebase(trackId, userData) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === trackId);
   if (!powerMeter) return;
@@ -1490,32 +1538,9 @@ function updatePowerMeterUI(trackId) {
     targetPowerEl.textContent = Math.round(powerMeter.targetPower);
   }
   
-  // 배경색 업데이트 (RPM 값이 0보다 크면 초록색) - 0 표시 오류 개선
-  const infoEl = document.querySelector(`#power-meter-${trackId} .speedometer-info`);
-  if (infoEl) {
-    const now = Date.now();
-    const timeSinceLastUpdate = now - (powerMeter.lastCadenceUpdateTime || 0);
-    // 5초 이내에 업데이트가 있었고 케이던스가 0보다 크면 초록색
-    const cadenceValue = (timeSinceLastUpdate <= 5000 && powerMeter.cadence > 0) 
-      ? ((typeof powerMeter.cadence === 'number' && powerMeter.cadence >= 0 && powerMeter.cadence <= 254) 
-          ? Math.round(powerMeter.cadence) 
-          : 0)
-      : 0;
-    if (cadenceValue > 0) {
-      // RPM 값이 0보다 크면 초록색 (#00d4aa)
-      infoEl.style.backgroundColor = '#00d4aa';
-      infoEl.style.color = '#ffffff';
-      infoEl.classList.remove('disconnected');
-      infoEl.classList.add('connected');
-    } else {
-      // RPM 값이 0이면 기본 색상
-      infoEl.style.backgroundColor = '';
-      infoEl.style.color = '';
-      infoEl.classList.remove('connected');
-      infoEl.classList.add('disconnected');
-    }
-  }
-  
+  // 하단 정보바(rpm·랩파워·bpm) 바탕색 — 랩파워 달성도 기준(2026-10-02)
+  updateBluetoothCoachInfoBarColor(powerMeter);
+
   // 연결 상태 업데이트 (Firebase 디바이스 정보 확인)
   updateBluetoothCoachConnectionStatus(trackId);
 }
