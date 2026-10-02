@@ -1332,8 +1332,8 @@ async function loadInitialUserDataForTracks() {
 /**
  * 하단 정보바(rpm·랩파워·bpm) 바탕색 — 2026-10-02
  *  - 흰색: 대기(사용자 없음 또는 최근 10초 데이터 미수신, 훈련 전)
- *  - 초록: 훈련 중 랩파워 달성도 95% 이상(목표 파워가 없는 구간은 충족으로 간주)
- *  - 주황: 훈련 중 랩파워 달성도 95% 미만
+ *  - 초록: 훈련 중 랩파워 달성도 98.5% 이상(목표 파워가 없는 구간은 충족으로 간주) — 궤적색 기준과 동일
+ *  - 주황: 훈련 중 랩파워 달성도 98.5% 미만
  */
 function updateBluetoothCoachInfoBarColor(powerMeter) {
   if (!powerMeter) return;
@@ -1347,7 +1347,7 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
   if (hasData && running) {
     const target = Number(powerMeter.targetPower) || 0;
     const lap = Number(powerMeter.segmentPower) || 0;
-    state = target <= 0 || (lap / target) * 100 >= 95 ? 'ok' : 'low';
+    state = target <= 0 || (lap / target) * 100 >= 98.5 ? 'ok' : 'low'; // 계기판 궤적색(민트/주황)과 같은 98.5% 기준
   }
   if (infoEl.dataset.achState === state) return;
   infoEl.dataset.achState = state;
