@@ -16232,6 +16232,11 @@ function OpenRidingGroupDetailView(props) {
         });
         /* 서버 순위(동점 규칙 포함) 순서를 유지하고, 현재 멤버끼리 1위부터 다시 매김 */
         ranked.forEach(function (item, idx) { item._crewRank = idx + 1; });
+        /* 아바타 상세의 GC·주간TSS·최근 30일 거리·독주 값(다른 항목 목록과 동일) */
+        var cycleApiM = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
+        if (cycleApiM && typeof cycleApiM.attachAllMetricsToItems === 'function') {
+          cycleApiM.attachAllMetricsToItems(ranked, rankAllMetricsByCategory, rankCategory);
+        }
       } else if (isCycleGroup) {
         var cycleApi = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
         if (!cycleApi || typeof cycleApi.buildClubMemberRankedList !== 'function' || !rankByCategory) return null;
@@ -16275,6 +16280,13 @@ function OpenRidingGroupDetailView(props) {
           _crewRank: null
         };
       });
+      /* 미션 항목: 미션 기록이 없는 멤버도 아바타 상세에 GC 등 값 표시 */
+      if (isCycleGroup && rankMetric === 'mission') {
+        var cycleApiP = typeof window !== 'undefined' ? window.openRidingCycleClubRanking : null;
+        if (cycleApiP && typeof cycleApiP.attachAllMetricsToItems === 'function') {
+          cycleApiP.attachAllMetricsToItems(placeholders, rankAllMetricsByCategory, rankCategory);
+        }
+      }
       /* 값 없는 멤버(플레이스홀더)는 순위 없이 맨 뒤에 붙되, 그 안에서는 이름 가나다순 정렬 */
       placeholders.sort(function (a, b) {
         return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
@@ -17308,6 +17320,9 @@ function OpenRidingGroupDetailView(props) {
                                   groupLabel: isRunGroup ? '크루' : '클럽',
                                   rank: rank || null,
                                   metaHtml: rankMetaHtml,
+                                  line2Text: rankMetric === 'mission' && missionBoard && missionBoard.mission
+                                    ? '미션 수행 달성 : ' + (Number(m.missionCompleted) || 0) + '/' + (Array.isArray(missionBoard.mission.steps) ? missionBoard.mission.steps.length : 0)
+                                    : '',
                                   segmentsLine: overlaySegmentsLine,
                                   bottomLine: overlayBottomLine
                                 }
@@ -17868,6 +17883,9 @@ function OpenRidingGroupDetailView(props) {
                 ) : null}
                 {avatarZoom.rank ? (
                   <>
+                    {avatarZoom.rank.line2Text ? (
+                      <p className="stelvio-rank-avatar-zoom-line2">{avatarZoom.rank.line2Text}</p>
+                    ) : (
                     <p className="stelvio-rank-avatar-zoom-line2">
                       전체 랭킹보드{' '}
                       {avatarZoom.rank.metaHtml ? (
@@ -17876,6 +17894,7 @@ function OpenRidingGroupDetailView(props) {
                         '-'
                       )}
                     </p>
+                    )}
                     {avatarZoom.rank.segmentsLine ? (
                       <p className="stelvio-rank-avatar-zoom-line2">{avatarZoom.rank.segmentsLine}</p>
                     ) : null}

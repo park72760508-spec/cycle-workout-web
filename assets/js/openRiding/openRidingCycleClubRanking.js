@@ -233,7 +233,36 @@
     return merged;
   }
 
+  /**
+   * 이미 만들어진 멤버 목록(예: 미션 순위)에 아바타 확대 오버레이용 GC·주간TSS·최근 30일 거리·독주 값·순위를 붙임.
+   * buildClubMemberRankedList 와 같은 필드명(gcScore, weeklyTss …)을 채운다(2026-10-04).
+   */
+  function attachAllMetricsToItems(items, allMetricsByCategory, category) {
+    var cat = category || 'Supremo';
+    var all = allMetricsByCategory || {};
+    function rowsOf(key) { var b = all[key]; return (b && b[cat]) || []; }
+    var gcRows = rowsOf('gc'), tssRows = rowsOf('tss'), distRows = rowsOf('personal_dist'), speedRows = rowsOf('personal_speed');
+    var gcByUid = rowsByUid(gcRows), tssByUid = rowsByUid(tssRows), distByUid = rowsByUid(distRows), speedByUid = rowsByUid(speedRows);
+    var gcRank = rankPoolByMetric(gcRows, 'gc'), tssRank = rankPoolByMetric(tssRows, 'tss');
+    var distRank = rankPoolByMetric(distRows, 'personal_dist'), speedRank = rankPoolByMetric(speedRows, 'personal_speed');
+    (items || []).forEach(function (it) {
+      if (!it) return;
+      var uid = String(it.firebaseUid || it.userId || it.uid || '');
+      if (!uid) return;
+      it.gcScore = metricValue('gc', gcByUid[uid]);
+      it.weeklyTss = metricValue('tss', tssByUid[uid]);
+      it.distance30dKm = metricValue('personal_dist', distByUid[uid]);
+      it.personalSpeedKmh = metricValue('personal_speed', speedByUid[uid]);
+      it.gcRank = gcRank[uid] || null;
+      it.weeklyTssRank = tssRank[uid] || null;
+      it.distance30dRank = distRank[uid] || null;
+      it.personalSpeedRank = speedRank[uid] || null;
+    });
+    return items;
+  }
+
   window.openRidingCycleClubRanking = {
+    attachAllMetricsToItems: attachAllMetricsToItems,
     METRIC_OPTIONS: METRIC_OPTIONS,
     metricUnit: metricUnit,
     metricValue: metricValue,
