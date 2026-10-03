@@ -1639,6 +1639,7 @@
     .stelvio-ios-guide__prev { background:transparent; color:#c4b5fd; border:1px solid rgba(167,139,250,0.45); }
     .stelvio-ios-guide__next { background:rgba(167,139,250,0.18); color:#fff; border:1px solid rgba(167,139,250,0.55); }
     .stelvio-ios-guide__prev:disabled { opacity:.35; cursor:default; }
+    .stelvio-ios-guide__icon-img { display:block; width:52px; height:52px; border-radius:12px; margin:0 0 10px; }
     .stelvio-ios-guide__icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin:0 0 10px; background:linear-gradient(135deg,#0a84ff 0%,#5ac8fa 100%); font-size:24px; }
     /* TestFlight — iOS 비-Safari·인앱 브라우저용 Safari 유도 모달 (다크 테마) */
     .stelvio-safari-tf-modal {
@@ -4096,7 +4097,7 @@
                 </div>
 
                 <section class="stelvio-ios-guide__step" data-step="0">
-                  <div class="stelvio-ios-guide__icon" aria-hidden="true">✈️</div>
+                  <img class="stelvio-ios-guide__icon-img" src="assets/img/TestFlight.svg" alt="TestFlight" width="52" height="52" />
                   <span class="stelvio-ios-guide__badge">STEP 1</span>
                   <h3 class="stelvio-ios-guide__title">TestFlight 앱을 먼저 설치하세요</h3>
                   <ul class="stelvio-ios-guide__list">
@@ -4113,9 +4114,9 @@
                   <h3 class="stelvio-ios-guide__title">STELVIO 초대 링크 열기</h3>
                   <ul class="stelvio-ios-guide__list">
                     <li>아래 버튼을 누르면 <b>STELVIO 초대 링크</b>(testflight.apple.com/join/…)가 열립니다.</li>
-                    <li>반드시 <b>Safari</b> 등 모바일 브라우저에서 열려야 합니다. 카카오톡 등 앱 안 브라우저에서는 Safari로 열도록 안내합니다.</li>
+                    <li>반드시 <b>Safari</b> 또는 <b>Chrome</b> 같은 모바일 브라우저에서 열려야 합니다. 카카오톡·네이버 등 앱 안 브라우저에서는 Safari로, 안 되면 Chrome으로 자동으로 열어 줍니다.</li>
                   </ul>
-                  <button type="button" class="stelvio-ios-guide__action" onclick="openStelvioIosTestFlightInvite()">Safari로 초대 링크 열기</button>
+                  <button type="button" class="stelvio-ios-guide__action" onclick="openStelvioIosTestFlightInvite()">초대 링크 열기 (Safari · Chrome)</button>
                   <p class="stelvio-ios-guide__note">링크를 연 뒤 이 화면으로 돌아와 [다음]을 눌러 남은 단계를 확인하세요.</p>
                 </section>
 
@@ -4151,7 +4152,7 @@
               <div class="stelvio-safari-tf-modal__overlay" data-stelvio-tf-overlay tabindex="-1"></div>
               <div class="stelvio-safari-tf-modal__panel">
                 <h2 id="stelvioSafariTfTitle" class="stelvio-safari-tf-modal__title">Safari에서 TestFlight 열기</h2>
-                <p class="stelvio-safari-tf-modal__lead">현재 브라우저에서는 TestFlight가 정상 연동되지 않습니다.</p>
+                <p class="stelvio-safari-tf-modal__lead">지금 열린 앱 안 브라우저(카카오톡·네이버·인스타그램 등)는 다른 앱으로 넘기는 링크를 막아 TestFlight 앱이 열리지 않습니다. 링크를 복사해 Safari 또는 Chrome에서 열어 주세요.</p>
                 <button type="button" class="stelvio-safari-tf-modal__copy" data-stelvio-tf-copy>링크 복사하기</button>
                 <p class="stelvio-safari-tf-modal__hint">오른쪽 아래 <span class="stelvio-safari-tf-modal__kbd">[...]</span> 아이콘을 눌러 <strong style="color:#c4b5fd;font-weight:600;">Safari로 열기</strong>를 선택하시거나, 복사한 주소를 Safari 앱에 붙여넣어 주세요!</p>
                 <button type="button" class="stelvio-safari-tf-modal__close" data-stelvio-tf-close>닫기</button>
@@ -33818,18 +33819,41 @@
     }
     window.handleAppDownloadClick = handleAppDownloadClick;
 
-    /** STEP 2 초대 링크 — Safari 면 바로, 카카오톡 인앱이면 외부 Safari, 그 외 인앱 브라우저는 Safari 유도(링크 복사) 창 */
+    /**
+     * STEP 2 초대 링크 열기 (2026-10-03)
+     *  - Safari·Chrome·Firefox·Edge 등 정식 브라우저: 바로 이동(유니버설 링크로 TestFlight 앱이 열림)
+     *  - 카카오톡 인앱: 외부 Safari 로
+     *  - 그 밖의 앱 안 브라우저(네이버·인스타 등): Safari 로 열기 시도 → 안 열리면 Google Chrome 으로 열기 시도
+     *    → 둘 다 안 되면(앱 미설치 등) 링크 복사 안내 창
+     *    (앱 안 브라우저는 다른 앱으로 넘기는 링크를 막아 TestFlight 앱이 열리지 않기 때문)
+     */
+    function stelvioIsIOSFullBrowser(ua) {
+      return /CriOS|FxiOS|EdgiOS/.test(ua || navigator.userAgent || '');
+    }
     function openStelvioIosTestFlightInvite() {
       var ua = navigator.userAgent || '';
+      var url = STELVIO_IOS_TESTFLIGHT_URL;
       if (stelvioIsKakaoTalkIOSInApp(ua)) {
-        openKakaoExternalSafariWithUrl(STELVIO_IOS_TESTFLIGHT_URL);
+        openKakaoExternalSafariWithUrl(url);
         return;
       }
-      if (stelvioIsNativeIOSSafari(ua) || !stelvioIsIOSDevice()) {
-        window.location.href = STELVIO_IOS_TESTFLIGHT_URL;
+      if (stelvioIsNativeIOSSafari(ua) || stelvioIsIOSFullBrowser(ua) || !stelvioIsIOSDevice()) {
+        window.location.href = url;
         return;
       }
-      showStelvioSafariTestFlightModal();
+      var hostPath = url.replace(/^https?:\/\//, '');
+      var left = false;
+      var onHide = function () { if (document.hidden) left = true; };
+      document.addEventListener('visibilitychange', onHide);
+      window.location.href = 'x-safari-https://' + hostPath; // iOS 17+: 앱 안 브라우저에서 Safari 로 열기
+      setTimeout(function () {
+        if (left) return;
+        window.location.href = 'googlechromes://' + hostPath; // Safari 로 안 열리면 Google Chrome 으로
+        setTimeout(function () {
+          document.removeEventListener('visibilitychange', onHide);
+          if (!left) showStelvioSafariTestFlightModal(); // 둘 다 안 되면 링크 복사 안내
+        }, 1500);
+      }, 1200);
     }
     window.openStelvioIosTestFlightInvite = openStelvioIosTestFlightInvite;
 
