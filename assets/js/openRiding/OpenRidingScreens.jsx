@@ -16029,9 +16029,15 @@ function OpenRidingGroupDetailView(props) {
   var _missionBoard = useState(null);
   var missionBoard = _missionBoard[0];
   var setMissionBoard = _missionBoard[1];
-  var _rankMetric = useState(function () { return isRunGroup ? 'overall' : 'mission'; });
+  /* 기본 항목: 멤버십 클럽 = 미션, 일반 클럽 = GC (2026-10-03). 클럽 정보가 늦게 오면 그때 맞추되, 사용자가 고른 뒤에는 유지 */
+  var _rankMetric = useState(function () { return isRunGroup ? 'overall' : isGroupPaid ? 'mission' : 'gc'; });
   var rankMetric = _rankMetric[0];
   var setRankMetric = _rankMetric[1];
+  var rankMetricUserPickedRef = useRef(false);
+  useEffect(function () {
+    if (isRunGroup || rankMetricUserPickedRef.current || !grp) return;
+    setRankMetric(isGroupPaid ? 'mission' : 'gc');
+  }, [isGroupPaid, !!grp, isRunGroup]);
   var _rankGender = useState('all');
   var rankGender = _rankGender[0];
   var setRankGender = _rankGender[1];
@@ -17009,7 +17015,7 @@ function OpenRidingGroupDetailView(props) {
               className="stelvio-dropdown-select"
               value={rankMetric}
               aria-label="멤버 순위 항목 필터"
-              onChange={function (e) { setRankMetric(e.target.value); }}
+              onChange={function (e) { rankMetricUserPickedRef.current = true; setRankMetric(e.target.value); }}
             >
               {rankMetricOptions.map(function (o) {
                 return <option key={o.value} value={o.value}>{o.label}</option>;
