@@ -1620,6 +1620,26 @@
       background: #eef2ff;
     }
 
+    /* iOS 앱 설치 단계별 안내(TestFlight) — Safari 유도 모달과 같은 다크·보라 톤 (2026-10-03) */
+    .stelvio-ios-guide__step { display:none; text-align:left; }
+    .stelvio-ios-guide__step.is-active { display:block; }
+    .stelvio-ios-guide__dots { display:flex; justify-content:center; gap:6px; margin:0 0 14px; }
+    .stelvio-ios-guide__dot { width:8px; height:8px; border-radius:999px; background:rgba(196,181,253,0.25); transition:all .2s; }
+    .stelvio-ios-guide__dot.is-on { width:22px; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); }
+    .stelvio-ios-guide__badge { display:inline-block; font-size:11px; font-weight:700; color:#c4b5fd; letter-spacing:.04em; margin-bottom:6px; }
+    .stelvio-ios-guide__title { font-size:18px; font-weight:800; color:#fff; margin:0 0 10px; line-height:1.35; }
+    .stelvio-ios-guide__list { margin:0 0 16px; padding:0; list-style:none; }
+    .stelvio-ios-guide__list li { position:relative; padding:0 0 8px 22px; font-size:13.5px; line-height:1.55; color:rgba(226,232,240,0.88); }
+    .stelvio-ios-guide__list li::before { content:''; position:absolute; left:6px; top:8px; width:6px; height:6px; border-radius:999px; background:#a78bfa; }
+    .stelvio-ios-guide__list b { color:#e9d5ff; font-weight:700; }
+    .stelvio-ios-guide__action { display:block; width:100%; box-sizing:border-box; text-align:center; text-decoration:none; padding:13px 14px; border-radius:14px; border:0; font-size:15px; font-weight:800; color:#fff; background:linear-gradient(135deg,#667eea 0%,#764ba2 100%); box-shadow:0 8px 22px rgba(118,75,162,0.35); cursor:pointer; margin-bottom:8px; }
+    .stelvio-ios-guide__note { font-size:12px; line-height:1.5; color:rgba(196,181,253,0.85); margin:0 0 14px; }
+    .stelvio-ios-guide__nav { display:flex; gap:8px; margin-top:6px; }
+    .stelvio-ios-guide__nav button { flex:1; padding:11px 10px; border-radius:12px; font-size:14px; font-weight:700; cursor:pointer; }
+    .stelvio-ios-guide__prev { background:transparent; color:#c4b5fd; border:1px solid rgba(167,139,250,0.45); }
+    .stelvio-ios-guide__next { background:rgba(167,139,250,0.18); color:#fff; border:1px solid rgba(167,139,250,0.55); }
+    .stelvio-ios-guide__prev:disabled { opacity:.35; cursor:default; }
+    .stelvio-ios-guide__icon { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; margin:0 0 10px; background:linear-gradient(135deg,#0a84ff 0%,#5ac8fa 100%); font-size:24px; }
     /* TestFlight — iOS 비-Safari·인앱 브라우저용 Safari 유도 모달 (다크 테마) */
     .stelvio-safari-tf-modal {
       position: fixed;
@@ -4064,6 +4084,66 @@
                 <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8; text-align: center;">문의: <a href="mailto:stelvio.ai.kr@gmail.com" style="color:#0284c7;">stelvio.ai.kr@gmail.com</a></p>
               </div>
             </div>
+            </div>
+
+            <!-- iOS 앱 설치 단계별 안내 (TestFlight) -->
+            <div id="stelvioIosInstallGuide" class="stelvio-safari-tf-modal hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="stelvioIosGuideHead">
+              <div class="stelvio-safari-tf-modal__overlay" onclick="closeStelvioIosInstallGuide()"></div>
+              <div class="stelvio-safari-tf-modal__panel">
+                <h2 id="stelvioIosGuideHead" class="stelvio-safari-tf-modal__title" style="margin-bottom:12px;">iPhone · iPad 앱 설치</h2>
+                <div class="stelvio-ios-guide__dots" aria-hidden="true">
+                  <span class="stelvio-ios-guide__dot"></span><span class="stelvio-ios-guide__dot"></span><span class="stelvio-ios-guide__dot"></span><span class="stelvio-ios-guide__dot"></span>
+                </div>
+
+                <section class="stelvio-ios-guide__step" data-step="0">
+                  <div class="stelvio-ios-guide__icon" aria-hidden="true">✈️</div>
+                  <span class="stelvio-ios-guide__badge">STEP 1</span>
+                  <h3 class="stelvio-ios-guide__title">TestFlight 앱을 먼저 설치하세요</h3>
+                  <ul class="stelvio-ios-guide__list">
+                    <li>iPhone(또는 iPad)의 <b>App Store</b>를 실행합니다.</li>
+                    <li>검색창에 <b>TestFlight</b>를 검색해 <b>파란색 프로펠러 아이콘</b> 앱을 설치합니다.</li>
+                    <li>아래 버튼을 누르면 App Store의 TestFlight 화면으로 바로 이동합니다.</li>
+                  </ul>
+                  <a class="stelvio-ios-guide__action" href="https://apps.apple.com/kr/app/testflight/id899247664" target="_blank" rel="noopener noreferrer">App Store에서 TestFlight 설치하기</a>
+                  <p class="stelvio-ios-guide__note">이미 설치되어 있다면 [다음]을 누르세요.</p>
+                </section>
+
+                <section class="stelvio-ios-guide__step" data-step="1">
+                  <span class="stelvio-ios-guide__badge">STEP 2</span>
+                  <h3 class="stelvio-ios-guide__title">STELVIO 초대 링크 열기</h3>
+                  <ul class="stelvio-ios-guide__list">
+                    <li>아래 버튼을 누르면 <b>STELVIO 초대 링크</b>(testflight.apple.com/join/…)가 열립니다.</li>
+                    <li>반드시 <b>Safari</b> 등 모바일 브라우저에서 열려야 합니다. 카카오톡 등 앱 안 브라우저에서는 Safari로 열도록 안내합니다.</li>
+                  </ul>
+                  <button type="button" class="stelvio-ios-guide__action" onclick="openStelvioIosTestFlightInvite()">Safari로 초대 링크 열기</button>
+                  <p class="stelvio-ios-guide__note">링크를 연 뒤 이 화면으로 돌아와 [다음]을 눌러 남은 단계를 확인하세요.</p>
+                </section>
+
+                <section class="stelvio-ios-guide__step" data-step="2">
+                  <span class="stelvio-ios-guide__badge">STEP 3</span>
+                  <h3 class="stelvio-ios-guide__title">테스트 시작 / 수락 누르기</h3>
+                  <ul class="stelvio-ios-guide__list">
+                    <li>초대 링크 화면에 표시되는 <b>「테스트 시작(Start Testing)」</b> 또는 <b>「수락(Accept)」</b> 버튼을 누릅니다.</li>
+                    <li><b>TestFlight 앱</b>이 자동으로 실행되며 STELVIO 앱의 빌드 화면이 열립니다.</li>
+                  </ul>
+                </section>
+
+                <section class="stelvio-ios-guide__step" data-step="3">
+                  <span class="stelvio-ios-guide__badge">STEP 4</span>
+                  <h3 class="stelvio-ios-guide__title">[설치(Install)] 누르면 완료!</h3>
+                  <ul class="stelvio-ios-guide__list">
+                    <li>TestFlight에서 <b>[설치(Install)]</b> 버튼을 누르면 다운로드가 끝나고 <b>홈 화면에 STELVIO 앱</b>이 추가됩니다.</li>
+                    <li>아이콘 옆의 <b>노란색 점</b>은 베타(TestFlight) 앱이라는 표시입니다.</li>
+                  </ul>
+                  <button type="button" class="stelvio-ios-guide__action" onclick="openStelvioIosTestFlightInvite()">초대 링크 다시 열기</button>
+                </section>
+
+                <div class="stelvio-ios-guide__nav">
+                  <button type="button" class="stelvio-ios-guide__prev" onclick="stelvioIosGuideGo(-1)">이전</button>
+                  <button type="button" class="stelvio-ios-guide__next" onclick="stelvioIosGuideGo(1)">다음</button>
+                </div>
+                <button type="button" class="stelvio-safari-tf-modal__close" onclick="closeStelvioIosInstallGuide()" style="margin-top:10px;">닫기</button>
+              </div>
             </div>
 
             <!-- iOS 인앱·제3자 브라우저: TestFlight Safari 유도 모달 -->
@@ -33733,19 +33813,69 @@
         return;
       }
 
+      // iOS: 단계별 설치 안내(TestFlight 설치 → 초대 링크 → 테스트 시작 → 설치)
+      showStelvioIosInstallGuide();
+    }
+    window.handleAppDownloadClick = handleAppDownloadClick;
+
+    /** STEP 2 초대 링크 — Safari 면 바로, 카카오톡 인앱이면 외부 Safari, 그 외 인앱 브라우저는 Safari 유도(링크 복사) 창 */
+    function openStelvioIosTestFlightInvite() {
+      var ua = navigator.userAgent || '';
       if (stelvioIsKakaoTalkIOSInApp(ua)) {
         openKakaoExternalSafariWithUrl(STELVIO_IOS_TESTFLIGHT_URL);
         return;
       }
-
-      if (stelvioIsNativeIOSSafari(ua)) {
+      if (stelvioIsNativeIOSSafari(ua) || !stelvioIsIOSDevice()) {
         window.location.href = STELVIO_IOS_TESTFLIGHT_URL;
         return;
       }
-
       showStelvioSafariTestFlightModal();
     }
-    window.handleAppDownloadClick = handleAppDownloadClick;
+    window.openStelvioIosTestFlightInvite = openStelvioIosTestFlightInvite;
+
+    var __stelvioIosGuideStep = 0;
+    function stelvioIosGuideRender() {
+      var m = document.getElementById('stelvioIosInstallGuide');
+      if (!m) return;
+      var steps = m.querySelectorAll('.stelvio-ios-guide__step');
+      var dots = m.querySelectorAll('.stelvio-ios-guide__dot');
+      for (var i = 0; i < steps.length; i++) steps[i].classList.toggle('is-active', i === __stelvioIosGuideStep);
+      for (var j = 0; j < dots.length; j++) dots[j].classList.toggle('is-on', j === __stelvioIosGuideStep);
+      var prev = m.querySelector('.stelvio-ios-guide__prev');
+      var next = m.querySelector('.stelvio-ios-guide__next');
+      if (prev) prev.disabled = __stelvioIosGuideStep === 0;
+      if (next) next.textContent = __stelvioIosGuideStep >= steps.length - 1 ? '완료' : '다음';
+    }
+    function stelvioIosGuideGo(delta) {
+      var m = document.getElementById('stelvioIosInstallGuide');
+      var n = m ? m.querySelectorAll('.stelvio-ios-guide__step').length : 4;
+      var target = __stelvioIosGuideStep + delta;
+      if (target >= n) { closeStelvioIosInstallGuide(); return; }
+      __stelvioIosGuideStep = Math.max(0, target);
+      stelvioIosGuideRender();
+    }
+    window.stelvioIosGuideGo = stelvioIosGuideGo;
+    function showStelvioIosInstallGuide() {
+      var m = document.getElementById('stelvioIosInstallGuide');
+      if (!m) { openStelvioIosTestFlightInvite(); return; }
+      if (m.parentNode !== document.body) document.body.appendChild(m);
+      __stelvioIosGuideStep = 0;
+      stelvioIosGuideRender();
+      m.classList.remove('hidden');
+      m.style.display = 'flex';
+      m.setAttribute('aria-hidden', 'false');
+      document.body.style.overflow = 'hidden';
+    }
+    window.showStelvioIosInstallGuide = showStelvioIosInstallGuide;
+    function closeStelvioIosInstallGuide() {
+      var m = document.getElementById('stelvioIosInstallGuide');
+      if (!m) return;
+      m.classList.add('hidden');
+      m.style.display = 'none';
+      m.setAttribute('aria-hidden', 'true');
+      document.body.style.overflow = '';
+    }
+    window.closeStelvioIosInstallGuide = closeStelvioIosInstallGuide;
 
     (function initStelvioSafariTestFlightModalUi() {
       function bind() {
