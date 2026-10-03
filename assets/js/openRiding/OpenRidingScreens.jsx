@@ -499,6 +499,46 @@ function openRidingNewSettlementItemId() {
  * 모임 정산(참가비 등 분담금) — "내 상태" 아래에 표시. 확정 참가자에게만 노출.
  * 방장 또는 정산 등록자(최초 등록한 확정 참가자)만 편집 가능(firestore.rules와 동일 조건).
  */
+/* ===== 정산 입금 계좌: 최근 사용 이력(2026-10-03) — 기기(localStorage) + 회원 정보(users.lastSettlementBankAccount) ===== */
+function openRidingRecentBankKey(uid) {
+  return 'stelvio_settlement_bank_' + String(uid || '');
+}
+function openRidingNormalizeBank(b) {
+  if (!b || typeof b !== 'object') return null;
+  var out = {
+    bank: String(b.bank || '').trim().slice(0, 40),
+    accountNumber: String(b.accountNumber || '').replace(/[^0-9]/g, '').slice(0, 30),
+    holderName: String(b.holderName || '').trim().slice(0, 40)
+  };
+  return out.bank || out.accountNumber || out.holderName ? out : null;
+}
+function openRidingLoadRecentSettlementBank(uid) {
+  if (!uid) return null;
+  try { return openRidingNormalizeBank(JSON.parse(localStorage.getItem(openRidingRecentBankKey(uid)) || 'null')); } catch (e) { return null; }
+}
+function openRidingSaveRecentSettlementBank(uid, bank) {
+  var b = openRidingNormalizeBank(bank);
+  if (!uid || !b) return;
+  try { localStorage.setItem(openRidingRecentBankKey(uid), JSON.stringify(b)); } catch (e) {}
+  try {
+    // 다른 기기에서도 쓰도록 본인 회원 문서에 기록(본인 문서는 규칙상 수정 가능)
+    if (typeof window !== 'undefined' && window.firestore && typeof window.firestore.collection === 'function') {
+      window.firestore.collection('users').doc(String(uid)).set({ lastSettlementBankAccount: b }, { merge: true }).catch(function () {});
+    }
+  } catch (e2) {}
+}
+function openRidingFetchRecentSettlementBank(uid) {
+  if (!uid || typeof window === 'undefined' || !window.firestore || typeof window.firestore.collection !== 'function') return Promise.resolve(null);
+  return window.firestore.collection('users').doc(String(uid)).get()
+    .then(function (snap) {
+      var d = snap && snap.exists ? snap.data() || {} : {};
+      var b = openRidingNormalizeBank(d.lastSettlementBankAccount);
+      if (b) { try { localStorage.setItem(openRidingRecentBankKey(uid), JSON.stringify(b)); } catch (e) {} }
+      return b;
+    })
+    .catch(function () { return null; });
+}
+
 function OpenRidingSettlementFold(props) {
   var ride = props.ride;
   var rideId = props.rideId;
@@ -544,6 +584,14 @@ function OpenRidingSettlementFold(props) {
   var accountCopied = _acctCopied[0];
   var setAccountCopied = _acctCopied[1];
 
+  /* 본인이 예전에 등록한 정산 계좌도 최근 이력으로 기억(기능 도입 전 등록분 포함) — 기기에 없을 때만 */
+  var myBankSrc = settlement && String(settlement.registeredBy || '') === String(userId || '') ? settlement.bankAccount : null;
+  var myBankKey = myBankSrc ? JSON.stringify(myBankSrc) : '';
+  useEffect(function () {
+    if (!myBankSrc || !userId) return;
+    if (!openRidingLoadRecentSettlementBank(userId)) openRidingSaveRecentSettlementBank(userId, myBankSrc);
+  }, [myBankKey, userId]);
+
   if (!isParticipant) return null;
 
   var _viewerGrade = typeof window !== 'undefined' && typeof window.getLoginUserGrade === 'function' ? window.getLoginUserGrade() : null;
@@ -573,11 +621,27 @@ function OpenRidingSettlementFold(props) {
         };
       })
     );
+    var savedBank = settlement && settlement.bankAccount && (settlement.bankAccount.accountNumber || settlement.bankAccount.bank)
+      ? settlement.bankAccount
+      : null;
     setDraftBank({
-      bank: (settlement && settlement.bankAccount && settlement.bankAccount.bank) || '',
-      accountNumber: (settlement && settlement.bankAccount && settlement.bankAccount.accountNumber) || '',
-      holderName: (settlement && settlement.bankAccount && settlement.bankAccount.holderName) || ''
+      bank: (savedBank && savedBank.bank) || '',
+      accountNumber: (savedBank && savedBank.accountNumber) || '',
+      holderName: (savedBank && savedBank.holderName) || ''
     });
+    /* 2026-10-03: 새 정산 등록이면 최근에 사용한 입금 계좌를 미리 채움(편집 가능) — 기기 저장값 → 회원 정보 순 */
+    if (!savedBank) {
+      var recent = openRidingLoadRecentSettlementBank(userId);
+      if (recent) setDraftBank(recent);
+      openRidingFetchRecentSettlementBank(userId).then(function (rb) {
+        if (!rb) return;
+        setDraftBank(function (cur) {
+          // 기기 저장값으로 이미 채웠거나 사용자가 입력을 시작했으면 덮어쓰지 않음
+          if (recent) return cur;
+          return cur && (cur.bank || cur.accountNumber || cur.holderName) ? cur : rb;
+        });
+      });
+    }
     setErrMsg('');
     setEditing(true);
     setExpanded(true);
@@ -633,6 +697,7 @@ function OpenRidingSettlementFold(props) {
         bankAccount: draftBank,
         registeredByName: (userProfile && (userProfile.name || userProfile.displayName)) || ''
       });
+      openRidingSaveRecentSettlementBank(userId, draftBank); // 다음 정산 등록 때 자동 채움용
       setEditing(false);
       await reload();
     } catch (e) {
