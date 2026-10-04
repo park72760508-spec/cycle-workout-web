@@ -194,6 +194,10 @@
     if (comp.status === 'open' && withinWindow) {
       return { key: 'open', label: '접수중' };
     }
+    // 2026-10-05: 접수 기간이 끝났고 대회일은 아직 — "예정" 대신 "접수 마감"
+    if (closesMs != null && nowMs > closesMs) {
+      return { key: 'closed', label: '접수 마감' };
+    }
     return { key: 'upcoming', label: '예정' };
   }
 
@@ -606,7 +610,7 @@
       canModerate: canModerate,
       remainingLabel: category.key === 'past' && !invite ? '종료' : remainingLabel || '확인 중...',
       hideApply: !invite && (category.key === 'past' || hasApplication),
-      applyDisabledLabel: !invite && category.key === 'upcoming' ? '접수 예정' : null,
+      applyDisabledLabel: !invite && category.key === 'upcoming' ? '접수 예정' : !invite && category.key === 'closed' ? '접수 마감' : null,
       applyLabel: invite ? '자리 확보! 지금 신청하기' : null,
       waitlistInviteExpiresAt: invite ? invite.inviteExpiresAt : null,
       virtualAccount: hasApplication ? myApp.virtualAccount || {} : null,
@@ -697,8 +701,8 @@
         escapeHtml(comp.category === 'CYCLE' ? 'CYCLE' : 'RUN') + '</div>';
 
     var showApplyBtn = invite || category.key !== 'past';
-    var applyBtnLabel = invite ? '자리 확보! 지금 신청하기' : category.key === 'upcoming' ? '접수 예정' : '신청하기';
-    var applyBtnDisabled = !invite && category.key === 'upcoming';
+    var applyBtnLabel = invite ? '자리 확보! 지금 신청하기' : category.key === 'upcoming' ? '접수 예정' : category.key === 'closed' ? '접수 마감' : '신청하기';
+    var applyBtnDisabled = !invite && (category.key === 'upcoming' || category.key === 'closed');
     var inviteHintHtml =
       invite && invite.inviteExpiresAt
         ? '<div class="competition-card-invite-hint">' +
@@ -808,7 +812,7 @@
         return;
       }
       container.innerHTML = '';
-      var categoryOrder = { open: 0, upcoming: 1, past: 2 };
+      var categoryOrder = { open: 0, upcoming: 1, closed: 1, past: 2 };
       list
         .map(function (comp) {
           return { comp: comp, category: categorizeCompetition(comp).key, raceMs: toDateMs(comp.raceDate) || 0 };
