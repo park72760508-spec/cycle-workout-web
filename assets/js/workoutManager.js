@@ -5209,7 +5209,7 @@ function applyClubWorkoutBuilderUiMode() {
   if (passwordGroup) passwordGroup.style.display = 'none';
 
   var formTitle = document.querySelector('#workoutBuilderScreen .workout-builder-title');
-  if (formTitle) formTitle.textContent = '클럽 전용 워크아웃 작성';
+  if (formTitle) formTitle.textContent = '워크아웃 작성';
   var subtitle = document.querySelector('#workoutBuilderScreen .workout-builder-subtitle');
   if (subtitle) subtitle.textContent = '이 클럽에서만 사용하는 워크아웃입니다. 세그먼트를 추가/수정하고 저장하세요';
 
