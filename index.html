@@ -9249,7 +9249,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=workout-rpm-lvl3-20261005"></script>
+<script src="assets/js/workoutManager.js?v=workout-catfilter-20261006"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -9349,21 +9349,12 @@
         if (subtitleEl) { subtitleEl.style.display = 'none'; }
         if (headerEl) headerEl.classList.add('workout-screen-header--list-view');
         var grade = (typeof getViewerGrade === 'function') ? getViewerGrade() : '2';
-        var useCache = window.workouts && Array.isArray(window.workouts) && typeof renderWorkoutTable === 'function';
-        var filtered = [];
-        if (useCache && categoryId === 'all') {
-          filtered = window.workouts;
-        } else if (useCache && categoryId === '기타') {
-          filtered = window.workouts.filter(function(w) {
-            var t = String(w.title || w.name || '');
-            return t.indexOf('(Lite)') !== -1;
-          });
-        } else if (useCache && categoryId) {
-          filtered = window.workouts.filter(function(w) {
-            return typeof getWorkoutCategoryId === 'function' && getWorkoutCategoryId(w) === categoryId;
-          });
-        }
+        /* window.workouts 는 직전 카테고리로 이미 걸러진 목록일 수 있으므로 전체 목록(workoutsFull) 기준으로 필터 */
+        var sourceList = (Array.isArray(window.workoutsFull) && window.workoutsFull.length > 0) ? window.workoutsFull : window.workouts;
+        var useCache = Array.isArray(sourceList) && typeof renderWorkoutTable === 'function' && typeof window.filterWorkoutsByCategoryId === 'function';
+        var filtered = useCache ? window.filterWorkoutsByCategoryId(sourceList, categoryId) : [];
         if (useCache && (categoryId === 'all' ? filtered.length > 0 : true)) {
+          window.workouts = filtered;
           renderWorkoutTable(filtered, {}, {}, grade);
           if (typeof attachTableEventListeners === 'function') attachTableEventListeners();
         } else if (typeof loadWorkouts === 'function') {

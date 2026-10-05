@@ -3705,31 +3705,24 @@ async function loadWorkouts(categoryId, forceRefresh = false) {
     // 카테고리 필터 적용 전 전체 목록 (카테고리 개수 표시용, author 기준)
     const allWorkoutsForCount = filteredWorkouts;
 
-    // 카테고리 필터 (구글 시트 author 필드 기준). '기타'=입문자 전용: title에 (Lite) 포함 워크아웃만
-    if (categoryId && categoryId !== 'all') {
-      if (categoryId === '기타') {
-        filteredWorkouts = allWorkoutsForCount.filter(w => {
-          const t = String(w.title || w.name || '');
-          return t.indexOf('(Lite)') !== -1;
-        });
-        console.log('📂 카테고리 필터 적용 (입문자 전용, Lite):', { categoryId, count: filteredWorkouts.length });
-      } else {
-        var zoneForFilter = workoutCategoryIdToZoneTag(categoryId);
-        if (zoneForFilter) {
-          filteredWorkouts = allWorkoutsForCount.filter(function (w) {
-            return workoutMatchesTargetZoneTag(w, zoneForFilter);
-          });
-          console.log('📂 카테고리 필터 적용 (Zone ' + zoneForFilter + '):', {
-            categoryId: categoryId,
-            count: filteredWorkouts.length,
-          });
-        } else {
-          filteredWorkouts = allWorkoutsForCount.filter(function (w) {
-            return getWorkoutCategoryId(w) === categoryId;
-          });
-          console.log('📂 카테고리 필터 적용 (author 기준):', { categoryId, count: filteredWorkouts.length });
-        }
-      }
+    // 응답 도착 시점의 화면 상태 기준으로 카테고리를 다시 정한다 — 진입 직후 걸린 loadWorkouts('all')이
+    // 사용자가 카테고리 카드를 누른 뒤에 끝나면 전체 목록으로 덮어쓰던 문제 방지
+    const viewState = window.workoutViewState;
+    if (viewState && viewState.mode === 'list' && viewState.selectedCategory) {
+      categoryId = viewState.selectedCategory;
+    }
+    // 클럽 전용 화면이 같은 목록 영역을 쓰고 있으면 목록은 건드리지 않는다
+    const skipListRender = !!(viewState && (viewState.mode === 'clubs' || viewState.mode === 'clubWorkouts'));
+
+    filteredWorkouts = filterWorkoutsByCategoryId(allWorkoutsForCount, categoryId);
+    console.log('📂 카테고리 필터 적용:', { categoryId: categoryId || 'all', count: filteredWorkouts.length });
+
+    if (skipListRender) {
+      window.workouts = filteredWorkouts;
+      window.workoutsFull = allWorkoutsForCount;
+      if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(allWorkoutsForCount);
+      hideLoading();
+      return;
     }
 
     if (filteredWorkouts.length === 0) {
@@ -3901,6 +3894,25 @@ async function appendNewWorkoutToList(workoutId) {
     console.warn('appendNewWorkoutToList 실패, 전체 로딩으로 폴백:', e);
     loadWorkouts(window.workoutViewState && window.workoutViewState.selectedCategory ? window.workoutViewState.selectedCategory : 'all');
   }
+}
+
+/**
+ * 카테고리 ID로 워크아웃 목록 필터 (loadWorkouts·카테고리 카드 진입 공통).
+ * '기타'=입문자 전용: title에 (Lite) 포함, Zone 매핑 카테고리는 Zone 기준, 그 외 author 기준
+ */
+function filterWorkoutsByCategoryId(list, categoryId) {
+  if (!Array.isArray(list)) return [];
+  if (!categoryId || categoryId === 'all') return list;
+  if (categoryId === '기타') {
+    return list.filter(function (w) {
+      return String(w.title || w.name || '').indexOf('(Lite)') !== -1;
+    });
+  }
+  var zoneForFilter = workoutCategoryIdToZoneTag(categoryId);
+  if (zoneForFilter) {
+    return list.filter(function (w) { return workoutMatchesTargetZoneTag(w, zoneForFilter); });
+  }
+  return list.filter(function (w) { return getWorkoutCategoryId(w) === categoryId; });
 }
 
 /** 구글 시트 Workouts.author 필드 → 카테고리 매핑 (대소문자 무시) */
@@ -7674,6 +7686,7 @@ window.drawWorkoutProfileOnCanvas = drawWorkoutProfileOnCanvas;
 window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
+window.filterWorkoutsByCategoryId = filterWorkoutsByCategoryId;
 window.inferWorkoutCategoryFromZoneOrText = inferWorkoutCategoryFromZoneOrText;
 window.workoutCategoryIdToZoneTag = workoutCategoryIdToZoneTag;
 window.extractZoneTagFromCategoryOrText = extractZoneTagFromCategoryOrText;
