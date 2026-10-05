@@ -4436,6 +4436,7 @@
         try {
           var until = Number(localStorage.getItem(LS_DISMISS_UNTIL_KEY) || 0);
           if (until > Date.now()) return true;
+          if (cookieDismissUntil() > Date.now()) return true;
           return localStorage.getItem(LS_DISMISS_DATE_KEY) === todayStr(); // 이전 방식(오늘 하루)으로 숨긴 경우
         } catch (e) { return false; }
       }
@@ -4452,9 +4453,18 @@
         return '';
       }
 
+      function cookieDismissUntil() {
+        try {
+          var m = document.cookie.match(/(?:^|;\s*)stelvioLaunchNoticeUntil=(\d+)/);
+          return m ? Number(m[1]) || 0 : 0;
+        } catch (e) { return 0; }
+      }
+
       function setDismissedToday() {
         var until = Date.now() + DISMISS_MS;
         try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
+        // 앱 웹뷰가 localStorage 를 비우는 경우 대비 — 쿠키(7일)에도 저장
+        try { document.cookie = 'stelvioLaunchNoticeUntil=' + until + '; max-age=' + Math.floor(DISMISS_MS / 1000) + '; path=/; SameSite=Lax'; } catch (e3) {}
         try {
           var uid = currentUidForNotice();
           if (uid && window.firestore && typeof window.firestore.collection === 'function') {
@@ -4463,24 +4473,54 @@
         } catch (e2) {}
       }
 
-      function fetchServerDismissUntil() {
-        var uid = currentUidForNotice();
-        if (!uid || !window.firestore || typeof window.firestore.collection !== 'function') return Promise.resolve(0);
-        return window.firestore.collection('users').doc(uid).get()
-          .then(function (snap) {
-            var d = snap && snap.exists ? (snap.data() || {}) : {};
-            return Number(d.launchNoticeDismissUntil) || 0;
-          })
-          .catch(function () { return 0; });
+      /*
+       * 2026-10-06: 앱 재실행(자동 로그인) 직후에는 Firebase 로그인 복원보다 팝업 확인이 먼저 실행돼
+       * uid 를 몰라 회원 문서를 확인하지 못하고 팝업을 띄우던 문제 — 로그인·Firestore 준비를 최대 8초 기다린다.
+       * 확인 자체가 실패(네트워크 등)하면 1회 재시도한다.
+       */
+      function waitForNoticeUid(maxMs) {
+        return new Promise(function (resolve) {
+          var t0 = Date.now();
+          (function tick() {
+            var uid = currentUidForNotice();
+            if (uid && window.firestore && typeof window.firestore.collection === 'function') return resolve(uid);
+            if (Date.now() - t0 >= maxMs) return resolve('');
+            setTimeout(tick, 200);
+          })();
+        });
       }
 
+      function readServerDismissUntil(uid) {
+        return window.firestore.collection('users').doc(uid).get().then(function (snap) {
+          var d = snap && snap.exists ? (snap.data() || {}) : {};
+          return Number(d.launchNoticeDismissUntil) || 0;
+        });
+      }
+
+      function fetchServerDismissUntil() {
+        return waitForNoticeUid(8000).then(function (uid) {
+          if (!uid) return 0;
+          return readServerDismissUntil(uid).catch(function () {
+            return new Promise(function (r) { setTimeout(r, 1200); }).then(function () {
+              return readServerDismissUntil(uid).catch(function () { return 0; });
+            });
+          });
+        });
+      }
+
+      var noticeCheckInFlight = false;
       window.maybeShowLaunchNoticeModal = function () {
         if (isDismissedToday()) return;
         var modal = document.getElementById('launchNoticeModal');
-        if (!modal) return;
+        if (!modal || noticeCheckInFlight) return;
+        noticeCheckInFlight = true;
         fetchServerDismissUntil().then(function (until) {
+          noticeCheckInFlight = false;
+          if (isDismissedToday()) return;
           if (until > Date.now()) {
+            // 계정 기록으로 숨김 — 이 기기에도 다시 저장(localStorage + 쿠키)
             try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
+            try { document.cookie = 'stelvioLaunchNoticeUntil=' + until + '; max-age=' + Math.max(60, Math.floor((until - Date.now()) / 1000)) + '; path=/; SameSite=Lax'; } catch (e4) {}
             return;
           }
           var cb = document.getElementById('launchNoticeDismissToday');
