@@ -17,6 +17,11 @@
   <!-- 👆 여기까지 추가 -->
   <!-- Firebase compat SDK(head 상단 blocking script)용 TLS 핸드셰이크 조기 시작 -->
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin />
+  <!-- 로그인 경로(비밀번호 인증·토큰·프로필 조회) 서버에 미리 DNS+TLS 연결 — 모바일 셀룰러에서 첫 요청마다
+       수백 ms 씩 들던 핸드셰이크를 사용자가 입력하는 동안 끝내 둔다 (Android 인증 지연 개선 2026-10-05) -->
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
 
   <!-- 오픈라이딩 지도 등에만 필요: 초기 렌더 블록 완화 (로드 후 media 전환) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" crossorigin="" media="print" onload="this.media='all'" />
@@ -615,7 +620,88 @@
       await setDocFn(userDocRef, userData);
     };
 
+    /* 로그인 직후 프로필 1건 조회 고속 경로 (2026-10-05).
+       Firestore SDK 는 experimentalForceLongPolling 이라 첫 getDoc 때 WebChannel 연결 수립(여러 번 왕복)이
+       먼저 필요하다 — Android(특히 셀룰러·저사양 WebView)에서 이 단계가 1~3초씩 걸려 "인증 지연"으로 체감됐다.
+       REST(documents.get)는 이미 받은 ID 토큰으로 HTTPS GET 한 번이면 끝나므로 이를 먼저 시도하고,
+       실패·타임아웃이면 기존 SDK getDoc 으로 폴백한다. 보안 규칙은 동일하게 적용된다. */
+    function _stelvioRestValueToJs(v) {
+      if (!v || typeof v !== 'object') return null;
+      if ('nullValue' in v) return null;
+      if ('booleanValue' in v) return !!v.booleanValue;
+      if ('integerValue' in v) return Number(v.integerValue);
+      if ('doubleValue' in v) return Number(v.doubleValue);
+      if ('stringValue' in v) return v.stringValue;
+      if ('timestampValue' in v) {
+        var ms = Date.parse(v.timestampValue);
+        var TS = firestoreMod && firestoreMod.Timestamp;
+        if (TS && typeof TS.fromMillis === 'function' && isFinite(ms)) {
+          /* 나노초 정밀도 보존(SDK getDoc 결과와 동일한 Timestamp 객체) */
+          var m = /\.(\d+)Z$/.exec(v.timestampValue);
+          var nanos = m ? parseInt((m[1] + '000000000').slice(0, 9), 10) : 0;
+          return new TS(Math.floor(ms / 1000), nanos);
+        }
+        return v.timestampValue;
+      }
+      if ('mapValue' in v) {
+        var f = (v.mapValue && v.mapValue.fields) || {};
+        var o = {};
+        for (var k in f) { if (Object.prototype.hasOwnProperty.call(f, k)) o[k] = _stelvioRestValueToJs(f[k]); }
+        return o;
+      }
+      if ('arrayValue' in v) {
+        var arr = (v.arrayValue && v.arrayValue.values) || [];
+        return arr.map(_stelvioRestValueToJs);
+      }
+      if ('geoPointValue' in v) {
+        var GP = firestoreMod && firestoreMod.GeoPoint;
+        var g = v.geoPointValue || {};
+        return GP ? new GP(g.latitude || 0, g.longitude || 0) : { latitude: g.latitude || 0, longitude: g.longitude || 0 };
+      }
+      if ('referenceValue' in v) {
+        var path = String(v.referenceValue || '').replace(/^projects\/[^/]+\/databases\/[^/]+\/documents\//, '');
+        try { return docFn(firestoreV9, path); } catch (eRef) { return path; }
+      }
+      if ('bytesValue' in v) return v.bytesValue;
+      return null;
+    }
+
+    async function _getUserByUidRest(uid) {
+      var au = window.authV9 && window.authV9.currentUser;
+      if (!au || au.uid !== uid || typeof fetch !== 'function') return undefined; /* undefined = 고속 경로 불가 → SDK */
+      var cfg = window.__FIREBASE_CONFIG__ || {};
+      if (!cfg.projectId) return undefined;
+      var token = await au.getIdToken(false);
+      var url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cfg.projectId) +
+        '/databases/(default)/documents/users/' + encodeURIComponent(uid);
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var to = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (eA) {} }, 4000);
+      try {
+        var res = await fetch(url, {
+          method: 'GET',
+          headers: { 'Authorization': 'Bearer ' + token },
+          cache: 'no-store',
+          signal: ctrl ? ctrl.signal : undefined
+        });
+        if (res.status === 404) return null;
+        if (!res.ok) return undefined;
+        var body = await res.json();
+        var fields = (body && body.fields) || {};
+        var out = { id: uid };
+        for (var k in fields) { if (Object.prototype.hasOwnProperty.call(fields, k)) out[k] = _stelvioRestValueToJs(fields[k]); }
+        return out;
+      } catch (eRest) {
+        return undefined;
+      } finally {
+        clearTimeout(to);
+      }
+    }
+
     async function _getUserByUidImpl(uid) {
+      try {
+        var restOut = await _getUserByUidRest(uid);
+        if (restOut !== undefined) return restOut;
+      } catch (eRestTop) {}
       if (!firestoreV9 || !collectionFn || !docFn || !getDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
       var usersRef = collectionFn(firestoreV9, 'users');
       var userDocRef = docFn(usersRef, uid);
@@ -31133,7 +31219,7 @@
              users 문서(account_status)로 어차피 다시 판정되므로 사전확인 없이도 안전하다. */
           window.__stelvioIsAutoRelogin = true;
           handlePhoneAuth();
-        }, 200);
+        }, 60);
       } catch (eC) {}
     };
 
@@ -31365,12 +31451,22 @@
            실제 탈퇴 여부는 로그인 성공 후 users 문서(account_status, isUserWithdrawn)로
            어차피 다시 판정되므로 안전하다. (login_account_flags는 전체 회원 중 극소수만 존재해
            대부분 NOT_FOUND 과금 읽기로 끝나던 조회 — 앱을 열 때마다 매번 발생하던 트래픽의 핵심 원인이었다.) */
-        showAuthStatus('회원 확인 중…', 'info');
-        var loginPreflight = { withdrawn: false, hasRegisteredFlag: false, email: email };
-        if (!isAutoRelogin && typeof window.stelvioPreflightPhoneLogin === 'function') {
-          loginPreflight = await window.stelvioPreflightPhoneLogin(phone);
-        }
-        if (loginPreflight.withdrawn) {
+        /* 탈퇴 사전확인은 비밀번호 인증과 병렬로 진행한다 (2026-10-05) — 예전엔 이 Firestore 조회가 끝나야
+           sign-in 이 시작돼, 캐시가 없는 첫 로그인에서 Android 는 long-polling 연결 수립만큼 더 기다렸다.
+           결과는 인증 직후에 확인하고, 탈퇴면 방금 만든 세션을 로그아웃한 뒤 기존과 같은 안내를 띄운다. */
+        var loginPreflightPromise = (!isAutoRelogin && typeof window.stelvioPreflightPhoneLogin === 'function')
+          ? window.stelvioPreflightPhoneLogin(phone).catch(function () { return { withdrawn: false, hasRegisteredFlag: false, email: email }; })
+          : Promise.resolve({ withdrawn: false, hasRegisteredFlag: false, email: email });
+        async function stelvioHandlePreflightWithdrawn() {
+          var loginPreflight = await loginPreflightPromise;
+          if (!loginPreflight || !loginPreflight.withdrawn) return false;
+          try {
+            if (typeof signOutAllFirebaseAuth === 'function') await signOutAllFirebaseAuth();
+            else if (window.authV9 && typeof window.authV9.signOut === 'function') await window.authV9.signOut();
+          } catch (eSo) {}
+          if (typeof window.hideAuthTransitionOverlay === 'function') {
+            window.hideAuthTransitionOverlay();
+          }
           if (submitBtn) {
             submitBtn.disabled = false;
             submitBtn.classList.remove('loading');
@@ -31391,8 +31487,10 @@
           } else if (typeof alert === 'function') {
             alert('탈퇴처리된 사용자입니다.\\n\\n정상 사용을 위해 재가입을 통해 이용이 가능합니다.\\n\\n감사합니다.');
           }
-          return;
+          window.__stelvioLoginWithdrawnBlock = true;
+          return true;
         }
+        window.__stelvioLoginWithdrawnBlock = false;
         
         try {
             // [SESSION-only 전면 전환] Firebase Auth는 항상 SESSION. "로그인 상태 유지"는 stelvio_saved_* localStorage로만 처리.
@@ -31400,17 +31498,21 @@
             var _wantsRemember = _rememberCb && _rememberCb.checked;
             try { window._stelvioStorageSet('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e) {}
             try { localStorage.setItem('stelvio_auth_persist_local', _wantsRemember ? '1' : '0'); } catch(e2) {}
+            /* setPersistence(SESSION) 은 초기화 때 이미 적용돼 있다 — 여기선 기다리지 않고 요청만 걸어 둔다.
+               Firebase Auth 는 setPersistence·signIn 을 내부 큐로 순서대로 처리하므로 await 없이도 순서는 보장되고,
+               Android 에서 이 대기(모듈 resolve + 저장소 전환)가 sign-in 시작을 늦추던 몫이 사라진다. */
             try {
-              var _authModP = await import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js');
-              var _setPersistP = _authModP && _authModP.setPersistence;
-              var _sessionP = _authModP && _authModP.browserSessionPersistence;
-              if (typeof _setPersistP === 'function' && _sessionP) {
-                if (window.authV9) await _setPersistP(window.authV9, _sessionP).catch(function(){});
-                if (window.auth && typeof window.auth.setPersistence === 'function' && window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
-                  await window.auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION).catch(function(){});
+              import('/assets/js/vendor/firebasejs/10.14.1/firebase-auth.js').then(function (_authModP) {
+                var _setPersistP = _authModP && _authModP.setPersistence;
+                var _sessionP = _authModP && _authModP.browserSessionPersistence;
+                if (typeof _setPersistP === 'function' && _sessionP && window.authV9 && !window.__stelvioV9SessionPersistSet) {
+                  window.__stelvioV9SessionPersistSet = true;
+                  _setPersistP(window.authV9, _sessionP).catch(function(){});
                 }
+              }).catch(function () {});
+              if (window.auth && typeof window.auth.setPersistence === 'function' && window.firebase && window.firebase.auth && window.firebase.auth.Auth && window.firebase.auth.Auth.Persistence) {
+                window.auth.setPersistence(window.firebase.auth.Auth.Persistence.SESSION).catch(function(){});
               }
-              console.log('[Auth] setPersistence: SESSION 고정 (browserLocalPersistence 미사용)');
             } catch(persistErr) {
               console.warn('[Auth] setPersistence 실패 (무시):', persistErr && persistErr.message);
             }
@@ -31428,7 +31530,10 @@
                   console.log('✅ 로그인 성공 (authV9):', userCredential.user.uid);
                   /* v8 동기: RTDB용. await 제거 — Android에서 이중 네트워크 로그인으로 체감 지연 큼 → 백그라운드 처리 */
                   if (auth && typeof auth.signInWithEmailAndPassword === 'function') {
-                    auth.signInWithEmailAndPassword(email, password).catch(function (v8SyncErr) {
+                    auth.signInWithEmailAndPassword(email, password).then(function () {
+                      /* 병렬 사전확인에서 탈퇴로 판정돼 이미 로그아웃했다면 뒤늦게 붙은 v8 세션도 정리 */
+                      if (window.__stelvioLoginWithdrawnBlock) { try { auth.signOut(); } catch (eSo8) {} }
+                    }).catch(function (v8SyncErr) {
                       console.warn('[Login] v8 동기화 실패 (무시):', v8SyncErr);
                     });
                   }
@@ -31453,6 +31558,9 @@
               throw new Error('인증 모듈이 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.');
             }
             const user = userCredential.user;
+
+            /* 병렬로 돌던 탈퇴 사전확인 결과 반영 (대부분 이미 끝나 있음 — 30일 로컬 캐시) */
+            if (await stelvioHandlePreflightWithdrawn()) return;
             
             showAuthStatus('✅ 로그인 성공!', 'success');
 
