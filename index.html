@@ -45,6 +45,79 @@
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="assets/js/firebaseConfig.js"></script>
+  <!-- 조기 자동 로그인 (2026-10-05): 저장된 자격증명이 있으면 페이지(2MB+) 파싱이 끝나기를 기다리지 않고
+       지금 바로 authV9 비밀번호 인증 + users/{uid} REST 프리패치를 시작한다. 결과는 window.__stelvioEarlyAuth 에
+       담아 두고, DOMContentLoaded 뒤 자동 재로그인(handlePhoneAuth)이 네트워크 없이 그대로 이어받는다.
+       저사양 Android 는 파싱만 수 초 걸려, 예전엔 그동안 인증이 시작조차 못 했다. -->
+  <script>
+    /* authV9 초기화 (2026-10-05): getAuth() 는 모바일 브라우저에서 팝업/리디렉션 로그인용 iframe·Google API 스크립트를
+       '미리' 로드하고 그게 끝날 때까지 signIn·authStateReady 를 보류한다(저사양 Android·느린 망에서 수 초~수십 초).
+       authV9 는 전화번호(이메일/비밀번호) 로그인만 쓰므로 resolver 없이 initializeAuth 로 만든다 — 구글 팝업은 v8(window.auth) 전용.
+       웹 환경이면 처음부터 SESSION 저장소로 만들어 setPersistence 전환도 필요 없다. */
+    window.stelvioInitAuthV9Fast = function (authMod, app) {
+      try {
+        if (typeof authMod.initializeAuth === 'function') {
+          var webEnv = typeof window.isStelvioFirebaseAuthWebEnv === 'function' && window.isStelvioFirebaseAuthWebEnv();
+          return authMod.initializeAuth(app, {
+            persistence: webEnv
+              ? authMod.browserSessionPersistence
+              : [authMod.indexedDBLocalPersistence, authMod.browserLocalPersistence, authMod.browserSessionPersistence]
+          });
+        }
+      } catch (eInitAuth) { /* auth/already-initialized 등 — 이미 만들어진 인스턴스 사용 */ }
+      return authMod.getAuth(app);
+    };
+    (function stelvioEarlyAutoSignIn() {
+      try {
+        if (typeof Promise === 'undefined' || typeof fetch !== 'function') return;
+        var qs = String(location.search || '');
+        if (qs.indexOf('openDeviceSettingsOnly=1') !== -1 || qs.indexOf('journalSave=1') !== -1) return;
+        var id = localStorage.getItem('stelvio_saved_id');
+        var pw = localStorage.getItem('stelvio_saved_pw');
+        if (!id || !pw) return;
+        var digits = String(id).replace(/\D/g, '');
+        if (digits.length < 10) return;
+        var cfg = window.__FIREBASE_CONFIG__;
+        if (!cfg || !cfg.apiKey || cfg.apiKey === 'YOUR_FIREBASE_API_KEY' || !cfg.projectId) return;
+        var st = window.__stelvioEarlyAuth = { email: digits + '@stelvio.ai', pw: pw, startedAt: Date.now() };
+        var base = '/assets/js/vendor/firebasejs/10.14.1/';
+        st.promise = Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js')]).then(function (mods) {
+          var appMod = mods[0], authMod = mods[1];
+          st.modsAt = Date.now() - st.startedAt;
+          var app;
+          try { app = appMod.getApp('authV9'); } catch (eNoApp) { app = appMod.initializeApp(cfg, 'authV9'); }
+          var a = window.stelvioInitAuthV9Fast(authMod, app);
+          return a.authStateReady().then(function () {
+            if (a.currentUser) return { restored: true, user: a.currentUser }; /* 같은 탭 새로고침 — 기존 세션 유지 */
+            st.signInAt = Date.now() - st.startedAt;
+            return authMod.signInWithEmailAndPassword(a, st.email, pw).then(function (cred) {
+              st.signedInEarly = true;
+              st.doneAt = Date.now() - st.startedAt;
+              return { user: cred.user };
+            });
+          });
+        }).then(function (res) {
+          if (res && res.user && !res.restored) {
+            /* 프로필도 1회 왕복 REST 로 미리 받아 둔다 (_getUserByUidRest 가 소비) */
+            var u = res.user;
+            st.profilePromise = u.getIdToken(false).then(function (tok) {
+              return fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cfg.projectId) +
+                '/databases/(default)/documents/users/' + encodeURIComponent(u.uid), {
+                method: 'GET', headers: { 'Authorization': 'Bearer ' + tok }, cache: 'no-store'
+              });
+            }).then(function (r) {
+              if (r.status === 404) return { uid: u.uid, at: Date.now(), body: null };
+              if (!r.ok) return null;
+              return r.json().then(function (b) { return { uid: u.uid, at: Date.now(), body: b }; });
+            }).catch(function () { return null; });
+          }
+          return res;
+        }).catch(function (err) {
+          return { error: err };
+        });
+      } catch (eEarly) {}
+    })();
+  </script>
   <!-- 비용 절감 3단계: 랭킹보드 공용 스냅샷(Supabase) 우선 읽기 — getPeakPowerRanking 호출부 공통 -->
   <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20260925live3"></script>
   <script src="assets/js/stelvioFirestoreReconnect.js"></script>
@@ -136,8 +209,11 @@
         if (typeof initApp !== 'function' || typeof getAuthFn !== 'function' || typeof initFirestore !== 'function') {
           throw new Error('Firebase 모듈 로드 실패');
         }
-        var appV9 = initApp(firebaseConfig, 'authV9');
-        authV9 = getAuthFn(appV9);
+        /* <head> 조기 자동 로그인이 같은 이름으로 먼저 만들었을 수 있다 — 있으면 그대로 사용 */
+        var appV9 = null;
+        try { if (typeof appMod.getApp === 'function') appV9 = appMod.getApp('authV9'); } catch (_noApp) { appV9 = null; }
+        if (!appV9) appV9 = initApp(firebaseConfig, 'authV9');
+        authV9 = typeof window.stelvioInitAuthV9Fast === 'function' ? window.stelvioInitAuthV9Fast(authMod, appV9) : getAuthFn(appV9);
         /* [SESSION-only 전면 전환] browserLocalPersistence(IndexedDB) 미사용 — iOS 비동기 지연 회피. "로그인 유지"는 localStorage 수동 저장으로 처리. */
         if (
           typeof setPersistenceFn === 'function' &&
@@ -671,6 +747,21 @@
       if (!au || au.uid !== uid || typeof fetch !== 'function') return undefined; /* undefined = 고속 경로 불가 → SDK */
       var cfg = window.__FIREBASE_CONFIG__ || {};
       if (!cfg.projectId) return undefined;
+      /* <head> 조기 자동 로그인이 미리 받아 둔 응답 — 1회만, 20초 이내 것만 사용 */
+      var early = window.__stelvioEarlyAuth;
+      if (early && early.profilePromise && !early.profileConsumed) {
+        early.profileConsumed = true;
+        try {
+          var pre = await early.profilePromise;
+          if (pre && pre.uid === uid && Date.now() - pre.at < 20000) {
+            if (!pre.body) return null;
+            var preFields = pre.body.fields || {};
+            var preOut = { id: uid };
+            for (var pk in preFields) { if (Object.prototype.hasOwnProperty.call(preFields, pk)) preOut[pk] = _stelvioRestValueToJs(preFields[pk]); }
+            return preOut;
+          }
+        } catch (ePre) {}
+      }
       var token = await au.getIdToken(false);
       var url = 'https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cfg.projectId) +
         '/databases/(default)/documents/users/' + encodeURIComponent(uid);
@@ -31197,9 +31288,16 @@
         if (!id || !pw || String(pw).length === 0) return;
         if (window.__stelvioPhoneAuthBusy) return;
         /* Android: Firebase 세션은 끊겼는데 localStorage 프로필만 남으면 이전에는 여기서 return되어 자동 로그인이 막힘 → Firebase currentUser만으로 판단 */
+        /* <head> 조기 자동 로그인이 방금 만든 세션은 아직 '명시 로그인' 처리(프로필·화면 전환) 전이므로 진행 */
+        var earlyPending = function () {
+          var ea = window.__stelvioEarlyAuth;
+          return !!(ea && ea.promise && !ea.consumed && ea.email === (String(id).replace(/\D/g, '') + '@stelvio.ai'));
+        };
         try {
-          if (window.authV9 && window.authV9.currentUser) return;
-          if (window.auth && window.auth.currentUser) return;
+          if (!earlyPending()) {
+            if (window.authV9 && window.authV9.currentUser) return;
+            if (window.auth && window.auth.currentUser) return;
+          }
         } catch (eA) {}
         var now = Date.now();
         var lastTs = parseInt(sessionStorage.getItem('stelvio_auto_login_ts') || '0', 10);
@@ -31211,8 +31309,10 @@
           if (window.__stelvioPhoneAuthBusy) return;
           /* 제출 직전 한 번 더: 이미 Firebase 로그인된 경우만 스킵 */
           try {
-            if (window.authV9 && window.authV9.currentUser) return;
-            if (window.auth && window.auth.currentUser) return;
+            if (!earlyPending()) {
+              if (window.authV9 && window.authV9.currentUser) return;
+              if (window.auth && window.auth.currentUser) return;
+            }
           } catch (e2) {}
           /* 자동 재로그인 표시 — handlePhoneAuth가 탈퇴 사전확인(login_account_flags)을 건너뛰도록.
              이 기기는 이미 한 번 정상 로그인했던 계정이고, 실제 탈퇴 여부는 로그인 성공 후
@@ -31522,7 +31622,42 @@
             var usedV9ForLogin = false;
             var lastAuthError = null;
             
-            if (window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
+            /* <head> 조기 자동 로그인 결과 이어받기 — 같은 계정·비밀번호일 때만, 1회 */
+            var _skipV9SignIn = false;
+            var _earlyAuth = window.__stelvioEarlyAuth;
+            if (_earlyAuth && _earlyAuth.promise && !_earlyAuth.consumed && _earlyAuth.email === email && _earlyAuth.pw === password) {
+              _earlyAuth.consumed = true;
+              _earlyAuth.pw = null;
+              try {
+                /* 조기 로그인이 아직 한참 진행 중이면(네트워크 정체 등) 오래 기다리지 않고 아래 일반 로그인으로 진행 */
+                var _earlyRes = await Promise.race([
+                  _earlyAuth.promise,
+                  new Promise(function (r) { setTimeout(function () { r(null); }, 2500); })
+                ]);
+                var _curV9 = window.authV9 && window.authV9.currentUser;
+                if (_earlyRes && _earlyRes.user && _curV9 && _curV9.uid === _earlyRes.user.uid) {
+                  userCredential = { user: _curV9 };
+                  usedV9ForLogin = true;
+                  console.log('✅ 로그인 성공 (조기 자동 로그인 이어받기):', _curV9.uid);
+                  if (auth && typeof auth.signInWithEmailAndPassword === 'function' && !(auth.currentUser && auth.currentUser.uid === _curV9.uid)) {
+                    auth.signInWithEmailAndPassword(email, password).then(function () {
+                      if (window.__stelvioLoginWithdrawnBlock) { try { auth.signOut(); } catch (eSo8e) {} }
+                    }).catch(function (v8SyncErrE) {
+                      console.warn('[Login] v8 동기화 실패 (무시):', v8SyncErrE);
+                    });
+                  }
+                } else if (_earlyRes && _earlyRes.error) {
+                  var _eCode = _earlyRes.error.code || '';
+                  /* 비밀번호 불일치 등 확정 실패는 같은 요청을 v9 로 반복하지 않는다(시도 횟수 제한 방지) — 아래 v8 경로가 기존대로 처리 */
+                  if (/auth\/(wrong-password|invalid-credential|invalid-login-credentials|user-not-found|user-disabled|too-many-requests|invalid-email)/.test(_eCode)) {
+                    lastAuthError = _earlyRes.error;
+                    _skipV9SignIn = true;
+                  }
+                }
+              } catch (eEarlyTake) {}
+            }
+
+            if (!userCredential && !_skipV9SignIn && window.authV9 && typeof window.signInWithEmailAndPasswordV9 === 'function') {
               try {
                 userCredential = await window.signInWithEmailAndPasswordV9(window.authV9, email, password);
                 if (userCredential && userCredential.user) {
