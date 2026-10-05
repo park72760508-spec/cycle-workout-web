@@ -4440,24 +4440,64 @@
         } catch (e) { return false; }
       }
 
+      /*
+       * 2026-10-05: iPhone 앱 웹뷰는 앱 종료 시 기기 저장값(localStorage)이 지워질 수 있어
+       * 회원 문서(users/{uid}.launchNoticeDismissUntil)에도 만료 시각을 저장하고, 표시 전에 함께 확인한다.
+       */
+      function currentUidForNotice() {
+        try {
+          if (window.authV9 && window.authV9.currentUser) return window.authV9.currentUser.uid;
+          if (window.auth && window.auth.currentUser) return window.auth.currentUser.uid;
+        } catch (e) {}
+        return '';
+      }
+
       function setDismissedToday() {
-        try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(Date.now() + DISMISS_MS)); } catch (e) {}
+        var until = Date.now() + DISMISS_MS;
+        try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
+        try {
+          var uid = currentUidForNotice();
+          if (uid && window.firestore && typeof window.firestore.collection === 'function') {
+            window.firestore.collection('users').doc(uid).set({ launchNoticeDismissUntil: until }, { merge: true }).catch(function () {});
+          }
+        } catch (e2) {}
+      }
+
+      function fetchServerDismissUntil() {
+        var uid = currentUidForNotice();
+        if (!uid || !window.firestore || typeof window.firestore.collection !== 'function') return Promise.resolve(0);
+        return window.firestore.collection('users').doc(uid).get()
+          .then(function (snap) {
+            var d = snap && snap.exists ? (snap.data() || {}) : {};
+            return Number(d.launchNoticeDismissUntil) || 0;
+          })
+          .catch(function () { return 0; });
       }
 
       window.maybeShowLaunchNoticeModal = function () {
         if (isDismissedToday()) return;
         var modal = document.getElementById('launchNoticeModal');
         if (!modal) return;
-        modal.classList.remove('hidden');
-        requestAnimationFrame(function () {
-          modal.classList.add('launch-notice-modal--visible');
+        fetchServerDismissUntil().then(function (until) {
+          if (until > Date.now()) {
+            try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
+            return;
+          }
+          var cb = document.getElementById('launchNoticeDismissToday');
+          if (cb) cb.checked = false;
+          modal.classList.remove('hidden');
+          requestAnimationFrame(function () {
+            modal.classList.add('launch-notice-modal--visible');
+          });
         });
       };
 
       window.closeLaunchNoticeModal = function (dontShowToday) {
         var modal = document.getElementById('launchNoticeModal');
         if (!modal) return;
-        if (dontShowToday) setDismissedToday();
+        // ×·바깥 영역·[닫기] 어느 쪽으로 닫아도 "1주일 동안 보지 않기" 체크 상태를 반영
+        var cb = document.getElementById('launchNoticeDismissToday');
+        if (dontShowToday === true || (cb && cb.checked)) setDismissedToday();
         modal.classList.remove('launch-notice-modal--visible');
         setTimeout(function () {
           modal.classList.add('hidden');
