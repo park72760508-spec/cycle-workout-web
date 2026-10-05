@@ -9293,15 +9293,11 @@
         var headerEl = document.getElementById('workoutScreenHeader');
         if (catView) { catView.style.display = 'block'; catView.removeAttribute('data-hidden'); }
         if (listView) { listView.style.display = 'none'; listView.setAttribute('data-hidden', 'true'); }
-        /* 카테고리(워크아웃 제목) 화면: 좌측 < 홈 이동, 우측 + 워크아웃 작성 */
+        /* 카테고리(워크아웃 메인) 화면: 좌측 < 없음, 우측 + 워크아웃 작성 (버튼은 absolute 배치라 제목 중앙 유지) */
         var backBtn = document.getElementById('workoutScreenBackBtn');
         if (backBtn) {
-          backBtn.style.display = 'flex';
-          backBtn.setAttribute('aria-label', '홈으로');
-          backBtn.onclick = function () {
-            if (typeof window.goHomeBasecamp === 'function') window.goHomeBasecamp();
-            else if (typeof showScreen === 'function') showScreen('basecampScreen');
-          };
+          backBtn.style.display = 'none';
+          backBtn.onclick = null;
         }
         var newBtn = document.getElementById('workoutScreenNewBtn');
         if (newBtn) newBtn.style.display = 'flex';
