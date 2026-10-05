@@ -7310,8 +7310,10 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     const hasCadence = bar.isCadence || (bar.isDual && bar.cadenceRpm > 0);
     
     if (hasCadence) {
+      // 2026-10-05: rpm 값은 모든 rpm 구간에 표시 — 좁은 막대는 작은 글씨(compact)로
       const effectiveWidth = widthPercent + HALF_GAP_PERCENT;
-      bar.showRpmValue = effectiveWidth >= RPM_TEXT_WIDTH_PERCENT;
+      bar.showRpmValue = true;
+      bar.rpmCompact = effectiveWidth < RPM_TEXT_WIDTH_PERCENT;
     } else {
       bar.showRpmValue = false;
     }
@@ -7418,14 +7420,14 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--cadence" style="flex: ${b.flexGrow} 1 0; --bar-height: 100%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line"></div>
-            ${(b.cadenceRpm > 0 && b.showRpmValue) ? `<span class="segmented-workout-graph__cadence-value">${b.cadenceRpm}</span>` : ''}
+            ${(b.cadenceRpm > 0 && b.showRpmValue) ? `<span class="segmented-workout-graph__cadence-value${b.rpmCompact ? ' segmented-workout-graph__cadence-value--compact' : ''}">${b.cadenceRpm}</span>` : ''}
           </div>`;
           }
           if (b.isDual && b.cadenceRpm > 0) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone} segmented-workout-graph__bar--dual" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="Zone ${b.zone} · RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line segmented-workout-graph__cadence-line--dual"></div>
-            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value segmented-workout-graph__cadence-value--dual">${b.cadenceRpm}</span>` : ''}
+            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value segmented-workout-graph__cadence-value--dual${b.rpmCompact ? ' segmented-workout-graph__cadence-value--compact' : ''}">${b.cadenceRpm}</span>` : ''}
           </div>`;
           }
           return `
