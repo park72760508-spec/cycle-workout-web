@@ -11305,6 +11305,14 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   font-size: 8px;
   letter-spacing: -0.3px;
 }
+/* 좁은 rpm 구간이 연속될 때 짝수 번째 값은 한 줄 위로(지그재그) — 겹침 방지 */
+.segmented-workout-graph__cadence-value--compact.segmented-workout-graph__cadence-value--stagger {
+  bottom: min(calc(var(--cadence-line-bottom, 0) + 14px), 92%);
+}
+.segmented-workout-graph__cadence-value--dual.segmented-workout-graph__cadence-value--stagger {
+  bottom: auto;
+  margin-top: -12px;
+}
 /* dual: RPM 값을 RPM 바(라인) 위쪽에 표기 */
 .segmented-workout-graph__cadence-value--dual {
   bottom: auto;
