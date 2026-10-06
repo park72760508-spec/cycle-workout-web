@@ -6347,23 +6347,7 @@ function OpenRidingCalendarMain(props) {
 
       {!compact ? renderListSection() : null}
 
-      {userId ? (
-        <button
-          type="button"
-          className="open-riding-action-btn open-riding-group-fab fixed flex h-12 w-12 items-center justify-center rounded-full border-0 text-white shadow-lg md:h-14 md:w-14 box-border"
-          style={{
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            boxShadow: '0 4px 16px rgba(102, 126, 234, 0.4)'
-          }}
-          title="라이딩 생성"
-          aria-label="라이딩 생성"
-          onClick={onOpenCreate}
-        >
-          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.2" d="M12 4v16m8-8H4" />
-          </svg>
-        </button>
-      ) : null}
+      {/* 생성(+) 버튼은 상단 헤더 제목 우측(OpenRidingRoomApp)으로 이동 (2026-10) */}
     </div>
   );
 }
@@ -18786,6 +18770,26 @@ function OpenRidingRoomApp(props) {
                 />
               </button>
             </div>
+          ) : view === 'main' && firestore && effectiveUserId ? (
+            /* 라이딩 모임·러닝 크루 생성(+) — 예전 좌하단 플로팅 버튼을 제목과 같은 수평선 우측으로 이동 */
+            <button
+              type="button"
+              className="open-riding-action-btn open-riding-header-create-btn shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-full border-0 text-white box-border justify-self-end"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)'
+              }}
+              title={clubCategory === 'RUN' ? '러닝 모임 생성' : '라이딩 생성'}
+              aria-label={clubCategory === 'RUN' ? '러닝 모임 생성' : '라이딩 생성'}
+              onClick={function () {
+                setDetailGroupId(null);
+                setView('create');
+              }}
+            >
+              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           ) : (
             <span className="shrink-0 inline-block w-9 h-9" aria-hidden="true" />
           )}
