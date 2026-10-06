@@ -3326,11 +3326,19 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
   /* 배치가 많으면(수백 개) 전체가 끝날 때까지(수십 초~1분 이상) 화면이 전혀 갱신되지
    * 않아 "그래프 불러오는 중…"만 계속 보이는 것도 체감상 안 좋다 — 2초에 한 번씩
    * 그때까지 채워진 것만 미리 반영해 그래프가 하나씩 나타나는 것처럼 보이게 한다. */
+  /* 재렌더는 "지금 화면에 보이는 카테고리" 기준 — 진입 시 시작된 'all' 로딩의 세그먼트 조회가
+   * 카테고리 카드 선택 이후에도 계속 돌면서 전체 목록으로 덮어쓰던 문제 방지.
+   * 카테고리 그리드(목록 숨김)·클럽 전용 화면에서는 목록을 다시 그리지 않는다. */
   function renderIfActive() {
     const screenEl = document.getElementById('workoutScreen');
-    if (screenEl && screenEl.classList.contains('active') && typeof renderWorkoutTable === 'function') {
-      renderWorkoutTable(filteredWorkouts, {}, {}, grade);
-    }
+    if (!screenEl || !screenEl.classList.contains('active') || typeof renderWorkoutTable !== 'function') return false;
+    const vs = window.workoutViewState;
+    if (vs && vs.mode !== 'list') return false;
+    const cat = vs && vs.selectedCategory ? vs.selectedCategory : 'all';
+    const visible = filterWorkoutsByCategoryId(allWorkoutsForCount, cat);
+    window.workouts = visible;
+    renderWorkoutTable(visible, {}, {}, grade);
+    return true;
   }
   var lastIncrementalRenderAt = Date.now();
 
@@ -3393,10 +3401,10 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
       w.totalMinutes = Math.round(w.total_seconds / 60);
     }
   });
-  const screenEl = document.getElementById('workoutScreen');
-  if (screenEl && screenEl.classList.contains('active') && typeof renderWorkoutTable === 'function') {
-    renderWorkoutTable(filteredWorkouts, {}, {}, grade);
-    if (typeof renderWorkoutCategories === 'function') renderWorkoutCategories(allWorkoutsForCount);
+  renderIfActive();
+  const screenElDone = document.getElementById('workoutScreen');
+  if (screenElDone && screenElDone.classList.contains('active') && typeof renderWorkoutCategories === 'function') {
+    renderWorkoutCategories(allWorkoutsForCount);
   }
 }
 
