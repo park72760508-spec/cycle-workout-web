@@ -4196,6 +4196,70 @@ function estimateWorkoutTSS(workout) {
 }
 
 /**
+ * 내가 완수한 워크아웃 id 집합 (users/{uid}/logs 중 workout_id 가 있는 훈련 기록 = 완수 이력,
+ * scheduleAIManager 의 완수 판정과 같은 기준). 사용자별 1회 조회 후 메모리 캐시,
+ * 훈련 저장 시 markWorkoutCompletedByMe 로 즉시 추가.
+ */
+var _completedWorkoutIdsState = { uid: null, ids: null, promise: null };
+
+function getCompletedWorkoutsUserId() {
+  try {
+    if (window.currentUser && window.currentUser.id) return String(window.currentUser.id);
+    var auth = window.authV9 || (window.firebase && window.firebase.auth && window.firebase.auth());
+    if (auth && auth.currentUser && auth.currentUser.uid) return String(auth.currentUser.uid);
+  } catch (e) {}
+  return null;
+}
+
+function isWorkoutCompletedByMe(workoutId) {
+  var st = _completedWorkoutIdsState;
+  return !!(st.ids && st.uid === getCompletedWorkoutsUserId() && st.ids.has(String(workoutId)));
+}
+
+function loadMyCompletedWorkoutIds() {
+  var uid = getCompletedWorkoutsUserId();
+  var st = _completedWorkoutIdsState;
+  if (!uid || !window.firestore) return Promise.resolve(null);
+  if (st.uid === uid && st.ids) return Promise.resolve(st.ids);
+  if (st.uid === uid && st.promise) return st.promise;
+  st.uid = uid;
+  st.ids = null;
+  st.promise = window.firestore.collection('users').doc(uid).collection('logs')
+    .where('workout_id', '!=', null)
+    .get()
+    .then(function (snap) {
+      var ids = new Set();
+      snap.forEach(function (doc) {
+        var w = doc.get('workout_id');
+        if (w != null && String(w).trim() !== '') ids.add(String(w).trim());
+      });
+      if (st.uid === uid) st.ids = ids;
+      return ids;
+    })
+    .catch(function (err) {
+      console.warn('[Workout] 완수 이력 조회 실패:', err && err.message ? err.message : err);
+      return null;
+    })
+    .finally(function () { if (st.uid === uid) st.promise = null; });
+  return st.promise;
+}
+
+function applyCompletedWorkoutChecks() {
+  document.querySelectorAll('.workout-card__select-btn[id^="selectWorkoutBtn-"]').forEach(function (btn) {
+    var id = btn.id.slice('selectWorkoutBtn-'.length);
+    btn.style.display = isWorkoutCompletedByMe(id) ? '' : 'none';
+  });
+}
+
+/** 훈련 저장 직후 호출 — 다음 목록 표시부터 해당 워크아웃에 완수 체크 표시 */
+function markWorkoutCompletedByMe(workoutId) {
+  if (workoutId == null || String(workoutId).trim() === '') return;
+  var st = _completedWorkoutIdsState;
+  if (st.ids && st.uid === getCompletedWorkoutsUserId()) st.ids.add(String(workoutId).trim());
+  applyCompletedWorkoutChecks();
+}
+
+/**
  * WorkoutCard 컴포넌트 렌더 (단일 카드 HTML)
  * 카드 블럭 클릭 시 선택·훈련준비 로딩, 선택된 카드는 훈련명 앞에 체크 표시
  */
@@ -4219,8 +4283,8 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
       <div class="workout-card__header">
         <h3 class="workout-card__title">${selectedCheck}<span class="workout-card__title-text">${safeTitle}</span></h3>
         <div class="workout-card__actions">
-          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${idArg})" title="선택" aria-label="선택">
-            <img src="assets/img/check2.png" alt="선택" class="workout-card__select-icon" />
+          <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${idArg})" title="완수한 워크아웃" aria-label="완수한 워크아웃"${isWorkoutCompletedByMe(workout.id) ? '' : ' style="display:none"'}>
+            <img src="assets/img/check2.png" alt="완수" class="workout-card__select-icon" />
           </button>
           ${isClubWorkout ? `
             <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); editClubWorkout(${idArg})" title="수정" aria-label="수정">
@@ -4274,6 +4338,8 @@ function renderWorkoutCards(workouts, workoutRoomStatusMap = {}, workoutRoomCode
       ${workouts.map(w => renderWorkoutCard(w, workoutRoomStatusMap, workoutRoomCodeMap, grade)).join('')}
     </div>
   `;
+  // 완수 체크 아이콘: 내 훈련 기록(완수 이력) 조회 후 해당 카드만 표시 (첫 조회 이후엔 메모리 캐시)
+  loadMyCompletedWorkoutIds().then(applyCompletedWorkoutChecks);
   workouts.forEach(workout => {
     const graphEl = document.getElementById('workout-card-graph-' + workout.id);
     if (!graphEl) return;
@@ -7687,6 +7753,7 @@ window.getSegmentZoneFromFtpPercent = getSegmentZoneFromFtpPercent;
 window.getWorkoutDominantZone = getWorkoutDominantZone;
 window.getWorkoutCategoryId = getWorkoutCategoryId;
 window.filterWorkoutsByCategoryId = filterWorkoutsByCategoryId;
+window.markWorkoutCompletedByMe = markWorkoutCompletedByMe;
 window.inferWorkoutCategoryFromZoneOrText = inferWorkoutCategoryFromZoneOrText;
 window.workoutCategoryIdToZoneTag = workoutCategoryIdToZoneTag;
 window.extractZoneTagFromCategoryOrText = extractZoneTagFromCategoryOrText;

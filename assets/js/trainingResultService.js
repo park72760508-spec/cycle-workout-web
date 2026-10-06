@@ -883,6 +883,10 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
     // 클럽 챌린지 미션: 미션 상세에서 START한 워크아웃이면 단계 완료 처리(서버가 로그로 검증)
     completePendingClubMissionAfterSave(trainingData, result.trainingLogId);
     completePendingClubPtLessonAfterSave(trainingData, result.trainingLogId);
+    // 워크아웃 목록 완수 체크 아이콘 즉시 반영
+    if (trainingData && trainingData.workout_id && typeof window !== 'undefined' && typeof window.markWorkoutCompletedByMe === 'function') {
+      try { window.markWorkoutCompletedByMe(trainingData.workout_id); } catch (e) {}
+    }
 
     try {
       const dualMod = await import('./supabaseDualWrite.js');
