@@ -1333,17 +1333,7 @@ function AffiliateList(props) {
         </>
       )}
 
-      {/* 등록 FAB (grade=1 only) */}
-      {isAdmin && (
-        <button
-          type="button"
-          className="open-riding-group-fab affiliate-fab-create fixed z-[100100] flex items-center justify-center rounded-full shadow-lg text-white text-2xl font-bold"
-          aria-label="제휴사 등록"
-          onClick={onCreate}
-        >
-          +
-        </button>
-      )}
+      {/* 등록(+) 버튼은 상단 헤더 제목 우측(AffiliateApp)으로 이동 (2026-10) */}
 
       {/* 스크롤 위로 버튼 */}
       {showScrollTop && (
@@ -2007,6 +1997,18 @@ function AffiliateApp(props) {
               onClick={goBack}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          ) : view === 'list' && isAdmin ? (
+            /* 제휴사 등록(+) (grade=1 only) — 예전 좌하단 플로팅 버튼을 제목과 같은 수평선 우측으로 이동 */
+            <button type="button"
+              className="shrink-0 inline-flex items-center justify-center w-9 h-9 rounded-full border-0 text-white box-border justify-self-end"
+              style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', boxShadow: '0 2px 8px rgba(102, 126, 234, 0.4)' }}
+              aria-label="제휴사 등록"
+              title="제휴사 등록"
+              onClick={function(){ setEditId(null); setView('create'); }}>
+              <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" d="M12 4v16m8-8H4" />
               </svg>
             </button>
           ) : (

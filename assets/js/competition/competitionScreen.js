@@ -793,18 +793,19 @@
       var existingFab = document.getElementById('competitionAdminCreateFab');
       if (existingFab) existingFab.remove();
       if (uid) {
-        // 제휴사 등록(.affiliate-fab-create)과 동일한 좌하단 원형 FAB — 로그인한 사용자라면 관리자·일반 모두 노출.
+        // 새 대회 만들기(+) — 제목 '대회'와 같은 수평선 우측 원형 버튼. 로그인한 사용자라면 관리자·일반 모두 노출.
         // 관리자가 만들면 즉시 공개(APPROVED), 일반 사용자가 만들면 승인 대기(PENDING)로 시작한다(competitionAdminForm.saveCompetition).
         var createBtn = document.createElement('button');
         createBtn.type = 'button';
         createBtn.id = 'competitionAdminCreateFab';
-        createBtn.className = 'competition-fab-create fixed z-[100100] flex items-center justify-center rounded-full shadow-lg text-white text-2xl font-bold';
+        createBtn.className = 'competition-header-create-btn';
         createBtn.setAttribute('aria-label', '새 대회 만들기');
-        createBtn.textContent = '+';
+        createBtn.title = '새 대회 만들기';
+        createBtn.innerHTML = '<svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4" d="M12 4v16m8-8H4"/></svg>';
         createBtn.addEventListener('click', function () {
           window.competitionAdminForm.openForm({ category: getActiveCompetitionCategory() }, renderCompetitionList);
         });
-        document.getElementById('competitionScreen').appendChild(createBtn);
+        (document.getElementById('competitionScreenTitleRow') || document.getElementById('competitionScreen')).appendChild(createBtn);
       }
 
       if (!list.length) {
