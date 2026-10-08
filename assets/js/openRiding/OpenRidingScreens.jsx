@@ -5522,11 +5522,19 @@ function OpenRidingCalendarMain(props) {
       }
     }
     var cuRank = openRidingFilterRankDist.currentUser || rankPeakEntry;
-    var peak60Watts = cuRank && Number(cuRank.watts) > 0 ? Number(cuRank.watts) : 0;
     var peakWeightKg =
-      cuRank && Number(cuRank.weightKg) > 0 ? Number(cuRank.weightKg) : prof.ok ? prof.weight : 0;
+      cuRank && Number(cuRank.weightKg) > 0 ? Number(cuRank.weightKg) : prof.weight > 0 ? prof.weight : 0;
+    /* 60분 피크 보드(Supabase MV)는 W/kg 만 내려주고 watts=0·weightKg=null 이다 —
+       W/kg × 체중으로 60분 파워를 복원해야 FTP 미입력 사용자도 60분 피크 기준 판별이 된다 */
+    var peak60Wkg = cuRank && Number(cuRank.wkg) > 0 ? Number(cuRank.wkg) : 0;
+    var peak60Watts =
+      cuRank && Number(cuRank.watts) > 0
+        ? Number(cuRank.watts)
+        : peak60Wkg > 0 && peakWeightKg > 0
+          ? Math.round(peak60Wkg * peakWeightKg)
+          : 0;
     var realisticStats =
-      prof.ok && ev && peak60Watts > 0 && peakWeightKg > 0 ? ev(peak60Watts, peakWeightKg, 0) : null;
+      ev && peak60Watts > 0 && peakWeightKg > 0 ? ev(peak60Watts, peakWeightKg, 0) : null;
     var rangePeak =
       openRidingFilterRankDist.startStr && openRidingFilterRankDist.endStr
         ? openRidingFilterRankDist.startStr + ' ~ ' + openRidingFilterRankDist.endStr
@@ -5627,12 +5635,12 @@ function OpenRidingCalendarMain(props) {
                   ? window.classifyOpenRidingInterestLevelFilter
                   : null;
               var refSolo =
-                refSoloFn && prof.ok && wLv > 0 ? refSoloFn(peak60Watts, prof.ftp, wLv) : null;
+                refSoloFn && (prof.ok || peak60Watts > 0) && wLv > 0 ? refSoloFn(peak60Watts, prof.ftp, wLv) : null;
               part =
                 intClsFn && refSolo != null && refSolo > 0 ? intClsFn(refSolo, opt.value) : null;
               badgeTitle = part
                 ? part.comment
-                : !prof.ok
+                : !prof.ok && !(peak60Watts > 0)
                   ? 'FTP·체중을 입력하면 참조 평지 개인 평속(60분 피크, 없으면 FTP 평속×93%)으로 관심 레벨을 판별합니다.'
                   : '';
             }
@@ -5748,12 +5756,24 @@ function OpenRidingCalendarMain(props) {
           </div>
           {!prof.ok ? (
             <p className="text-xs text-slate-600 m-0 leading-relaxed">
-              프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 관심 레벨 배지는
-              <strong> 평지 개인 평속(60분 피크·없으면 FTP 평속×93%)</strong>으로 입문~상급 항속 구간과 비교합니다.
-              아래 분포·그룹 평속은 참고용입니다.
+              {realisticStats ? (
+                <>
+                  프로필에 <strong>FTP</strong>{prof.weight > 0 ? '' : <>와 <strong>체중</strong></>}을 입력하면 <strong>최대 능력치</strong>가 표시됩니다.
+                  관심 레벨 배지는 아래 <strong>60분 피크 평지 평속</strong>으로 판별합니다.
+                </>
+              ) : (
+                <>
+                  프로필에 <strong>FTP</strong>와 <strong>체중</strong>을 입력하면, 관심 레벨 배지는
+                  <strong> 평지 개인 평속(60분 피크·없으면 FTP 평속×93%)</strong>으로 입문~상급 항속 구간과 비교합니다.
+                  아래 분포·그룹 평속은 참고용입니다.
+                </>
+              )}
             </p>
-          ) : (
+          ) : null}
+          {prof.ok || realisticStats ? (
             <>
+              {prof.ok ? (
+              <>
               <p className="text-[10px] font-semibold text-violet-800 m-0">최대 능력치 (프로필 FTP·체중)</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                 <div className="rounded-lg bg-white/90 border border-violet-100 px-2 py-1.5">
@@ -5786,7 +5806,9 @@ function OpenRidingCalendarMain(props) {
                 </div>
               </div>
 
-              <p className="text-[10px] font-semibold text-slate-800 m-0 pt-1 border-t border-violet-100/80">
+              </>
+              ) : null}
+              <p className={'text-[10px] font-semibold text-slate-800 m-0' + (prof.ok ? ' pt-1 border-t border-violet-100/80' : '')}>
                 현실 지표 (최근 6개월 · 60분 최대 평균 파워·체중, 랭킹보드와 동일 산출)
                 {rangePeak ? (
                   <span className="font-normal text-slate-500"> · {rangePeak}</span>
@@ -5832,7 +5854,7 @@ function OpenRidingCalendarMain(props) {
                 <strong className="text-slate-600"> FTP 평지 평속의 93%</strong>를 참조 속도로 씁니다.
               </p>
             </>
-          )}
+          ) : null}
 
           {openRidingFilterRankDist.loading ? (
             <p className="text-xs text-slate-500 m-0 py-2 text-center">분포 데이터 불러오는 중…</p>
@@ -5856,7 +5878,7 @@ function OpenRidingCalendarMain(props) {
               overrideReferenceBadgeTitle={chartRefBadgeTitle}
               overrideReferenceValueNote={chartRefValueNote}
               openRidingTierBandWeightKg={
-                peakWeightKg > 0 ? peakWeightKg : prof.ok && Number(prof.weight) > 0 ? Number(prof.weight) : null
+                peakWeightKg > 0 ? peakWeightKg : Number(prof.weight) > 0 ? Number(prof.weight) : null
               }
               titleOverride="전체 사용자 60분 W/kg 분포"
               pillLabelOverride="전체 · 60분 W/kg · 최근 6개월"
