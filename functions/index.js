@@ -6795,42 +6795,87 @@ exports.finalizeWeeklyRanking = onSchedule(
   async (event) => {
     const db = admin.firestore();
     const { startStr, endStr } = getWeekRangeSeoul();
-    let entries = [];
-    let weeklyFromSupabase = false;
-    try {
-      const sbWeekly = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, "all");
-      entries = Array.isArray(sbWeekly && sbWeekly.entries) ? sbWeekly.entries : [];
-      weeklyFromSupabase = true;
-      console.log("[finalizeWeeklyRanking] Supabase weekly TSS source", {
-        entries: entries.length,
-        supabaseWeeklyTssSource: sbWeekly && sbWeekly.supabaseWeeklyTssSource,
+    /* 2026-10-08: 순위는 Supabase(fn_weekly_tss_leaderboard_live, 1일 500+ TSS 치팅 주는 RPC 가 이미 제외)
+     * 단일 경로만 사용. 예전 비상 폴백(getWeeklyRankingEntries — Firestore 전체 사용자 풀스캔, 실행당
+     * 수십만 건 읽기)은 제거하고, 일시 오류는 재시도 후에도 실패하면 지급을 보류하고 오류로 남긴다
+     * (weekly_ranking_awards 로 중복 지급이 막혀 있어 수동 재실행해도 안전). */
+    let entries = null;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= 3 && entries === null; attempt++) {
+      try {
+        const sbWeekly = await supabaseRankingReader.fetchWeeklyTssRanking(admin, startStr, endStr, "all");
+        entries = Array.isArray(sbWeekly && sbWeekly.entries) ? sbWeekly.entries : [];
+        console.log("[finalizeWeeklyRanking] Supabase weekly TSS source", {
+          attempt,
+          entries: entries.length,
+          supabaseWeeklyTssSource: sbWeekly && sbWeekly.supabaseWeeklyTssSource,
+        });
+      } catch (eSbWeekly) {
+        lastErr = eSbWeekly;
+        console.warn("[finalizeWeeklyRanking] Supabase weekly TSS failed (attempt " + attempt + "):", eSbWeekly && eSbWeekly.message ? eSbWeekly.message : eSbWeekly);
+        if (attempt < 3) await new Promise((r) => setTimeout(r, attempt * 10000));
+      }
+    }
+    if (entries === null) {
+      console.error("[finalizeWeeklyRanking] 주간 순위 조회 실패 — 포인트 지급 보류(수동 재실행 필요)", {
+        startStr,
+        endStr,
+        error: lastErr && lastErr.message ? lastErr.message : String(lastErr),
       });
-    } catch (eSbWeekly) {
-      console.error("[finalizeWeeklyRanking] Supabase weekly TSS failed:", eSbWeekly && eSbWeekly.message ? eSbWeekly.message : eSbWeekly);
-      entries = await getWeeklyRankingEntries(db, startStr, endStr); // emergency fallback only
+      return;
     }
-    const pointRecipients = [];
-    for (const e of entries) {
-      if (pointRecipients.length >= 3) break;
-      const hasCheat = weeklyFromSupabase
-        ? false
-        : await hasWeeklyTssCheatDay(db, e.userId, startStr, endStr);
-      if (!hasCheat) pointRecipients.push({ ...e, rank: pointRecipients.length + 1 });
-    }
+
+    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
     const points = [100, 50, 30]; // 1등 100SP, 2등 50SP, 3등 30SP
+    const pointRecipients = entries.slice(0, 3);
+    const paid = [];
     for (let i = 0; i < pointRecipients.length; i++) {
       const u = pointRecipients[i];
-      const userRef = db.collection("users").doc(u.userId);
-      const snap = await userRef.get();
-      if (!snap.exists) continue;
-      const data = snap.data();
+      const rank = i + 1;
       const add = points[i];
-      const rem = Number(data.rem_points || 0) + add;
-      const acc = Number(data.acc_points || 0) + add;
-      await userRef.update({ rem_points: rem, acc_points: acc });
-      console.log("[finalizeWeeklyRanking] 포인트 지급:", (i + 1) + "등", u.name, "+" + add + "SP → rem_points:", rem, ", acc_points:", acc);
+      // 지급 직전 기록 — (week_start, rank) 가 이미 있으면 이번 주 해당 순위는 지급 완료/진행된 것으로 보고 건너뜀
+      const { error: claimErr } = await supabase.from("weekly_ranking_awards").insert({
+        week_start: startStr,
+        week_end: endStr,
+        rank,
+        firebase_uid: String(u.userId),
+        user_name: u.name || null,
+        total_tss: u.totalTss != null ? Number(u.totalTss) : null,
+        points: add,
+        status: "pending",
+      });
+      if (claimErr) {
+        if (claimErr.code === "23505") {
+          console.log("[finalizeWeeklyRanking] 이미 지급 기록 있음 — 건너뜀:", rank + "등", startStr);
+        } else {
+          console.error("[finalizeWeeklyRanking] 지급 기록 실패 — 지급 보류:", rank + "등", u.name, claimErr.message);
+        }
+        continue;
+      }
+      try {
+        // 원자적 증가 — 같은 시각 다른 적립·사용 트랜잭션과 겹쳐도 값이 덮어써지지 않게
+        await db.collection("users").doc(String(u.userId)).update({
+          rem_points: admin.firestore.FieldValue.increment(add),
+          acc_points: admin.firestore.FieldValue.increment(add),
+        });
+        await supabase
+          .from("weekly_ranking_awards")
+          .update({ status: "paid", paid_at: new Date().toISOString() })
+          .eq("week_start", startStr)
+          .eq("rank", rank);
+        paid.push(rank + "등 " + u.name + " +" + add + "SP");
+        console.log("[finalizeWeeklyRanking] 포인트 지급:", rank + "등", u.name, "+" + add + "SP");
+      } catch (ePay) {
+        const msg = ePay && ePay.message ? ePay.message : String(ePay);
+        await supabase
+          .from("weekly_ranking_awards")
+          .update({ status: "failed", error: msg.slice(0, 500) })
+          .eq("week_start", startStr)
+          .eq("rank", rank);
+        console.error("[finalizeWeeklyRanking] 포인트 지급 실패(수동 확인 필요):", rank + "등", u.name, msg);
+      }
     }
-    console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, pointRecipients: pointRecipients.map((e) => e.name) });
+    console.log("[finalizeWeeklyRanking] 완료", { startStr, endStr, paid });
   }
 );
 

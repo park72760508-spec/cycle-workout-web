@@ -464,14 +464,64 @@
       info.epoch = epoch;
       return fetchSnapshot(info).then(function (shared) {
         if (shared) return shared;
-        /* 이 보드 스냅샷이 아직 한 번도 없으면(서버 미배포·첫 요청) 기다리지 않고 바로 Cloud Run */
-        return snapshotRowExists(info.key).then(function (exists) {
-          if (!exists) return null;
-          return new Promise(function (r) { setTimeout(r, 400 + Math.floor(Math.random() * 1200)); })
-            .then(function () { return fetchSnapshot(info); });
+        /* 주간 TSS 보드·주간 TOP10: Cloud Run 대신 Supabase RPC 가 계산·저장(같은 날 baseline 재사용).
+           RPC 가 NULL(하루 첫 계산·월요일 첫 기록 전 등)이면 아래 기존 경로 → Cloud Run */
+        return buildSnapshotViaRpc(info).then(function (built) {
+          if (built) return built;
+          return waitForPeerSnapshot(info);
         });
       });
     });
+  }
+
+  /** 스냅샷 miss 후: 다른 기기가 막 계산 중일 수 있으니 잠깐 기다렸다 한 번 더 확인 */
+  function waitForPeerSnapshot(info) {
+    /* 이 보드 스냅샷이 아직 한 번도 없으면(서버 미배포·첫 요청) 기다리지 않고 바로 Cloud Run */
+    return snapshotRowExists(info.key).then(function (exists) {
+      if (!exists) return null;
+      return new Promise(function (r) { setTimeout(r, 400 + Math.floor(Math.random() * 1200)); })
+        .then(function () { return fetchSnapshot(info); });
+    });
+  }
+
+  /**
+   * 주간 TSS 보드(weekly|tss|all·M·F)·주간 TOP10(weekly_top10|current) 스냅샷을 Supabase RPC 로 생성
+   * (supabase/migrations/20261008120000_weekly_tss_board_snapshot_rpc.sql — Cloud Run 응답과 동일 JSON).
+   * 같은 key|epoch 동시 요청은 한 번만 보낸다.
+   */
+  var rpcBuildMemo = Object.create(null);
+  function buildSnapshotViaRpc(info) {
+    var fn = null;
+    var body = {};
+    var m = /^weekly\|tss\|(all|M|F)$/.exec(info.key || '');
+    if (m) {
+      fn = 'fn_weekly_tss_board_snapshot';
+      body = { p_gender: m[1] };
+    } else if (info.key === 'weekly_top10|current') {
+      fn = 'fn_weekly_top10_snapshot';
+    }
+    var cfg = supabaseCfg();
+    if (!fn || !cfg || window.__stelvioWeeklyRpcSnapshotOff === true) return Promise.resolve(null);
+    var memoKey = info.key + '|' + info.epoch;
+    if (rpcBuildMemo[memoKey]) return rpcBuildMemo[memoKey];
+    var p = originalFetch(cfg.supabaseUrl + '/rest/v1/rpc/' + fn, {
+      method: 'POST',
+      headers: {
+        apikey: cfg.supabaseAnonKey,
+        Authorization: 'Bearer ' + cfg.supabaseAnonKey,
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify(body)
+    }).then(function (res) {
+      return res.ok ? res.json() : null;
+    }).then(function (payload) {
+      if (!payload || payload.success !== true) return null;
+      return payload;
+    }).catch(function () { return null; });
+    p.then(function (v) { if (!v) delete rpcBuildMemo[memoKey]; });
+    rpcBuildMemo[memoKey] = p;
+    return p;
   }
 
   function snapshotRowExists(key) {
