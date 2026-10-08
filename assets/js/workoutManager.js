@@ -4294,7 +4294,7 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
           <button type="button" class="workout-card__select-btn" id="selectWorkoutBtn-${workout.id}" onclick="event.stopPropagation(); selectWorkout(${idArg})" title="완수한 워크아웃" aria-label="완수한 워크아웃"${isWorkoutCompletedByMe(workout.id) ? '' : ' style="display:none"'}>
             <img src="assets/img/check2.png" alt="완수" class="workout-card__select-icon" />
           </button>
-          ${isClubWorkout ? `
+          ${isClubWorkout && workout.canManage !== false ? `
             <button type="button" class="workout-card__action-btn" onclick="event.stopPropagation(); editClubWorkout(${idArg})" title="수정" aria-label="수정">
               <img src="assets/img/edit2.png" alt="수정" />
             </button>
@@ -4386,10 +4386,11 @@ async function workoutClubRpc(fnName, args) {
   return rpc(fnName, args || {});
 }
 
-/** 내가 관리하는 클럽 목록 — RPC fn_my_manageable_clubs (로그인 전·실패 시 빈 배열) */
+/** 클럽 전용 카드 대상 클럽 — 관리 클럽 + 멤버쉽 회원 클럽(기간 종료 포함, membershipActive 로 구분)
+ *  RPC fn_my_workout_clubs (로그인 전·실패 시 빈 배열) */
 async function fetchManagedClubsForWorkoutView() {
   try {
-    const rows = await workoutClubRpc('fn_my_manageable_clubs', {});
+    const rows = await workoutClubRpc('fn_my_workout_clubs', {});
     return Array.isArray(rows) ? rows.filter(r => r && r.groupId && r.name) : [];
   } catch (e) {
     console.warn('[클럽 전용] 관리 클럽 조회 실패:', e && e.message ? e.message : e);
@@ -4397,13 +4398,24 @@ async function fetchManagedClubsForWorkoutView() {
   }
 }
 
-/** 클럽 전용 워크아웃 목록 — RPC fn_club_workouts_for_manager (권한 없으면 빈 배열) */
+/** 클럽 전용 워크아웃 목록 — RPC fn_club_workouts_for_viewer (관리자: 수정·삭제 가능, 멤버쉽 회원: 열람만) */
 async function fetchClubWorkoutsForManager(groupId) {
-  const res = await workoutClubRpc('fn_club_workouts_for_manager', { p_group_id: String(groupId) });
+  const res = await workoutClubRpc('fn_club_workouts_for_viewer', { p_group_id: String(groupId) });
   if (!res || res.success !== true || !Array.isArray(res.items)) {
-    throw new Error(res && res.error === 'forbidden' ? '이 클럽의 워크아웃을 볼 권한이 없습니다.' : '클럽 전용 워크아웃을 불러오지 못했습니다.');
+    throw new Error(
+      res && res.error === 'membership_expired'
+        ? '멤버쉽 기간이 종료되어 열람이 불가합니다.'
+        : res && res.error === 'forbidden'
+          ? '이 클럽의 워크아웃을 볼 권한이 없습니다.'
+          : '클럽 전용 워크아웃을 불러오지 못했습니다.'
+    );
   }
-  res.items.forEach(w => { if (w && w.id) window.__clubWorkoutsById[String(w.id)] = w; });
+  const canManage = res.canManage === true;
+  res.items.forEach(w => {
+    if (!w) return;
+    w.canManage = canManage;
+    if (w.id) window.__clubWorkoutsById[String(w.id)] = w;
+  });
   return res.items;
 }
 

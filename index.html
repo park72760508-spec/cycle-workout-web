@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261005rpmLvl3" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261009clubMember" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -9252,7 +9252,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=completed-check2-20261007"></script>
+<script src="assets/js/workoutManager.js?v=club-member-20261009"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
@@ -9277,7 +9277,7 @@
         /* 클럽 관리자(방장·관리자·부관리자)에게만 표시 — 그룹세션 클럽 전용 워크아웃 */
         { id: '클럽', label: '클럽 전용', icon: 'assets/img/club.svg', color: 'var(--zone-1)' }
       ];
-      /** fn_my_manageable_clubs 결과 — null: 아직 조회 전, []: 관리 클럽 없음(카드 숨김) */
+      /** fn_my_workout_clubs 결과(관리 클럽 + 멤버쉽 회원 클럽) — null: 아직 조회 전, []: 없음(카드 숨김) */
       var workoutManagedClubs = null;
       var workoutManagedClubsLoading = null;
 
@@ -9451,8 +9451,8 @@
         var clubs = workoutManagedClubs || [];
         if (!clubs.length) {
           list.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div>' +
-            '<div class="empty-state-title">관리 중인 클럽이 없습니다</div>' +
-            '<div class="empty-state-description">클럽 방장·관리자·부관리자만 클럽 전용 워크아웃을 볼 수 있습니다.</div></div>';
+            '<div class="empty-state-title">열람 가능한 클럽이 없습니다</div>' +
+            '<div class="empty-state-description">멤버쉽 클럽의 회원·방장·관리자에게 클럽 전용 워크아웃이 표시됩니다.</div></div>';
           return;
         }
         list.innerHTML = '<div class="workout-club-list">' + clubs.map(function (c, i) {
@@ -9462,13 +9462,20 @@
           return '<button type="button" class="workout-club-item" data-index="' + i + '">' + photo +
             '<span class="workout-club-item__body"><span class="workout-club-item__name">' + workoutEscape(c.name) +
             (c.isPaid ? ' <span class="workout-club-item__badge">멤버쉽</span>' : '') + '</span>' +
-            '<span class="workout-club-item__count">클럽 전용 워크아웃 ' + (Number(c.workoutCount) || 0) + '개</span></span>' +
+            (c.membershipActive === false
+              ? '<span class="workout-club-item__count workout-club-item__count--expired">멤버쉽 기간이 종료되어 열람이 불가합니다.</span></span>'
+              : '<span class="workout-club-item__count">클럽 전용 워크아웃 ' + (Number(c.workoutCount) || 0) + '개</span></span>') +
             '<span class="workout-club-item__chevron" aria-hidden="true">›</span></button>';
         }).join('') + '</div>';
         Array.prototype.forEach.call(list.querySelectorAll('.workout-club-item'), function (btn) {
           btn.addEventListener('click', function () {
             var c = clubs[Number(btn.getAttribute('data-index'))];
-            if (c) workoutViewShowClubWorkouts(c);
+            if (!c) return;
+            if (c.membershipActive === false) {
+              if (typeof window.showToast === 'function') window.showToast('멤버쉽 기간이 종료되어 열람이 불가합니다.');
+              return;
+            }
+            workoutViewShowClubWorkouts(c);
           });
         });
       }
