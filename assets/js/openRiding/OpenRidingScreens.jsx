@@ -4625,17 +4625,17 @@ function OpenRidingDetailGlassNav(props) {
           className={openRidingGlassNavBtnClass(false)}
           onClick={onCancel}
           disabled={!showHostActions || hostToolbarLocked}
-          aria-label="라이딩 폭파"
+          aria-label="모임 취소"
           title={
             !showHostActions
               ? '방장 또는 관리자만 이용할 수 있습니다.'
               : hostToolbarLocked
-                ? '라이딩 일정일이 지나 폭파할 수 없습니다.'
+                ? '라이딩 일정일이 지나 취소할 수 없습니다.'
                 : undefined
           }
         >
           <img src="assets/img/cancel01.png" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
-          <span className="open-riding-bottom-glass-nav__label">폭파</span>
+          <span className="open-riding-bottom-glass-nav__label">취소</span>
         </button>
       </OpenRidingGlassNavSlot>
       <OpenRidingGlassNavSlot>
@@ -4681,7 +4681,7 @@ function OpenRidingDetailHostActions(props) {
       return dis ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined;
     }
     if (kind === 'cancel') {
-      return dis ? '라이딩 일정일이 지나 폭파할 수 없습니다.' : undefined;
+      return dis ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined;
     }
     return dis ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined;
   }
@@ -4730,7 +4730,7 @@ function OpenRidingDetailHostActions(props) {
       <div className="open-riding-detail-host-actions-block">
         {actionIconBtn('수정', 'edit', hostActionImg('assets/img/edit2.png', ''))}
         {actionIconBtn('복사', 'copy', hostActionImg('assets/img/copy.png', ''))}
-        {actionIconBtn('폭파', 'cancel', hostActionImg('assets/img/cancel01.png', ''))}
+        {actionIconBtn('취소', 'cancel', hostActionImg('assets/img/cancel01.png', ''))}
         {actionIconBtn('삭제', 'delete', hostActionImg('assets/img/delete2.png', ''))}
       </div>
     </div>
@@ -12268,7 +12268,7 @@ function OpenRidingDetail(props) {
     } catch (err) {
       console.warn('[openRiding] cancelRideByHost', err);
       if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
-        window.showToast('라이딩 폭파에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+        window.showToast('모임 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.');
       }
     } finally {
       setCancelBusy(false);
@@ -12494,7 +12494,7 @@ function OpenRidingDetail(props) {
     >
       {isCancelled ? (
         <p className="text-sm font-medium text-red-500 px-1 rounded-lg bg-red-50 border border-red-100 py-2 px-2 m-0">
-          이 라이딩은 방장에 의해 폭파(취소)되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
+          이 모임은 방장에 의해 취소되었습니다. 참가자 개별 안내(알림톡 등)는 추후 연동 예정입니다.
         </p>
       ) : null}
 
@@ -13534,10 +13534,10 @@ function OpenRidingDetail(props) {
                 !
               </span>
               <h2 id="open-riding-bomb-title" className="text-base font-bold text-slate-800 m-0 leading-tight">
-                라이딩 폭파
+                모임 취소
               </h2>
             </div>
-            <p className="stelvio-exit-confirm-message text-center">정말 라이딩을 폭파하시겠습니까?</p>
+            <p className="stelvio-exit-confirm-message text-center">정말 모임을 취소하시겠습니까?</p>
             <p className="text-xs text-slate-500 mt-2 leading-snug m-0 text-center">
               모임 생성 시 차감되었던 100SP가 환급 처리됩니다.
             </p>
