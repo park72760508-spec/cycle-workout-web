@@ -4630,7 +4630,7 @@ function OpenRidingDetailGlassNav(props) {
             !showHostActions
               ? '방장 또는 관리자만 이용할 수 있습니다.'
               : hostToolbarLocked
-                ? '라이딩 일정일이 지나 취소할 수 없습니다.'
+                ? '모임 일정일이 지나 취소할 수 없습니다.'
                 : undefined
           }
         >
@@ -4681,7 +4681,7 @@ function OpenRidingDetailHostActions(props) {
       return dis ? '라이딩 일정일이 지나 수정할 수 없습니다.' : undefined;
     }
     if (kind === 'cancel') {
-      return dis ? '라이딩 일정일이 지나 취소할 수 없습니다.' : undefined;
+      return dis ? '모임 일정일이 지나 취소할 수 없습니다.' : undefined;
     }
     return dis ? '라이딩 일정일이 지나 삭제할 수 없습니다.' : undefined;
   }
