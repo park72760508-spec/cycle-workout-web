@@ -7,9 +7,14 @@
  * Bluetooth 트랙에 사용자 할당 (애니메이션 효과 포함)
  * 로딩 애니메이션 적용 (Bluetooth Join Session 전용, 독립적 구동)
  */
-/** RTDB 호출 10초 제한(연결 멈춤 시 무한 로딩 방지) — trainingRoomManager.js의 stelvioRtdbCall 사용 */
-function __btRtdb(promise, label) {
-  return typeof window.stelvioRtdbCall === 'function' ? window.stelvioRtdbCall(promise, label, 10000) : promise;
+/** 트랙 정보 RTDB 읽기·쓰기 — REST(v9 토큰) 우선, SDK 10초 제한 폴백 (trainingRoomManager.js stelvioRtdbGet/Set) */
+function __btGet(path) {
+  if (typeof window.stelvioRtdbGet === 'function') return window.stelvioRtdbGet(path, typeof db !== 'undefined' ? db : null);
+  return db.ref(path).once('value').then(function (snap) { return snap.val(); });
+}
+function __btSet(path, value) {
+  if (typeof window.stelvioRtdbSet === 'function') return window.stelvioRtdbSet(path, value, typeof db !== 'undefined' ? db : null);
+  return value === null ? db.ref(path).remove() : db.ref(path).set(value);
 }
 
 async function assignUserToBluetoothTrackWithAnimation(trackNumber, currentUserId, roomIdParam, event) {
@@ -138,12 +143,8 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
   if (typeof db !== 'undefined') {
     try {
       const sessionId = roomId;
-      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
       if (typeof window.stelvioRtdbKick === 'function') window.stelvioRtdbKick(db);
-      const usersSnapshot = await (typeof window.stelvioRtdbCall === 'function'
-        ? window.stelvioRtdbCall(usersRef.once('value'), 'track user', 10000)
-        : usersRef.once('value'));
-      currentTrackUser = usersSnapshot.val();
+      currentTrackUser = await __btGet(`sessions/${sessionId}/users/${trackNumber}`);
     } catch (error) {
       console.error('[assignUserToBluetoothTrack] 현재 트랙 사용자 확인 오류:', error);
       // 2026-10-10: 현재 신청자를 확인하지 못하면(연결 지연·권한 만료) 다른 사람의 트랙을 덮어쓸 수 있으므로 중단하고 사유 안내
@@ -209,22 +210,20 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
           weight: loggedInUser.weight || null
         };
         
-        await __btRtdb(db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData), 'set user');
+        await __btSet(`sessions/${sessionId}/users/${trackNumber}`, userData);
         
         // 기존 디바이스 정보 유지 (있는 경우)
-        const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-        const devicesSnapshot = await __btRtdb(devicesRef.once('value'), 'devices');
-        const currentDeviceData = devicesSnapshot.val() || {};
+        const currentDeviceData = (await __btGet(`sessions/${sessionId}/devices/${trackNumber}`)) || {};
         
         // 디바이스 정보가 없으면 빈 객체로 초기화
         if (!currentDeviceData || Object.keys(currentDeviceData).length === 0) {
-          await __btRtdb(db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
+          await __btSet(`sessions/${sessionId}/devices/${trackNumber}`, {
             smartTrainerId: '',
             powerMeterId: '',
             heartRateId: '',
             gear: '',
             brake: ''
-          }), 'set devices');
+          });
         }
         
         if (typeof showToast === 'function') {
@@ -342,13 +341,8 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
     if (typeof db !== 'undefined') {
       try {
         const sessionId = roomId;
-        const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
-        const usersSnapshot = await usersRef.once('value');
-        currentUserData = usersSnapshot.val();
-        
-        const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-        const devicesSnapshot = await devicesRef.once('value');
-        currentDeviceData = devicesSnapshot.val();
+        currentUserData = await __btGet(`sessions/${sessionId}/users/${trackNumber}`);
+        currentDeviceData = await __btGet(`sessions/${sessionId}/devices/${trackNumber}`);
       } catch (error) {
         console.error('[assignUserToBluetoothTrack] Firebase 정보 로드 오류:', error);
       }
@@ -745,8 +739,8 @@ async function removeUserFromBluetoothTrack(trackNumber, roomIdParam) {
       const sessionId = roomId;
       
       // Firebase에서 사용자 및 디바이스 정보 제거
-      await db.ref(`sessions/${sessionId}/users/${trackNumber}`).remove();
-      await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).remove();
+      await __btSet(`sessions/${sessionId}/users/${trackNumber}`, null);
+      await __btSet(`sessions/${sessionId}/devices/${trackNumber}`, null);
       
       if (typeof showToast === 'function') {
         showToast('사용자가 제거되었습니다.', 'success');
@@ -829,9 +823,7 @@ async function saveBluetoothTrackApplication(trackNumber, roomId) {
       const sessionId = roomId;
       
       // Firebase에서 현재 트랙에 할당된 사용자 확인 (Live Training Session 전용)
-      const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
-      const usersSnapshot = await usersRef.once('value');
-      const currentTrackUser = usersSnapshot.val();
+      const currentTrackUser = await __btGet(`sessions/${sessionId}/users/${trackNumber}`);
       const hasCurrentUser = currentTrackUser && currentTrackUser.userId;
       
       // 트랙에 이미 다른 사용자가 신청되어 있는지 확인
@@ -856,7 +848,7 @@ async function saveBluetoothTrackApplication(trackNumber, roomId) {
         weight: app.selectedUserWeight
       };
       
-      await db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData);
+      await __btSet(`sessions/${sessionId}/users/${trackNumber}`, userData);
       
       // 디바이스 정보 저장
       const trainerInput = document.getElementById('bluetoothTrackTrainerDeviceId');
@@ -873,7 +865,7 @@ async function saveBluetoothTrackApplication(trackNumber, roomId) {
         brake: brakeSelect?.value || ''
       };
       
-      await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set(deviceData);
+      await __btSet(`sessions/${sessionId}/devices/${trackNumber}`, deviceData);
       
       if (typeof showToast === 'function') {
         showToast('트랙 신청이 완료되었습니다.', 'success');
@@ -1032,20 +1024,16 @@ async function clearAllBluetoothTracksData(opts) {
       
       // Step 1: Fetch the current track count from devices/track (default to 10 if null)
       let maxTracks = 10;
-      try {
-        const trackSnapshot = await db.ref(`sessions/${sessionId}/devices/track`).once('value');
-        const trackValue = trackSnapshot.val();
-        if (trackValue !== null && trackValue !== undefined) {
-          maxTracks = Number(trackValue) || 10;
-        }
-        console.log(`[clearAllBluetoothTracksData] Step 1 - 트랙 개수 확인: ${maxTracks}`);
-      } catch (e) {
-        console.warn('[clearAllBluetoothTracksData] Step 1 - track 값 읽기 실패, 기본값 10 사용:', e);
+      // 트랙 수를 읽지 못한 채 기본값 10으로 덮어쓰면 기존 트랙 구성(예: 17)이 줄어들므로, 읽기 실패 시 중단한다.
+      const trackValue = await __btGet(`sessions/${sessionId}/devices/track`);
+      if (trackValue !== null && trackValue !== undefined) {
+        maxTracks = Number(trackValue) || 10;
       }
+      console.log(`[clearAllBluetoothTracksData] Step 1 - 트랙 개수 확인: ${maxTracks}`);
       
       // Step 2: Remove the entire users node using .remove()
       try {
-        await db.ref(`sessions/${sessionId}/users`).remove();
+        await __btSet(`sessions/${sessionId}/users`, null);
         console.log(`[clearAllBluetoothTracksData] Step 2 - users 노드 전체 삭제 완료`);
       } catch (e) {
         console.error('[clearAllBluetoothTracksData] Step 2 - users 노드 삭제 실패:', e);
@@ -1056,7 +1044,7 @@ async function clearAllBluetoothTracksData(opts) {
       // This will automatically clear all other child nodes (smartTrainerId, etc.) 
       // while preserving the track count in a single operation
       try {
-        await db.ref(`sessions/${sessionId}/devices`).set({ track: maxTracks });
+        await __btSet(`sessions/${sessionId}/devices`, { track: maxTracks });
         console.log(`[clearAllBluetoothTracksData] Step 3 - devices 노드 Atomic Overwrite 완료 (track: ${maxTracks})`);
       } catch (e) {
         console.error('[clearAllBluetoothTracksData] Step 3 - devices 노드 Atomic Overwrite 실패:', e);

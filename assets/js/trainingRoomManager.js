@@ -6054,8 +6054,7 @@ async function saveTrackApplication(trackNumber, roomIdParam) {
         ftp: appData.selectedUserFTP || null
       };
       
-      const userRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
-      await userRef.set(userData);
+      await stelvioRtdbSet(`sessions/${sessionId}/users/${trackNumber}`, userData, db);
       console.log('[saveTrackApplication] 사용자 정보 저장 완료:', userData);
       
       // 2. devices 정보 저장
@@ -6067,8 +6066,7 @@ async function saveTrackApplication(trackNumber, roomIdParam) {
         brake: brake || null
       };
       
-      const deviceRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-      await deviceRef.set(deviceData);
+      await stelvioRtdbSet(`sessions/${sessionId}/devices/${trackNumber}`, deviceData, db);
       console.log('[saveTrackApplication] 디바이스 정보 저장 완료:', deviceData);
       
       if (typeof showToast === 'function') {
@@ -6660,6 +6658,91 @@ function stelvioRtdbErrorMessage(err) {
 function stelvioRtdbKick(db) {
   try { if (db && typeof db.goOnline === 'function') db.goOnline(); } catch (e) {}
 }
+/**
+ * 2026-10-10: 트랙 정보 RTDB REST 접근 — 휴대폰(WebView)에서 RTDB SDK가 웹소켓 연결 또는 compat Auth
+ * 세션(RTDB 규칙 auth != null 판정에 쓰임) 복원에 걸려 once()/set()이 응답 없이 멈추던 문제의 근본 대응.
+ * 로그인 시 항상 존재하는 v9 Auth ID 토큰으로 REST(https)를 호출하므로 SDK 연결 상태와 무관하다.
+ * 보안 규칙은 동일하게 적용된다(sessions: auth != null, 토큰 없으면 401).
+ */
+var STELVIO_RTDB_URL = 'https://stelvio-ai-default-rtdb.firebaseio.com';
+function stelvioRtdbBaseUrl() {
+  try {
+    var u = window.firebase && firebase.apps && firebase.apps.length && firebase.app().options.databaseURL;
+    if (u) return String(u).replace(/\/+$/, '');
+  } catch (e) {}
+  return STELVIO_RTDB_URL;
+}
+async function stelvioRtdbIdToken() {
+  var u = (window.authV9 && window.authV9.currentUser) ||
+    (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+  if (!u || typeof u.getIdToken !== 'function') {
+    var e = new Error('PERMISSION_DENIED (로그인 세션 없음)');
+    e.code = 'PERMISSION_DENIED';
+    throw e;
+  }
+  return u.getIdToken();
+}
+/** method: GET | PUT | PATCH | DELETE, path: 'sessions/1/users' (앞뒤 슬래시 없이) */
+async function stelvioRtdbRest(method, path, body, ms) {
+  var token = await stelvioRtdbIdToken();
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var limit = Number(ms) > 0 ? Number(ms) : 10000;
+  var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, limit);
+  try {
+    var res = await fetch(stelvioRtdbBaseUrl() + '/' + String(path).replace(/^\/+|\/+$/g, '') + '.json?auth=' + encodeURIComponent(token), {
+      method: method || 'GET',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    if (res.status === 401 || res.status === 403) {
+      var pe = new Error('PERMISSION_DENIED (HTTP ' + res.status + ')');
+      pe.code = 'PERMISSION_DENIED';
+      throw pe;
+    }
+    if (!res.ok) throw new Error('RTDB_REST_HTTP_' + res.status);
+    var text = await res.text();
+    return text ? JSON.parse(text) : null;
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      var te = new Error('RTDB_TIMEOUT (REST ' + path + ')');
+      te.code = 'RTDB_TIMEOUT';
+      throw te;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+/** REST 우선 → 실패(권한 오류 제외) 시 SDK once() 10초 제한 폴백 */
+async function stelvioRtdbGet(path, db) {
+  try {
+    return await stelvioRtdbRest('GET', path, undefined, 8000);
+  } catch (restErr) {
+    if (String(restErr && restErr.code) === 'PERMISSION_DENIED' || !db || typeof db.ref !== 'function') throw restErr;
+    console.warn('[RTDB] REST 실패 → SDK 폴백:', path, restErr && restErr.message);
+    var snap = await stelvioRtdbCall(db.ref(path).once('value'), path, 10000);
+    return snap && typeof snap.val === 'function' ? snap.val() : null;
+  }
+}
+/** REST 우선 쓰기(PUT=set, DELETE=remove) → 실패(권한 오류 제외) 시 SDK 폴백 */
+async function stelvioRtdbSet(path, value, db) {
+  try {
+    if (value === null) await stelvioRtdbRest('DELETE', path, undefined, 10000);
+    else await stelvioRtdbRest('PUT', path, value, 10000);
+  } catch (restErr) {
+    if (String(restErr && restErr.code) === 'PERMISSION_DENIED' || !db || typeof db.ref !== 'function') throw restErr;
+    console.warn('[RTDB] REST 쓰기 실패 → SDK 폴백:', path, restErr && restErr.message);
+    var ref = db.ref(path);
+    await stelvioRtdbCall(value === null ? ref.remove() : ref.set(value), path, 10000);
+  }
+}
+if (typeof window !== 'undefined') {
+  window.stelvioRtdbRest = stelvioRtdbRest;
+  window.stelvioRtdbGet = stelvioRtdbGet;
+  window.stelvioRtdbSet = stelvioRtdbSet;
+}
 if (typeof window !== 'undefined') {
   window.stelvioRtdbCall = stelvioRtdbCall;
   window.stelvioRtdbErrorMessage = stelvioRtdbErrorMessage;
@@ -6684,16 +6767,13 @@ function getBluetoothPlayerListDb() {
  */
 async function fetchBluetoothTrackData(db, roomId) {
   const sessionId = roomId;
-  const devicesRef = db.ref(`sessions/${sessionId}/devices`);
-  const usersRef = db.ref(`sessions/${sessionId}/users`);
+  // REST(v9 토큰) 우선 — SDK 웹소켓/compat Auth 상태와 무관하게 읽는다(휴대폰 무응답 문제 근본 대응)
   var trackResults = await Promise.all([
-    stelvioRtdbCall(devicesRef.once('value'), 'devices', 10000),
-    stelvioRtdbCall(usersRef.once('value'), 'users', 10000)
+    stelvioRtdbGet(`sessions/${sessionId}/devices`, db),
+    stelvioRtdbGet(`sessions/${sessionId}/users`, db)
   ]);
-  var devicesSnapshot = trackResults && trackResults[0];
-  var usersSnapshot = trackResults && trackResults[1];
-  const devicesData = (devicesSnapshot && devicesSnapshot.val) ? devicesSnapshot.val() : {};
-  const usersData = (usersSnapshot && usersSnapshot.val) ? usersSnapshot.val() : {};
+  const devicesData = trackResults[0] || {};
+  const usersData = trackResults[1] || {};
   let maxTrackNumber = 10;
   if (devicesData && typeof devicesData.track === 'number' && devicesData.track > 0) {
     maxTrackNumber = devicesData.track;
@@ -6980,7 +7060,7 @@ async function renderBluetoothPlayerList() {
     } catch (e) {}
   }
 
-  if (!data && db && roomId) {
+  if (!data && roomId) {
     const timeoutPromise = new Promise((_, rej) =>
       setTimeout(() => rej(new Error('Fast fail timeout (3s)')), BLUETOOTH_PLAYER_LIST_FAST_FAIL_MS)
     );
@@ -7033,7 +7113,7 @@ async function renderBluetoothPlayerList() {
       try {
         const container = document.getElementById('bluetoothPlayerListContent');
         const backgroundDb = getBluetoothPlayerListDb();
-        if (!container || !backgroundDb) return;
+        if (!container) return;
         // 연결 재수립을 유도하며 최대 3회 재시도(10s 제한) — 성공하면 안내 배너가 사라진 실제 목록으로 교체
         let fresh = null;
         let lastErr = null;
