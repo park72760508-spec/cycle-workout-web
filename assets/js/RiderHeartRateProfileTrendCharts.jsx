@@ -15,8 +15,9 @@ var useEffect = ReactObj.useEffect || null;
 let _hrChartId = 0;
 function nextHrChartId() { return 'hr-' + (++_hrChartId); }
 
-/** 1·5·10·20·40·60분 → 성장 트렌드 슬롯 인덱스 (getGrowthStelvioReferencePowerHr) */
+/** Max(5초)·1·5·10·20·40·60분 → 성장 트렌드 슬롯 인덱스 (getGrowthStelvioReferencePowerHr) */
 function monthHrApiToGrowthSlot(api) {
+  if (api === 'max') return 0;
   if (api === '1min') return 1;
   if (api === '5min') return 2;
   if (api === '10min') return 3;
@@ -31,6 +32,7 @@ var MONTH_HR_CHART_COLOR = '#a855f7';
 var MONTH_HR_BTN_ACTIVE = '#a855f7';
 var MONTH_HR_BTN_INACTIVE = '#9ca3af';
 var MONTH_HR_CURVE_ITEMS = [
+  { api: 'max', dataKey: 'hrmax', label: 'Max' },
   { api: '1min', dataKey: 'hr1min', label: '1분' },
   { api: '5min', dataKey: 'hr5min', label: '5분' },
   { api: '10min', dataKey: 'hr10min', label: '10분' },
@@ -116,12 +118,14 @@ function buildMonthHeartRateCurveData(intervalHR, intervalMMP) {
     return {
       name: row.name,
       endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
+      hrmax: Number(row.max_hr_5sec || row.max_hr) || 0,
       hr1min: Number(row.max_hr_1min) || 0,
       hr5min: Number(row.max_hr_5min) || 0,
       hr10min: Number(row.max_hr_10min) || 0,
       hr20min: Number(row.max_hr_20min) || 0,
       hr40min: Number(row.max_hr_40min) || 0,
       hr60min: Number(row.max_hr_60min) || 0,
+      powermax: Number(pw.max_watts) || 0,
       power1min: Number(pw.max_1min_watts) || 0,
       power5min: Number(pw.max_5min_watts) || 0,
       power10min: Number(pw.max_10min_watts) || 0,
@@ -294,7 +298,7 @@ function HeartRateProfileMonthCurveChart(props) {
   var dataKey = selItem.dataKey;
   var selColor = MONTH_HR_CHART_COLOR;
 
-  var hasData = data.length > 0 && data.some(function(r) { return (r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
+  var hasData = data.length > 0 && data.some(function(r) { return (r.hrmax || r.hr1min || r.hr5min || r.hr10min || r.hr20min || r.hr40min || r.hr60min) > 0; });
 
   var hrFromApi = avgHrByDuration[selectedApi];
   var cohortAvgHrFromRolling = hrFromApi != null && !isNaN(Number(hrFromApi)) ? Math.round(Number(hrFromApi)) : null;
