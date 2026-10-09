@@ -78,12 +78,14 @@ function buildMonthPowerCurveData(intervalMMP, intervalHR) {
     return {
       name: row.name,
       endStr: row.endStr != null && String(row.endStr).length ? String(row.endStr) : null,
+      powermax: Number(row.max_watts) || 0,
       power1min: Number(row.max_1min_watts) || 0,
       power5min: Number(row.max_5min_watts) || 0,
       power10min: Number(row.max_10min_watts) || 0,
       power20min: Number(row.max_20min_watts) || 0,
       power40min: Number(row.max_40min_watts) || 0,
       power60min: Number(row.max_60min_watts) || 0,
+      hrmax: Number(hr.max_hr_5sec || hr.max_hr) || 0,
       hr1min: Number(hr.max_hr_1min) || 0,
       hr5min: Number(hr.max_hr_5min) || 0,
       hr10min: Number(hr.max_hr_10min) || 0,
@@ -99,6 +101,7 @@ var MONTH_POWER_CHART_COLOR = '#a855f7';
 var MONTH_POWER_BTN_ACTIVE = '#a855f7';
 var MONTH_POWER_BTN_INACTIVE = '#9ca3af';
 var MONTH_POWER_CURVE_ITEMS = [
+  { api: 'max', dataKey: 'powermax', label: 'Max' },
   { api: '1min', dataKey: 'power1min', label: '1분' },
   { api: '5min', dataKey: 'power5min', label: '5분' },
   { api: '10min', dataKey: 'power10min', label: '10분' },
@@ -328,7 +331,7 @@ function PowerProfileMonthCurveChart(props) {
   var hrKeyForApi = 'hr' + selectedApi;
 
   var hasAnyWeek = data.length > 0 && data.some(function(r) {
-    return (r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
+    return (r.powermax || r.power1min || r.power5min || r.power10min || r.power20min || r.power40min || r.power60min) > 0;
   });
 
   var avgWkgSel = avgWkgByDuration[selectedApi];
