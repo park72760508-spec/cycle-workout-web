@@ -36,6 +36,39 @@ var bluetoothIndividualSegmentElapsedTime = 0;
 var bluetoothIndividualTotalElapsedTime = 0;
 var bluetoothIndividualTrainingStartTime = null;
 
+/**
+ * 2026-10-10: 그룹 훈련(블루투스 개인 대시보드)도 개인 훈련(app.js)과 동일하게 1초 단위
+ * window.trainingMetrics(실질 훈련초·일·30초 롤링 NP)를 누적한다. resultManager.saveTrainingResult와
+ * 결과 모달이 이 값으로 NP·TSS·active_sec를 계산하므로, 누락 시 평균파워×1.05 근사·유휴시간 포함 TSS가
+ * 되거나 같은 페이지에서 앞서 한 개인 훈련 값이 섞일 수 있었다. 알고리즘은 app.js와 동일.
+ */
+var __indivTmTimer = null;
+function __indivStartTrainingMetrics() {
+    if (!window.trainingMetrics) window.trainingMetrics = {};
+    Object.assign(window.trainingMetrics, { elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0, zeroStreak: 0 });
+    if (__indivTmTimer) clearInterval(__indivTmTimer);
+    __indivTmTimer = setInterval(function () {
+        if (window.currentTrainingState !== 'running') return;
+        var tm = window.trainingMetrics;
+        if (!tm) return;
+        var p = Math.max(0, Number(window.liveData && window.liveData.power) || 0);
+        var pauseZeroSec = Number(window.STELVIO_TSS_PAUSE_ZERO_SEC) > 0 ? Number(window.STELVIO_TSS_PAUSE_ZERO_SEC) : 15;
+        tm.zeroStreak = p > 0 ? 0 : (tm.zeroStreak || 0) + 1;
+        if (p <= 0 && tm.zeroStreak > pauseZeroSec) return; // 일시정지 구간: 누적 제외(ra30 동결)
+        tm.elapsedSec += 1;
+        tm.joules += p;
+        tm.ra30 += (p - tm.ra30) / 30;
+        tm.np4sum += Math.pow(tm.ra30, 4);
+        tm.count += 1;
+    }, 1000);
+}
+function __indivStopTrainingMetrics() {
+    if (__indivTmTimer) {
+        clearInterval(__indivTmTimer);
+        __indivTmTimer = null;
+    }
+}
+
 // 화면 방향 고정 함수 (세로 모드)
 async function lockScreenOrientation() {
     try {
@@ -1518,6 +1551,7 @@ _refStatus.on('value', (snapshot) => {
                 
                 // 모바일 대시보드와 동일한 훈련 결과 저장 로직 적용 (Bluetooth 개인 훈련 대시보드 전용, 독립적 구동)
                 // Android 등에서 탭 백그라운드 시 저장 미완료 방지: 저장 완료까지 await 후 결과 모달 표시
+                __indivStopTrainingMetrics();
                 (async function bluetoothSaveAndShowResult() {
                     showBluetoothTrainingResultModalSaving();
                     const beforeAccPoints = window.currentUser?.acc_points || 0;
@@ -1598,6 +1632,7 @@ _refStatus.on('value', (snapshot) => {
             bluetoothIndividualTotalElapsedTime = 0;
             if (typeof startFirebaseDataTransmission === 'function') startFirebaseDataTransmission();
             window._indivDistanceKm = 0;
+            __indivStartTrainingMetrics();
             if (currentSegmentIndex >= 0) {
                 bluetoothIndividualSegmentStartTime = Date.now();
                 bluetoothIndividualSegmentElapsedTime = 0;
@@ -5094,6 +5129,7 @@ function exitBluetoothIndividualTraining() {
     var beforeRemPoints = window.currentUser?.rem_points || 0;
     window.beforeTrainingPoints = { acc_points: beforeAccPoints, rem_points: beforeRemPoints };
 
+    __indivStopTrainingMetrics();
     (async function saveAndExit() {
         try {
             if (window.trainingResults && typeof window.trainingResults.endSession === 'function') {
