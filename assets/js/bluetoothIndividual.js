@@ -656,7 +656,7 @@ function sendDataToFirebase() {
     dataToSend.screenName = screenInfo.screenName;
     
     // Firebase에 업데이트 (merge: true로 기존 데이터 보존)
-    db.ref(`sessions/${sessionId}/users/${myTrackId}`).update(dataToSend)
+    __indivUpdate(`sessions/${sessionId}/users/${myTrackId}`, dataToSend)
         .then(() => {
             // Firebase 전송 성공 로그 (UI 업데이트는 startFirebaseDataTransmission의 setInterval에서 처리)
             // UI 업데이트는 주기적으로 window.liveData를 읽어서 처리하므로 여기서는 전송만 함
@@ -765,8 +765,7 @@ function updateFirebaseDevices() {
     };
     
     // devices 경로에 업데이트 (sessions/{sessionId}/devices/{myTrackId})
-    const devicesRef = db.ref(`sessions/${sessionId}/devices/${myTrackId}`);
-    devicesRef.update(devicesData)
+    __indivUpdate(`sessions/${sessionId}/devices/${myTrackId}`, devicesData)
         .then(() => {
             console.log('[BluetoothIndividual] ✅ Firebase 디바이스 정보 업데이트 성공:', {
                 path: `sessions/${sessionId}/devices/${myTrackId}`,
@@ -780,8 +779,7 @@ function updateFirebaseDevices() {
         });
     
     // 하위 호환성을 위해 users 경로에도 업데이트 (기존 코드와의 호환성)
-    const usersDevicesRef = db.ref(`sessions/${sessionId}/users/${myTrackId}/devices`);
-    usersDevicesRef.update(devicesData)
+    __indivUpdate(`sessions/${sessionId}/users/${myTrackId}/devices`, devicesData)
         .then(() => {
             console.log('[BluetoothIndividual] ✅ Firebase users/devices 경로 업데이트 성공 (하위 호환성)');
         })
@@ -1231,8 +1229,7 @@ async function loadUserInfoAndUpdateName() {
         } catch (error) {}
         if (!userName && db) {
             try {
-                const userSnapshot = await db.ref(`users/${currentUserIdForSession}`).once('value');
-                const userData = userSnapshot.val();
+                const userData = await __indivGet(`users/${currentUserIdForSession}`);
                 if (userData && userData.name) {
                     userName = String(userData.name).trim();
                     if (!window.currentUser) window.currentUser = userData;
@@ -1254,6 +1251,139 @@ let userDataLoaded = false;
 // [비용절감] RTDB .on() 리스너 참조 저장소 — 화면 이탈 시 .off() 호출로 누수 방지
 if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
 
+/* ==========================================================================================
+ * 2026-10-10: 그룹 훈련 Player RTDB 전송 계층 — SDK(웹소켓 + compat Auth)가 일부 휴대폰(WebView)에서
+ * 응답 없이 멈춰 Coach가 보낸 워크아웃·진행 상태를 받지 못하던 문제의 근본 대응.
+ *  - 구독: SDK on('value') 우선, 5초 내 첫 값이 없으면 RTDB REST 스트리밍(EventSource, v9 ID 토큰)으로 자동 전환.
+ *    두 경로에서 같은 값이 와도 JSON 비교로 한 번만 처리.
+ *  - 단건 조회: REST 우선(8초) → SDK 폴백. 쓰기(라이브 데이터): SDK 연결 시 SDK, 아니면 REST PATCH.
+ * ========================================================================================== */
+var __indivRtdbConnected = false;
+try {
+    db.ref('.info/connected').on('value', function (s) { __indivRtdbConnected = !!(s && s.val()); });
+} catch (e) {}
+function __indivRtdbBase() {
+    try {
+        var u = window.firebase && firebase.apps && firebase.apps.length && firebase.app().options.databaseURL;
+        if (u) return String(u).replace(/\/+$/, '');
+    } catch (e) {}
+    return 'https://stelvio-ai-default-rtdb.firebaseio.com';
+}
+function __indivIdToken() {
+    var u = (window.authV9 && window.authV9.currentUser) || (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+    if (!u || typeof u.getIdToken !== 'function') return Promise.reject(new Error('NO_AUTH'));
+    return u.getIdToken();
+}
+function __indivRestUrl(path, token) {
+    return __indivRtdbBase() + '/' + String(path).replace(/^\/+|\/+$/g, '') + '.json?auth=' + encodeURIComponent(token);
+}
+async function __indivRest(method, path, body, ms) {
+    var token = await __indivIdToken();
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms || 8000);
+    try {
+        var res = await fetch(__indivRestUrl(path, token), {
+            method: method, cache: 'no-store',
+            headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+            body: body !== undefined ? JSON.stringify(body) : undefined,
+            signal: ctrl ? ctrl.signal : undefined
+        });
+        if (!res.ok) throw new Error('RTDB REST HTTP ' + res.status);
+        var txt = await res.text();
+        return txt ? JSON.parse(txt) : null;
+    } finally { clearTimeout(t); }
+}
+/** 단건 조회: REST 우선 → SDK(10초 제한) 폴백. 반환은 값(val) */
+async function __indivGet(path) {
+    try { return await __indivRest('GET', path, undefined, 8000); }
+    catch (eRest) {
+        console.warn('[BluetoothIndividual] REST 조회 실패 → SDK 폴백:', path, eRest && eRest.message);
+        return await Promise.race([
+            db.ref(path).once('value').then(function (s) { return s.val(); }),
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('RTDB_TIMEOUT ' + path)); }, 10000); })
+        ]);
+    }
+}
+/** once('value', cb) 대체 — cb(snapshotLike) */
+function __indivOnce(path, cb) {
+    __indivGet(path).then(function (v) { cb({ val: function () { return v; } }); })
+        .catch(function (e) { console.warn('[BluetoothIndividual] 조회 실패:', path, e && e.message); });
+}
+function __indivSetAtPath(root, relPath, data, merge) {
+    var parts = String(relPath || '/').split('/').filter(Boolean);
+    if (!parts.length) {
+        if (merge && data && typeof data === 'object' && root && typeof root === 'object' && !Array.isArray(root)) {
+            var m = Object.assign({}, root);
+            Object.keys(data).forEach(function (k) { if (data[k] === null) delete m[k]; else m[k] = data[k]; });
+            return m;
+        }
+        return merge ? Object.assign({}, root || {}, data || {}) : data;
+    }
+    var base = (root && typeof root === 'object') ? (Array.isArray(root) ? root.slice() : Object.assign({}, root)) : {};
+    var head = parts[0];
+    var rest = '/' + parts.slice(1).join('/');
+    var child = __indivSetAtPath(base[head], rest, data, merge);
+    if (child === null || child === undefined) delete base[head]; else base[head] = child;
+    return base;
+}
+/** RTDB REST 스트리밍(EventSource). 토큰 만료·오류 시 새 토큰으로 재연결. */
+function __indivStream(path, onValue) {
+    var es = null, closed = false, value = null, retryTimer = null;
+    function scheduleReopen(ms) { if (closed) return; clearTimeout(retryTimer); retryTimer = setTimeout(open, ms); }
+    function open() {
+        if (closed) return;
+        if (typeof EventSource === 'undefined') { console.warn('[BluetoothIndividual] EventSource 미지원'); return; }
+        __indivIdToken().then(function (token) {
+            if (closed) return;
+            try { if (es) es.close(); } catch (e) {}
+            es = new EventSource(__indivRestUrl(path, token));
+            es.addEventListener('put', function (e) {
+                try { var m = JSON.parse(e.data); value = __indivSetAtPath(value, m.path, m.data, false); onValue(value); } catch (err) {}
+            });
+            es.addEventListener('patch', function (e) {
+                try { var m = JSON.parse(e.data); value = __indivSetAtPath(value, m.path, m.data, true); onValue(value); } catch (err) {}
+            });
+            es.addEventListener('auth_revoked', function () { scheduleReopen(500); });
+            es.addEventListener('cancel', function () { scheduleReopen(5000); });
+            es.onerror = function () {
+                // 연결 끊김: 토큰 만료(1시간) 가능성까지 고려해 새 토큰으로 재연결
+                try { es.close(); } catch (e2) {}
+                scheduleReopen(3000);
+            };
+        }).catch(function () { scheduleReopen(5000); });
+    }
+    open();
+    return { off: function () { closed = true; clearTimeout(retryTimer); try { if (es) es.close(); } catch (e) {} } };
+}
+/** on('value', handler) 대체 — SDK 우선, 5초 내 무응답이면 REST 스트림 병행. handler(snapshotLike) */
+function __indivWatch(path, handler) {
+    var last; // JSON 문자열(중복 전달 방지)
+    function deliver(v) {
+        var key;
+        try { key = JSON.stringify(v === undefined ? null : v); } catch (e) { key = String(Math.random()); }
+        if (key === last) return;
+        last = key;
+        try { handler({ val: function () { return v === undefined ? null : v; } }); } catch (err) { console.error('[BluetoothIndividual] 구독 처리 오류:', path, err); }
+    }
+    var ref = db.ref(path);
+    window.__btIndivFirebaseRefs.push(ref);
+    ref.on('value', function (snap) { deliver(snap.val()); }, function (err) { console.warn('[BluetoothIndividual] SDK 구독 오류:', path, err && err.message); });
+    var fallbackTimer = setTimeout(function () {
+        if (last !== undefined) return; // SDK가 이미 값을 전달함
+        console.warn('[BluetoothIndividual] SDK 구독 무응답 → REST 스트림 전환:', path);
+        window.__btIndivFirebaseRefs.push(__indivStream(path, deliver));
+    }, 5000);
+    window.__btIndivFirebaseRefs.push({ off: function () { clearTimeout(fallbackTimer); } });
+}
+/** update() 대체 — SDK 연결 상태면 SDK, 아니면 REST PATCH(동시 요청 1건 제한) */
+var __indivPatchInFlight = {};
+function __indivUpdate(path, data) {
+    if (__indivRtdbConnected) return db.ref(path).update(data);
+    if (__indivPatchInFlight[path]) return Promise.resolve();
+    __indivPatchInFlight[path] = true;
+    return __indivRest('PATCH', path, data, 8000).finally(function () { __indivPatchInFlight[path] = false; });
+}
+
 /**
  * [비용절감] 등록된 모든 RTDB 실시간 리스너를 해제합니다.
  * 화면 이탈(뒤로가기, 탭 전환) 시 반드시 호출해야 합니다.
@@ -1273,6 +1403,7 @@ window.detachBluetoothIndividualFirebaseListeners = detachBluetoothIndividualFir
 function attachBluetoothIndividualFirebaseListeners() {
     if (window.__bluetoothIndividualFirebaseListenersAttached) return;
     window.__bluetoothIndividualFirebaseListenersAttached = true;
+    window.__btIndivAttachedKey = String(window.SESSION_ID || '') + '|' + String(myTrackId || '');
     var sessionId = (typeof window !== 'undefined' && window.SESSION_ID)
         || (typeof localStorage !== 'undefined' && localStorage.getItem('currentTrainingRoomId'))
         || (typeof SESSION_ID !== 'undefined' ? SESSION_ID : '');
@@ -1281,7 +1412,7 @@ function attachBluetoothIndividualFirebaseListeners() {
         console.warn('[BluetoothIndividual] Firebase 리스너: SESSION_ID가 없어 리스너를 설정하지 않습니다.');
         return;
     }
-    db.ref(`sessions/${sessionId}/users/${myTrackId}`).once('value', (snapshot) => {
+    __indivOnce(`sessions/${sessionId}/users/${myTrackId}`, (snapshot) => {
     const data = snapshot.val();
     
     if (data && !userDataLoaded) {
@@ -1391,10 +1522,7 @@ function attachBluetoothIndividualFirebaseListeners() {
 // Firebase에서 사용자 정보 실시간 업데이트 감지 (추가 보강)
 // sessions/{sessionId}/users/{myTrackId}의 변경사항을 실시간으로 감지
 // [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
-const _refUserData = db.ref(`sessions/${sessionId}/users/${myTrackId}`);
-if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
-window.__btIndivFirebaseRefs.push(_refUserData);
-_refUserData.on('value', (snapshot) => {
+__indivWatch(`sessions/${sessionId}/users/${myTrackId}`, (snapshot) => {
     const data = snapshot.val();
     if (data && data.userName) {
         // 사용자 이름이 업데이트되면 즉시 반영
@@ -1439,8 +1567,7 @@ async function getWorkoutId() {
         const sid = (typeof window !== 'undefined' && window.SESSION_ID)
             || (typeof localStorage !== 'undefined' && localStorage.getItem('currentTrainingRoomId'))
             || (typeof SESSION_ID !== 'undefined' ? SESSION_ID : '');
-        const snapshot = await db.ref(`sessions/${sid}/workoutId`).once('value');
-        const workoutId = snapshot.val();
+        const workoutId = await __indivGet(`sessions/${sid}/workoutId`);
         if (workoutId) {
             // 가져온 값 저장
             if (!window.currentWorkout) {
@@ -1480,10 +1607,7 @@ window.getWorkoutId = getWorkoutId;
 window.getWorkoutIdSync = getWorkoutIdSync;
 
 // [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
-const _refStatus = db.ref(`sessions/${sessionId}/status`);
-if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
-window.__btIndivFirebaseRefs.push(_refStatus);
-_refStatus.on('value', (snapshot) => {
+__indivWatch(`sessions/${sessionId}/status`, (snapshot) => {
     const status = snapshot.val();
     if (status) {
         // Firebase status 저장 (updateTargetPower에서 사용)
@@ -1512,7 +1636,7 @@ _refStatus.on('value', (snapshot) => {
         // 훈련 시작 감지 (idle/paused -> running)
         if (previousTrainingState !== 'running' && currentState === 'running') {
             // 워크아웃 ID 가져오기 (Firebase에서 또는 window.currentWorkout에서)
-            db.ref(`sessions/${sessionId}/workoutId`).once('value', (workoutIdSnapshot) => {
+            __indivOnce(`sessions/${sessionId}/workoutId`, (workoutIdSnapshot) => {
                 const workoutId = workoutIdSnapshot.val();
                 if (workoutId) {
                     if (!window.currentWorkout) {
@@ -1734,10 +1858,7 @@ _refStatus.on('value', (snapshot) => {
 
 // 4. 워크아웃 정보 구독 (세그먼트 그래프 표시용)
 // [비용절감] ref 저장 → detachBluetoothIndividualFirebaseListeners()로 일괄 해제 가능
-const _refWorkoutPlan = db.ref(`sessions/${sessionId}/workoutPlan`);
-if (!window.__btIndivFirebaseRefs) window.__btIndivFirebaseRefs = [];
-window.__btIndivFirebaseRefs.push(_refWorkoutPlan);
-_refWorkoutPlan.on('value', (snapshot) => {
+__indivWatch(`sessions/${sessionId}/workoutPlan`, (snapshot) => {
     const segments = snapshot.val();
     if (segments && Array.isArray(segments) && segments.length > 0) {
         // 워크아웃 객체 생성
@@ -5596,9 +5717,19 @@ function runBluetoothIndividualScreenInit() {
 if (__indivIdPrefix) {
     // 통합 모드: 로드 시 초기화하지 않음. 화면 표시 시 index에서 initBluetoothIndividualIntegratedScreen() 호출
     window.initBluetoothIndividualIntegratedScreen = function () {
-        if (window.__bluetoothIndividualIntegratedScreenInitialized) return;
         if (typeof window.__bluetoothIndividualTrackId !== 'undefined' && window.__bluetoothIndividualTrackId != null && window.__bluetoothIndividualTrackId !== '') {
             myTrackId = String(window.__bluetoothIndividualTrackId);
+        }
+        if (window.__bluetoothIndividualIntegratedScreenInitialized) {
+            // 2026-10-10: 재입장 — 이탈 시(showScreen) 리스너가 해제되므로 매 입장마다 현재 방·트랙으로 다시 구독한다.
+            // (기존에는 초기화 플래그 때문에 두 번째 입장부터 워크아웃·진행 상태 구독이 연결되지 않았다)
+            var curKey = String(window.SESSION_ID || '') + '|' + String(myTrackId || '');
+            if (window.__bluetoothIndividualFirebaseListenersAttached && window.__btIndivAttachedKey !== curKey) {
+                detachBluetoothIndividualFirebaseListeners();
+            }
+            userDataLoaded = false;
+            attachBluetoothIndividualFirebaseListeners();
+            return;
         }
         window.__bluetoothIndividualIntegratedScreenInitialized = true;
         initializeBluetoothIndividualWakeLockForSPA();
