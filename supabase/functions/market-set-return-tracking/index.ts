@@ -7,6 +7,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
+import { isTrackerEnabled, trackShipment } from "../_shared/deliveryTracker.ts";
 
 const jwks = createRemoteJWKSet(
   new URL(`${Deno.env.get("SUPABASE_URL")}/auth/v1/.well-known/jwks.json`)
@@ -167,20 +168,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ success: false, error: "더 이상 송장을 수정할 수 없는 상태입니다." }, 400);
   }
 
-  const { data: apiKey, error: apiKeyErr } = await admin.rpc("get_delivery_api_key");
-  if (apiKeyErr || !apiKey) {
-    return jsonResponse({ success: false, error: "배송 조회 API 키를 찾을 수 없습니다." }, 500);
-  }
-  const { data: webhookConfig, error: webhookConfigErr } = await admin.rpc("get_delivery_webhook_config").single();
-  if (webhookConfigErr || !webhookConfig?.endpoint_id) {
-    return jsonResponse({ success: false, error: "웹훅 엔드포인트 설정을 찾을 수 없습니다." }, 500);
-  }
-
-  const isCorrection = !!order.return_tracking_number && (order.return_courier_code !== courierCode || order.return_tracking_number !== trackingNumber);
-  if (isCorrection && order.return_delivery_request_id) {
-    await cancelTrackingSubscription(apiKey as string, order.return_delivery_request_id as string);
-  }
-
   const nowIso = new Date().toISOString();
   const update: Record<string, unknown> = {
     return_courier_code: courierCode,
@@ -191,37 +178,87 @@ Deno.serve(async (req) => {
     return_delivery_status_text: null,
     return_delivery_checked_at: null,
     return_delivered_at: null,
+    return_delivery_events: null,
     updated_at: nowIso,
   };
 
-  try {
-    const registered = await registerTracking(
-      apiKey as string,
-      webhookConfig.endpoint_id as string,
-      courierCode,
-      trackingNumber,
-      orderId + ":return"
-    );
-    update.return_delivery_request_id = registered.requestId;
-    update.return_webhook_registered = true;
-    update.return_webhook_registered_at = nowIso;
-  } catch (eReg) {
-    return jsonResponse({ success: false, error: (eReg as Error).message }, 400);
+  const isCorrection = !!order.return_tracking_number && (order.return_courier_code !== courierCode || order.return_tracking_number !== trackingNumber);
+
+  // 2026-10-09: 1차 공급자 Delivery Tracker(V2). 설정돼 있고 송장이 실제로 조회되면 deliveryapi
+  // 구독 등록(건당 과금)을 생략하고 30분 주기 폴링(market-check-delivery-status mode=tracker)으로
+  // 추적한다. 미설정·미조회(NOT_FOUND)·오류면 아래 기존 deliveryapi 경로로 그대로 폴백한다.
+  let trackerHandled = false;
+  if (isTrackerEnabled()) {
+    try {
+      const tr = await trackShipment(courierCode, trackingNumber);
+      if (tr) {
+        trackerHandled = true;
+        update.return_delivery_provider = "tracker";
+        update.return_delivery_status = tr.status;
+        update.return_delivery_status_text = tr.statusText;
+        update.return_delivery_events = tr.events;
+        update.return_delivery_checked_at = nowIso;
+        update.return_delivery_request_id = null;
+        update.return_webhook_registered = false;
+        if (tr.isDelivered) {
+          update.return_delivered_at = nowIso;
+          update.return_status = "DELIVERED";
+        }
+      }
+    } catch (eTr) {
+      console.warn("[market-set-return-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
+    }
   }
 
-  try {
-    const immediate = await fetchImmediateStatus(apiKey as string, courierCode, trackingNumber);
-    if (immediate) {
-      update.return_delivery_status = immediate.status;
-      update.return_delivery_status_text = immediate.statusText;
-      update.return_delivery_checked_at = nowIso;
-      if (immediate.isDelivered) {
-        update.return_delivered_at = nowIso;
-        update.return_status = "DELIVERED";
-      }
+  // 기존 deliveryapi 구독이 있던 송장을 정정하거나 Tracker로 넘어가면 이전 구독은 취소한다.
+  const needLegacyKey = !trackerHandled || (isCorrection && order.return_delivery_request_id);
+  let apiKey: unknown = null;
+  if (needLegacyKey) {
+    const keyRes = await admin.rpc("get_delivery_api_key");
+    apiKey = keyRes.data;
+    if (!trackerHandled && (keyRes.error || !apiKey)) {
+      return jsonResponse({ success: false, error: "배송 조회 API 키를 찾을 수 없습니다." }, 500);
     }
-  } catch (_eImmediate) {
-    // 즉시 조회 실패는 무시 — 구독이 곧 첫 자동 폴링 결과를 웹훅으로 보내준다.
+  }
+  if (isCorrection && order.return_delivery_request_id && apiKey) {
+    await cancelTrackingSubscription(apiKey as string, order.return_delivery_request_id as string);
+  }
+
+  if (!trackerHandled) {
+    const { data: webhookConfig, error: webhookConfigErr } = await admin.rpc("get_delivery_webhook_config").single();
+    if (webhookConfigErr || !webhookConfig?.endpoint_id) {
+      return jsonResponse({ success: false, error: "웹훅 엔드포인트 설정을 찾을 수 없습니다." }, 500);
+    }
+    update.return_delivery_provider = "deliveryapi";
+    try {
+      const registered = await registerTracking(
+        apiKey as string,
+        webhookConfig.endpoint_id as string,
+        courierCode,
+        trackingNumber,
+        orderId + ":return"
+      );
+      update.return_delivery_request_id = registered.requestId;
+      update.return_webhook_registered = true;
+      update.return_webhook_registered_at = nowIso;
+    } catch (eReg) {
+      return jsonResponse({ success: false, error: (eReg as Error).message }, 400);
+    }
+
+    try {
+      const immediate = await fetchImmediateStatus(apiKey as string, courierCode, trackingNumber);
+      if (immediate) {
+        update.return_delivery_status = immediate.status;
+        update.return_delivery_status_text = immediate.statusText;
+        update.return_delivery_checked_at = nowIso;
+        if (immediate.isDelivered) {
+          update.return_delivered_at = nowIso;
+          update.return_status = "DELIVERED";
+        }
+      }
+    } catch (_eImmediate) {
+      // 즉시 조회 실패는 무시 — 구독이 곧 첫 자동 폴링 결과를 웹훅으로 보내준다.
+    }
   }
 
   const { data: updated, error: updErr } = await admin
