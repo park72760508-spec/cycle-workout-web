@@ -21,7 +21,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
-import { isTrackerEnabled, trackShipment } from "../_shared/deliveryTracker.ts";
+import { isTrackerEnabled, loadTrackerCredentials, reportTrackerVerify, trackShipment, TrackerAuthError } from "../_shared/deliveryTracker.ts";
 
 // 프로젝트 JWKS를 모듈 스코프에서 한 번만 생성 — jose가 내부적으로 키를 캐시해
 // 매 요청마다 JWKS를 다시 받아오지 않는다(PostgREST가 JWT를 검증하는 것과 동일한 방식).
@@ -216,6 +216,7 @@ Deno.serve(async (req) => {
   // 구독 등록(건당 과금)을 생략하고 30분 주기 폴링(market-check-delivery-status mode=tracker)으로
   // 추적한다. 미설정·미조회(NOT_FOUND)·오류면 아래 기존 deliveryapi 경로로 그대로 폴백한다.
   let trackerHandled = false;
+  await loadTrackerCredentials(admin);
   if (isTrackerEnabled()) {
     try {
       const tr = await trackShipment(courierCode, trackingNumber);
@@ -234,6 +235,7 @@ Deno.serve(async (req) => {
       }
     } catch (eTr) {
       console.warn("[market-set-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
+      if (eTr instanceof TrackerAuthError) await reportTrackerVerify(admin, false, (eTr as Error).message);
     }
   }
 

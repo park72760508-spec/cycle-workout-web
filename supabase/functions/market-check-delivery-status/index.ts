@@ -17,7 +17,7 @@
 // 않은 건(Tracker 장애 등)도 deliveryapi 단발 조회로 함께 보정한다.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { isTrackerEnabled, shouldSkipTrackerCheck, trackShipment, TrackerNotFoundError } from "../_shared/deliveryTracker.ts";
+import { isTrackerEnabled, loadTrackerCredentials, reportTrackerVerify, shouldSkipTrackerCheck, trackShipment, TrackerAuthError, TrackerNotFoundError } from "../_shared/deliveryTracker.ts";
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
   }
 
   if (reqBody.mode === "tracker") {
+    await loadTrackerCredentials(admin);
     if (!isTrackerEnabled()) return jsonResponse({ success: true, mode: "tracker", skipped: "not_configured" });
     const sides = [
       { p: "", returnStatus: false },
@@ -111,6 +112,11 @@ Deno.serve(async (req) => {
         } catch (e) {
           failed += 1;
           // NOT_FOUND(아직 택배사 전산 미등록)는 다음 주기 재시도. 조회 시각만 남겨 30분 캐시를 적용.
+          if (e instanceof TrackerAuthError) {
+            // 키 만료 — 관리자 화면에 표시하고 이번 주기는 중단(12h 뒤 일일 배치가 deliveryapi로 보정).
+            await reportTrackerVerify(admin, false, (e as Error).message);
+            return jsonResponse({ success: false, mode: "tracker", error: "tracker_auth_failed" });
+          }
           if (e instanceof TrackerNotFoundError) {
             await admin.from("market_orders").update({ [`${P}delivery_checked_at`]: new Date().toISOString() }).eq("id", o.id);
           } else {
@@ -119,6 +125,7 @@ Deno.serve(async (req) => {
         }
       }
     }
+    if (checked > 0) await reportTrackerVerify(admin, true);
     return jsonResponse({ success: true, mode: "tracker", checked, delivered, cached, failed });
   }
 

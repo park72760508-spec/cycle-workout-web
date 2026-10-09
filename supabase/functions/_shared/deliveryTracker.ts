@@ -69,10 +69,39 @@ export type TrackerResult = {
   events: TrackerEvent[];
 };
 
+// 관리자가 중고랜드 마이페이지 "환경" 탭에서 등록한 키(Vault) — 환경변수보다 우선한다.
+let dbClientId = "";
+let dbClientSecret = "";
+let dbLoadedAt = 0;
+
+/** Vault 키를 읽어 둔다(인스턴스당 5분 캐시). 호출 측은 isTrackerEnabled() 전에 한 번 부른다. */
+// deno-lint-ignore no-explicit-any
+export async function loadTrackerCredentials(admin: any): Promise<void> {
+  if (Date.now() - dbLoadedAt < 5 * 60 * 1000) return;
+  try {
+    const { data } = await admin.rpc("get_delivery_tracker_credentials").maybeSingle();
+    dbClientId = String(data?.client_id || "").trim();
+    dbClientSecret = String(data?.client_secret || "").trim();
+    dbLoadedAt = Date.now();
+  } catch (_e) {
+    // Vault 조회 실패 시 환경변수만 사용
+  }
+}
+
+/** 실제 호출 결과를 관리자 화면 상태에 남긴다(만료·인증 실패 감지). */
+// deno-lint-ignore no-explicit-any
+export async function reportTrackerVerify(admin: any, ok: boolean, error?: string): Promise<void> {
+  try {
+    await admin.rpc("mark_delivery_tracker_verify", { p_ok: ok, p_error: error || null });
+  } catch (_e) {
+    // best-effort
+  }
+}
+
 function config() {
   const baseUrl = (Deno.env.get("DELIVERY_TRACKER_BASE_URL") || DEFAULT_DELIVERY_TRACKER_BASE_URL).replace(/\/+$/, "");
-  const clientId = (Deno.env.get("DELIVERY_TRACKER_CLIENT_ID") || "").trim();
-  const clientSecret = (Deno.env.get("DELIVERY_TRACKER_CLIENT_SECRET") || "").trim();
+  const clientId = dbClientId || (Deno.env.get("DELIVERY_TRACKER_CLIENT_ID") || "").trim();
+  const clientSecret = dbClientSecret || (Deno.env.get("DELIVERY_TRACKER_CLIENT_SECRET") || "").trim();
   const selfHosted = baseUrl !== DEFAULT_DELIVERY_TRACKER_BASE_URL;
   return { baseUrl, clientId, clientSecret, enabled: selfHosted || !!(clientId && clientSecret) };
 }
@@ -104,6 +133,8 @@ function mapEvent(node: Record<string, any> | null | undefined): TrackerEvent | 
 }
 
 export class TrackerNotFoundError extends Error {}
+/** 키 만료(무료 플랜 21일)·잘못된 키 — 관리자 재등록이 필요하다. */
+export class TrackerAuthError extends Error {}
 
 /**
  * 송장 1건 조회 → 내부 규격으로 변환. 미설정이면 null(호출 측 폴백), 송장 미존재는
@@ -130,6 +161,7 @@ export async function trackShipment(courierCode: string, trackingNumber: string)
       signal: ctrl.signal,
     });
     json = await res.json().catch(() => ({}));
+    if ((res.status === 401 || res.status === 403) && !json?.errors) throw new TrackerAuthError(`Delivery Tracker HTTP ${res.status}`);
     if (!res.ok && !json?.errors) throw new Error(`Delivery Tracker HTTP ${res.status}`);
   } finally {
     clearTimeout(timer);
@@ -140,6 +172,7 @@ export async function trackShipment(courierCode: string, trackingNumber: string)
     const code = String(errors[0]?.extensions?.code || "");
     const msg = String(errors[0]?.message || code || "Delivery Tracker 오류");
     if (code === "NOT_FOUND") throw new TrackerNotFoundError(msg);
+    if (code === "UNAUTHENTICATED" || code === "FORBIDDEN") throw new TrackerAuthError(`Delivery Tracker 인증 실패(${code}): ${msg}`);
     throw new Error(`Delivery Tracker: ${msg}`);
   }
   const track = json?.data?.track;

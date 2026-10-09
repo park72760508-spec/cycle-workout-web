@@ -1121,6 +1121,48 @@ export async function adminMarkMarketOrderSettled(orderId, settlementDate) {
   return callMarketFunction('adminMarkMarketOrderSettled', { orderId, settlementDate: settlementDate || undefined });
 }
 
+/** 관리자 "환경" 탭 — Delivery Tracker(배송조회) 키 상태. 키 원문은 반환하지 않는다(fn_is_admin() 서버 검증). */
+export async function getDeliveryTrackerStatus() {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { data, error } = await supabase.rpc('fn_admin_get_delivery_tracker_status');
+    if (error) throw error;
+    return (data && data[0]) || null;
+  });
+}
+
+/** 저장 전 브라우저에서 실제 API로 키를 검증한다(Delivery Tracker는 CORS 허용).
+ * 성공 시 true, 인증 실패 시 사유를 담은 Error를 던진다. */
+export async function verifyDeliveryTrackerCredentials(clientId, clientSecret) {
+  const res = await fetch('https://apis.tracker.delivery/graphql', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'TRACKQL-API-KEY ' + String(clientId).trim() + ':' + String(clientSecret).trim(),
+    },
+    body: JSON.stringify({ query: '{ carriers(first: 1) { edges { node { id } } } }' }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || (json && json.errors && json.errors.length) || !(json && json.data && json.data.carriers)) {
+    const e = json && json.errors && json.errors[0];
+    const code = (e && e.extensions && e.extensions.code) || ('HTTP ' + res.status);
+    throw new Error('키 검증 실패(' + code + ')' + (e && e.message ? ': ' + e.message : ''));
+  }
+  return true;
+}
+
+/** 관리자 — 검증된 새 키를 Vault에 저장(등록일 갱신 → 21일 만료 카운트 재시작). */
+export async function setDeliveryTrackerCredentials(clientId, clientSecret) {
+  return withMarketAuthRetry(async () => {
+    const supabase = await ensureMarketSupabaseSession();
+    const { error } = await supabase.rpc('fn_admin_set_delivery_tracker_credentials', {
+      p_client_id: String(clientId).trim(),
+      p_client_secret: String(clientSecret).trim(),
+    });
+    if (error) throw error;
+  });
+}
+
 if (typeof window !== 'undefined') {
   window.marketService = {
     ensureMarketSupabaseSession,
@@ -1185,5 +1227,8 @@ if (typeof window !== 'undefined') {
     getAllActiveMarketReportsForAdmin,
     getMarketSettlementsForAdmin,
     adminMarkMarketOrderSettled,
+    getDeliveryTrackerStatus,
+    verifyDeliveryTrackerCredentials,
+    setDeliveryTrackerCredentials,
   };
 }

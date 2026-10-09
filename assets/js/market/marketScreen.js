@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20260928sharedMint1';
+  var MARKET_SERVICE_URL = './marketService.js?v=20261009trackerEnv';
   var svc = null;
 
   function loadMarketService() {
@@ -4703,6 +4703,8 @@
     // 기록하는 화면이라 클라이언트 판단(marketIsAdminUser)과 무관하게 서버 RPC도 다시
     // fn_is_admin()으로 막혀 있다(이중 방어).
     if (marketIsAdminUser()) tabs.push({ key: 'settlement', label: '정산', icon: 'won' });
+    // 환경 탭(관리자 전용) — 배송조회(Delivery Tracker) 무료 키 21일 만료 재등록 화면.
+    if (marketIsAdminUser()) tabs.push({ key: 'env', label: '환경', icon: 'preferences' });
     // 신고 탭은 일반 사용자·관리자 모두에게 노출되지만 내용이 다르다(loadMyPageContent에서
     // marketIsAdminUser()로 분기) — 일반 사용자는 본인이 접수한 신고만, 관리자는 신고
     // 대상자별로 모은 전체 현황을 본다.
@@ -4748,12 +4750,13 @@
     var grid = document.getElementById('marketMyPageGrid');
     if (!grid) return;
     grid.className = (myPageState.tab === 'deals' || myPageState.tab === 'favorites') ? 'market-deals-list'
-      : (myPageState.tab === 'settlement' || myPageState.tab === 'reports' || myPageState.tab === 'alerts') ? 'market-settlement-wrap'
+      : (myPageState.tab === 'settlement' || myPageState.tab === 'reports' || myPageState.tab === 'alerts' || myPageState.tab === 'env') ? 'market-settlement-wrap'
       : 'market-grid';
     grid.innerHTML = '<div class="market-loading">불러오는 중...</div>';
     loadMarketService()
       .then(function (s) {
         if (myPageState.tab === 'settlement') return renderMySettlementTable(s, grid);
+        if (myPageState.tab === 'env') return renderMarketEnvSettings(s, grid);
         if (myPageState.tab === 'reports') return renderMarketReportsTable(s, grid);
         if (myPageState.tab === 'deals') return renderMyDeals(s, grid);
         if (myPageState.tab === 'alerts') return renderMarketAlertKeywords(s, grid);
@@ -4772,6 +4775,101 @@
       .catch(function (err) {
         grid.innerHTML = '<div class="market-empty">불러오지 못했습니다: ' + escapeHtml(err.message || String(err)) + '</div>';
       });
+  }
+
+  /** 마이페이지 "환경" 탭(관리자 전용) — 배송조회 Delivery Tracker 키 등록.
+   * 무료 플랜 키는 21일마다 콘솔(console.tracker.delivery)에서 수동 재발급해야 하므로, 여기서
+   * 붙여넣기 → 브라우저에서 실제 API로 검증 → Vault 저장(fn_admin_set_delivery_tracker_credentials).
+   * 만료돼도 배송조회는 기존 deliveryapi로 자동 폴백되어 거래·정산은 멈추지 않는다. */
+  function marketFmtKst(iso) {
+    if (!iso) return '-';
+    try {
+      return new Date(iso).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return String(iso); }
+  }
+
+  /** "DELIVERY_TRACKER_CLIENT_ID=..." 두 줄을 통째로 붙여넣어도 각 칸에 나눠 넣는다. */
+  function marketParseTrackerEnvPaste(text) {
+    var out = {};
+    String(text || '').split(/\r?\n/).forEach(function (line) {
+      var m = line.match(/^\s*(?:export\s+)?(DELIVERY_TRACKER_CLIENT_ID|DELIVERY_TRACKER_CLIENT_SECRET)\s*=\s*["']?([^"'\s]+)["']?\s*$/);
+      if (m) out[m[1] === 'DELIVERY_TRACKER_CLIENT_ID' ? 'id' : 'secret'] = m[2];
+    });
+    return out;
+  }
+
+  function renderMarketEnvSettings(s, grid) {
+    return s.getDeliveryTrackerStatus().then(function (st) {
+      st = st || {};
+      var now = Date.now();
+      var expMs = st.expires_at ? new Date(st.expires_at).getTime() : 0;
+      var daysLeft = expMs ? Math.ceil((expMs - now) / 86400000) : null;
+      var badge, badgeColor;
+      if (!st.configured) { badge = '미등록'; badgeColor = '#9ca3af'; }
+      else if (st.last_verify_ok === false) { badge = '인증 실패 — 재등록 필요'; badgeColor = '#dc2626'; }
+      else if (daysLeft != null && daysLeft <= 0) { badge = '만료됨 — 재등록 필요'; badgeColor = '#dc2626'; }
+      else if (daysLeft != null && daysLeft <= 3) { badge = '만료 임박 (D-' + daysLeft + ')'; badgeColor = '#f59e0b'; }
+      else { badge = '정상' + (daysLeft != null ? ' (D-' + daysLeft + ')' : ''); badgeColor = '#16a34a'; }
+      var row = function (k, v) {
+        return '<div style="display:flex;justify-content:space-between;gap:12px;padding:6px 0;border-bottom:1px solid #f1f1f1;font-size:13px;">' +
+          '<span style="color:#6b7280;">' + escapeHtml(k) + '</span><span style="text-align:right;word-break:break-all;">' + v + '</span></div>';
+      };
+      var inputStyle = 'width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-top:4px;';
+      grid.innerHTML =
+        '<div class="market-env-card" style="background:#fff;border-radius:12px;padding:16px;margin:8px 0;box-shadow:0 1px 3px rgba(0,0,0,.08);">' +
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">' +
+            '<strong style="font-size:15px;">배송조회 키 (Delivery Tracker)</strong>' +
+            '<span style="font-size:12px;font-weight:700;color:#fff;background:' + badgeColor + ';padding:3px 10px;border-radius:999px;white-space:nowrap;">' + escapeHtml(badge) + '</span>' +
+          '</div>' +
+          row('Client ID', escapeHtml(st.client_id_hint || '-')) +
+          row('등록일', escapeHtml(marketFmtKst(st.registered_at))) +
+          row('만료 예정', escapeHtml(marketFmtKst(st.expires_at))) +
+          row('마지막 확인', escapeHtml(marketFmtKst(st.last_verified_at)) + (st.last_verify_ok === false ? ' <span style="color:#dc2626;">실패</span>' : st.last_verified_at ? ' <span style="color:#16a34a;">정상</span>' : '')) +
+          (st.last_error ? row('오류', '<span style="color:#dc2626;">' + escapeHtml(st.last_error) + '</span>') : '') +
+          '<p style="font-size:12px;color:#6b7280;line-height:1.6;margin:12px 0;">무료 플랜 키는 <b>21일마다 만료</b>됩니다. ' +
+            '<a href="https://console.tracker.delivery" target="_blank" rel="noopener" style="color:#7c3aed;">console.tracker.delivery</a>에서 새 키를 발급받아 아래에 붙여넣고 저장하세요. ' +
+            '<code>DELIVERY_TRACKER_CLIENT_ID=…</code> 두 줄을 그대로 붙여넣어도 됩니다. 만료돼도 배송조회는 기존 서비스로 자동 처리되어 거래·정산은 멈추지 않습니다.</p>' +
+          '<label style="font-size:13px;font-weight:600;">Client ID<input id="marketEnvTrackerId" type="text" autocomplete="off" spellcheck="false" style="' + inputStyle + '" placeholder="Client ID"></label>' +
+          '<label style="display:block;margin-top:10px;font-size:13px;font-weight:600;">Client Secret<input id="marketEnvTrackerSecret" type="password" autocomplete="new-password" spellcheck="false" style="' + inputStyle + '" placeholder="Client Secret"></label>' +
+          '<button type="button" id="marketEnvTrackerSave" class="stelvio-ranking-board-entry-btn" style="width:100%;margin-top:14px;">검증 후 저장</button>' +
+        '</div>';
+
+      var idEl = document.getElementById('marketEnvTrackerId');
+      var secEl = document.getElementById('marketEnvTrackerSecret');
+      var btn = document.getElementById('marketEnvTrackerSave');
+      function onPaste(e) {
+        var text = (e.clipboardData || window.clipboardData).getData('text');
+        var parsed = marketParseTrackerEnvPaste(text);
+        if (parsed.id || parsed.secret) {
+          e.preventDefault();
+          if (parsed.id) idEl.value = parsed.id;
+          if (parsed.secret) secEl.value = parsed.secret;
+        }
+      }
+      idEl.addEventListener('paste', onPaste);
+      secEl.addEventListener('paste', onPaste);
+      btn.onclick = function () {
+        var cid = idEl.value.trim();
+        var sec = secEl.value.trim();
+        if (!cid || !sec) { toast('Client ID와 Client Secret을 모두 입력해주세요.'); return; }
+        btn.disabled = true;
+        btn.textContent = '검증 중...';
+        s.verifyDeliveryTrackerCredentials(cid, sec)
+          .then(function () {
+            btn.textContent = '저장 중...';
+            return s.setDeliveryTrackerCredentials(cid, sec);
+          })
+          .then(function () {
+            toast('배송조회 키를 저장했습니다. 21일 뒤 만료됩니다.');
+            return renderMarketEnvSettings(s, grid);
+          })
+          .catch(function (err) {
+            toast((err && err.message) || String(err));
+            btn.disabled = false;
+            btn.textContent = '검증 후 저장';
+          });
+      };
+    });
   }
 
   /** 정산 표 컬럼 정의 — data-field 값과 순서의 단일 소스. 체크박스 on/off로 th/td를

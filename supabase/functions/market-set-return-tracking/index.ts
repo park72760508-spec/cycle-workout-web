@@ -7,7 +7,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
-import { isTrackerEnabled, trackShipment } from "../_shared/deliveryTracker.ts";
+import { isTrackerEnabled, loadTrackerCredentials, reportTrackerVerify, trackShipment, TrackerAuthError } from "../_shared/deliveryTracker.ts";
 
 const jwks = createRemoteJWKSet(
   new URL(`${Deno.env.get("SUPABASE_URL")}/auth/v1/.well-known/jwks.json`)
@@ -188,6 +188,7 @@ Deno.serve(async (req) => {
   // 구독 등록(건당 과금)을 생략하고 30분 주기 폴링(market-check-delivery-status mode=tracker)으로
   // 추적한다. 미설정·미조회(NOT_FOUND)·오류면 아래 기존 deliveryapi 경로로 그대로 폴백한다.
   let trackerHandled = false;
+  await loadTrackerCredentials(admin);
   if (isTrackerEnabled()) {
     try {
       const tr = await trackShipment(courierCode, trackingNumber);
@@ -207,6 +208,7 @@ Deno.serve(async (req) => {
       }
     } catch (eTr) {
       console.warn("[market-set-return-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
+      if (eTr instanceof TrackerAuthError) await reportTrackerVerify(admin, false, (eTr as Error).message);
     }
   }
 
