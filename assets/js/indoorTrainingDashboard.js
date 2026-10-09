@@ -6692,6 +6692,43 @@ function displayWorkoutSegmentGraph(workout, currentSegmentIndex = -1) {
 /**
  * 전광판용 세그먼트 그래프 그리기 (크기 제한 적용)
  */
+/** 워크아웃 화면 그래프와 동일한 Zone 색상 (style.css --zone-1~7) */
+var __COACH_ZONE_FALLBACK = ['#9E9E9E', '#3498DB', '#2ECC71', '#F1C40F', '#E67E22', '#E74C3C', '#9B59B6'];
+var __coachZoneColorCache = null;
+function __coachZoneColorForSegment(seg, ftpPercent) {
+    if (!__coachZoneColorCache) {
+        __coachZoneColorCache = __COACH_ZONE_FALLBACK.map(function (fb, i) {
+            try {
+                var v = getComputedStyle(document.documentElement).getPropertyValue('--zone-' + (i + 1)).trim();
+                return v || fb;
+            } catch (e) { return fb; }
+        });
+    }
+    var zone = 1;
+    if (typeof getSegmentZoneFromFtpPercent === 'function') {
+        zone = Number(getSegmentZoneFromFtpPercent(seg)) || 1;
+    } else {
+        var pct = Number(ftpPercent) || 0;
+        zone = pct < 56 ? 1 : pct < 76 ? 2 : pct < 91 ? 3 : pct < 106 ? 4 : pct < 121 ? 5 : pct < 151 ? 6 : 7;
+    }
+    return __coachZoneColorCache[Math.max(1, Math.min(7, zone)) - 1];
+}
+/** 상단만 둥근 막대 + 우측 1px 간격(세그먼트 구분) */
+function __coachFillTopRoundedBar(ctx, x, y, w, h) {
+    var gap = w > 3 ? 1 : 0;
+    var bw = Math.max(1, w - gap);
+    var r = Math.max(0, Math.min(4, bw / 2, h));
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.lineTo(x + bw - r, y);
+    ctx.quadraticCurveTo(x + bw, y, x + bw, y + r);
+    ctx.lineTo(x + bw, y + h);
+    ctx.closePath();
+    ctx.fill();
+}
+
 function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canvasId = 'selectedWorkoutSegmentGraphCanvas', maxWidth = 300, maxHeight = 120) {
     if (!segments || segments.length === 0) return;
     
@@ -6977,9 +7014,10 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
                 segmentStrokeColor = isCurrent ? 'rgba(0, 212, 170, 1)' : 'rgba(255, 255, 255, 0.3)';
             }
             
-            // 세그먼트 사각형 그리기
-            ctx.fillStyle = segmentColor;
-            ctx.fillRect(x, y, segWidth, powerHeight);
+            // 2026-10-10: 워크아웃 화면 그래프(renderSegmentedWorkoutGraph)와 동일한 막대 형식 —
+            // Zone 1~7 색상(--zone-N), 세그먼트 사이 1px 간격, 상단 둥근 모서리(4px), 테두리 없음.
+            ctx.fillStyle = __coachZoneColorForSegment(seg, ftpPercent);
+            __coachFillTopRoundedBar(ctx, x, y, segWidth, powerHeight);
         
             // 현재 세그먼트에 흰색 네온 효과 추가 (훈련 화면과 동일한 방식)
             // 시작 버튼 클릭 후에만 네온 효과 적용 (trainingState === 'running')
@@ -7035,12 +7073,8 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
                 // 그림자 효과 리셋
                 ctx.shadowBlur = 0;
                 ctx.shadowColor = 'transparent';
-            } else {
-                // 일반 세그먼트 경계선
-                ctx.strokeStyle = segmentStrokeColor;
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, segWidth, powerHeight);
             }
+            // 일반 세그먼트: 워크아웃 화면 그래프처럼 테두리 없이 1px 간격으로만 구분
         }
         
         // dual 또는 cadence_rpm 타입일 때 RPM 값 표시 (기준값 90을 기준으로 위 아래에 바로 표시)
