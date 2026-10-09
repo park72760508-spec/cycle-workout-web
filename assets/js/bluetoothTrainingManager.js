@@ -7,6 +7,11 @@
  * Bluetooth 트랙에 사용자 할당 (애니메이션 효과 포함)
  * 로딩 애니메이션 적용 (Bluetooth Join Session 전용, 독립적 구동)
  */
+/** RTDB 호출 10초 제한(연결 멈춤 시 무한 로딩 방지) — trainingRoomManager.js의 stelvioRtdbCall 사용 */
+function __btRtdb(promise, label) {
+  return typeof window.stelvioRtdbCall === 'function' ? window.stelvioRtdbCall(promise, label, 10000) : promise;
+}
+
 async function assignUserToBluetoothTrackWithAnimation(trackNumber, currentUserId, roomIdParam, event) {
   if (event) {
     event.stopPropagation();
@@ -134,10 +139,18 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
     try {
       const sessionId = roomId;
       const usersRef = db.ref(`sessions/${sessionId}/users/${trackNumber}`);
-      const usersSnapshot = await usersRef.once('value');
+      if (typeof window.stelvioRtdbKick === 'function') window.stelvioRtdbKick(db);
+      const usersSnapshot = await (typeof window.stelvioRtdbCall === 'function'
+        ? window.stelvioRtdbCall(usersRef.once('value'), 'track user', 10000)
+        : usersRef.once('value'));
       currentTrackUser = usersSnapshot.val();
     } catch (error) {
       console.error('[assignUserToBluetoothTrack] 현재 트랙 사용자 확인 오류:', error);
+      // 2026-10-10: 현재 신청자를 확인하지 못하면(연결 지연·권한 만료) 다른 사람의 트랙을 덮어쓸 수 있으므로 중단하고 사유 안내
+      if (typeof showToast === 'function') {
+        showToast(typeof window.stelvioRtdbErrorMessage === 'function' ? window.stelvioRtdbErrorMessage(error) : '트랙 정보를 확인하지 못했습니다.', 'error');
+      }
+      throw error;
     }
   }
   
@@ -196,22 +209,22 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
           weight: loggedInUser.weight || null
         };
         
-        await db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData);
+        await __btRtdb(db.ref(`sessions/${sessionId}/users/${trackNumber}`).set(userData), 'set user');
         
         // 기존 디바이스 정보 유지 (있는 경우)
         const devicesRef = db.ref(`sessions/${sessionId}/devices/${trackNumber}`);
-        const devicesSnapshot = await devicesRef.once('value');
+        const devicesSnapshot = await __btRtdb(devicesRef.once('value'), 'devices');
         const currentDeviceData = devicesSnapshot.val() || {};
         
         // 디바이스 정보가 없으면 빈 객체로 초기화
         if (!currentDeviceData || Object.keys(currentDeviceData).length === 0) {
-          await db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
+          await __btRtdb(db.ref(`sessions/${sessionId}/devices/${trackNumber}`).set({
             smartTrainerId: '',
             powerMeterId: '',
             heartRateId: '',
             gear: '',
             brake: ''
-          });
+          }), 'set devices');
         }
         
         if (typeof showToast === 'function') {
@@ -234,7 +247,7 @@ async function assignUserToBluetoothTrack(trackNumber, currentUserId, roomIdPara
       if (typeof showToast === 'function') {
         // 이미 다른 사용자 메시지는 위에서 표시했으므로 중복 표시하지 않음
         if (!error.message || !error.message.includes('이미 다른 사용자가 신청되어 있습니다')) {
-          showToast('트랙 신청 중 오류가 발생했습니다.', 'error');
+          showToast(typeof window.stelvioRtdbErrorMessage === 'function' ? window.stelvioRtdbErrorMessage(error) : '트랙 신청 중 오류가 발생했습니다.', 'error');
         }
       }
       // 오류 발생 시 에러를 다시 throw하여 assignUserToBluetoothTrackWithAnimation에서 버튼 상태 복원

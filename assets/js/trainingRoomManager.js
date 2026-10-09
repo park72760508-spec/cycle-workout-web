@@ -6634,6 +6634,38 @@ function createDefaultTracks(count = 10) {
 /** Fast-fail timeout for initial Bluetooth player list fetch (no long mobile timeouts). */
 const BLUETOOTH_PLAYER_LIST_FAST_FAIL_MS = 3000;
 
+/**
+ * 2026-10-10: Realtime DB 호출 시간 제한 — 연결이 멈춘 기기(앱 복귀 직후·네트워크 전환·RTDB 미인증 등)에서
+ * once()/set()이 끝나지 않아 트랙 신청 로딩이 무한히 돌고, Player 목록이 '사용자 없음'으로만 보이던 문제 대응.
+ */
+function stelvioRtdbCall(promise, label, ms) {
+  var limit = Number(ms) > 0 ? Number(ms) : 10000;
+  return Promise.race([
+    promise,
+    new Promise(function (_, rej) {
+      setTimeout(function () {
+        var e = new Error('RTDB_TIMEOUT' + (label ? ' (' + label + ')' : ''));
+        e.code = 'RTDB_TIMEOUT';
+        rej(e);
+      }, limit);
+    })
+  ]);
+}
+function stelvioRtdbErrorMessage(err) {
+  var code = String((err && (err.code || err.message)) || '').toUpperCase();
+  if (code.indexOf('RTDB_TIMEOUT') !== -1) return '서버 연결이 지연되고 있습니다. 네트워크 상태를 확인한 뒤 다시 시도해주세요.';
+  if (code.indexOf('PERMISSION') !== -1) return '실시간 서버 인증이 만료되었습니다. 로그아웃 후 다시 로그인해주세요.';
+  return '트랙 정보를 처리하지 못했습니다. 잠시 후 다시 시도해주세요.';
+}
+function stelvioRtdbKick(db) {
+  try { if (db && typeof db.goOnline === 'function') db.goOnline(); } catch (e) {}
+}
+if (typeof window !== 'undefined') {
+  window.stelvioRtdbCall = stelvioRtdbCall;
+  window.stelvioRtdbErrorMessage = stelvioRtdbErrorMessage;
+  window.stelvioRtdbKick = stelvioRtdbKick;
+}
+
 /** Safe Realtime DB reference (survives page suspension). */
 function getBluetoothPlayerListDb() {
   if (typeof db !== 'undefined' && db != null) return db;
@@ -6655,8 +6687,8 @@ async function fetchBluetoothTrackData(db, roomId) {
   const devicesRef = db.ref(`sessions/${sessionId}/devices`);
   const usersRef = db.ref(`sessions/${sessionId}/users`);
   var trackResults = await Promise.all([
-    devicesRef.once('value'),
-    usersRef.once('value')
+    stelvioRtdbCall(devicesRef.once('value'), 'devices', 10000),
+    stelvioRtdbCall(usersRef.once('value'), 'users', 10000)
   ]);
   var devicesSnapshot = trackResults && trackResults[0];
   var usersSnapshot = trackResults && trackResults[1];
@@ -6956,6 +6988,7 @@ async function renderBluetoothPlayerList() {
       data = await Promise.race([fetchBluetoothTrackData(db, roomId), timeoutPromise]);
     } catch (err) {
       console.warn('[Bluetooth Player List] Fast fail (timeout or error), rendering default 10 tracks:', err?.message);
+      var fastFailErr = err;
     }
   }
 
@@ -6969,7 +7002,20 @@ async function renderBluetoothPlayerList() {
   try {
     renderBluetoothPlayerListToContainer(playerListContent, data);
     rendered = true;
-    if (data.tracks.length > 0 && roomId && typeof sessionStorage !== 'undefined') {
+    if (usedFallback && roomId) {
+      // 실패 시 빈 트랙을 '사용자 없음'으로만 보여주면 실제 신청 현황과 달라 보이므로 안내 + 다시 시도 버튼 표시
+      var banner = document.createElement('div');
+      banner.id = 'bluetoothPlayerListLoadError';
+      banner.style.cssText = 'margin:8px 0 12px;padding:10px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:13px;line-height:1.5;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+      var msgText = (typeof fastFailErr !== 'undefined' && fastFailErr && String(fastFailErr.code || fastFailErr.message || '').toUpperCase().indexOf('PERMISSION') !== -1)
+        ? stelvioRtdbErrorMessage(fastFailErr)
+        : '트랙 정보를 불러오는 중 연결이 지연되고 있습니다. 표시된 트랙은 실제 신청 현황과 다를 수 있습니다.';
+      banner.innerHTML = '<span id="bluetoothPlayerListLoadErrorMsg"></span><button type="button" style="flex-shrink:0;padding:6px 10px;border-radius:6px;border:none;background:#ea580c;color:#fff;font-weight:700;cursor:pointer;" onclick="renderBluetoothPlayerList()">다시 시도</button>';
+      playerListContent.insertBefore(banner, playerListContent.firstChild);
+      var msgEl = document.getElementById('bluetoothPlayerListLoadErrorMsg');
+      if (msgEl) msgEl.textContent = msgText;
+    }
+    if (!usedFallback && data.tracks.length > 0 && roomId && typeof sessionStorage !== 'undefined') {
       try {
         sessionStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: data.tracks, maxTrackNumber: data.maxTrackNumber, roomId, timestamp: now }));
       } catch (e) {}
@@ -6988,7 +7034,25 @@ async function renderBluetoothPlayerList() {
         const container = document.getElementById('bluetoothPlayerListContent');
         const backgroundDb = getBluetoothPlayerListDb();
         if (!container || !backgroundDb) return;
-        const fresh = await fetchBluetoothTrackData(backgroundDb, roomId);
+        // 연결 재수립을 유도하며 최대 3회 재시도(10s 제한) — 성공하면 안내 배너가 사라진 실제 목록으로 교체
+        let fresh = null;
+        let lastErr = null;
+        for (let attempt = 0; attempt < 3 && !fresh; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * attempt));
+          if (!document.getElementById('bluetoothPlayerListContent')) return;
+          stelvioRtdbKick(backgroundDb);
+          try {
+            fresh = await fetchBluetoothTrackData(backgroundDb, roomId);
+          } catch (eRetry) {
+            lastErr = eRetry;
+            if (String(eRetry && (eRetry.code || eRetry.message) || '').toUpperCase().indexOf('PERMISSION') !== -1) break;
+          }
+        }
+        if (!fresh) {
+          const msgEl = document.getElementById('bluetoothPlayerListLoadErrorMsg');
+          if (msgEl) msgEl.textContent = stelvioRtdbErrorMessage(lastErr) + ' (트랙 정보를 불러오지 못했습니다)';
+          return;
+        }
         if (fresh && fresh.tracks && fresh.tracks.length > 0) {
           renderBluetoothPlayerListToContainer(container, fresh);
           if (typeof sessionStorage !== 'undefined') {
