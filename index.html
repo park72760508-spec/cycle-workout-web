@@ -15450,7 +15450,7 @@
     var stelvioRankingUserGenderCache = {};
     /** 2026-10-09 Firestore 읽기 절감: 위 보강 결과(사진 없음·사진 URL·성별)를 24시간 localStorage에 보존.
         메모리 캐시만 있을 때는 앱 실행마다 랭킹 참가자 ~350명 users/{uid}를 다시 읽었다(사진 보유자는 ~30명). */
-    var STELVIO_RANKING_PROFILE_LS_KEY = 'stelvioRankingBoardProfileHydrate:v1';
+    var STELVIO_RANKING_PROFILE_LS_KEY = 'stelvio_rb_prof_hydrate:v1'; // 'stelvioRanking*' 접두는 부팅 시 QuotaGuard가 삭제하므로 피함
     var STELVIO_RANKING_PROFILE_LS_TTL_MS = 24 * 60 * 60 * 1000;
     var stelvioRankingProfileLsMap = {};
     var stelvioRankingProfileLsSaveTimer = null;
