@@ -7542,12 +7542,12 @@
             <h3 class="training-ready-h3">Select Dashboard</h3>
             <div class="grid-2 training-ready-dashboard-grid">
               <!-- 좌측: 개인 훈련 화면 (워크아웃 선택 시 활성화) -->
-              <button class="btn btn-device" id="btnStartTraining" disabled onclick="showScreen('trainingScreen'); if (typeof initTrainingScreenForReady === 'function') { setTimeout(function(){ initTrainingScreenForReady(); }, 200); }">
+              <button class="btn btn-device" id="btnStartTraining" disabled onclick="openDashboardFromTrainingReady('tablet')">
                 <img src="assets/img/laptop.png" loading="lazy" alt="태블릿" class="device-btn-icon" />
                 <span>태블릿</span>
               </button>
               <!-- 우측: 모바일 대시보드 화면 (워크아웃 선택 시 활성화) -->
-              <button class="btn btn-device" id="btnMobileDashboard" disabled onclick="showScreen('mobileDashboardScreen'); if (typeof startMobileDashboard === 'function') { setTimeout(() => startMobileDashboard(), 200); }">
+              <button class="btn btn-device" id="btnMobileDashboard" disabled onclick="openDashboardFromTrainingReady('mobile')">
                 <img src="assets/img/mobile.png" loading="lazy" alt="모바일" class="device-btn-icon" />
                 <span>모바일</span>
               </button>
@@ -34621,7 +34621,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js"></script>
-  <script src="assets/js/app.js?v=20260928idle10m"></script>
+  <script src="assets/js/app.js?v=20261009dashspin"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
