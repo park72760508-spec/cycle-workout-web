@@ -29,6 +29,22 @@
   /** localStorage 쓰기 실패·ITP(미사용 삭제) 대비: 같은 탭·세션 내 조회/복구용 */
   var _readThroughMemory = Object.create(null);
 
+  /** 2026-10-09: 부팅 시 QuotaGuard 일괄 삭제를 없앤 대신, 2일 지난 자기 캐시만 정리(용량 무한 증가 방지) */
+  setTimeout(function purgeExpiredAiCache() {
+    try {
+      var cutoff = Date.now() - 2 * 24 * 60 * 60 * 1000;
+      var rm = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(CACHE_PREFIX) !== 0) continue;
+        var at = 0;
+        try { at = Date.parse((JSON.parse(localStorage.getItem(k)) || {}).cachedAt) || 0; } catch (eP) {}
+        if (at < cutoff) rm.push(k);
+      }
+      rm.forEach(function(k) { try { localStorage.removeItem(k); } catch (eR) {} });
+    } catch (e) {}
+  }, 5000);
+
   function getTodayStr() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');

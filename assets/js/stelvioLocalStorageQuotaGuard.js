@@ -44,8 +44,6 @@
     ) {
       return true;
     }
-    if (key.indexOf('stelvio_dashboard_ai_') === 0) return true;
-    if (key.indexOf('stelvio_run_dashboard_ai_') === 0) return true;
     if (key === 'stelvio_workouts_cache') return true;
     if (key === 'stelvio_workouts_cache_timestamp') return true;
     if (key === 'stelvio_workouts_cache_count') return true;
@@ -54,6 +52,10 @@
     if (key.indexOf('firebase:host:') === 0 && key.indexOf('authUser') < 0) return true;
 
     if (opts.aggressive) {
+      /* 2026-10-09: AI 분석 캐시(당일 결과)는 부팅마다 지우면 같은 날 재분석(AI 재호출)이 발생 —
+         실제 용량 초과 시에만 삭제. 오래된 항목은 dashboardAICache/runDashboardAICache가 스스로 정리. */
+      if (key.indexOf('stelvio_dashboard_ai_') === 0) return true;
+      if (key.indexOf('stelvio_run_dashboard_ai_') === 0) return true;
       if (key.indexOf('stelvio_workout') === 0) return true;
       if (key.indexOf('workoutPlans') === 0) return true;
     }

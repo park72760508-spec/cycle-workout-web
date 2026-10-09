@@ -37,7 +37,7 @@
   <script src="assets/js/journal/journalSaveBridgeBoot.js"></script>
   <script>try { window.__CONFIG_LOADED__ = !!(window.__FIREBASE_CONFIG__ && window.__FIREBASE_CONFIG__.apiKey && window.__FIREBASE_CONFIG__.apiKey !== 'YOUR_FIREBASE_API_KEY'); } catch (e) { window.__CONFIG_LOADED__ = false; }</script>
   <!-- Firebase·랭킹 캐시 등이 localStorage를 채우기 전 용량 정리 (QuotaExceededError 방지) -->
-  <script src="assets/js/stelvioLocalStorageQuotaGuard.js"></script>
+  <script src="assets/js/stelvioLocalStorageQuotaGuard.js?v=20261009aicache"></script>
   <script src="assets/js/stelvioIdleGate.js?v=idle10m-20260928"></script>
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-database-compat.js"></script>
@@ -9256,7 +9256,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20260904flagCacheClear1"></script>
+  <script src="assets/js/userManager.js?v=20261009aicache"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -44705,7 +44705,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script defer src="assets/js/dashboardCoach.js"></script>
   <script defer src="assets/js/runDashboard/runDashboardCoach.js"></script>
   <script defer src="assets/js/runDashboard/runProfileInsightAnalysis.js"></script>
-  <script defer src="assets/js/dashboard/dashboardAICache.js"></script>
+  <script defer src="assets/js/dashboard/dashboardAICache.js?v=20261009aicache"></script>
   <!-- Dashboard 리팩터링: 반드시 마지막에 로드하여 window.PerformanceDashboard 덮어쓰기 -->
   <!-- defer: React(react.production.min.js)가 defer이므로 동기 로드 시 훅 초기화가 먼저 돌아 경고 발생 -->
   <!-- CYCLE PMC (CTL/ATL/TSB) — RUN pmcCalculator와 분리 -->
@@ -44722,7 +44722,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <!-- RUN Dashboard (러닝 분석) -->
   <script defer src="assets/js/runDashboard/pmcCalculator.js"></script>
   <script defer src="assets/js/runDashboard/runFitnessTrend.js"></script>
-  <script defer src="assets/js/runDashboard/runDashboardAICache.js"></script>
+  <script defer src="assets/js/runDashboard/runDashboardAICache.js?v=20261009aicache"></script>
   <script defer src="assets/js/runDashboard/runVo2maxCalculator.js"></script>
   <script defer src="assets/js/runDashboard/runDashboardPace.js"></script>
   <script defer src="assets/js/runDashboard/analyzeStelvioHexagon.js"></script>

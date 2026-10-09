@@ -1126,8 +1126,6 @@ function pruneStelvioLocalStorageForQuota(opts) {
         k.indexOf('stelvio_rank_prev') === 0 ||
         k.indexOf('stelvioPeakRanking') === 0 ||
         k.indexOf('stelvio_peak_rank_snap') === 0 ||
-        k.indexOf('stelvio_dashboard_ai_') === 0 ||
-        k.indexOf('stelvio_run_dashboard_ai_') === 0 ||
         k === 'stelvio_workouts_segments_cache' ||
         (k.indexOf('stelvioRanking') === 0 &&
           k.indexOf('stelvioRankingFavorites:') !== 0)
