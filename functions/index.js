@@ -19782,42 +19782,8 @@ exports.adminMarkMarketOrderSettled = onRequest(adminMarkMarketOrderSettledOptio
   res.status(200).json({ success: true });
 });
 
-/**
- * 입금 기한이 지난 PENDING 중고랜드 주문 정리 — 상품을 다시 ON_SALE로 되돌린다.
- * Toss 가상계좌는 기한이 지나면 자동 만료되므로 별도 취소 API 호출은 불필요.
- */
-exports.cancelUnpaidMarketOrdersSchedule = onSchedule(
-  {
-    schedule: "every 15 minutes",
-    region: "asia-northeast3",
-    secrets: [supabaseDualWriteServer.supabaseServiceRoleKey],
-  },
-  async () => {
-    const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
-    if (!supabase) return;
-    const nowIso = new Date().toISOString();
-    const { data: expired, error } = await supabase
-      .from("market_orders")
-      .select("id, item_id")
-      .eq("escrow_status", "PENDING")
-      .lt("va_due_at", nowIso);
-    if (error || !expired || !expired.length) return;
-    for (const o of expired) {
-      /* eslint-disable no-await-in-loop */
-      await supabase
-        .from("market_orders")
-        .update({ escrow_status: "CANCELLED", updated_at: nowIso })
-        .eq("id", o.id);
-      await supabase
-        .from("market_items")
-        .update({ status: "ON_SALE", updated_at: nowIso })
-        .eq("id", o.item_id)
-        .eq("status", "RESERVED");
-      /* eslint-enable no-await-in-loop */
-    }
-    console.log("[cancelUnpaidMarketOrdersSchedule] 만료 처리:", expired.length);
-  }
-);
+/* cancelUnpaidMarketOrdersSchedule 제거(2026-10-09) — Supabase pg_cron 'market-cancel-unpaid-orders'
+   (public.cancel_unpaid_market_orders, 15분마다)로 이관. migration 20261009200000 참고. */
 
 /**
  * 중고랜드 이미지 검색 — 상품 등록/수정 직후 첫 번째 이미지로 CLIP 임베딩을 계산해 저장한다.
