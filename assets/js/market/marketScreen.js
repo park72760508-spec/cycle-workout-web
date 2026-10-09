@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20261010trackerEnv2';
+  var MARKET_SERVICE_URL = './marketService.js?v=20261010trackerEnv3';
   var svc = null;
 
   function loadMarketService() {
@@ -4836,6 +4836,8 @@
 
       var idEl = document.getElementById('marketEnvTrackerId');
       var secEl = document.getElementById('marketEnvTrackerSecret');
+      // 현재 사용 중인 Client ID를 기본값으로 채운다(관리자 RPC가 반환할 때만 — Secret은 반환·표시하지 않음).
+      if (st.client_id) idEl.value = String(st.client_id);
       var btn = document.getElementById('marketEnvTrackerSave');
       function onPaste(e) {
         var text = (e.clipboardData || window.clipboardData).getData('text');
