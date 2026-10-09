@@ -1358,13 +1358,21 @@ function __indivStream(path, onValue) {
 /** on('value', handler) 대체 — SDK 우선, 5초 내 무응답이면 REST 스트림 병행. handler(snapshotLike) */
 function __indivWatch(path, handler) {
     var last; // JSON 문자열(중복 전달 방지)
+    var lastVal;
+    function run(v) {
+        try { handler({ val: function () { return v === undefined ? null : v; } }); } catch (err) { console.error('[BluetoothIndividual] 구독 처리 오류:', path, err); }
+    }
     function deliver(v) {
         var key;
         try { key = JSON.stringify(v === undefined ? null : v); } catch (e) { key = String(Math.random()); }
         if (key === last) return;
         last = key;
-        try { handler({ val: function () { return v === undefined ? null : v; } }); } catch (err) { console.error('[BluetoothIndividual] 구독 처리 오류:', path, err); }
+        lastVal = v;
+        run(v);
     }
+    // 재입장 시 구독이 유지되고 있으면 마지막 값을 화면에 다시 적용(워크아웃 그래프·목표 파워 등 재표시)
+    if (!window.__btIndivWatchers) window.__btIndivWatchers = [];
+    window.__btIndivWatchers.push({ replay: function () { if (last !== undefined) run(lastVal); } });
     var ref = db.ref(path);
     window.__btIndivFirebaseRefs.push(ref);
     ref.on('value', function (snap) { deliver(snap.val()); }, function (err) { console.warn('[BluetoothIndividual] SDK 구독 오류:', path, err && err.message); });
@@ -1395,6 +1403,7 @@ function detachBluetoothIndividualFirebaseListeners() {
         });
         window.__btIndivFirebaseRefs = [];
     }
+    window.__btIndivWatchers = [];
     window.__bluetoothIndividualFirebaseListenersAttached = false;
     console.log('[BluetoothIndividual] RTDB 리스너 모두 해제 완료');
 }
@@ -5728,7 +5737,11 @@ if (__indivIdPrefix) {
                 detachBluetoothIndividualFirebaseListeners();
             }
             userDataLoaded = false;
-            attachBluetoothIndividualFirebaseListeners();
+            if (window.__bluetoothIndividualFirebaseListenersAttached) {
+                (window.__btIndivWatchers || []).forEach(function (w) { try { w.replay(); } catch (e) {} });
+            } else {
+                attachBluetoothIndividualFirebaseListeners();
+            }
             return;
         }
         window.__bluetoothIndividualIntegratedScreenInitialized = true;
