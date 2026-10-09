@@ -3676,8 +3676,17 @@ async function summarizeStravaWebhookRetryQueue(db, options = {}) {
       });
     }
   });
+  // 영구 실패(dead) 건수 — count 집계(1,000건당 1 read)로만 가시화
+  let deadCount = null;
+  try {
+    const agg = await db.collection("strava_webhook_retries").where("status_queue", "==", "dead").count().get();
+    deadCount = agg.data().count;
+  } catch (eDead) {
+    console.warn("[summarizeStravaWebhookRetryQueue] dead count failed:", eDead.message || eDead);
+  }
   return {
     pendingCount: rows.length,
+    deadCount,
     truncated: rows.length >= limit,
     unresolvedCount,
     resolvableCount,
@@ -3847,6 +3856,7 @@ exports.stravaWebhookRetryMonitorSchedule = onSchedule(
     if (summary.unresolvedCount > 0 || summary.pendingCount >= 50) {
       console.error("[stravaWebhookRetryMonitor] ALERT: 웹훅 재시도 큐 적체", {
         pendingCount: summary.pendingCount,
+        deadCount: summary.deadCount,
         unresolvedCount: summary.unresolvedCount,
         resolvableCount: summary.resolvableCount,
         byReason: summary.byReason,
@@ -3856,6 +3866,7 @@ exports.stravaWebhookRetryMonitorSchedule = onSchedule(
     } else {
       console.log("[stravaWebhookRetryMonitor] OK", {
         pendingCount: summary.pendingCount,
+        deadCount: summary.deadCount,
         byReason: summary.byReason,
       });
     }

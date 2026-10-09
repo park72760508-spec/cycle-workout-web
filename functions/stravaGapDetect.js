@@ -87,7 +87,9 @@ async function enqueueStravaWebhookRetry(db, entry) {
     reason: String(entry.reason || "webhook").slice(0, 40),
     status: Number(entry.status) || 500,
     error: entry.error ? String(entry.error).slice(0, 500) : null,
-    status_queue: "pending",
+    // 2026-10-09: 401/403/404·user_unresolved 등 재시도로 복구 불가한 건은 "dead"로 분리 —
+    // pending에 쌓이면 hourly drain·6h 모니터가 매번 수백 건을 다시 읽는다(Firestore read 절감).
+    status_queue: isPermanentStravaRetryFailure(entry.status, entry.reason) ? "dead" : "pending",
     processed_at: null,
   };
   try {
