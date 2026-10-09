@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20261009trackerEnv';
+  var MARKET_SERVICE_URL = './marketService.js?v=20261010trackerEnv2';
   var svc = null;
 
   function loadMarketService() {
@@ -4831,7 +4831,7 @@
             '<code>DELIVERY_TRACKER_CLIENT_ID=…</code> 두 줄을 그대로 붙여넣어도 됩니다. 만료돼도 배송조회는 기존 서비스로 자동 처리되어 거래·정산은 멈추지 않습니다.</p>' +
           '<label style="font-size:13px;font-weight:600;">Client ID<input id="marketEnvTrackerId" type="text" autocomplete="off" spellcheck="false" style="' + inputStyle + '" placeholder="Client ID"></label>' +
           '<label style="display:block;margin-top:10px;font-size:13px;font-weight:600;">Client Secret<input id="marketEnvTrackerSecret" type="password" autocomplete="new-password" spellcheck="false" style="' + inputStyle + '" placeholder="Client Secret"></label>' +
-          '<button type="button" id="marketEnvTrackerSave" class="stelvio-ranking-board-entry-btn" style="width:100%;margin-top:14px;">검증 후 저장</button>' +
+          '<button type="button" id="marketEnvTrackerSave" style="display:block;width:100%;margin-top:14px;padding:13px 0;border:none;border-radius:10px;background:#ea580c;color:#fff;font-size:15px;font-weight:700;cursor:pointer;">검증 후 저장</button>' +
         '</div>';
 
       var idEl = document.getElementById('marketEnvTrackerId');
