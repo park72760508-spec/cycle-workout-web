@@ -3505,11 +3505,20 @@ function pauseBluetoothCoachTraining() {
  * 훈련 재개 (Indoor Training의 resumeTraining 참고)
  */
 function resumeBluetoothCoachTraining() {
-  if (window.bluetoothCoachState.pausedTime) {
-    const pausedDuration = Date.now() - window.bluetoothCoachState.pausedTime;
-    window.bluetoothCoachState.startTime += pausedDuration;
-    window.bluetoothCoachState.segmentStartTime += pausedDuration;
-    window.bluetoothCoachState.pausedTime = 0;
+  // 2026-10-10: 일시정지 시점의 경과(전체·구간)로 시작 시각을 재구성한다. 기존 'startTime += 일시정지 시간'은
+  // 이 화면이 훈련을 시작하지 않아 startTime이 null인 경우(새로고침한 Coach·다른 기기 Coach가 재시작 = 관찰자 모드)
+  // startTime이 '몇 초'가 되어 경과가 현재 epoch(예: 497670:34:57)로 표시되고 마스코트가 그래프 맨 우측으로 밀렸다.
+  // 경과는 일시정지 중 타이머가 멈춰 있으므로(관찰자는 Firebase status.elapsedTime) 정지 시점 값 그대로다.
+  {
+    const st = window.bluetoothCoachState;
+    const nowR = Date.now();
+    let elapsedSec = Math.max(0, Number(st.totalElapsedTime) || 0);
+    let segSec = Math.max(0, Number(st.segmentElapsedTime) || 0);
+    // 이전 오류로 이미 비정상 값(48시간 초과)이 들어 있으면 0부터가 아니라 구간 경과 기준으로라도 복구
+    if (elapsedSec > 172800) elapsedSec = segSec;
+    st.startTime = nowR - elapsedSec * 1000;
+    st.segmentStartTime = nowR - segSec * 1000;
+    st.pausedTime = 0;
   }
   
   window.bluetoothCoachState.trainingState = 'running';
@@ -3685,7 +3694,14 @@ function startBluetoothCoachTrainingTimer() {
   
   // Indoor Training과 동일한 로직: startTime이 있으면 경과 시간 계산
   if (window.bluetoothCoachState.startTime) {
-    const elapsed = Math.floor((now - window.bluetoothCoachState.startTime - window.bluetoothCoachState.pausedTime) / 1000);
+    let elapsed = Math.floor((now - window.bluetoothCoachState.startTime - window.bluetoothCoachState.pausedTime) / 1000);
+    // 비정상 경과(48시간 초과, startTime 손상) 방지: 직전 정상 경과 기준으로 시작 시각 복구
+    if (!(elapsed >= 0 && elapsed <= 172800)) {
+      const prev = Math.max(0, Math.min(172800, Number(window.bluetoothCoachState.totalElapsedTime) || 0));
+      window.bluetoothCoachState.startTime = now - prev * 1000;
+      window.bluetoothCoachState.pausedTime = 0;
+      elapsed = prev;
+    }
     window.bluetoothCoachState.totalElapsedTime = Math.max(0, elapsed);
     
     // 세그먼트 경과 시간 업데이트 (Indoor Training과 동일)

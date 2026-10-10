@@ -4590,8 +4590,17 @@ function pauseTraining() {
 function resumeTraining() {
   if (window.indoorTrainingState.pausedTime) {
     const pausedDuration = Date.now() - window.indoorTrainingState.pausedTime;
-    window.indoorTrainingState.startTime += pausedDuration;
-    window.indoorTrainingState.segmentStartTime += pausedDuration;
+    // 2026-10-10: startTime이 없으면(null + 숫자 → epoch 경과) 정지 시점 경과로 재구성 — Bluetooth Coach와 동일 방어
+    if (window.indoorTrainingState.startTime) {
+      window.indoorTrainingState.startTime += pausedDuration;
+    } else {
+      window.indoorTrainingState.startTime = Date.now() - Math.max(0, Number(window.indoorTrainingState.totalElapsedTime) || 0) * 1000;
+    }
+    if (window.indoorTrainingState.segmentStartTime) {
+      window.indoorTrainingState.segmentStartTime += pausedDuration;
+    } else {
+      window.indoorTrainingState.segmentStartTime = Date.now() - Math.max(0, Number(window.indoorTrainingState.segmentElapsedTime) || 0) * 1000;
+    }
     window.indoorTrainingState.pausedTime = 0;
   }
   
