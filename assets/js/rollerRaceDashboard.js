@@ -6071,7 +6071,7 @@ function generateRaceReportPDF() {
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">이동거리(km)</th>
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">평균속도(km/h)</th>
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">최고속도(km/h)</th>
-              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">경과시간</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Total Time</th>
             </tr>
           </thead>
           <tbody>
