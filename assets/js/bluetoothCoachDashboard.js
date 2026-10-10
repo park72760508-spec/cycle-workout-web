@@ -612,7 +612,7 @@ function createPowerMeterElement(powerMeter) {
         
         <g class="speedometer-speed-labels">${generateBluetoothCoachSpeedLabels()}</g>
         
-        <text x="100" y="100" 
+        <text x="100" y="110" 
               id="target-power-value-${powerMeter.id}"
               text-anchor="middle" 
               dominant-baseline="middle"
