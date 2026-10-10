@@ -1325,11 +1325,12 @@ async function loadInitialUserDataForTracks() {
               if (userData.weight) powerMeter.userWeight = userData.weight;
               
               // FTP 적용
-              if (userData.ftp) {
+              const initFTP = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
+              if (initFTP) {
                 const prevFTP = powerMeter.userFTP;
-                powerMeter.userFTP = userData.ftp;
-                if (prevFTP !== userData.ftp) {
-                  console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${userData.ftp}`);
+                powerMeter.userFTP = initFTP;
+                if (Number(prevFTP) !== Number(initFTP)) {
+                  console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${initFTP}`);
                   updateBluetoothCoachPowerMeterTicks(trackId);
                 }
               }
@@ -1430,6 +1431,39 @@ if (typeof window !== 'undefined' && !window.__bluetoothCoachInfoBarTimer) {
   }, 1000);
 }
 
+/**
+ * 2026-10-10: 계기판 FTP는 사용자 프로필(Firestore users/{uid}.ftp)을 기준으로 한다.
+ * sessions/{id}/users/{track}.ftp는 트랙 신청 시점의 값을 복사한 것이라 이후 FTP 변경이 반영되지 않았다
+ * (예: 트랙 210 / 프로필 240, 신청 시 FTP 미기록 → 계기판이 비율 0.33·0.67로만 표시).
+ * 프로필 FTP(>0)가 있으면 우선, 없으면 트랙 값. 사용자별 10분 캐시.
+ */
+var __bcProfileFtpCache = {};
+function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
+  var uid = userId ? String(userId) : '';
+  var trackN = Number(trackFtp) > 0 ? Number(trackFtp) : null;
+  if (!uid) return trackN;
+  var c = __bcProfileFtpCache[uid];
+  var fresh = c && (Date.now() - c.at < 10 * 60 * 1000);
+  if (!fresh && !(c && c.pending) && typeof window.getUserByUid === 'function') {
+    __bcProfileFtpCache[uid] = { ftp: c ? c.ftp : null, weight: c ? c.weight : null, at: c ? c.at : 0, pending: true };
+    window.getUserByUid(uid).then(function (prof) {
+      var f = Number(prof && prof.ftp);
+      var w = Number(prof && prof.weight);
+      __bcProfileFtpCache[uid] = { ftp: f > 0 ? f : null, weight: w > 0 ? w : null, at: Date.now(), pending: false };
+      // 응답이 온 시점에 같은 사용자가 그 트랙에 있으면 계기판 갱신
+      if (f > 0 && powerMeter && String(powerMeter.userId || '') === uid && Number(powerMeter.userFTP) !== f) {
+        powerMeter.userFTP = f;
+        if (w > 0) powerMeter.userWeight = w;
+        console.log('[Bluetooth Coach] 트랙 ' + powerMeter.id + ' 프로필 FTP 적용: ' + f);
+        updateBluetoothCoachPowerMeterTicks(powerMeter.id);
+      }
+    }).catch(function () {
+      __bcProfileFtpCache[uid] = { ftp: c ? c.ftp : null, weight: c ? c.weight : null, at: Date.now(), pending: false };
+    });
+  }
+  return (c && c.ftp > 0) ? c.ftp : trackN;
+}
+
 function updatePowerMeterDataFromFirebase(trackId, userData) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === trackId);
   if (!powerMeter) return;
@@ -1448,14 +1482,21 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   // FTP 변경 감지를 위해 이전 값 저장 (업데이트 전에)
   const prevFTP = powerMeter.userFTP;
   
-  // FTP 업데이트
-  if (userData.ftp) {
-    powerMeter.userFTP = userData.ftp;
+  // FTP 업데이트 — 프로필 FTP 우선(트랙 값은 신청 시점 복사본이라 오래될 수 있음)
+  const resolvedFTP = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
+  const ftpUid = userData.userId ? String(userData.userId) : '';
+  if (resolvedFTP) {
+    powerMeter.userFTP = resolvedFTP;
+  } else if (prevFTP && powerMeter.__ftpUid && powerMeter.__ftpUid !== ftpUid) {
+    // 트랙 사용자가 바뀌었는데 새 사용자 FTP를 아직 모르면 이전 사용자 FTP를 남기지 않는다(비율 표시로 복귀)
+    powerMeter.userFTP = null;
+    updateBluetoothCoachPowerMeterTicks(trackId);
   }
+  powerMeter.__ftpUid = ftpUid;
   
   // FTP 변경 시 눈금 업데이트
-  if (userData.ftp && userData.ftp !== prevFTP) {
-    console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP || '없음'} → ${userData.ftp}`);
+  if (resolvedFTP && Number(resolvedFTP) !== Number(prevFTP)) {
+    console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP || '없음'} → ${resolvedFTP}`);
     updateBluetoothCoachPowerMeterTicks(trackId);
   }
   

@@ -1448,6 +1448,22 @@ function attachBluetoothIndividualFirebaseListeners() {
             foundFTP = Number(data.user.FTP);
         }
         
+        // 2026-10-10: 트랙의 ftp는 신청 시점 복사본이라 오래될 수 있다 — 본인 트랙이면 프로필 FTP(window.currentUser)를
+        // 우선 적용하고, 다르면 트랙 값도 바로잡아 Coach 계기판·다른 화면이 같은 FTP를 쓰게 한다.
+        try {
+            var _cuF = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+            var _profFtp = _cuF ? Number(_cuF.ftp) : 0;
+            var _isMine = _cuF && data.userId && String(_cuF.id) === String(data.userId);
+            if (_isMine && _profFtp > 0) {
+                if (foundFTP !== _profFtp) {
+                    console.log('[BluetoothIndividual] 트랙 FTP(' + foundFTP + ') → 프로필 FTP(' + _profFtp + ')로 보정');
+                    var _sidF = (typeof window !== 'undefined' && window.SESSION_ID) || sessionId;
+                    __indivUpdate(`sessions/${_sidF}/users/${myTrackId}`, { ftp: _profFtp }).catch(function () {});
+                }
+                foundFTP = _profFtp;
+            }
+        } catch (eProfFtp) {}
+        
         if (foundFTP !== null && !isNaN(foundFTP) && foundFTP > 0) {
             userFTP = foundFTP;
             window.userFTP = userFTP;
