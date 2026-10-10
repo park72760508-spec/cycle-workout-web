@@ -1792,6 +1792,49 @@ function updateBluetoothCoachDeviceIcons(powerMeterId, deviceData) {
 }
 
 /**
+ * 세그먼트 목표 파워(W) = 사용자 FTP × 세그먼트 목표 % (cadence_rpm 은 0). PC·휴대폰 Coach 공용.
+ */
+function bluetoothCoachSegmentTargetPower(currentSegment, ftp) {
+  if (!currentSegment) return 0;
+  let targetPower = 0;
+  const targetType = currentSegment.target_type || 'ftp_pct';
+  let ftpPercent = 100; // 기본값
+  const targetValue = currentSegment.target_value || currentSegment.target || '100';
+
+  if (targetType === 'cadence_rpm') {
+    // cadence_rpm 타입: target_value가 RPM 값
+    targetPower = 0; // RPM만 있는 경우 파워는 0
+  } else if (targetType === 'dual') {
+    // dual 타입: target_value는 "100~120" 또는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
+    const dualDelimBcd = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
+    if (dualDelimBcd && typeof targetValue === 'string') {
+      const parts = targetValue.split(dualDelimBcd).map(s => s.trim());
+      ftpPercent = Number(parts[0].replace('%', '')) || 100;
+    } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
+      ftpPercent = Number(targetValue[0]) || 100;
+    } else {
+      ftpPercent = Number(targetValue) || 100;
+    }
+    targetPower = (ftp * ftpPercent) / 100;
+  } else {
+    // ftp_pct 타입 (ftp_pctz 등 "/" 또는 "~" 구분자 사용 시 첫 값 사용)
+    if (typeof targetValue === 'string') {
+      const pctDelim = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
+      if (pctDelim) {
+        ftpPercent = Number(targetValue.split(pctDelim)[0].trim().replace('%', '')) || 100;
+      } else {
+        ftpPercent = Number(targetValue.replace('%', '')) || 100;
+      }
+    } else if (typeof targetValue === 'number') {
+      ftpPercent = targetValue;
+    }
+    targetPower = (ftp * ftpPercent) / 100;
+  }
+  return targetPower;
+}
+if (typeof window !== 'undefined') window.bluetoothCoachSegmentTargetPower = bluetoothCoachSegmentTargetPower;
+
+/**
  * 파워미터 바늘 궤적 업데이트 (Indoor Training의 updatePowerMeterTrail 참고)
  */
 function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, currentAngle, powerMeter) {
@@ -1836,42 +1879,8 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
     const currentSegmentIndex = window.bluetoothCoachState.currentSegmentIndex || 0;
     const currentSegment = segments[currentSegmentIndex] || segments[0]; 
     
-    // 목표 파워 및 RPM 계산
-    if (currentSegment) {
-      const targetType = currentSegment.target_type || 'ftp_pct';
-      let ftpPercent = 100; // 기본값
-      const targetValue = currentSegment.target_value || currentSegment.target || '100';
-      
-      if (targetType === 'cadence_rpm') {
-        // cadence_rpm 타입: target_value가 RPM 값
-        targetPower = 0; // RPM만 있는 경우 파워는 0
-      } else if (targetType === 'dual') {
-        // dual 타입: target_value는 "100~120" 또는 "100/120" 형식 (앞값: ftp%, 뒤값: rpm)
-        const dualDelimBcd = (typeof targetValue === 'string' && (targetValue.includes('~') || targetValue.includes('/'))) ? (targetValue.includes('~') ? '~' : '/') : null;
-        if (dualDelimBcd && typeof targetValue === 'string') {
-          const parts = targetValue.split(dualDelimBcd).map(s => s.trim());
-          ftpPercent = Number(parts[0].replace('%', '')) || 100;
-        } else if (Array.isArray(targetValue) && targetValue.length >= 2) {
-          ftpPercent = Number(targetValue[0]) || 100;
-        } else {
-          ftpPercent = Number(targetValue) || 100;
-        }
-        targetPower = (ftp * ftpPercent) / 100;
-      } else {
-        // ftp_pct 타입 (ftp_pctz 등 "/" 또는 "~" 구분자 사용 시 첫 값 사용)
-        if (typeof targetValue === 'string') {
-          const pctDelim = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
-          if (pctDelim) {
-            ftpPercent = Number(targetValue.split(pctDelim)[0].trim().replace('%', '')) || 100;
-          } else {
-            ftpPercent = Number(targetValue.replace('%', '')) || 100;
-          }
-        } else if (typeof targetValue === 'number') {
-          ftpPercent = targetValue;
-        }
-        targetPower = (ftp * ftpPercent) / 100;
-      }
-    }
+    // 목표 파워 계산 (휴대폰 Coach와 같은 함수)
+    targetPower = bluetoothCoachSegmentTargetPower(currentSegment, ftp);
     
     // 현재 랩파워 (Segment Average Power) 가져오기
     segmentPower = powerMeter.segmentPower || 0;

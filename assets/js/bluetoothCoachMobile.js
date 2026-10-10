@@ -217,9 +217,12 @@
       ? (segInfo || (w.title || '워크아웃'))
       : '워크아웃을 선택하세요');
 
-    // 사용자 화면과 같은 값: 사용자 기기가 보낸 목표값 우선(Coach 엔진 재계산값은 보조)
-    var hasReported = pm && typeof pm.reportedTargetPower === 'number' && isFinite(pm.reportedTargetPower);
-    var target = Math.round(hasReported ? pm.reportedTargetPower : (Number(pm && pm.targetPower) || 0));
+    // 2026-10-10: 목표 파워 = 현재 세그먼트 목표 % × 트랙 사용자 프로필 FTP (PC Coach 와 같은 계산)
+    if (pmRaw && pm && pm.userName && pm.userId && typeof window.bluetoothCoachResolveFtp === 'function') {
+      var resolved = window.bluetoothCoachResolveFtp(pmRaw, pm.userId, pmRaw.userFTP);
+      if (resolved > 0) pmRaw.userFTP = resolved;
+    }
+    var target = Math.round(userTargetPower(pm));
     var lap = Math.round(Number(pm && pm.segmentPower) || 0);
     setText('coachm-ui-target-power', target);
     setText('coachm-ui-current-power', Math.round(Number(pm && pm.currentPower) || 0));
@@ -227,11 +230,6 @@
     setText('coachm-ui-lap-power', lap);
     setText('coachm-ui-hr', Math.round(Number(pm && pm.heartRate) || 0));
 
-    // 2026-10-10: 트랙 사용자의 프로필 FTP 기준(PC Coach와 동일 함수·캐시). 트랙 값은 신청 시점 복사본이라 오래될 수 있다.
-    if (pmRaw && pm && pm.userName && pm.userId && typeof window.bluetoothCoachResolveFtp === 'function') {
-      var resolved = window.bluetoothCoachResolveFtp(pmRaw, pm.userId, pmRaw.userFTP);
-      if (resolved > 0) pmRaw.userFTP = resolved;
-    }
     var ftpKnown = Number(pm && pm.userFTP) > 0;
     var ftp = ftpKnown ? Number(pm.userFTP) : 200; // 바늘·원호 배율 계산용(눈금 숫자는 모르면 배수로 표시)
     ensureGaugeScale(ftpKnown ? ftp : 0);
@@ -441,8 +439,21 @@
 
   /* ---------- 연결 메뉴: 슬롯 목록 · 워크아웃 선택 ---------- */
 
-  /** 사용자 화면과 같은 목표값(사용자 기기 보고값 우선) */
+  /**
+   * 트랙 목표 파워: 현재 세그먼트 목표 % × 사용자 프로필 FTP(PC Coach 와 같은 함수). 사용자 기기 보고값은
+   * 세그먼트 전환·FTP 차이로 늦거나 틀릴 수 있어(예: 120 고정) FTP·워크아웃을 모를 때만 보조로 쓴다.
+   */
   function userTargetPower(pm) {
+    var cs = coachState();
+    var fbS = st.fbStatus || {};
+    var w = cs.currentWorkout;
+    var segs = Array.isArray(st.fbPlan) && st.fbPlan.length ? st.fbPlan : (w && w.segments);
+    var ftp = Number(pm && pm.userFTP) || 0;
+    if (pm && pm.userName && ftp > 0 && Array.isArray(segs) && segs.length && typeof window.bluetoothCoachSegmentTargetPower === 'function') {
+      var idx = typeof fbS.segmentIndex === 'number' ? fbS.segmentIndex : (cs.currentSegmentIndex || 0);
+      var seg = segs[idx] || segs[0];
+      return window.bluetoothCoachSegmentTargetPower(seg, ftp) || 0;
+    }
     if (pm && typeof pm.reportedTargetPower === 'number' && isFinite(pm.reportedTargetPower)) return pm.reportedTargetPower;
     return Number(pm && pm.targetPower) || 0;
   }
