@@ -1952,9 +1952,9 @@ function drawBluetoothCoachPowerMeterTrail(container, targetAngle, targetPower, 
     const startRad = ((startAng + angleOffset) * Math.PI) / 180;
     const endRad = ((endAng + angleOffset) * Math.PI) / 180;
     
-    // [수정] 호가 눈금의 중앙을 지나도록 반지름 조정
-    // 눈금 범위: 70 ~ 77. 중앙: 73.5
-    const arcRadius = innerRadius + (tickLengthShort / 2);
+    // 2026-10-10: 휴대폰 Coach·사용자 훈련 화면과 같은 목표 파워 띠 — 바깥 원(r=80)에 12px 띠,
+    // 현재 세그먼트 랩 평균이 목표의 98.5% 이상이면 민트, 아니면 주황
+    const arcRadius = radius;
     
     const startX = centerX + arcRadius * Math.cos(startRad);
     const startY = centerY + arcRadius * Math.sin(startRad);
@@ -1966,13 +1966,12 @@ function drawBluetoothCoachPowerMeterTrail(container, targetAngle, targetPower, 
     
     const pathData = `M ${startX} ${startY} A ${arcRadius} ${arcRadius} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
     
+    const targetAchieved = segmentPower > 0 && (segmentPower / targetPower) >= 0.985;
     targetPath.setAttribute('d', pathData);
     targetPath.setAttribute('fill', 'none');
-    // [요청 반영] 진한 투명 주황색
-    targetPath.setAttribute('stroke', 'rgba(255, 165, 0, 0.6)'); 
-    // [요청 반영] 두께는 작은 눈금 높이(7px)
-    targetPath.setAttribute('stroke-width', tickLengthShort); 
-    targetPath.setAttribute('stroke-linecap', 'butt');
+    targetPath.setAttribute('stroke', targetAchieved ? 'rgba(0, 212, 170, 0.5)' : 'rgba(255, 140, 0, 0.5)');
+    targetPath.setAttribute('stroke-width', 12);
+    targetPath.setAttribute('stroke-linecap', 'round');
     
     container.appendChild(targetPath);
   }
