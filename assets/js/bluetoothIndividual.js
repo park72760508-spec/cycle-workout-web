@@ -2584,7 +2584,11 @@ function updateTargetPower() {
     
     // 1순위: Firebase에서 받은 targetPower 값 사용 (서버에서 계산된 값)
     // 단, targetPower가 0이면 세그먼트 정보로부터 계산 (Firebase 값이 0일 수 있음)
-    if (firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower > 0) {
+    // 2026-10-10: 내 트랙 targetPower 는 이 기기가 직접 써 둔 값이라 1순위로 다시 읽으면 이전 세그먼트 값(예: 120)에
+    // 고정된다. 현재 세그먼트 목표(코치 status 또는 워크아웃)와 FTP를 알면 항상 FTP×세그먼트 % 로 계산한다.
+    const __segKnownTP = !!((firebaseStatus && firebaseStatus.segmentTargetType && firebaseStatus.segmentTargetValue !== undefined && firebaseStatus.segmentTargetValue !== null) || getCurrentSegment());
+    const __ftpKnownTP = Number(userFTP) > 0;
+    if (!(__segKnownTP && __ftpKnownTP) && firebaseTargetPower !== null && !isNaN(firebaseTargetPower) && firebaseTargetPower > 0) {
         // 강도 조절 비율 적용 (개인 훈련 대시보드 슬라이드 바)
         const adjustedTargetPower = Math.round(firebaseTargetPower * individualIntensityAdjustment);
         if (__stelvioBtIndivVerboseLog()) {
@@ -2808,7 +2812,7 @@ function updateTargetPower() {
     }
     
     // FTP 값 사용 (Firebase에서 가져온 사용자 FTP 값)
-    const ftp = userFTP;
+    const ftp = Number(userFTP) || Number(window.currentUser && window.currentUser.ftp) || 200;
     
     // 세그먼트 목표 파워 계산
     let targetPower = 0;
@@ -2823,7 +2827,7 @@ function updateTargetPower() {
     }
     
     if (targetType === 'ftp_pct') {
-        const ftpPercent = Number(targetValue) || 100;
+        const ftpPercent = Number(String(targetValue).split(/[~\/]/)[0].replace('%', '').trim()) || 100;
         targetPower = Math.round(ftp * (ftpPercent / 100));
         if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] ftp_pct 계산: FTP', ftp, '*', ftpPercent, '% =', targetPower);
     } else if (targetType === 'dual') {
