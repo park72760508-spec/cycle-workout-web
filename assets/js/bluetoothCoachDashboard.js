@@ -1800,11 +1800,18 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
   
   // 컨테이너가 없거나 연결되지 않은 경우 초기화 후 종료
   if (!trailContainer) return;
-  if (!powerMeter.connected) {
+  // 2026-10-10: 목표 파워 띠는 트랙에 사용자가 배정돼 있고 훈련 중(진행·일시정지)이면 실시간 데이터
+  // 수신 여부(connected — 디바이스 정보·파워/심박/케이던스 0 이면 false)와 관계없이 세그먼트 시작 즉시 표시
+  const bcState = window.bluetoothCoachState;
+  const bcActive = !!(bcState && (bcState.trainingState === 'running' || bcState.trainingState === 'paused'));
+  const bcHasUser = !!(powerMeter.userId || powerMeter.userName);
+  if (!powerMeter.connected && !(bcActive && bcHasUser)) {
     trailContainer.innerHTML = '';
     if (targetTextEl) targetTextEl.textContent = '';
+    powerMeter.__bandKey = '';
     return;
   }
+  if (!powerMeter.connected) currentPower = 0;
 
   // 1. 기본 설정값 로드
   const ftp = powerMeter.userFTP || 200;
@@ -1906,6 +1913,28 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
     maxPower,
     isTrainingRunning
   );
+}
+
+/**
+ * 실시간 데이터가 없는(connected=false) 사용자 트랙의 목표 파워 띠 갱신 — 애니메이션 루프는 연결된
+ * 트랙만 매 프레임 다시 그리므로, 세그먼트·FTP·랩파워·상태가 바뀐 경우에만 다시 그린다.
+ */
+function refreshBluetoothCoachIdleTargetBands() {
+  const st = window.bluetoothCoachState;
+  if (!st || !Array.isArray(st.powerMeters)) return;
+  st.powerMeters.forEach(pm => {
+    if (pm.connected) { pm.__bandKey = ''; return; }
+    const key = [st.trainingState, st.currentSegmentIndex, pm.userId || pm.userName || '', pm.userFTP || 0, Math.round(pm.segmentPower || 0)].join('|');
+    if (pm.__bandKey === key) return;
+    pm.__bandKey = key;
+    try { updateBluetoothCoachPowerMeterTrail(pm.id, 0, -90, pm); } catch (e) {}
+  });
+}
+if (typeof window !== 'undefined' && !window.__bluetoothCoachIdleBandTimer) {
+  window.__bluetoothCoachIdleBandTimer = setInterval(function () {
+    if (document.hidden) return;
+    refreshBluetoothCoachIdleTargetBands();
+  }, 500);
 }
 
 /**
