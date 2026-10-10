@@ -326,21 +326,64 @@
         var overlay = $('coachmCountdownOverlay');
         if (!overlay) return;
         var n = s && s.state === 'countdown' ? Number(s.countdownRemainingSec) : NaN;
-        clearTimeout(st.cdHideTimer);
         if (Number.isFinite(n) && n > 0) {
+          clearTimeout(st.cdHideTimer);
+          st.startCdShown = true;
+          st.segCdShown = false;
           setText('coachmCountdownNumber', n);
           overlay.style.display = 'flex';
-        } else if ((Number.isFinite(n) && n === 0) || (overlay.style.display === 'flex' && s && s.state === 'running')) {
-          // 5·4·3·2·1 다음 "Go!" 1초 표시
+        } else if ((Number.isFinite(n) && n === 0) || (st.startCdShown && s && s.state === 'running')) {
+          // 5·4·3·2·1 다음 "Go!" 1초 표시 (시작 카운트다운에서만)
+          clearTimeout(st.cdHideTimer);
+          st.startCdShown = false;
           setText('coachmCountdownNumber', 'Go!');
           overlay.style.display = 'flex';
           st.cdHideTimer = setTimeout(function () { overlay.style.display = 'none'; }, 1000);
-        } else {
+        } else if (st.startCdShown) {
+          st.startCdShown = false;
           overlay.style.display = 'none';
+        } else {
+          updateSegmentEndCountdown(s, overlay);
         }
       });
     } catch (e) {
       console.warn('[Coach Mobile] status 구독 실패:', e && e.message ? e.message : e);
+    }
+  }
+
+  /**
+   * 2026-10-10: 세그먼트 종료 5초 카운트다운 — PC Coach와 같은 시점·숫자(남은 6초 → 5 … 남은 1초 → 0, 0.8초 뒤 닫힘,
+   * 마지막 세그먼트는 표시 안 함). PC는 자기 화면에서만 띄우므로 휴대폰은 PC가 매초 기록하는
+   * status.segmentIndex·segmentElapsedSec와 워크아웃 구간 길이로 동일하게 계산한다.
+   */
+  function updateSegmentEndCountdown(s, overlay) {
+    function hide() {
+      if (st.segCdShown) { overlay.style.display = 'none'; st.segCdShown = false; }
+    }
+    if (!s || s.state !== 'running') { hide(); return; }
+    var cs = coachState();
+    var segs = (cs.currentWorkout && Array.isArray(cs.currentWorkout.segments) && cs.currentWorkout.segments.length)
+      ? cs.currentWorkout.segments : (st.fbPlan || []);
+    var idx = Number(s.segmentIndex);
+    if (!(idx >= 0) || !segs[idx] || idx >= segs.length - 1) { hide(); return; }
+    var dur = Number(segs[idx].duration_sec || segs[idx].duration || 0);
+    var el = Number(s.segmentElapsedSec);
+    if (!(dur > 0) || !Number.isFinite(el)) { hide(); return; }
+    var remaining = Math.round(dur - el);
+    if (remaining >= 1 && remaining <= 6) {
+      var num = remaining - 1;
+      if (st.segCdKey !== idx + ':' + num) {
+        st.segCdKey = idx + ':' + num;
+        clearTimeout(st.cdHideTimer);
+        setText('coachmCountdownNumber', num);
+        overlay.style.display = 'flex';
+        st.segCdShown = true;
+        if (num === 0) {
+          st.cdHideTimer = setTimeout(function () { overlay.style.display = 'none'; st.segCdShown = false; }, 800);
+        }
+      }
+    } else {
+      hide();
     }
   }
 
