@@ -10605,7 +10605,7 @@
     (async function() {
       let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
       try {
-        var mod = await import('./assets/js/trainingResultService.js?v=completed-check-20261007');
+        var mod = await import('./assets/js/trainingResultService.js?v=20261010tizDates');
         if (mod && typeof mod === 'object') {
           saveTrainingSession = mod.saveTrainingSession;
           getUserTrainingLogs = mod.getUserTrainingLogs;
@@ -19340,6 +19340,11 @@
             if (!rowUrl || rowUrl !== cached) row.profileImageUrl = cached;
             if (!needsGender) continue;
           }
+          // 2026-10-10: 서버 랭킹 스냅샷은 행마다 profileImageUrl 필드를 명시적으로 내려준다(사진 없으면 null —
+          // Supabase 미러와 Firestore 원본 모두 사진 보유 30명으로 일치 확인). 서버가 '사진 없음'으로 확정한 행은
+          // users/{uid}를 다시 읽지 않는다. 휴대폰 앱에서 localStorage 캐시가 유지되지 않아 앱을 열 때마다
+          // 랭킹 참가자 ~350명 문서를 다시 읽던 문제(감사 로그: 1분 간격 재실행마다 349건) 근본 차단.
+          if (!rowUrl && !needsGender && Object.prototype.hasOwnProperty.call(row, 'profileImageUrl')) continue;
           if (!rowUrl || needsGender) push(u);
         }
       }

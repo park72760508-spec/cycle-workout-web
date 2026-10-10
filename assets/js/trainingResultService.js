@@ -976,13 +976,31 @@ function logNeedsTimeInZones(log) {
  * segment_avg_watts는 rides.segment_avg_watts_json 컬럼으로 Supabase에 직접 dual-write되므로
  * (mapTrainingLogToRideRow) 이 Firestore 보강 대상에 포함하지 않는다 — Firestore 트래픽 추가 없음.
  */
+/** 세션 내 time_in_zones 보강 시도 날짜 (userId별) — 반복 조회 방지 */
+var __tizTriedDates = {};
+
 async function enrichLogsWithTimeInZonesFromFirestore(userId, logs, db) {
   if (!logs || !logs.length) return logs;
   if (!logs.some(logNeedsTimeInZones)) return logs;
   if (!db) return logs;
   try {
+    // 2026-10-10: 보강이 필요한 로그의 날짜만(최근 30일치, Firestore 'in' 최대 30) 조회 — 기존에는 하나라도 비면
+    // logs 500건을 통째로 읽었고, 원본에도 time_in_zones가 없는 로그(파워·심박 없음)는 영영 채워지지 않아
+    // 앱을 열 때마다 500건 읽기가 반복됐다(감사 로그 최대 핫스팟). 같은 세션에서 이미 시도한 날짜는 다시 읽지 않는다.
+    var triedKey = 'tiz:' + String(userId);
+    var tried = __tizTriedDates[triedKey] || (__tizTriedDates[triedKey] = {});
+    var needDates = [];
+    logs.forEach(function(log) {
+      if (!logNeedsTimeInZones(log)) return;
+      var ds0 = parseLogDateStrForTiz(log.date) || (typeof log.date === 'string' ? log.date.slice(0, 10) : '');
+      if (ds0 && !tried[ds0] && needDates.indexOf(ds0) === -1) needDates.push(ds0);
+    });
+    needDates.sort().reverse();
+    needDates = needDates.slice(0, 30);
+    if (!needDates.length) return logs;
+    needDates.forEach(function(ds1) { tried[ds1] = true; });
     var userLogsRef = collection(db, 'users', userId, 'logs');
-    var q = query(userLogsRef, orderBy('date', 'desc'), limit(500));
+    var q = query(userLogsRef, where('date', 'in', needDates));
     var snap = await getDocs(q);
     var byActivityId = new Map();
     var byDate = new Map();
