@@ -1443,7 +1443,8 @@ function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
   var trackN = Number(trackFtp) > 0 ? Number(trackFtp) : null;
   if (!uid) return trackN;
   var c = __bcProfileFtpCache[uid];
-  var fresh = c && (Date.now() - c.at < 10 * 60 * 1000);
+  // 프로필 FTP가 있으면 10분, 없으면(미입력·0) 1분 캐시 — 나중에 입력한 FTP가 빨리 반영되도록
+  var fresh = c && (Date.now() - c.at < ((c.ftp > 0) ? 10 * 60 * 1000 : 60 * 1000));
   if (!fresh && !(c && c.pending) && typeof window.getUserByUid === 'function') {
     __bcProfileFtpCache[uid] = { ftp: c ? c.ftp : null, weight: c ? c.weight : null, at: c ? c.at : 0, pending: true };
     window.getUserByUid(uid).then(function (prof) {
@@ -1463,6 +1464,7 @@ function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
   }
   return (c && c.ftp > 0) ? c.ftp : trackN;
 }
+if (typeof window !== 'undefined') window.bluetoothCoachResolveFtp = bluetoothCoachResolveFtp;
 
 function updatePowerMeterDataFromFirebase(trackId, userData) {
   const powerMeter = window.bluetoothCoachState.powerMeters.find(pm => pm.id === trackId);

@@ -107,17 +107,25 @@
     return html;
   }
 
+  /** ftp > 0 이면 W 눈금, 모르면(0) PC Coach와 같은 FTP 배수(0.33·0.67·1…) 눈금 — 기본값 200W 숫자로 오인 표시 방지 */
   function buildLabels(ftp) {
     var mults = [0, 0.33, 0.67, 1, 1.33, 1.67, 2];
+    var known = Number(ftp) > 0;
     var html = '';
     mults.forEach(function (m, i) {
       var angle = 180 + (i / 6) * 180;
       if (angle >= 360) angle = angle % 360;
       var rad = (angle * Math.PI) / 180;
-      var v = Math.round(ftp * m);
+      var label;
+      if (known) {
+        var v = Math.round(ftp * m);
+        label = v === 0 ? '0 w' : String(v);
+      } else {
+        label = m === 0 ? '0' : String(m);
+      }
       html += '<text x="' + (100 + 98 * Math.cos(rad)) + '" y="' + (140 + 98 * Math.sin(rad)) +
         '" text-anchor="middle" dominant-baseline="middle" fill="' + (m === 1 ? '#ef4444' : '#ffffff') +
-        '" font-size="10" font-weight="600">' + (v === 0 ? '0 w' : String(v)) + '</text>';
+        '" font-size="10" font-weight="600">' + label + '</text>';
     });
     return html;
   }
@@ -219,8 +227,14 @@
     setText('coachm-ui-lap-power', lap);
     setText('coachm-ui-hr', Math.round(Number(pm && pm.heartRate) || 0));
 
-    var ftp = Number(pm && pm.userFTP) || 200;
-    ensureGaugeScale(ftp);
+    // 2026-10-10: 트랙 사용자의 프로필 FTP 기준(PC Coach와 동일 함수·캐시). 트랙 값은 신청 시점 복사본이라 오래될 수 있다.
+    if (pmRaw && pm && pm.userName && pm.userId && typeof window.bluetoothCoachResolveFtp === 'function') {
+      var resolved = window.bluetoothCoachResolveFtp(pmRaw, pm.userId, pmRaw.userFTP);
+      if (resolved > 0) pmRaw.userFTP = resolved;
+    }
+    var ftpKnown = Number(pm && pm.userFTP) > 0;
+    var ftp = ftpKnown ? Number(pm.userFTP) : 200; // 바늘·원호 배율 계산용(눈금 숫자는 모르면 배수로 표시)
+    ensureGaugeScale(ftpKnown ? ftp : 0);
     updateTargetArc(target, lap, ftp);
     updateSpeedArc(pm);
 
