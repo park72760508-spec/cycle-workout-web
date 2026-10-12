@@ -20479,6 +20479,9 @@ if (fs.existsSync(libPath)) {
     if (naverSubscription && naverSubscription.scheduledRideAttendanceVerification) {
       exports.scheduledRideAttendanceVerification = naverSubscription.scheduledRideAttendanceVerification;
     }
+    if (naverSubscription && naverSubscription.liveTrackInbound) {
+      exports.liveTrackInbound = naverSubscription.liveTrackInbound;
+    }
   } catch (e) {
     console.warn("[Functions] Naver 구독 모듈 로드 실패:", e.message);
   }
