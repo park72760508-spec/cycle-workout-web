@@ -13210,7 +13210,7 @@ function OpenRidingDetail(props) {
                                     setLiveTrackModalOpen(true);
                                   }}
                                 >
-                                  {ltNeedsToday ? <><OpenRidingLiveTrackIcon size={13} />오늘 링크 등록</> : ltSaved ? 'LiveTrack 변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
+                                  {ltNeedsToday ? <><OpenRidingLiveTrackIcon size={13} />오늘 링크 등록</> : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
                                 </button>
                               ) : null}
                             </span>
