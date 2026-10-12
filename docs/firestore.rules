@@ -284,6 +284,20 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1';
 
+      // 참석 확정자 본인 Garmin LiveTrack 공유 링크 — 문서 ID = uid, 본인만 쓰기, 로그인 사용자 읽기
+      match /liveTrack/{uid} {
+        allow read: if request.auth != null;
+        allow create, update: if request.auth != null &&
+          request.auth.uid == uid &&
+          request.resource.data.keys().hasOnly(['url', 'uid', 'updatedAt']) &&
+          request.resource.data.url is string &&
+          request.resource.data.url.size() <= 500 &&
+          request.resource.data.url.matches('https://(livetrack[.]garmin[.]com|gar[.]mn)/.+') &&
+          exists(/databases/$(database)/documents/rides/$(rideId)) &&
+          request.auth.uid in get(/databases/$(database)/documents/rides/$(rideId)).data.participants;
+        allow delete: if request.auth != null && request.auth.uid == uid;
+      }
+
       // 참석 확정자 본인 STRAVA 후기 거리(누적 합계용) — 문서 ID = uid, 본인만 쓰기
       match /participantStravaReview/{uid} {
         allow read: if request.auth != null;

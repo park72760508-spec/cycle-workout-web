@@ -11040,6 +11040,137 @@ function openRidingIsPointExemptViewer() {
   }
 }
 
+/** 2026-10-12: 참석자 Garmin LiveTrack 링크 서비스(openRidingLiveTrack.js) 지연 로드 */
+var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012a';
+var __openRidingLiveTrackModP = null;
+function loadOpenRidingLiveTrackModule() {
+  if (!__openRidingLiveTrackModP) {
+    __openRidingLiveTrackModP = import(OPEN_RIDING_LIVETRACK_MODULE_URL).catch(function (e) {
+      __openRidingLiveTrackModP = null;
+      throw e;
+    });
+  }
+  return __openRidingLiveTrackModP;
+}
+
+function openRidingOpenLiveTrackUrl(url) {
+  if (!url) return;
+  if (typeof window !== 'undefined' && typeof window.openStelvioExternalUrl === 'function') {
+    window.openStelvioExternalUrl(url);
+  } else if (typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+}
+
+/** Garmin LiveTrack 아이콘(위치 핀 + 전파) */
+function OpenRidingLiveTrackIcon(props) {
+  var size = props.size || 14;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 21s-6-5.6-6-10a6 6 0 1 1 12 0c0 4.4-6 10-6 10z" fill="currentColor" opacity="0.9" />
+      <circle cx="12" cy="11" r="2.2" fill="#fff" />
+      <path d="M3.5 7.5a9.5 9.5 0 0 1 3-4M20.5 7.5a9.5 9.5 0 0 0-3-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** 본인 LiveTrack 링크 등록·변경·삭제 모달 */
+function OpenRidingLiveTrackModal(props) {
+  var _v = useState(props.initialUrl || '');
+  var val = _v[0];
+  var setVal = _v[1];
+  var _busy = useState(false);
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _err = useState('');
+  var err = _err[0];
+  var setErr = _err[1];
+  function run(fnName) {
+    var db = props.firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+    setBusy(true);
+    setErr('');
+    loadOpenRidingLiveTrackModule()
+      .then(function (m) {
+        if (!db) throw new Error('로그인 정보를 확인할 수 없습니다.');
+        return fnName === 'save'
+          ? m.saveMyRideLiveTrackLink(db, props.rideId, props.userId, val)
+          : m.deleteMyRideLiveTrackLink(db, props.rideId, props.userId);
+      })
+      .then(function (url) {
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
+          window.showToast(fnName === 'save' ? 'LiveTrack 링크를 등록했습니다.' : 'LiveTrack 링크를 삭제했습니다.');
+        }
+        props.onDone(fnName === 'save' ? url : '');
+      })
+      .catch(function (e) {
+        var msg = (e && e.message) || '';
+        setErr(/permission/i.test(msg) ? '참석 확정자만 LiveTrack 링크를 등록할 수 있습니다.' : msg || '처리하지 못했습니다.');
+        setBusy(false);
+      });
+  }
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/40 px-4"
+      style={{ zIndex: 100050 }}
+      onClick={function (e) {
+        if (e.target === e.currentTarget && !busy) props.onClose();
+      }}
+    >
+      <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl text-left">
+        <p className="m-0 text-base font-bold text-slate-800">Garmin LiveTrack 연결</p>
+        <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
+          라이딩 시작 후 Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>(또는 LiveTrack 이메일의 링크)를 복사해
+          붙여넣으세요. 등록하면 참석자 누구나 내 실시간 위치를 볼 수 있으며, 링크는 등록 후 36시간 동안 표시됩니다.
+        </p>
+        <textarea
+          className="mt-3 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+          rows={3}
+          placeholder="https://livetrack.garmin.com/session/…"
+          value={val}
+          disabled={busy}
+          onChange={function (e) {
+            setVal(e.target.value);
+          }}
+        />
+        {err ? <p className="mt-1 mb-0 text-xs text-red-600">{err}</p> : null}
+        <div className="mt-3 flex items-center gap-2">
+          {props.initialUrl ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 disabled:opacity-50"
+              onClick={function () {
+                run('delete');
+              }}
+            >
+              삭제
+            </button>
+          ) : null}
+          <span className="flex-1" />
+          <button
+            type="button"
+            disabled={busy}
+            className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50"
+            onClick={props.onClose}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={busy || !String(val).trim()}
+            className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            onClick={function () {
+              run('save');
+            }}
+          >
+            {busy ? '처리 중…' : '등록'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function OpenRidingDetail(props) {
   var firestore = props.firestore;
   var storage = props.storage || null;
@@ -11236,6 +11367,45 @@ function OpenRidingDetail(props) {
   var _partListExp = useState(false);
   var participantListExpanded = _partListExp[0];
   var setParticipantListExpanded = _partListExp[1];
+  /** 2026-10-12: 참석자별 Garmin LiveTrack 링크(uid → { url }) — 정원(+) 펼칠 때 조회 */
+  var _liveTrack = useState({});
+  var liveTrackLinks = _liveTrack[0];
+  var setLiveTrackLinks = _liveTrack[1];
+  var _liveTrackTick = useState(0);
+  var liveTrackTick = _liveTrackTick[0];
+  var setLiveTrackTick = _liveTrackTick[1];
+  var _liveTrackModal = useState(false);
+  var liveTrackModalOpen = _liveTrackModal[0];
+  var setLiveTrackModalOpen = _liveTrackModal[1];
+  useEffect(
+    function () {
+      if (!participantListExpanded || !rideId) return undefined;
+      var cancelled = false;
+      var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+      loadOpenRidingLiveTrackModule()
+        .then(function (m) {
+          return m && db ? m.fetchRideLiveTrackLinks(db, String(rideId)) : {};
+        })
+        .then(function (links) {
+          if (!cancelled) setLiveTrackLinks(links || {});
+        })
+        .catch(function (e) {
+          if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] LiveTrack 링크 조회', e);
+        });
+      /* 라이딩 중 새로 등록된 링크 반영 — 펼쳐 둔 동안 1분마다 다시 조회 */
+      var tm = setInterval(function () {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        setLiveTrackTick(function (n) {
+          return n + 1;
+        });
+      }, 60000);
+      return function () {
+        cancelled = true;
+        clearInterval(tm);
+      };
+    },
+    [participantListExpanded, rideId, liveTrackTick]
+  );
   var _revExp = useState(false);
   var reviewExpanded = _revExp[0];
   var setReviewExpanded = _revExp[1];
@@ -12810,6 +12980,8 @@ function OpenRidingDetail(props) {
                       var attStatus = attResultsMap ? (attResultsMap[String(uid)] || null) : null;
                       /* attVerRan이고 맵은 있는데 이 uid 결과가 없으면 → SKIPPED */
                       var attSkipped = attVerRan && attResultsMap !== null && attStatus === null;
+                      var ltLink = liveTrackLinks[String(uid)] || null;
+                      var ltMine = !!(userId && String(uid) === String(userId));
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
                           <span className="font-semibold text-violet-700">{idx + 1}번</span>{' '}
@@ -12837,12 +13009,70 @@ function OpenRidingDetail(props) {
                               ❓ 미확인
                             </span>
                           ) : null}
+                          {ltLink || (ltMine && !isCancelled) ? (
+                            <span className="ml-auto inline-flex items-center gap-1 shrink-0">
+                              {ltLink ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700 leading-4 hover:bg-sky-100"
+                                  title="Garmin LiveTrack 실시간 위치 보기"
+                                  aria-label={participantRowName(uid, '참가자') + ' LiveTrack 보기'}
+                                  onClick={function () {
+                                    openRidingOpenLiveTrackUrl(ltLink.url);
+                                  }}
+                                >
+                                  <span className="relative inline-flex h-1.5 w-1.5">
+                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                                    <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+                                  </span>
+                                  <OpenRidingLiveTrackIcon size={13} />
+                                  LIVE
+                                </button>
+                              ) : null}
+                              {ltMine && !isCancelled ? (
+                                <button
+                                  type="button"
+                                  className={
+                                    ltLink
+                                      ? 'inline-flex items-center rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 leading-4'
+                                      : 'inline-flex items-center gap-1 rounded-full border border-dashed border-sky-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-sky-700 leading-4'
+                                  }
+                                  title={ltLink ? '내 LiveTrack 링크 변경·삭제' : '내 Garmin LiveTrack 링크 등록'}
+                                  onClick={function () {
+                                    setLiveTrackModalOpen(true);
+                                  }}
+                                >
+                                  {ltLink ? '변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
+                                </button>
+                              ) : null}
+                            </span>
+                          ) : null}
                         </li>
                       );
                     })}
                   </ol>
                 )}
               </div>
+              {liveTrackModalOpen && userId ? (
+                <OpenRidingLiveTrackModal
+                  firestore={firestore}
+                  rideId={String(rideId)}
+                  userId={String(userId)}
+                  initialUrl={(liveTrackLinks[String(userId)] && liveTrackLinks[String(userId)].url) || ''}
+                  onClose={function () {
+                    setLiveTrackModalOpen(false);
+                  }}
+                  onDone={function (url) {
+                    setLiveTrackModalOpen(false);
+                    setLiveTrackLinks(function (prev) {
+                      var next = Object.assign({}, prev);
+                      if (url) next[String(userId)] = { url: url, updatedAtMs: Date.now() };
+                      else delete next[String(userId)];
+                      return next;
+                    });
+                  }}
+                />
+              ) : null}
               <div>
                 <p className="text-xs font-medium text-slate-600 mb-1">대기 ({waits.length}명)</p>
                 {waits.length === 0 ? (
