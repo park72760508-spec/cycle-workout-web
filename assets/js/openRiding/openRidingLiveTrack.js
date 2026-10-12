@@ -16,11 +16,46 @@ import {
   deleteDoc,
   query,
   where,
+  limit,
   documentId,
   serverTimestamp
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
 
 const COL = 'garminLiveTrack';
+const INBOX_COL = 'garminLiveTrackInbox';
+
+/**
+ * LiveTrack 초대 메일 자동 수신 Gmail(Apps Script가 1분마다 functions/liveTrackInbound 로 전달).
+ * 비어 있으면 자동 연결 안내를 숨긴다. 사용자별 주소 = <local>+<개인코드>@gmail.com
+ */
+export const LIVETRACK_INBOX_GMAIL = '';
+
+function randomInboxCode() {
+  const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
+  const buf = new Uint8Array(10);
+  (globalThis.crypto || window.crypto).getRandomValues(buf);
+  return Array.from(buf, (b) => abc[b % abc.length]).join('');
+}
+
+/** 내 자동 수신 주소(없으면 개인 코드를 만들어 등록). 수신 Gmail 미설정이면 ''. */
+export async function getOrCreateMyLiveTrackInboxAddress(db, uid) {
+  if (!LIVETRACK_INBOX_GMAIL || !db || !uid) return { address: '', lastReceivedAtMs: 0 };
+  const u = String(uid).trim();
+  const snap = await getDocs(query(collection(db, INBOX_COL), where('uid', '==', u), limit(1)));
+  let code = '';
+  let lastReceivedAtMs = 0;
+  snap.forEach((d) => {
+    code = d.id;
+    const t = d.get('lastReceivedAt');
+    lastReceivedAtMs = t && typeof t.toMillis === 'function' ? t.toMillis() : 0;
+  });
+  if (!code) {
+    code = randomInboxCode();
+    await setDoc(doc(db, INBOX_COL, code), { uid: u, createdAt: serverTimestamp() });
+  }
+  const [local, domain] = LIVETRACK_INBOX_GMAIL.split('@');
+  return { address: `${local}+${code}@${domain}`, lastReceivedAtMs };
+}
 
 /** 붙여넣은 텍스트(공유 문구 포함)에서 LiveTrack URL만 추출. 유효하지 않으면 ''. */
 export function extractLiveTrackUrl(text) {
@@ -70,6 +105,7 @@ if (typeof window !== 'undefined') {
     extractLiveTrackUrl,
     fetchLiveTrackLinksForUids,
     saveMyLiveTrackLink,
-    deleteMyLiveTrackLink
+    deleteMyLiveTrackLink,
+    getOrCreateMyLiveTrackInboxAddress
   };
 }

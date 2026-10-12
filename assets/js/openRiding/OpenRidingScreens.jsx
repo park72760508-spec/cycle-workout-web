@@ -11041,7 +11041,7 @@ function openRidingIsPointExemptViewer() {
 }
 
 /** 2026-10-12: 참석자 Garmin LiveTrack 링크 서비스(openRidingLiveTrack.js) 지연 로드 */
-var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012b';
+var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012c';
 var __openRidingLiveTrackModP = null;
 function loadOpenRidingLiveTrackModule() {
   if (!__openRidingLiveTrackModP) {
@@ -11101,6 +11101,48 @@ function OpenRidingLiveTrackModal(props) {
   var _err = useState('');
   var err = _err[0];
   var setErr = _err[1];
+  /** 자동 연결: Garmin LiveTrack 이메일 초대 수신 주소(사용자 전용) */
+  var _inbox = useState(null);
+  var inbox = _inbox[0];
+  var setInbox = _inbox[1];
+  var _inboxCopied = useState(false);
+  var inboxCopied = _inboxCopied[0];
+  var setInboxCopied = _inboxCopied[1];
+  useEffect(function () {
+    var cancelled = false;
+    var db = props.firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
+    loadOpenRidingLiveTrackModule()
+      .then(function (m) {
+        return m && db && typeof m.getOrCreateMyLiveTrackInboxAddress === 'function'
+          ? m.getOrCreateMyLiveTrackInboxAddress(db, props.userId)
+          : null;
+      })
+      .then(function (r) {
+        if (!cancelled && r && r.address) setInbox(r);
+      })
+      .catch(function (e) {
+        if (typeof console !== 'undefined' && console.warn) console.warn('[openRiding] LiveTrack 자동 수신 주소', e);
+      });
+    return function () {
+      cancelled = true;
+    };
+  }, []);
+  function copyInboxAddress() {
+    if (!inbox || !inbox.address) return;
+    var done = function () {
+      setInboxCopied(true);
+      setTimeout(function () {
+        setInboxCopied(false);
+      }, 2000);
+    };
+    try {
+      navigator.clipboard.writeText(inbox.address).then(done, function () {
+        setErr('복사하지 못했습니다. 주소를 길게 눌러 복사해 주세요.');
+      });
+    } catch (e) {
+      setErr('복사하지 못했습니다. 주소를 길게 눌러 복사해 주세요.');
+    }
+  }
   /** 클립보드의 LiveTrack 링크를 읽어 바로 등록(원탭) */
   function pasteFromClipboard() {
     setErr('');
@@ -11156,7 +11198,7 @@ function OpenRidingLiveTrackModal(props) {
         if (e.target === e.currentTarget && !busy) props.onClose();
       }}
     >
-      <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl text-left">
+      <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl text-left">
         <p className="m-0 text-base font-bold text-slate-800">Garmin LiveTrack 연결</p>
         <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
           Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>로 복사한 주소를 붙여넣으세요. 한 번 등록하면 이후
@@ -11164,6 +11206,34 @@ function OpenRidingLiveTrackModal(props) {
           <br />※ Garmin Connect+ 개인 LiveTrack 주소는 고정이라 계속 사용됩니다. 일반 LiveTrack 링크는 활동마다 새로
           발급되므로, 라이딩 당일 활동 시작 후 링크를 복사해 <b>오늘 링크 등록</b>을 눌러 주세요(지난 활동 링크는 자동으로 숨겨집니다).
         </p>
+        {inbox && inbox.address ? (
+          <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
+            <p className="m-0 text-sm font-bold text-emerald-800">자동 연결 (추천 · 한 번만 설정)</p>
+            <p className="mt-1 mb-0 text-[11px] leading-relaxed text-emerald-900/80">
+              Garmin Connect 앱 → <b>LiveTrack</b> → <b>자동 시작</b> 켜기 → <b>연락처</b>에 아래 이메일 주소를 추가하세요.
+              이후 활동을 시작할 때마다 새 링크가 자동으로 등록됩니다(약 1~2분).
+            </p>
+            <div className="mt-2 flex items-center gap-1.5">
+              <code className="min-w-0 flex-1 break-all rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[12px] text-slate-800 select-all">
+                {inbox.address}
+              </code>
+              <button
+                type="button"
+                className="shrink-0 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-bold text-white"
+                onClick={copyInboxAddress}
+              >
+                {inboxCopied ? '복사됨' : '복사'}
+              </button>
+            </div>
+            {inbox.lastReceivedAtMs ? (
+              <p className="mt-1.5 mb-0 text-[11px] text-emerald-700">
+                ✓ 자동 연결 동작 중 · 마지막 수신 {new Date(inbox.lastReceivedAtMs).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            ) : (
+              <p className="mt-1.5 mb-0 text-[11px] text-slate-500">아직 수신된 LiveTrack 메일이 없습니다.</p>
+            )}
+          </div>
+        ) : null}
         <button
           type="button"
           disabled={busy}

@@ -1451,3 +1451,6 @@ export const verifyMeetingAttendance = createVerifyMeetingAttendance(stravaClien
 
 /** 서울 새벽 3:30: stravaSyncPreviousDay(00:10 갭 탐지) 이후 미검증 rides 일괄 참석 검증 (스케줄러, Strava Secret 필요) */
 export const scheduledRideAttendanceVerification = createScheduledRideAttendanceVerification(stravaClientSecret);
+
+/** Garmin LiveTrack 초대 메일 자동 수신(수신 Gmail Apps Script → 링크 갱신) — liveTrackInbound.ts */
+export { liveTrackInbound } from "./liveTrackInbound";

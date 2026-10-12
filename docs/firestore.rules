@@ -248,6 +248,17 @@ service cloud.firestore {
       allow delete: if request.auth != null && request.auth.uid == uid;
     }
 
+    // LiveTrack 초대 메일 자동 수신용 개인 코드(문서 ID = 10자리 코드) → uid. 본인만 생성·조회, 수정 불가
+    // (functions/src/liveTrackInbound.ts 가 Admin SDK로 조회·lastReceivedAt 기록)
+    match /garminLiveTrackInbox/{code} {
+      allow read: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow create: if request.auth != null &&
+        code.matches('[a-z0-9]{10}') &&
+        request.resource.data.keys().hasOnly(['uid', 'createdAt']) &&
+        request.resource.data.uid == request.auth.uid;
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+    }
+
     match /rides/{rideId} {
       // 로그인 사용자: 월간 조회·상세
       allow read: if request.auth != null;
