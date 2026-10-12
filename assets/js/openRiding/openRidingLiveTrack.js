@@ -28,7 +28,7 @@ const INBOX_COL = 'garminLiveTrackInbox';
  * LiveTrack 초대 메일 자동 수신 Gmail(Apps Script가 1분마다 functions/liveTrackInbound 로 전달).
  * 비어 있으면 자동 연결 안내를 숨긴다. 사용자별 주소 = <local>+<개인코드>@gmail.com
  */
-export const LIVETRACK_INBOX_GMAIL = '';
+export const LIVETRACK_INBOX_GMAIL = 'stelvio.livetrack@gmail.com';
 
 function randomInboxCode() {
   const abc = 'abcdefghijkmnpqrstuvwxyz23456789';

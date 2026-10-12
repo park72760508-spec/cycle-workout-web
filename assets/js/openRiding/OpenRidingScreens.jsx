@@ -11041,7 +11041,7 @@ function openRidingIsPointExemptViewer() {
 }
 
 /** 2026-10-12: 참석자 Garmin LiveTrack 링크 서비스(openRidingLiveTrack.js) 지연 로드 */
-var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012c';
+var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012d';
 var __openRidingLiveTrackModP = null;
 function loadOpenRidingLiveTrackModule() {
   if (!__openRidingLiveTrackModP) {
