@@ -11192,13 +11192,18 @@ function OpenRidingLiveTrackModal(props) {
   }
   return (
     <div
-      className="fixed inset-0 flex items-center justify-center bg-black/40 px-4"
-      style={{ zIndex: 100050 }}
+      className="fixed inset-0 flex items-start justify-center overflow-y-auto bg-black/40 px-4"
+      style={{
+        zIndex: 100050,
+        paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
+        /* 하단 네비게이션 바(약 72px)에 버튼이 가리지 않도록 아래 여백 확보 + 스크롤 */
+        paddingBottom: 'calc(120px + env(safe-area-inset-bottom, 0px))'
+      }}
       onClick={function (e) {
         if (e.target === e.currentTarget && !busy) props.onClose();
       }}
     >
-      <div className="w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-4 shadow-xl text-left">
+      <div className="my-auto w-full max-w-sm shrink-0 rounded-2xl bg-white p-4 shadow-xl text-left">
         <p className="m-0 text-base font-bold text-slate-800">Garmin LiveTrack 연결</p>
         <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
           Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>로 복사한 주소를 붙여넣으세요. 한 번 등록하면 이후
