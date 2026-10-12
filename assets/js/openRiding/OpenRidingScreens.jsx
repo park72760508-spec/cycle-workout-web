@@ -11101,6 +11101,22 @@ function OpenRidingLiveTrackModal(props) {
   var _err = useState('');
   var err = _err[0];
   var setErr = _err[1];
+  /** 창이 열린 동안 맨 위로(Top) 버튼 숨김 — body 클래스 + 1회 주입 스타일 */
+  useEffect(function () {
+    if (typeof document === 'undefined') return undefined;
+    if (!document.getElementById('or-livetrack-modal-style')) {
+      var st = document.createElement('style');
+      st.id = 'or-livetrack-modal-style';
+      st.textContent =
+        'body.or-livetrack-modal-open .global-back-to-top-btn,body.or-livetrack-modal-open .stelvio-back-to-top-btn,' +
+        'body.or-livetrack-modal-open .market-back-to-top-btn,body.or-livetrack-modal-open [class*="back-to-top"]{display:none!important}';
+      document.head.appendChild(st);
+    }
+    document.body.classList.add('or-livetrack-modal-open');
+    return function () {
+      document.body.classList.remove('or-livetrack-modal-open');
+    };
+  }, []);
   /** 자동 연결: Garmin LiveTrack 이메일 초대 수신 주소(사용자 전용) */
   var _inbox = useState(null);
   var inbox = _inbox[0];
@@ -11190,11 +11206,13 @@ function OpenRidingLiveTrackModal(props) {
         setBusy(false);
       });
   }
-  return (
+  return openRidingRenderModalPortal(
     <div
       className="fixed inset-0 flex items-start justify-center overflow-y-auto bg-black/40 px-4"
       style={{
         zIndex: 100050,
+        overscrollBehavior: 'contain',
+        WebkitOverflowScrolling: 'touch',
         paddingTop: 'calc(16px + env(safe-area-inset-top, 0px))',
         /* 하단 네비게이션 바(약 72px)에 버튼이 가리지 않도록 아래 여백 확보 + 스크롤 */
         paddingBottom: 'calc(120px + env(safe-area-inset-bottom, 0px))'
