@@ -11062,6 +11062,22 @@ function openRidingOpenLiveTrackUrl(url) {
   }
 }
 
+/**
+ * LiveTrack 링크가 해당 라이딩에 유효한지:
+ * - 개인 고정 주소(Connect+ 등, /session/ 이 없는 주소): 항상 유효
+ * - 일반 세션 링크(/session/…): 활동마다 새로 발급 — 라이딩 당일(서울 0시) 이후 등록된 것만 유효
+ */
+function openRidingLiveTrackIsSessionUrl(url) {
+  return /\/session\//i.test(String(url || ''));
+}
+function openRidingLiveTrackFreshForRide(link, rideYmd) {
+  if (!link || !link.url) return false;
+  if (!openRidingLiveTrackIsSessionUrl(link.url)) return true;
+  var dayStart = rideYmd ? Date.parse(String(rideYmd) + 'T00:00:00+09:00') : NaN;
+  if (!isFinite(dayStart)) return false;
+  return Number(link.updatedAtMs || 0) >= dayStart;
+}
+
 /** Garmin LiveTrack 아이콘(위치 핀 + 전파) */
 function OpenRidingLiveTrackIcon(props) {
   var size = props.size || 14;
@@ -11085,7 +11101,31 @@ function OpenRidingLiveTrackModal(props) {
   var _err = useState('');
   var err = _err[0];
   var setErr = _err[1];
-  function run(fnName) {
+  /** 클립보드의 LiveTrack 링크를 읽어 바로 등록(원탭) */
+  function pasteFromClipboard() {
+    setErr('');
+    var cb = typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText;
+    if (!cb) {
+      setErr('이 기기에서는 자동 붙여넣기를 지원하지 않습니다. 입력칸을 길게 눌러 붙여넣어 주세요.');
+      return;
+    }
+    navigator.clipboard
+      .readText()
+      .then(function (t) {
+        var m = String(t || '').match(/https:\/\/(?:livetrack\.garmin\.com|gar\.mn)\/[^\s<>"']+/i);
+        if (!m) {
+          setVal(String(t || '').slice(0, 500));
+          setErr('클립보드에 Garmin LiveTrack 링크가 없습니다. Garmin Connect 앱에서 링크를 먼저 복사해 주세요.');
+          return;
+        }
+        setVal(m[0]);
+        run('save', m[0]);
+      })
+      .catch(function () {
+        setErr('클립보드 접근이 허용되지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.');
+      });
+  }
+  function run(fnName, textOverride) {
     var db = props.firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
     setBusy(true);
     setErr('');
@@ -11093,7 +11133,7 @@ function OpenRidingLiveTrackModal(props) {
       .then(function (m) {
         if (!db) throw new Error('로그인 정보를 확인할 수 없습니다.');
         return fnName === 'save'
-          ? m.saveMyLiveTrackLink(db, props.userId, val)
+          ? m.saveMyLiveTrackLink(db, props.userId, textOverride != null ? textOverride : val)
           : m.deleteMyLiveTrackLink(db, props.userId);
       })
       .then(function (url) {
@@ -11121,11 +11161,21 @@ function OpenRidingLiveTrackModal(props) {
         <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
           Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>로 복사한 주소를 붙여넣으세요. 한 번 등록하면 이후
           참석하는 모든 라이딩 모임에서 그대로 사용되며, 라이딩 당일 참석자 리스트에 LIVE 아이콘으로 표시됩니다.
-          <br />※ Garmin Connect+ 개인 LiveTrack 주소는 고정이라 계속 사용 가능하고, 일반 LiveTrack 링크는 활동마다
-          새로 발급되므로 주소가 바뀐 날에는 <b>변경</b>으로 갱신해 주세요.
+          <br />※ Garmin Connect+ 개인 LiveTrack 주소는 고정이라 계속 사용됩니다. 일반 LiveTrack 링크는 활동마다 새로
+          발급되므로, 라이딩 당일 활동 시작 후 링크를 복사해 <b>오늘 링크 등록</b>을 눌러 주세요(지난 활동 링크는 자동으로 숨겨집니다).
         </p>
+        <button
+          type="button"
+          disabled={busy}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
+          onClick={pasteFromClipboard}
+        >
+          <OpenRidingLiveTrackIcon size={16} />
+          복사한 LiveTrack 링크 바로 등록
+        </button>
+        <p className="mt-2 mb-0 text-[11px] text-slate-400 text-center">또는 아래에 직접 붙여넣기</p>
         <textarea
-          className="mt-3 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+          className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
           rows={3}
           placeholder="https://livetrack.garmin.com/session/…"
           value={val}
@@ -12988,7 +13038,10 @@ function OpenRidingDetail(props) {
                       /* attVerRan이고 맵은 있는데 이 uid 결과가 없으면 → SKIPPED */
                       var attSkipped = attVerRan && attResultsMap !== null && attStatus === null;
                       /* 다른 참석자의 LIVE 아이콘은 라이딩 당일(서울)에만 — 본인은 언제든 등록·변경 */
-                      var ltLink = liveTrackRideDay ? liveTrackLinks[String(uid)] || null : null;
+                      var ltSaved = liveTrackLinks[String(uid)] || null;
+                      var ltLink = liveTrackRideDay && openRidingLiveTrackFreshForRide(ltSaved, rideYmdHint) ? ltSaved : null;
+                      /* 일반 세션 링크가 지난 활동 것이면 당일 본인에게 "오늘 링크 등록" 강조 */
+                      var ltNeedsToday = !!(liveTrackRideDay && ltSaved && !ltLink);
                       var ltMine = !!(userId && String(uid) === String(userId));
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
@@ -13041,16 +13094,18 @@ function OpenRidingDetail(props) {
                                 <button
                                   type="button"
                                   className={
-                                    ltLink
-                                      ? 'inline-flex items-center rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 leading-4'
-                                      : 'inline-flex items-center gap-1 rounded-full border border-dashed border-sky-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-sky-700 leading-4'
+                                    ltNeedsToday
+                                      ? 'inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 leading-4'
+                                      : ltLink
+                                        ? 'inline-flex items-center rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 leading-4'
+                                        : 'inline-flex items-center gap-1 rounded-full border border-dashed border-sky-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-sky-700 leading-4'
                                   }
                                   title={ltLink ? '내 LiveTrack 링크 변경·삭제' : '내 Garmin LiveTrack 링크 등록'}
                                   onClick={function () {
                                     setLiveTrackModalOpen(true);
                                   }}
                                 >
-                                  {ltLink || liveTrackLinks[String(uid)] ? 'LiveTrack 변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
+                                  {ltNeedsToday ? <><OpenRidingLiveTrackIcon size={13} />오늘 링크 등록</> : ltSaved ? 'LiveTrack 변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
                                 </button>
                               ) : null}
                             </span>
