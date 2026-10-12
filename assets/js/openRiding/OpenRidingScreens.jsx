@@ -11041,7 +11041,7 @@ function openRidingIsPointExemptViewer() {
 }
 
 /** 2026-10-12: 참석자 Garmin LiveTrack 링크 서비스(openRidingLiveTrack.js) 지연 로드 */
-var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012a';
+var OPEN_RIDING_LIVETRACK_MODULE_URL = '/assets/js/openRiding/openRidingLiveTrack.js?v=20261012b';
 var __openRidingLiveTrackModP = null;
 function loadOpenRidingLiveTrackModule() {
   if (!__openRidingLiveTrackModP) {
@@ -11093,8 +11093,8 @@ function OpenRidingLiveTrackModal(props) {
       .then(function (m) {
         if (!db) throw new Error('로그인 정보를 확인할 수 없습니다.');
         return fnName === 'save'
-          ? m.saveMyRideLiveTrackLink(db, props.rideId, props.userId, val)
-          : m.deleteMyRideLiveTrackLink(db, props.rideId, props.userId);
+          ? m.saveMyLiveTrackLink(db, props.userId, val)
+          : m.deleteMyLiveTrackLink(db, props.userId);
       })
       .then(function (url) {
         if (typeof window !== 'undefined' && typeof window.showToast === 'function') {
@@ -11104,7 +11104,7 @@ function OpenRidingLiveTrackModal(props) {
       })
       .catch(function (e) {
         var msg = (e && e.message) || '';
-        setErr(/permission/i.test(msg) ? '참석 확정자만 LiveTrack 링크를 등록할 수 있습니다.' : msg || '처리하지 못했습니다.');
+        setErr(/permission/i.test(msg) ? 'LiveTrack 주소 형식을 확인해 주세요.' : msg || '처리하지 못했습니다.');
         setBusy(false);
       });
   }
@@ -11119,8 +11119,10 @@ function OpenRidingLiveTrackModal(props) {
       <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl text-left">
         <p className="m-0 text-base font-bold text-slate-800">Garmin LiveTrack 연결</p>
         <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
-          라이딩 시작 후 Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>(또는 LiveTrack 이메일의 링크)를 복사해
-          붙여넣으세요. 등록하면 참석자 누구나 내 실시간 위치를 볼 수 있으며, 링크는 등록 후 36시간 동안 표시됩니다.
+          Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>로 복사한 주소를 붙여넣으세요. 한 번 등록하면 이후
+          참석하는 모든 라이딩 모임에서 그대로 사용되며, 라이딩 당일 참석자 리스트에 LIVE 아이콘으로 표시됩니다.
+          <br />※ Garmin Connect+ 개인 LiveTrack 주소는 고정이라 계속 사용 가능하고, 일반 LiveTrack 링크는 활동마다
+          새로 발급되므로 주소가 바뀐 날에는 <b>변경</b>으로 갱신해 주세요.
         </p>
         <textarea
           className="mt-3 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
@@ -11374,17 +11376,20 @@ function OpenRidingDetail(props) {
   var _liveTrackTick = useState(0);
   var liveTrackTick = _liveTrackTick[0];
   var setLiveTrackTick = _liveTrackTick[1];
+  var liveTrackUidsKey = ride && Array.isArray(ride.participants)
+    ? ride.participants.map(function (x) { return String(x || '').trim(); }).filter(Boolean).sort().join(',')
+    : '';
   var _liveTrackModal = useState(false);
   var liveTrackModalOpen = _liveTrackModal[0];
   var setLiveTrackModalOpen = _liveTrackModal[1];
   useEffect(
     function () {
-      if (!participantListExpanded || !rideId) return undefined;
+      if (!participantListExpanded || !rideId || !liveTrackUidsKey) return undefined;
       var cancelled = false;
       var db = firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
       loadOpenRidingLiveTrackModule()
         .then(function (m) {
-          return m && db ? m.fetchRideLiveTrackLinks(db, String(rideId)) : {};
+          return m && db ? m.fetchLiveTrackLinksForUids(db, liveTrackUidsKey ? liveTrackUidsKey.split(',') : []) : {};
         })
         .then(function (links) {
           if (!cancelled) setLiveTrackLinks(links || {});
@@ -11404,7 +11409,7 @@ function OpenRidingDetail(props) {
         clearInterval(tm);
       };
     },
-    [participantListExpanded, rideId, liveTrackTick]
+    [participantListExpanded, rideId, liveTrackTick, liveTrackUidsKey]
   );
   var _revExp = useState(false);
   var reviewExpanded = _revExp[0];
@@ -12589,6 +12594,8 @@ function OpenRidingDetail(props) {
   /** Non-participant host review: from ride day (Seoul, today inclusive), not cancelled. */
   var hostPublicReviewWindow = !isCancelled && isOpenRidingRideDayOnOrBeforeTodaySeoul(ride);
   var rideYmdHint = getRideDateSeoulYmd(ride);
+  /** Garmin LiveTrack LIVE 아이콘 표시일 — 라이딩 당일(서울) */
+  var liveTrackRideDay = !!rideYmdHint && rideYmdHint === getTodaySeoulYmd();
   /** 그룹세션 START 버튼(Live Training Room 바로 입장) 활성화 조건 —
    * 참석 확정 + 훈련 당일. 단, 사이트 관리자(grade=1)는 일자·참석 여부와 무관하게 상시 활성(2026-09 요청).
    * 연결된 Live Training Room이 없으면 누구에게나 비활성. */
@@ -12980,7 +12987,8 @@ function OpenRidingDetail(props) {
                       var attStatus = attResultsMap ? (attResultsMap[String(uid)] || null) : null;
                       /* attVerRan이고 맵은 있는데 이 uid 결과가 없으면 → SKIPPED */
                       var attSkipped = attVerRan && attResultsMap !== null && attStatus === null;
-                      var ltLink = liveTrackLinks[String(uid)] || null;
+                      /* 다른 참석자의 LIVE 아이콘은 라이딩 당일(서울)에만 — 본인은 언제든 등록·변경 */
+                      var ltLink = liveTrackRideDay ? liveTrackLinks[String(uid)] || null : null;
                       var ltMine = !!(userId && String(uid) === String(userId));
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
@@ -13042,7 +13050,7 @@ function OpenRidingDetail(props) {
                                     setLiveTrackModalOpen(true);
                                   }}
                                 >
-                                  {ltLink ? '변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
+                                  {ltLink || liveTrackLinks[String(uid)] ? 'LiveTrack 변경' : <><OpenRidingLiveTrackIcon size={13} />LiveTrack 연결</>}
                                 </button>
                               ) : null}
                             </span>
