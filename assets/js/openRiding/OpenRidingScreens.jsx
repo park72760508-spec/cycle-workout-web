@@ -11255,6 +11255,18 @@ function OpenRidingLiveTrackModal(props) {
           }}
         />
         {err ? <p className="mt-1 mb-0 text-xs text-red-600">{err}</p> : null}
+        {props.initialUrl ? (
+          <button
+            type="button"
+            className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-300 bg-sky-50 px-3 py-2 text-sm font-bold text-sky-700"
+            onClick={function () {
+              openRidingOpenLiveTrackUrl(props.initialUrl);
+            }}
+          >
+            <OpenRidingLiveTrackIcon size={15} />
+            등록된 내 LiveTrack 열어 보기
+          </button>
+        ) : null}
         <div className="mt-3 flex items-center gap-2">
           {props.initialUrl ? (
             <button
