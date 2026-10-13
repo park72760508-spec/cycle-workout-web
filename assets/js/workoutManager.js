@@ -998,26 +998,27 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.textAlign = 'right'; // 원래 정렬 복원
       ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
     } else if (canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph') {
-      // 모바일 대시보드: FTP 기준선 끝 = 빨강 원 + "90"
+      // 모바일 대시보드: FTP 기준선 끝 = 민트 원 + "90" (2026-10-14: 빨강 → 민트, FTP 라벨이 빨강)
       const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
       const cx = padding.left + chartWidth - circleR - 2;
       const cy = ftpY;
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.92)';
+      ctx.fillStyle = '#10b981';
       ctx.beginPath();
       ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = '#000000';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, cx, cy);
       ctx.textAlign = 'right';
       ctx.textBaseline = 'alphabetic';
     } else {
-      // 개인훈련 대시보드 등: 기존 둥근 사각형
+      // 개인훈련 대시보드 등: 기존 둥근 사각형 (2026-10-14: 개인·그룹 훈련 화면은 민트, 훈련 준비 화면은 빨강 유지)
       const boxX = padding.left + chartWidth - boxWidth - 2;
       const boxY = ftpY - boxHeight / 2;
+      const rpmBoxMint = isIndividualDashboardCanvas;
       
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.9)';
+      ctx.fillStyle = rpmBoxMint ? '#10b981' : 'rgba(239, 68, 68, 0.9)';
       ctx.beginPath();
       const radius = 3;
       ctx.moveTo(boxX + radius, boxY);
@@ -1032,7 +1033,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.closePath();
       ctx.fill();
       
-      ctx.fillStyle = '#ffffff';
+      ctx.fillStyle = rpmBoxMint ? '#000000' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
@@ -1128,9 +1129,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           const boxX = padding.left + 10; // Y축 오른쪽 바로 옆
           const boxY = y - boxHeight / 2; // FTP 가이드 실선 중앙에 걸치게
           
-          // 민트색 둥근 상자 그리기
+          // 민트색 둥근 상자 그리기 — 2026-10-14: 모바일 훈련 화면(개인·그룹·Coach 휴대폰)은 빨강 바탕·흰 글자(90 RPM 원은 민트)
           const borderRadius = 6;
-          ctx.fillStyle = '#10b981'; // 민트색
+          const ftpBoxRed = isIndividualDashboardCanvas;
+          ctx.fillStyle = ftpBoxRed ? 'rgba(239, 68, 68, 0.92)' : '#10b981'; // 빨강 / 민트
           ctx.beginPath();
           ctx.moveTo(boxX + borderRadius, boxY);
           ctx.lineTo(boxX + boxWidth - borderRadius, boxY);
@@ -1145,7 +1147,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           ctx.fill();
           
           // 검정색 폰트로 파워값 표시 (한글 폰트 통일)
-          ctx.fillStyle = '#000000'; // 검정색
+          ctx.fillStyle = ftpBoxRed ? '#ffffff' : '#000000'; // 빨강 바탕엔 흰 글자
           ctx.font = `bold 9px ${textFontFamily}`;
           ctx.textAlign = 'center';
           ctx.fillText(powerText, boxX + boxWidth / 2, boxY + boxHeight / 2 + 3);
