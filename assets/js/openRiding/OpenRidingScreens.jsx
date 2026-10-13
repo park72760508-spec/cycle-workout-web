@@ -11159,30 +11159,6 @@ function OpenRidingLiveTrackModal(props) {
       setErr('복사하지 못했습니다. 주소를 길게 눌러 복사해 주세요.');
     }
   }
-  /** 클립보드의 LiveTrack 링크를 읽어 바로 등록(원탭) */
-  function pasteFromClipboard() {
-    setErr('');
-    var cb = typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.readText;
-    if (!cb) {
-      setErr('이 기기에서는 자동 붙여넣기를 지원하지 않습니다. 입력칸을 길게 눌러 붙여넣어 주세요.');
-      return;
-    }
-    navigator.clipboard
-      .readText()
-      .then(function (t) {
-        var m = String(t || '').match(/https:\/\/(?:livetrack\.garmin\.com|gar\.mn)\/[^\s<>"']+/i);
-        if (!m) {
-          setVal(String(t || '').slice(0, 500));
-          setErr('클립보드에 Garmin LiveTrack 링크가 없습니다. Garmin Connect 앱에서 링크를 먼저 복사해 주세요.');
-          return;
-        }
-        setVal(m[0]);
-        run('save', m[0]);
-      })
-      .catch(function () {
-        setErr('클립보드 접근이 허용되지 않았습니다. 입력칸을 길게 눌러 붙여넣어 주세요.');
-      });
-  }
   function run(fnName, textOverride) {
     var db = props.firestore || (typeof window !== 'undefined' ? window.firestoreV9 : null);
     setBusy(true);
@@ -11223,20 +11199,15 @@ function OpenRidingLiveTrackModal(props) {
     >
       <div className="my-auto w-full max-w-sm shrink-0 rounded-2xl bg-white p-4 shadow-xl text-left">
         <p className="m-0 text-base font-bold text-slate-800">Garmin LiveTrack 연결</p>
-        <p className="mt-2 mb-0 text-xs leading-relaxed text-slate-600">
-          Garmin Connect 앱 → <b>LiveTrack</b> → <b>링크 공유</b>로 복사한 주소를 붙여넣으세요. 한 번 등록하면 이후
-          참석하는 모든 라이딩 모임에서 그대로 사용되며, 라이딩 당일 참석자 리스트에 LIVE 아이콘으로 표시됩니다.
-          <br />※ Garmin Connect+ 개인 LiveTrack 주소는 고정이라 계속 사용됩니다. 일반 LiveTrack 링크는 활동마다 새로
-          발급되므로, 라이딩 당일 활동 시작 후 링크를 복사해 <b>오늘 링크 등록</b>을 눌러 주세요(지난 활동 링크는 자동으로 숨겨집니다).
-        </p>
+        <div className="mt-2 text-xs leading-relaxed text-slate-700">
+          <p className="m-0 font-semibold">
+            Garmin Connect 앱 &gt; 홈 &gt; 자세히 &gt; 안전 및 추적 &gt; LiveTrack
+          </p>
+          <p className="mt-0.5 mb-0">- 공유 기능 설정 &gt; 이메일(켜기) &gt; 수신자에 아래 링크를 추가</p>
+        </div>
         {inbox && inbox.address ? (
           <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3">
-            <p className="m-0 text-sm font-bold text-emerald-800">자동 연결 (추천 · 한 번만 설정)</p>
-            <p className="mt-1 mb-0 text-[11px] leading-relaxed text-emerald-900/80">
-              Garmin Connect 앱 → <b>LiveTrack</b> → <b>자동 시작</b> 켜기 → <b>연락처</b>에 아래 이메일 주소를 추가하세요.
-              이후 활동을 시작할 때마다 새 링크가 자동으로 등록됩니다(약 1~2분).
-            </p>
-            <div className="mt-2 flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5">
               <code className="min-w-0 flex-1 break-all rounded-md border border-emerald-200 bg-white px-2 py-1.5 text-[12px] text-slate-800 select-all">
                 {inbox.address}
               </code>
@@ -11257,18 +11228,8 @@ function OpenRidingLiveTrackModal(props) {
             )}
           </div>
         ) : null}
-        <button
-          type="button"
-          disabled={busy}
-          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2.5 text-sm font-bold text-white disabled:opacity-50"
-          onClick={pasteFromClipboard}
-        >
-          <OpenRidingLiveTrackIcon size={16} />
-          복사한 LiveTrack 링크 바로 등록
-        </button>
-        <p className="mt-2 mb-0 text-[11px] text-slate-400 text-center">또는 아래에 직접 붙여넣기</p>
         <textarea
-          className="mt-1 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
+          className="mt-3 w-full rounded-lg border border-slate-300 p-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-violet-400"
           rows={3}
           placeholder="https://livetrack.garmin.com/session/…"
           value={val}
