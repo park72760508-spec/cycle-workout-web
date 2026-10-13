@@ -13066,7 +13066,7 @@ function OpenRidingDetail(props) {
                 aria-expanded={participantListExpanded}
                 id="open-riding-participant-toggle"
               >
-                정원{' '}
+                참석자{' '}
                 <span className="tabular-nums font-semibold text-inherit" aria-hidden>
                   {participantListExpanded ? '(−)' : '(+)'}
                 </span>
