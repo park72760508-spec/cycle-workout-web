@@ -13108,6 +13108,11 @@ function OpenRidingDetail(props) {
                       var ltLink = liveTrackRideDay && openRidingLiveTrackFreshForRide(ltSaved, rideYmdHint) ? ltSaved : null;
                       /* 일반 세션 링크가 지난 활동 것이면 당일 본인에게 "오늘 링크 등록" 강조 */
                       var ltNeedsToday = !!(liveTrackRideDay && ltSaved && !ltLink);
+                      /* LiveTrack 이 시작돼 바로 볼 수 있는 상태: 당일 LIVE 표시 조건 충족, 또는 최근 12시간 내 받은 세션 링크 */
+                      var ltLiveNow = !!(
+                        ltLink ||
+                        (ltSaved && openRidingLiveTrackIsSessionUrl(ltSaved.url) && Date.now() - Number(ltSaved.updatedAtMs || 0) <= 12 * 3600 * 1000)
+                      );
                       var ltMine = !!(userId && String(uid) === String(userId));
                       return (
                         <li key={String(uid) + '-p'} className="flex items-center gap-1 flex-wrap">
@@ -13160,7 +13165,9 @@ function OpenRidingDetail(props) {
                                 <button
                                   type="button"
                                   className={
-                                    ltNeedsToday
+                                    ltLiveNow
+                                      ? 'inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800 leading-4'
+                                      : ltNeedsToday
                                       ? 'inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-700 leading-4'
                                       : ltLink
                                         ? 'inline-flex items-center rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-500 leading-4'
