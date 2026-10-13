@@ -1013,6 +1013,28 @@
     var activeTab = _useState[0];
     var setActiveTab = _useState[1];
 
+    /* 2026-10-13: 시트가 열린 동안 뒤쪽 라이딩 기록 화면(#trainingJournalScreen) 스크롤 잠금 + 맨 위로(Top) 버튼 숨김 */
+    useEffect(function() {
+      if (!open || typeof document === 'undefined') return undefined;
+      if (!document.getElementById('journal-sheet-open-style')) {
+        var st = document.createElement('style');
+        st.id = 'journal-sheet-open-style';
+        st.textContent =
+          'body.journal-sheet-open .global-back-to-top-btn,body.journal-sheet-open .stelvio-back-to-top-btn,' +
+          'body.journal-sheet-open [class*="back-to-top"]{display:none!important}' +
+          '#trainingJournalScreen .journal-bottom-sheet-body{overscroll-behavior:contain}';
+        document.head.appendChild(st);
+      }
+      var scr = document.getElementById('trainingJournalScreen');
+      var prevOverflow = scr ? scr.style.overflowY : '';
+      if (scr) scr.style.overflowY = 'hidden';
+      document.body.classList.add('journal-sheet-open');
+      return function() {
+        if (scr) scr.style.overflowY = prevOverflow;
+        document.body.classList.remove('journal-sheet-open');
+      };
+    }, [open]);
+
     if (!open) return null;
 
     var merged = mergeLogsForDetail(logs, dailyRouteDoc);
