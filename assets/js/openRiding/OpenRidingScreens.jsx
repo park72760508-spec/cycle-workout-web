@@ -6582,7 +6582,8 @@ function ClubMissionPicker(props) {
 
 function clubMissionStepStyle(state) {
   if (state === 'done') return { background: '#22c55e', color: '#ffffff', border: '1px solid #16a34a' };
-  if (state === 'doneLow') return { background: '#7fe0a2', color: '#14532d', border: '1px solid #4ade80' }; // 완료·95점 미만: 녹색(#22c55e)과 연한 녹색(#dcfce7)의 중간 톤, 진녹색 글자
+  if (state === 'doneLow') return { background: '#d9f99d', color: '#3f6212', border: '1px solid #a3e635' }; // 통과·90~95점 미만: 연한 연두
+  if (state === 'failed') return { background: '#fde047', color: '#713f12', border: '1px solid #eab308' }; // 미달성·90점 미만: 노랑(재도전 필요)
   if (state === 'next') return { background: '#f97316', color: '#ffffff', border: '1px solid #ea580c' };
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
@@ -7629,7 +7630,7 @@ function ClubMissionDetailModal(props) {
     var dp = String(actual.completedDate).split('-');
     if (dp.length === 3) doneDateLabel = Number(dp[1]) + '/' + Number(dp[2]) + ' ';
   }
-  var stateLabel = state === 'done' ? doneDateLabel + '완료' : state === 'next' ? '수행할 미션' : '대기';
+  var stateLabel = props.failed && state === 'next' ? '재도전' : state === 'done' ? doneDateLabel + '완료' : state === 'next' ? '수행할 미션' : '대기';
 
   function start() {
     if (!canStart || !workout) return;
@@ -7678,12 +7679,19 @@ function ClubMissionDetailModal(props) {
             </div>
             <p>운동 시간: {minutes}분 | 예상 TSS: {tss != null ? tss : '—'}</p>
             <p>{props.subtitleText || mission.title + ' · ' + step.ord + '번 미션 (' + stateLabel + ')'}</p>
+            {props.failed && result && result.score != null ? (
+              <p style={{ color: '#a16207', fontWeight: 700 }}>
+                미달성 {Math.floor(result.score)}점 — {props.passScore || 90}점 이상이어야 통과합니다. 다시 도전해 주세요.
+                <span style={{ color: '#64748b', fontWeight: 400 }}>
+                  {' '}(인터벌 달성률 {result.intervalAchievement != null ? result.intervalAchievement + '%' : '—'})
+                </span>
+              </p>
+            ) : null}
             {state === 'done' && result && result.score != null ? (
-              <p style={{ color: '#16a34a', fontWeight: 700 }}>
+              <p style={{ color: Number(result.score) >= 95 ? '#16a34a' : '#4d7c0f', fontWeight: 700 }}>
                 달성 점수 {result.score}점
                 <span style={{ color: '#64748b', fontWeight: 400 }}>
-                  {' '}(인터벌 달성률 {result.intervalAchievement != null ? result.intervalAchievement + '%' : '—'}
-                  {result.wkg != null ? ' · FTP ' + result.wkg + ' W/kg' : ''})
+                  {' '}(인터벌 달성률 {result.intervalAchievement != null ? result.intervalAchievement + '%' : '—'})
                 </span>
               </p>
             ) : null}
@@ -7754,6 +7762,9 @@ function ClubMissionPanel(props) {
   }
 
   var done = new Set((data.completedOrds || []).map(Number));
+  /* 90점 미만 미달성 단계 — 완료가 아니라 다시 수행해야 하는 미션(노랑) */
+  var failed = new Set((data.failedOrds || []).map(Number));
+  var passScore = Number(data.passScore) || 90;
   var myResults = data.myResults || {};
   /* 진도(완료 n / N) 옆 굵게: 내 누적 순위 점수(진도 40 + 달성 60)·순위 — 서버 leaderboard 의 내 행 */
   var myBoardRow = (data.leaderboard || []).find(function (r) { return r && r.isMe; }) || null;
@@ -7766,6 +7777,7 @@ function ClubMissionPanel(props) {
   var blockedReason = '';
   if (detailStep) {
     if (detailState === 'done') blockedReason = '이미 완료한 미션입니다.';
+    else if (failed.has(detailOrd) && detailState !== 'next') blockedReason = '앞 번호 미션을 먼저 완료해 주세요.';
     else if (detailState === 'todo') blockedReason = '앞 번호 미션을 먼저 완료해 주세요.';
     else if (!canPerform) blockedReason = '클럽 회원(멤버십 유효)만 미션을 수행할 수 있습니다.';
     else if (!inPeriod) blockedReason = today < mission.startDate ? '미션 시작일 전입니다.' : '미션 기간이 끝났습니다.';
@@ -7825,9 +7837,14 @@ function ClubMissionPanel(props) {
         {ords.map(function (o) {
           var st = done.has(o) ? 'done' : o === nextOrd ? 'next' : 'todo';
           var res = myResults[o];
-          var scoreTxt = st === 'done' && res && res.score != null ? String(Math.round(res.score)) : '';
-          /* 완료 색 구분: 달성 점수 95점 이상 녹색, 95점 미만 연한 녹색 바탕·진녹색 글자 (점수 없으면 녹색 유지) */
-          var styleKey = st === 'done' && res && res.score != null && Number(res.score) < 95 ? 'doneLow' : st;
+          var isFailed = failed.has(o);
+          var scoreTxt = (st === 'done' || isFailed) && res && res.score != null ? String(Math.floor(res.score)) : '';
+          /* 색 구분(2026-10-14): 95점 이상 녹색 / 90~95점 미만 연한 연두 / 90점 미만 노랑(미달성·재도전) — 점수 없으면 녹색 유지 */
+          var styleKey = isFailed
+            ? 'failed'
+            : st === 'done' && res && res.score != null && Number(res.score) < 95
+              ? 'doneLow'
+              : st;
           var stepObj = mission.steps.find(function (x) { return Number(x.ord) === o; });
           var diffStars = clubMissionStepDifficulty(stepObj);
           var numColor = clubMissionStepStyle(styleKey).color;
@@ -7838,7 +7855,7 @@ function ClubMissionPanel(props) {
               className="aspect-square rounded-xl inline-flex flex-col items-center justify-center font-bold leading-none"
               style={clubMissionStepStyle(styleKey)}
               onClick={function () { setDetailOrd(o); }}
-              aria-label={o + '번 미션 ' + (st === 'done' ? '완료' + (scoreTxt ? ' ' + scoreTxt + '점' : '') : st === 'next' ? '수행할 미션' : '미수행')}
+              aria-label={o + '번 미션 ' + (isFailed ? '미달성 ' + scoreTxt + '점 · 다시 도전' : st === 'done' ? '완료' + (scoreTxt ? ' ' + scoreTxt + '점' : '') : st === 'next' ? '수행할 미션' : '미수행')}
             >
               <span className="text-sm">{o}</span>
               {diffStars ? <ClubMissionDifficultyStars stars={diffStars} color={numColor} size={7} /> : null}
@@ -7847,10 +7864,11 @@ function ClubMissionPanel(props) {
           );
         })}
       </div>
-      <div className="flex items-center gap-3 mt-3 text-[11px] text-slate-500">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-3 text-[11px] text-slate-500">
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('next')} />수행할 미션</span>
-        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />완료(95점↑)</span>
-        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('doneLow')} />완료(95점↓)</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('failed')} />미달성({passScore}↓)</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('doneLow')} />{passScore}~95</span>
+        <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('done')} />95↑</span>
         <span className="inline-flex items-center gap-1"><span className="w-3 h-3 rounded" style={clubMissionStepStyle('todo')} />미수행</span>
       </div>
       <p className="text-[11px] text-slate-500 m-0 mt-3 leading-snug">
@@ -7866,6 +7884,8 @@ function ClubMissionPanel(props) {
           canStart={canStart}
           blockedReason={blockedReason}
           result={myResults[detailOrd] || null}
+          failed={failed.has(detailOrd)}
+          passScore={passScore}
           onClose={function () { setDetailOrd(null); }}
         />
       ) : null}

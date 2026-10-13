@@ -1,7 +1,12 @@
 /**
  * 클럽 챌린지 미션 — 달성 점수 산출(순수 함수, 단위 테스트 대상).
  *
- * 단계(미션 1개) 달성 점수 S (0~100) = 인터벌 달성률 A × W/kg 가중치 F
+ * 2026-10-14: 단계 달성 점수 S = 인터벌 달성률 A (W/kg 가중치 F는 참고값으로만 저장, 점수에 곱하지 않음).
+ *   통과 기준 PASS_SCORE(90점) — 미만은 미달성으로 같은 단계를 다시 수행해야 한다.
+ *   워크아웃 작성 시 회복 구간을 'interval'로 둔 경우가 있어(예: 83% ↔ 45% 반복), 세그먼트 종류와 별개로
+ *   목표가 FTP 55% 이하(Coggan Z1 회복)이거나 이름에 휴식·회복·워밍업·쿨다운이 들어간 세그먼트도 제외한다.
+ *
+ * (이전) 단계(미션 1개) 달성 점수 S (0~100) = 인터벌 달성률 A × W/kg 가중치 F
  *  - A: 워밍업·쿨다운·휴식 세그먼트를 뺀 "인터벌" 세그먼트의 (실제 평균 W ÷ 목표 W)를
  *       세그먼트별 100% 상한으로 자른 뒤 시간(초) 가중 평균. 목표 W = FTP × 목표%.
  *       구간 목표(ftp_pctz "56~75")는 하한을 목표로, 램프는 시작·끝 평균을 목표로 본다.
@@ -26,6 +31,15 @@ const GROWTH_MAX = 5;
 const RATE_WEIGHT = 40;
 const SCORE_WEIGHT = 60;
 const EXCLUDED_TYPES = new Set(["warmup", "cooldown", "rest"]);
+/** 단계 통과 점수 — 미만은 미달성(재도전 필요) */
+const PASS_SCORE = 90;
+/** 이 FTP% 이하 목표 세그먼트는 회복(휴식)으로 보고 달성률에서 제외 (Coggan Z1 상한 55%) */
+const RECOVERY_MAX_PCT = 55;
+const REST_LABEL_RE = /휴식|회복|리커버리|워밍업|웜업|쿨다운|쿨\s*다운|rest|recover|warm|cool/i;
+
+function isPassedScore(score) {
+  return score == null || !isFinite(Number(score)) ? true : Number(score) >= PASS_SCORE;
+}
 
 /** workoutManager.js normalizeSegmentType 과 동일 규칙 */
 function normalizeSegmentType(type) {
@@ -90,12 +104,19 @@ function computeStepAchievement(segments, segmentAvgWatts, ftp, weightKg, fallba
   const ftpW = Number(ftp);
   if (!Array.isArray(segments) || !segments.length || !(ftpW > 0)) return null;
 
-  const all = segments.map((seg, i) => ({
-    type: normalizeSegmentType(seg && seg.segment_type),
-    dur: Math.max(0, Number(seg && (seg.duration_sec != null ? seg.duration_sec : seg.duration)) || 0),
-    targetW: (segmentTargetFtpPct(seg) / 100) * ftpW,
-    actualW: Array.isArray(segmentAvgWatts) ? Number(segmentAvgWatts[i]) : NaN,
-  }));
+  const all = segments.map((seg, i) => {
+    const pct = segmentTargetFtpPct(seg);
+    const label = String((seg && (seg.label || seg.name || seg.title)) || "");
+    let type = normalizeSegmentType(seg && seg.segment_type);
+    // 종류가 interval 이어도 저강도(≤55%)·이름이 휴식/회복/워밍업/쿨다운이면 회복 구간으로 본다
+    if (type === "interval" && ((pct > 0 && pct <= RECOVERY_MAX_PCT) || REST_LABEL_RE.test(label))) type = "rest";
+    return {
+      type,
+      dur: Math.max(0, Number(seg && (seg.duration_sec != null ? seg.duration_sec : seg.duration)) || 0),
+      targetW: (pct / 100) * ftpW,
+      actualW: Array.isArray(segmentAvgWatts) ? Number(segmentAvgWatts[i]) : NaN,
+    };
+  });
   const powered = all.filter((s) => s.dur > 0 && s.targetW > 0);
   let intervals = powered.filter((s) => !EXCLUDED_TYPES.has(s.type));
   // 인터벌로 분류된 세그먼트가 없으면(전부 휴식형 등) 워밍업·쿨다운만 제외
@@ -122,7 +143,8 @@ function computeStepAchievement(segments, segmentAvgWatts, ftp, weightKg, fallba
   } else {
     const overall = Number(fallbackAvgWatts);
     if (!(overall > 0)) return null;
-    const targetAvg = powered.reduce((a, s) => a + s.dur * s.targetW, 0) / powered.reduce((a, s) => a + s.dur, 0);
+    // 세그먼트별 파워가 없으면 전체 평균을 인터벌 구간 평균 목표와 비교(워밍업·휴식·쿨다운 목표 제외)
+    const targetAvg = intervals.reduce((a, s) => a + s.dur * s.targetW, 0) / totalDur;
     achievement = Math.min(1, overall / targetAvg);
     avgW = overall;
     method = "overall";
@@ -137,7 +159,8 @@ function computeStepAchievement(segments, segmentAvgWatts, ftp, weightKg, fallba
     intervalAvgWatts: Math.round(avgW),
     wkg: Math.round(wkg * 100) / 100,
     wkgFactor: Math.round(factor * 1000) / 1000,
-    score: round1(achievement * factor * 100),
+    score: round1(achievement * 100),
+    passed: achievement * 100 >= PASS_SCORE,
     method,
   };
 }
@@ -178,6 +201,8 @@ function rankMissionUsers(totalSteps, users) {
 }
 
 module.exports = {
+  PASS_SCORE,
+  isPassedScore,
   computeStepAchievement,
   rankMissionUsers,
   segmentTargetFtpPct,

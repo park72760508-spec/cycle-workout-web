@@ -109,7 +109,7 @@ test('1번 미션: 같은 워크아웃·충분한 시간이면 완료', async ()
   assert.equal(tables.club_mission_completions.length, 1);
   // 세그먼트 목표를 서버가 조회해 점수 저장: 목표 200W(80%) 달성 100%, 2.86 W/kg → 가중치 0.886
   assert.equal(r.result.intervalAchievement, 100);
-  assert.equal(tables.club_mission_completions[0].step_score, 98.9);
+  assert.equal(tables.club_mission_completions[0].step_score, 100); // 2026-10-14: 점수 = 인터벌 달성률
   // 조회한 세그먼트가 미션에 채워짐
   assert.equal(tables.club_missions[0].steps[0].segments.length, 1);
 });
@@ -154,8 +154,8 @@ test('조회: 진행 미션 + 내 완료 단계, 방장이면 canManage', async 
   reset();
   tables.club_mission_completions.push(
     { mission_id: 'm1', user_id: 'u-rider', step_ord: 1, step_score: 90, completed_at: '2026-10-02' },
-    { mission_id: 'm1', user_id: 'u-other', step_ord: 1, step_score: 70, completed_at: '2026-10-01' },
-    { mission_id: 'm1', user_id: 'u-other', step_ord: 2, step_score: 70, completed_at: '2026-10-03' }
+    { mission_id: 'm1', user_id: 'u-other', step_ord: 1, step_score: 95, completed_at: '2026-10-01' },
+    { mission_id: 'm1', user_id: 'u-other', step_ord: 2, step_score: 95, completed_at: '2026-10-03' }
   );
   tables.v_user_public_profile = [
     { id: 'u-rider', display_name: '라이더', is_private: true },
@@ -164,8 +164,8 @@ test('조회: 진행 미션 + 내 완료 단계, 방장이면 canManage', async 
   const mine = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
   assert.deepEqual(mine.completedOrds, [1]);
   assert.equal(mine.myResults[1].score, 90);
-  // other: 40×2/2 + 60×140/2/100 = 82, rider: 40×1/2 + 60×90/2/100 = 47
-  assert.deepEqual(mine.leaderboard.map((r) => [r.name, r.total, r.isMe]), [['홍**', 82, false], ['라이더', 47, true]]);
+  // other: 40×2/2 + 60×190/2/100 = 97, rider: 40×1/2 + 60×90/2/100 = 47
+  assert.deepEqual(mine.leaderboard.map((r) => [r.name, r.total, r.isMe]), [['홍**', 97, false], ['라이더', 47, true]]);
   assert.equal(mine.myRank, 2);
   assert.deepEqual(mine.leaderboard.map((r) => r.uid), ['other', 'rider']);
   assert.equal(mine.canManage, false);
@@ -189,22 +189,45 @@ test('단계 수가 줄면(3→2) 없어진 번호의 완료는 집계에서 제
   reset();
   tables.club_mission_completions.push(
     { mission_id: 'm1', user_id: 'u-rider', step_ord: 1, step_score: 90, completed_at: '2026-10-01' },
-    { mission_id: 'm1', user_id: 'u-rider', step_ord: 2, step_score: 80, completed_at: '2026-10-02' },
-    { mission_id: 'm1', user_id: 'u-rider', step_ord: 3, step_score: 70, completed_at: '2026-10-03' }
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 2, step_score: 92, completed_at: '2026-10-02' },
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 3, step_score: 96, completed_at: '2026-10-03' }
   );
   tables.v_user_public_profile = [{ id: 'u-rider', display_name: '라이더', is_private: false }];
-  // 현재 미션은 2단계 → 3번 완료는 제외: 40×2/2 + 60×170/2/100 = 91
+  // 현재 미션은 2단계 → 3번 완료는 제외: 40×2/2 + 60×182/2/100 = 94.6
   const r = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
   assert.deepEqual(r.completedOrds, [1, 2]);
-  assert.equal(r.leaderboard[0].total, 91);
+  assert.equal(r.leaderboard[0].total, 94.6);
   assert.equal(r.leaderboard[0].completed, 2);
 
-  // 30단계로 늘리면 수행률 분모가 30: 40×3/30 + 60×240/30/100 = 4 + 4.8 = 8.8
+  // 30단계로 늘리면 수행률 분모가 30: 40×3/30 + 60×278/30/100 = 4 + 5.56 = 9.6
   tables.club_missions[0].steps = Array.from({ length: 30 }, (_, i) => ({
     ord: i + 1, workoutId: 'w' + (i + 1), workoutSource: 'gas', title: 'S' + (i + 1), totalSeconds: 600,
   }));
   const r30 = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
   assert.deepEqual(r30.completedOrds, [1, 2, 3]);
-  assert.equal(r30.leaderboard[0].total, 8.8);
+  assert.equal(r30.leaderboard[0].total, 9.6);
   assert.equal(r30.leaderboard[0].completionRate, 10);
+});
+
+test('90점 미만은 미달성 — 순위·완료에서 제외되고 같은 단계를 다시 수행해 갱신', async () => {
+  reset();
+  tables.club_mission_completions.push(
+    { mission_id: 'm1', user_id: 'u-rider', step_ord: 1, step_score: 85, completed_at: '2026-10-02' }
+  );
+  tables.v_user_public_profile = [{ id: 'u-rider', display_name: '라이더', is_private: false }];
+  const g = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
+  assert.deepEqual(g.completedOrds, []);
+  assert.deepEqual(g.failedOrds, [1]);
+  assert.equal(g.myResults[1].passed, false);
+  assert.equal(g.passScore, 90);
+
+  // 재도전: 1단계를 다시 수행해 100점 → 기존 행 갱신(행 수 그대로)
+  logs['rider/L9'] = { workout_id: 'w1', duration_sec: 3500, date: TODAY, ftp_at_time: 250, weight: 70, segment_avg_watts: [200] };
+  const r = await complete(1, 'L9');
+  assert.equal(r.passed, true);
+  assert.equal(tables.club_mission_completions.length, 1);
+  assert.equal(tables.club_mission_completions[0].step_score, 100);
+  const g2 = await missions.handleGetClubMission(fakeAdmin, 'rider', { groupId: 'club1' });
+  assert.deepEqual(g2.completedOrds, [1]);
+  assert.deepEqual(g2.failedOrds, []);
 });

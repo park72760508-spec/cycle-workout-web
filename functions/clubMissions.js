@@ -205,6 +205,7 @@ async function handleGetClubMission(admin, uid, body) {
   const missions = allRows.map((r) => missionListItem(r, todayYmd));
 
   let completedOrds = [];
+  const failedOrds = [];
   const myResults = {};
   let leaderboard = [];
   let myRank = null;
@@ -218,6 +219,20 @@ async function handleGetClubMission(admin, uid, body) {
     const validOrds = new Set((Array.isArray(row.steps) ? row.steps : []).map((st) => Number(st.ord)));
     (allComps || []).forEach((c) => {
       if (!validOrds.has(Number(c.step_ord))) return;
+      const passed = clubMissionScoring.isPassedScore(c.step_score);
+      // 미달성(90점 미만) 기록은 내 결과에만 표시하고 순위·완료 집계에서는 제외 → 다시 수행해야 하는 단계
+      if (!passed) {
+        if (userUuid && String(c.user_id) === String(userUuid)) {
+          failedOrds.push(Number(c.step_ord));
+          myResults[c.step_ord] = {
+            score: c.step_score != null ? Number(c.step_score) : null,
+            intervalAchievement: c.interval_achievement != null ? Number(c.interval_achievement) : null,
+            wkg: c.wkg != null ? Number(c.wkg) : null,
+            passed: false,
+          };
+        }
+        return;
+      }
       const key = String(c.user_id);
       if (!byUser.has(key)) byUser.set(key, { userId: key, stepScores: [], lastCompletedAt: "", firstAt: "", firstWkg: null, lastWkg: null });
       const u = byUser.get(key);
@@ -236,10 +251,12 @@ async function handleGetClubMission(admin, uid, body) {
           score: c.step_score != null ? Number(c.step_score) : null,
           intervalAchievement: c.interval_achievement != null ? Number(c.interval_achievement) : null,
           wkg: c.wkg != null ? Number(c.wkg) : null,
+          passed: true,
         };
       }
     });
     completedOrds.sort((a, b) => a - b);
+    failedOrds.sort((a, b) => a - b);
 
     const ranked = clubMissionScoring.rankMissionUsers(
       Array.isArray(row.steps) ? row.steps.length : 0,
@@ -297,6 +314,8 @@ async function handleGetClubMission(admin, uid, body) {
     mission: mapMissionRow(row),
     missions,
     completedOrds,
+    failedOrds,
+    passScore: clubMissionScoring.PASS_SCORE,
     myResults,
     leaderboard,
     myRank,
@@ -387,10 +406,12 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
 
   const { data: comps } = await supabase
     .from("club_mission_completions")
-    .select("step_ord")
+    .select("step_ord, step_score")
     .eq("mission_id", row.id)
     .eq("user_id", userUuid);
-  const done = new Set((comps || []).map((c) => Number(c.step_ord)));
+  // 통과(90점 이상) 단계만 완료로 본다 — 미달성 단계는 다시 수행해 점수를 갱신할 수 있다
+  const done = new Set((comps || []).filter((c) => clubMissionScoring.isPassedScore(c.step_score)).map((c) => Number(c.step_ord)));
+  const prevFailed = (comps || []).find((c) => Number(c.step_ord) === stepOrd && !clubMissionScoring.isPassedScore(c.step_score)) || null;
   if (done.has(stepOrd)) return { success: true, alreadyCompleted: true };
   const nextOrd = mission.steps.map((s) => Number(s.ord)).sort((a, b) => a - b).find((o) => !done.has(o));
   if (nextOrd !== stepOrd) throw new WriteError(400, "미션은 순서대로 수행해야 합니다.");
@@ -427,10 +448,7 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     Number(log.avg_watts)
   );
 
-  const { error } = await supabase.from("club_mission_completions").insert({
-    mission_id: row.id,
-    user_id: userUuid,
-    step_ord: stepOrd,
+  const payload = {
     workout_id: String(step.workoutId),
     training_log_id: logId,
     step_score: result ? result.score : null,
@@ -438,9 +456,26 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     wkg: result ? result.wkg : null,
     wkg_factor: result ? result.wkgFactor : null,
     score_method: result ? result.method : null,
-  });
-  if (error && error.code !== "23505") throw error;
-  return { success: true, completed: true, stepOrd, result };
+  };
+  const passed = result ? result.passed : true;
+  if (prevFailed) {
+    // 재도전: 이전 미달성 점수보다 높을 때만 갱신(통과하면 completed_at 도 이번 시각으로)
+    if (result && Number(result.score) > Number(prevFailed.step_score || 0)) {
+      const { error: upErr } = await supabase
+        .from("club_mission_completions")
+        .update(Object.assign({}, payload, { completed_at: new Date().toISOString() }))
+        .eq("mission_id", row.id)
+        .eq("user_id", userUuid)
+        .eq("step_ord", stepOrd);
+      if (upErr) throw upErr;
+    }
+  } else {
+    const { error } = await supabase.from("club_mission_completions").insert(
+      Object.assign({ mission_id: row.id, user_id: userUuid, step_ord: stepOrd }, payload)
+    );
+    if (error && error.code !== "23505") throw error;
+  }
+  return { success: true, completed: passed, passed, retry: !passed, stepOrd, result, passScore: clubMissionScoring.PASS_SCORE };
 }
 
 module.exports = {

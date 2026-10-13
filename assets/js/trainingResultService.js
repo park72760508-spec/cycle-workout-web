@@ -485,8 +485,12 @@ function completePendingClubMissionAfterSave(trainingData, trainingLogId) {
           trainingLogId: String(trainingLogId)
         })
           .then((res) => {
-            if (res && res.completed) {
-              const sc = res.result && res.result.score != null ? ' 달성 점수 ' + res.result.score + '점' : '';
+            if (res && res.retry) {
+              // 90점 미만 미달성 — 같은 단계를 다시 수행해야 한다
+              const sc = res.result && res.result.score != null ? Math.floor(res.result.score) + '점' : '';
+              toast(t.stepOrd + '번 미션 미달성(' + sc + ') — ' + (res.passScore || 90) + '점 이상이어야 통과합니다. 다시 도전해 주세요.', 'error');
+            } else if (res && res.completed) {
+              const sc = res.result && res.result.score != null ? ' 달성 점수 ' + Math.floor(res.result.score) + '점' : '';
               toast(t.stepOrd + '번 미션을 완료했습니다!' + sc, 'success');
             }
             else if (res && res.reason === 'too_short') toast('훈련 시간이 짧아 미션 완료로 인정되지 않았습니다.', 'error');

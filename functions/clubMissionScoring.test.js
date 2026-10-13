@@ -7,6 +7,7 @@ const {
   rankMissionUsers,
   segmentTargetFtpPct,
   wkgFactor,
+  isPassedScore,
 } = require('./clubMissionScoring');
 
 /** 워밍업 10분(50%) · 인터벌 5분(100%) · 휴식 3분(50%) · 인터벌 5분(100%) · 쿨다운 10분(40%) */
@@ -42,23 +43,57 @@ test('워밍업·쿨다운·휴식은 제외하고 인터벌만 평가 (FTP 250W
   assert.equal(r.intervalAchievement, 90);
   assert.equal(r.intervalAvgWatts, 225);
   assert.equal(r.wkg, 3.57); // FTP 250W ÷ 70kg
-  assert.equal(r.wkgFactor, 0.989);
-  assert.equal(r.score, 89); // 90 × 0.989
+  assert.equal(r.wkgFactor, 0.989); // 참고값 — 점수에는 곱하지 않음
+  assert.equal(r.score, 90); // 2026-10-14: 점수 = 인터벌 달성률
+  assert.equal(r.passed, true); // 90점 이상 통과
 });
 
 test('목표 초과 수행은 세그먼트별 100% 상한', () => {
   const r = computeStepAchievement(SEGS, [0, 400, 0, 400, 0], 250, 70);
   assert.equal(r.intervalAchievement, 100);
-  assert.equal(r.wkgFactor, 0.989); // 가중치는 FTP W/kg(250/70=3.57) — 초과 수행 파워와 무관
-  assert.equal(r.score, 98.9);
+  assert.equal(r.score, 100);
 });
 
-test('같은 달성률이면 FTP W/kg 가 높을수록 점수 높음 (2.0 → 95%, 4.0 → 100%)', () => {
+test('점수는 인터벌 달성률 그대로 — FTP W/kg 와 무관 (2026-10-14)', () => {
   const segs = [{ segment_type: 'interval', duration_sec: 600, target_type: 'ftp_pct', target_value: '100' }];
-  const low = computeStepAchievement(segs, [140], 140, 70); // FTP 2.0 W/kg, 100% 달성
-  const high = computeStepAchievement(segs, [280], 280, 70); // FTP 4.0 W/kg, 100% 달성
-  assert.equal(low.score, 95);
-  assert.equal(high.score, 100);
+  assert.equal(computeStepAchievement(segs, [140], 140, 70).score, 100);
+  assert.equal(computeStepAchievement(segs, [280], 280, 70).score, 100);
+});
+
+test("종류가 interval 이어도 FTP 55% 이하 회복 구간은 제외 (83%↔45% 반복 미션 사례)", () => {
+  // 실제 5단계 미션: warmup 50, interval 83, interval 45, interval 83, interval 45, interval 56~75, cooldown 45
+  const segs = [
+    { segment_type: 'warmup', duration_sec: 600, target_type: 'ftp_pct', target_value: '50' },
+    { segment_type: 'interval', duration_sec: 300, target_type: 'ftp_pct', target_value: '83' },
+    { segment_type: 'interval', duration_sec: 180, target_type: 'ftp_pct', target_value: '45' },
+    { segment_type: 'interval', duration_sec: 300, target_type: 'ftp_pct', target_value: '83' },
+    { segment_type: 'interval', duration_sec: 180, target_type: 'ftp_pct', target_value: '45' },
+    { segment_type: 'interval', duration_sec: 600, target_type: 'ftp_pctz', target_value: '56/75' },
+    { segment_type: 'cooldown', duration_sec: 300, target_type: 'ftp_pct', target_value: '45' },
+  ];
+  // FTP 200: 인터벌 목표 166·166·112W 를 모두 달성, 회복 구간은 0W(쉬어도) → 100점
+  const r = computeStepAchievement(segs, [0, 170, 0, 170, 0, 115, 0], 200, 60);
+  assert.equal(r.intervalAchievement, 100);
+  assert.equal(r.score, 100);
+});
+
+test('이름이 휴식·회복이면 제외', () => {
+  const segs = [
+    { segment_type: 'interval', label: '고강도', duration_sec: 300, target_type: 'ftp_pct', target_value: '100' },
+    { segment_type: 'interval', label: '회복 구간', duration_sec: 300, target_type: 'ftp_pct', target_value: '65' },
+  ];
+  const r = computeStepAchievement(segs, [200, 0], 200, 60);
+  assert.equal(r.score, 100);
+});
+
+test('90점 미만은 미달성(passed=false)', () => {
+  const segs = [{ segment_type: 'interval', duration_sec: 600, target_type: 'ftp_pct', target_value: '100' }];
+  const r = computeStepAchievement(segs, [178], 200, 60); // 89%
+  assert.equal(r.score, 89);
+  assert.equal(r.passed, false);
+  assert.equal(isPassedScore(89.9), false);
+  assert.equal(isPassedScore(90), true);
+  assert.equal(isPassedScore(null), true); // 점수 산출 불가 기록은 통과로 간주(기존 데이터)
 });
 
 test('구간 파워가 없으면 전체 평균 파워로 대체 산출', () => {
