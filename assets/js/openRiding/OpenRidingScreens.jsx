@@ -13141,9 +13141,38 @@ function OpenRidingDetail(props) {
                               ❓ 미확인
                             </span>
                           ) : null}
-                          {ltLink || (ltMine && !isCancelled) ? (
+                          {ltLink || (ltMine && !isCancelled) || (!ltMine && ltSaved) ? (
                             <span className="ml-auto inline-flex items-center gap-1 shrink-0">
-                              {ltLink ? (
+                              {!ltMine && ltSaved ? (
+                                ltLink ? (
+                                  /* 라이딩 당일·LiveTrack 시작됨: 녹색 — 눌러서 실시간 위치 보기 */
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1 rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-[11px] font-bold text-emerald-800 leading-4 hover:bg-emerald-200"
+                                    title="Garmin LiveTrack 실시간 위치 보기"
+                                    aria-label={participantRowName(uid, '참가자') + ' LiveTrack 보기'}
+                                    onClick={function () {
+                                      openRidingOpenLiveTrackUrl(ltLink.url);
+                                    }}
+                                  >
+                                    <span className="relative inline-flex h-1.5 w-1.5">
+                                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                      <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                    </span>
+                                    LiveTrack 연결
+                                  </button>
+                                ) : (
+                                  /* LiveTrack 등록자이나 라이딩 당일이 아니거나 아직 시작 전: 회색 표시만 */
+                                  <span
+                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-400 leading-4"
+                                    title="라이딩 당일 LiveTrack이 시작되면 실시간 위치를 볼 수 있습니다"
+                                  >
+                                    <span className="inline-flex h-1.5 w-1.5 rounded-full bg-slate-400" />
+                                    LiveTrack
+                                  </span>
+                                )
+                              ) : null}
+                              {ltMine && ltLink ? (
                                 <button
                                   type="button"
                                   className="inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50 px-2 py-0.5 text-[11px] font-bold text-sky-700 leading-4 hover:bg-sky-100"
