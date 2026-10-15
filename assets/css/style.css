@@ -33865,6 +33865,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .launch-notice-referral__gift-text p { margin: 0; line-height: 1.4; }
 .launch-notice-referral__gift-name { font-size: 15px; font-weight: 700; color: #1e293b; }
 .launch-notice-referral__gift-qty { margin-top: 2px !important; font-size: 22px; font-weight: 800; color: #5b21b6; letter-spacing: -0.01em; }
+.launch-notice-referral__gift-value {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  color: #dc2626;
+  font-size: 12.5px;
+  font-weight: 800;
+  vertical-align: middle;
+  letter-spacing: 0;
+}
 .launch-notice-referral__note { margin-top: 6px !important; color: #64748b; font-size: 12px; }
 .launch-notice-slide--referral .launch-notice-modal__features { margin-bottom: 16px; }
 .launch-notice-referral__cta-box { display: flex; flex-direction: column; gap: 10px; }
