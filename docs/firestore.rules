@@ -305,7 +305,7 @@ service cloud.firestore {
         (request.resource.data.referralCount >= 10 || giftReqIsSiteAdmin()) && // 관리자는 신청 테스트용으로 조건 생략
         request.resource.data.status == 'REQUESTED' &&
         request.resource.data.createdAt == request.time &&
-        giftStockDelta(request.resource.data.size) == 1;
+        giftStockDelta(request.resource.data.size) == 2;
       allow update: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
@@ -323,17 +323,17 @@ service cloud.firestore {
         request.resource.data.referralCount is int && request.resource.data.referralCount >= 10 &&
         request.resource.data.updatedAt == request.time &&
         (request.resource.data.size == resource.data.size ||
-          (giftStockDelta(request.resource.data.size) == 1 && giftStockDelta(resource.data.size) == -1))
+          (giftStockDelta(request.resource.data.size) == 2 && giftStockDelta(resource.data.size) == -2))
       );
       allow delete: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
         resource.data.status == 'REQUESTED' &&
-        giftStockDelta(resource.data.size) == -1
+        giftStockDelta(resource.data.size) == -2
       );
     }
-    // 2026-10-16: 기념품 사이즈별 신청 수량 { XS, S, M, L } — 한도 XS 30 · S 40 · M 80 · L 50.
-    // 본인 신청 생성(+1)·사이즈 변경(-1/+1)·취소(-1)와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
+    // 2026-10-16: 기념품 사이즈별 소진 수량 { XS, S, M, L } — 한도 XS 30 · S 40 · M 80 · L 50, 신청 1건 = 2개.
+    // 본인 신청 생성(+2)·사이즈 변경(-2/+2)·취소(-2)와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
     match /referralGiftStock/{stockId} {
       function giftStockIsSiteAdmin() {
         return request.auth != null &&
@@ -354,19 +354,19 @@ service cloud.firestore {
       }
       function giftStockInc(sz) {
         return giftStockChangedOnly([sz]) &&
-          request.resource.data[sz] == resource.data[sz] + 1 &&
+          request.resource.data[sz] == resource.data[sz] + 2 &&
           request.resource.data[sz] <= giftStockCap(sz);
       }
       function giftStockDec(sz) {
         return giftStockChangedOnly([sz]) &&
-          request.resource.data[sz] == resource.data[sz] - 1 &&
+          request.resource.data[sz] == resource.data[sz] - 2 &&
           request.resource.data[sz] >= 0;
       }
       function giftStockMove(fromSz, toSz) {
         return giftStockChangedOnly([fromSz, toSz]) &&
-          request.resource.data[fromSz] == resource.data[fromSz] - 1 &&
+          request.resource.data[fromSz] == resource.data[fromSz] - 2 &&
           request.resource.data[fromSz] >= 0 &&
-          request.resource.data[toSz] == resource.data[toSz] + 1 &&
+          request.resource.data[toSz] == resource.data[toSz] + 2 &&
           request.resource.data[toSz] <= giftStockCap(toSz);
       }
       allow read: if request.auth != null;
