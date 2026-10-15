@@ -4304,6 +4304,8 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
             <span class="point-badge point-remaining" title="보유 포인트"><span class="point-icon">💎</span><span class="point-value">${formatPoints(remPoints)}</span></span>
             ${privacyColHtml}
           </div>
+          ${canEditAvatar ? `<!-- 친구 초대 이벤트: 내 추천인 코드·가입 친구 수·기념품 신청 (본인 카드만, 비동기 표시) -->
+          <div class="stelvio-referral-row" data-stelvio-referral-row="${user.id}" onclick="event.stopPropagation();" hidden></div>` : ''}
 
         </div>
         <div class="user-details">
@@ -4328,6 +4330,9 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
   containers.forEach(function (container) {
     container.innerHTML = cardsHtml;
   });
+  if (viewerId && window.stelvioReferral && typeof window.stelvioReferral.hydrateProfileReferralRow === 'function') {
+    window.stelvioReferral.hydrateProfileReferralRow(String(viewerId));
+  }
 }
 
 /** 프로필 선택 화면 리스트형 보기 — 카테고리·성명·연결·대시보드·보기·만료일 컬럼 */

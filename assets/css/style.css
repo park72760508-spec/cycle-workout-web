@@ -33778,3 +33778,158 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ===== 2026-10-15: 공지 팝업 슬라이드(1: 중고랜드·앱, 2: 친구 초대 이벤트) ===== */
+.launch-notice-slides {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+}
+.launch-notice-slides::-webkit-scrollbar { display: none; }
+.launch-notice-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow-y: auto;
+}
+.launch-notice-slider-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 6px 0 2px;
+}
+.launch-notice-slider-arrow {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.launch-notice-slider-arrow:disabled { opacity: 0.3; cursor: default; }
+.launch-notice-slider-dots { display: inline-flex; gap: 6px; }
+.launch-notice-slider-dots i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: width 0.2s ease, background 0.2s ease;
+}
+.launch-notice-slider-dots i.is-active { width: 18px; border-radius: 4px; background: #667eea; }
+.launch-notice-referral__badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fee500;
+  color: #3c1e1e;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.launch-notice-referral__gift {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #eef1f5;
+  margin-bottom: 14px;
+}
+.launch-notice-referral__gift img {
+  width: 92px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: #e2e8f0;
+}
+.launch-notice-referral__gift-text p { margin: 0 0 6px; font-size: 14px; color: #334155; line-height: 1.45; }
+.launch-notice-referral__note { color: #64748b !important; font-size: 12.5px !important; }
+.launch-notice-referral__steps {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+}
+.launch-notice-referral__steps li { margin-bottom: 4px; }
+.launch-notice-referral__mycode {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 13px;
+  color: #475569;
+}
+.launch-notice-referral__mycode b { font-size: 16px; letter-spacing: 0.12em; color: #0f172a; }
+.launch-notice-referral__invite {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 16px;
+  border: none;
+  border-radius: 12px;
+  background: #fee500;
+  color: #191919;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.launch-notice-referral__invite:active { transform: scale(0.98); }
+
+/* 프로필 카드: 추천인 코드 · 친구 초대 카운트 · 기념품 신청 (아바타 줄 아래 오른쪽) */
+.stelvio-referral-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #475569;
+}
+.stelvio-referral-row[hidden] { display: none; }
+.stelvio-referral-code b { letter-spacing: 0.08em; color: #0f172a; }
+.stelvio-referral-count {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  font-weight: 700;
+  color: #334155;
+}
+.stelvio-referral-count.is-done { background: #dcfce7; border-color: #86efac; color: #166534; }
+.stelvio-referral-gift-btn {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #16a34a;
+  background: #16a34a;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.stelvio-referral-gift-btn:disabled {
+  border-color: #cbd5e1;
+  background: #e2e8f0;
+  color: #94a3b8;
+  cursor: not-allowed;
+}

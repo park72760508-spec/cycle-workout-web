@@ -236,6 +236,33 @@ service cloud.firestore {
 
     // ===== rides 컬렉션 규칙 (오픈 라이딩방 — 달력·참석 Transaction) =====
     // 클라이언트: openRidingService.js → collection(db, 'rides')
+    // ===== 2026-10-15: 친구 초대 이벤트 =====
+    // 추천인 코드(문서 ID = 6자리 코드) → 소유자 uid. 가입 화면(비로그인)에서도 코드 확인 가능(get만, 목록 불가).
+    match /referralCodes/{code} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if request.auth != null &&
+        code.matches('[A-Z0-9]{6}') &&
+        request.resource.data.keys().hasOnly(['uid', 'createdAt']) &&
+        request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // 추천 기록(문서 ID = 신규 가입자 uid) — users/{uid} 를 처음 만드는 같은 묶음 쓰기에서만 생성 가능
+    // (기존 회원·재가입은 인정 안 됨), 코드 소유자 일치·본인 코드 금지, 이후 수정·삭제 불가.
+    match /referralClaims/{claimUid} {
+      allow read: if request.auth != null &&
+        (resource.data.referrerUid == request.auth.uid || claimUid == request.auth.uid);
+      allow create: if request.auth != null &&
+        claimUid == request.auth.uid &&
+        request.resource.data.keys().hasOnly(['code', 'referrerUid', 'createdAt']) &&
+        request.resource.data.referrerUid != request.auth.uid &&
+        !exists(/databases/$(database)/documents/users/$(claimUid)) &&
+        existsAfter(/databases/$(database)/documents/users/$(claimUid)) &&
+        exists(/databases/$(database)/documents/referralCodes/$(request.resource.data.code)) &&
+        get(/databases/$(database)/documents/referralCodes/$(request.resource.data.code)).data.uid == request.resource.data.referrerUid;
+      allow update, delete: if false;
+    }
+
     // 2026-10-12: 사용자별 Garmin LiveTrack 공유 링크(라이딩 모임 참석자 리스트 LIVE 아이콘) — 본인만 쓰기
     match /garminLiveTrack/{uid} {
       allow read: if request.auth != null;

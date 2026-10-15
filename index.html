@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261009clubMember" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261015referral" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4545,7 +4545,9 @@
     <div class="launch-notice-modal__backdrop" onclick="if(typeof closeLaunchNoticeModal==='function')closeLaunchNoticeModal(false);"></div>
     <div class="launch-notice-modal__card">
       <button type="button" class="launch-notice-modal__close" aria-label="닫기" onclick="if(typeof closeLaunchNoticeModal==='function')closeLaunchNoticeModal(false);">&times;</button>
-      <div class="launch-notice-modal__body">
+      <!-- 2026-10-15: 슬라이드 2장(1: 중고랜드·앱 출시, 2: 친구 초대 이벤트) — 좌우로 넘겨 보기 -->
+      <div class="launch-notice-slides" id="launchNoticeSlides">
+      <div class="launch-notice-modal__body launch-notice-slide">
         <div class="launch-notice-modal__hero">
           <h2 class="launch-notice-modal__title" id="launchNoticeTitle">STELVIO 중고랜드<br/>정식 오픈!</h2>
           <p class="launch-notice-modal__subtitle">라이더와 러너만을 위한 프리미엄 C2C 마켓플레이스</p>
@@ -4577,6 +4579,36 @@
           </a>
         </div>
       </div>
+      <div class="launch-notice-modal__body launch-notice-slide launch-notice-slide--referral">
+        <div class="launch-notice-modal__hero">
+          <p class="launch-notice-referral__badge">EVENT</p>
+          <h2 class="launch-notice-modal__title">친구 초대하고<br/>기념품 받기</h2>
+          <p class="launch-notice-modal__subtitle">친구 <strong>10명</strong> 가입 달성 시 <strong>STELVIO 기념 양말 2개</strong> 증정</p>
+        </div>
+        <div class="launch-notice-referral__gift">
+          <img src="assets/img/stelviogift_720.jpg" alt="STELVIO 기념 양말" loading="lazy" decoding="async" />
+          <div class="launch-notice-referral__gift-text">
+            <p><strong>기념품</strong> : STELVIO 기념 양말</p>
+            <p class="launch-notice-referral__note">*배송비는 수신자 부담</p>
+          </div>
+        </div>
+        <ol class="launch-notice-referral__steps">
+          <li><strong>친구 초대하기</strong>로 카카오톡에 가입 링크와 내 추천인 코드를 보내요.</li>
+          <li>친구가 링크로 가입하면서 <strong>추천인 코드</strong>를 입력하면 1명으로 집계돼요.</li>
+          <li>10명 달성 시 프로필 화면에서 <strong>기념품 신청</strong>을 할 수 있어요.</li>
+        </ol>
+        <p class="launch-notice-referral__mycode" id="launchNoticeMyReferralCode" hidden></p>
+        <button type="button" class="launch-notice-referral__invite" onclick="if(window.stelvioReferral)window.stelvioReferral.shareInvite();">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 3C6.48 3 2 6.58 2 11c0 2.83 1.84 5.31 4.6 6.73-.2.73-.73 2.65-.84 3.06-.13.51.19.5.39.37.16-.11 2.55-1.73 3.58-2.43.74.11 1.5.17 2.27.17 5.52 0 10-3.58 10-8S17.52 3 12 3z"/></svg>
+          친구 초대하기
+        </button>
+      </div>
+      </div>
+      <div class="launch-notice-slider-nav" aria-hidden="false">
+        <button type="button" class="launch-notice-slider-arrow" id="launchNoticePrev" aria-label="이전 안내">&#8249;</button>
+        <span class="launch-notice-slider-dots" id="launchNoticeDots"><i class="is-active"></i><i></i></span>
+        <button type="button" class="launch-notice-slider-arrow" id="launchNoticeNext" aria-label="다음 안내">&#8250;</button>
+      </div>
       <div class="launch-notice-modal__footer">
         <div class="launch-notice-modal__footer-row">
           <label class="launch-notice-modal__dismiss-label">
@@ -4607,7 +4639,8 @@
       }
 
       /* 2026-10-05: "오늘 하루" → "1주일 동안 보지 않기" — 숨김 만료 시각(지금 + 7일)을 저장 */
-      var LS_DISMISS_UNTIL_KEY = 'stelvioLaunchNoticeDismissUntil';
+      /* 2026-10-15: 친구 초대 이벤트 추가 — 이전에 '1주일 동안 보지 않기'한 사용자에게도 새 공지를 1회 보이도록 키 갱신 */
+      var LS_DISMISS_UNTIL_KEY = 'stelvioLaunchNoticeDismissUntil_v2';
       var DISMISS_MS = 7 * 24 * 60 * 60 * 1000;
 
       function isDismissedToday() {
@@ -4615,7 +4648,7 @@
           var until = Number(localStorage.getItem(LS_DISMISS_UNTIL_KEY) || 0);
           if (until > Date.now()) return true;
           if (cookieDismissUntil() > Date.now()) return true;
-          return localStorage.getItem(LS_DISMISS_DATE_KEY) === todayStr(); // 이전 방식(오늘 하루)으로 숨긴 경우
+          return false; // 이전 공지의 '오늘 하루' 숨김은 새 공지에 적용하지 않음
         } catch (e) { return false; }
       }
 
@@ -4633,7 +4666,7 @@
 
       function cookieDismissUntil() {
         try {
-          var m = document.cookie.match(/(?:^|;\s*)stelvioLaunchNoticeUntil=(\d+)/);
+          var m = document.cookie.match(/(?:^|;\s*)stelvioLaunchNoticeUntil2=(\d+)/);
           return m ? Number(m[1]) || 0 : 0;
         } catch (e) { return 0; }
       }
@@ -4642,11 +4675,11 @@
         var until = Date.now() + DISMISS_MS;
         try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
         // 앱 웹뷰가 localStorage 를 비우는 경우 대비 — 쿠키(7일)에도 저장
-        try { document.cookie = 'stelvioLaunchNoticeUntil=' + until + '; max-age=' + Math.floor(DISMISS_MS / 1000) + '; path=/; SameSite=Lax'; } catch (e3) {}
+        try { document.cookie = 'stelvioLaunchNoticeUntil2=' + until + '; max-age=' + Math.floor(DISMISS_MS / 1000) + '; path=/; SameSite=Lax'; } catch (e3) {}
         try {
           var uid = currentUidForNotice();
           if (uid && window.firestore && typeof window.firestore.collection === 'function') {
-            window.firestore.collection('users').doc(uid).set({ launchNoticeDismissUntil: until }, { merge: true }).catch(function () {});
+            window.firestore.collection('users').doc(uid).set({ launchNoticeDismissUntil2: until }, { merge: true }).catch(function () {});
           }
         } catch (e2) {}
       }
@@ -4671,7 +4704,7 @@
       function readServerDismissUntil(uid) {
         return window.firestore.collection('users').doc(uid).get().then(function (snap) {
           var d = snap && snap.exists ? (snap.data() || {}) : {};
-          return Number(d.launchNoticeDismissUntil) || 0;
+          return Number(d.launchNoticeDismissUntil2) || 0;
         });
       }
 
@@ -4698,17 +4731,55 @@
           if (until > Date.now()) {
             // 계정 기록으로 숨김 — 이 기기에도 다시 저장(localStorage + 쿠키)
             try { localStorage.setItem(LS_DISMISS_UNTIL_KEY, String(until)); } catch (e) {}
-            try { document.cookie = 'stelvioLaunchNoticeUntil=' + until + '; max-age=' + Math.max(60, Math.floor((until - Date.now()) / 1000)) + '; path=/; SameSite=Lax'; } catch (e4) {}
+            try { document.cookie = 'stelvioLaunchNoticeUntil2=' + until + '; max-age=' + Math.max(60, Math.floor((until - Date.now()) / 1000)) + '; path=/; SameSite=Lax'; } catch (e4) {}
             return;
           }
           var cb = document.getElementById('launchNoticeDismissToday');
           if (cb) cb.checked = false;
           modal.classList.remove('hidden');
+          setupLaunchNoticeSlider();
+          fillMyReferralCode();
           requestAnimationFrame(function () {
             modal.classList.add('launch-notice-modal--visible');
           });
         });
       };
+
+      /* 슬라이드: 가로 스크롤 스냅 + 점·화살표 */
+      var sliderBound = false;
+      function setupLaunchNoticeSlider() {
+        var track = document.getElementById('launchNoticeSlides');
+        var dots = document.querySelectorAll('#launchNoticeDots i');
+        var prev = document.getElementById('launchNoticePrev');
+        var next = document.getElementById('launchNoticeNext');
+        if (!track) return;
+        track.scrollLeft = 0;
+        function idx() { return Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); }
+        function paint() {
+          var i = idx();
+          for (var k = 0; k < dots.length; k++) dots[k].classList.toggle('is-active', k === i);
+          if (prev) prev.disabled = i <= 0;
+          if (next) next.disabled = i >= dots.length - 1;
+        }
+        function go(i) { track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' }); }
+        paint();
+        if (sliderBound) return;
+        sliderBound = true;
+        track.addEventListener('scroll', function () { window.requestAnimationFrame(paint); }, { passive: true });
+        if (prev) prev.addEventListener('click', function () { go(Math.max(0, idx() - 1)); });
+        if (next) next.addEventListener('click', function () { go(Math.min(dots.length - 1, idx() + 1)); });
+        for (var d = 0; d < dots.length; d++) {
+          (function (n) { dots[n].addEventListener('click', function () { go(n); }); })(d);
+        }
+      }
+      function fillMyReferralCode() {
+        var el = document.getElementById('launchNoticeMyReferralCode');
+        if (!el || !window.stelvioReferral) return;
+        window.stelvioReferral.ensureMyReferralCode().then(function (code) {
+          el.innerHTML = '내 추천인 코드 <b>' + code + '</b>';
+          el.hidden = false;
+        }).catch(function () {});
+      }
 
       window.closeLaunchNoticeModal = function (dontShowToday) {
         var modal = document.getElementById('launchNoticeModal');
@@ -4916,6 +4987,19 @@
                   <option value="PRO">PRO (국가대표, 프로 선수)</option>
                 </select>
               </div>
+            </div>
+            <!-- 추천인 코드 (선택) — 친구 초대 링크(?ref=)로 접속하면 자동 입력 -->
+            <div class="auth-input-group">
+              <label for="registerReferralInput" class="auth-label-left">추천인 코드 (선택)</label>
+              <input
+                type="text"
+                id="registerReferralInput"
+                placeholder="예: AB12CD"
+                autocomplete="off"
+                autocapitalize="characters"
+                maxlength="6"
+                oninput="this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '')"
+              >
             </div>
             
             <!-- 제출 버튼 -->
@@ -9253,10 +9337,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js?v=ftp-red-20261014"></script>
+<!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
+<script type="module" src="assets/js/referral/stelvioReferral.js?v=20261015a"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20261009aicache"></script>
+  <script src="assets/js/userManager.js?v=20261015referral"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -32640,6 +32726,12 @@
       
       // 사용자 등록 화면 표시
       const registerScreen = document.getElementById('registerScreen');
+      /* 친구 초대 링크로 접속했다면 추천인 코드 자동 입력 */
+      try {
+        var _refIn = document.getElementById('registerReferralInput');
+        var _refCode = window.stelvioReferral && window.stelvioReferral.pendingReferralCode();
+        if (_refIn && _refCode && !_refIn.value) _refIn.value = _refCode;
+      } catch (_eRef) {}
       if (registerScreen) {
         // 스타일 강제 설정
         registerScreen.classList.add('active');
@@ -32932,6 +33024,26 @@
         submitBtn.textContent = '가입 중...';
       }
       
+      /* 친구 초대 추천인 코드(선택) — 입력했다면 계정을 만들기 전에 유효한 코드인지 확인 */
+      var _referralCode = '';
+      var _referrerUid = '';
+      var _referralInputEl = document.getElementById('registerReferralInput');
+      var _referralRaw = _referralInputEl ? String(_referralInputEl.value || '').trim() : '';
+      if (_referralRaw) {
+        var _refSvc = window.stelvioReferral;
+        _referralCode = _refSvc ? _refSvc.normalizeReferralCode(_referralRaw) : '';
+        if (_referralCode) {
+          showRegisterStatus('추천인 코드를 확인하는 중...', 'info');
+          try { _referrerUid = await _refSvc.lookupReferralCode(_referralCode); } catch (_eLookup) { _referrerUid = ''; }
+        }
+        if (!_referralCode || !_referrerUid) {
+          showRegisterStatus('추천인 코드를 찾을 수 없습니다. 코드를 확인하거나 비워 두고 가입해 주세요.', 'error');
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.classList.remove('loading'); submitBtn.textContent = '가입 완료'; }
+          if (_referralInputEl) _referralInputEl.focus();
+          return;
+        }
+      }
+      
       showRegisterStatus('계정을 생성하는 중...', 'info');
       
       try {
@@ -33171,7 +33283,13 @@
         for (var _saveAttempt = 0; _saveAttempt < _saveRetryDelays.length; _saveAttempt++) {
           await new Promise(r => setTimeout(r, _saveRetryDelays[_saveAttempt]));
           try {
-            await window.saveNewUserToFirestore(user.uid, userData);
+            if (_referralCode && _referrerUid && window.stelvioReferral) {
+              // 회원 문서 + 추천 기록을 한 번에 저장(추천 기록이 거부되면 회원 문서만 저장)
+              await window.stelvioReferral.saveNewUserWithReferral(user.uid, userData, _referralCode, _referrerUid, _saveAttempt === _saveRetryDelays.length - 1);
+              window.stelvioReferral.clearPendingReferralCode();
+            } else {
+              await window.saveNewUserToFirestore(user.uid, userData);
+            }
             _saveOk = true;
             break;
           } catch (_saveErr) {
