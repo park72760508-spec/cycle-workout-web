@@ -33953,3 +33953,73 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   color: #94a3b8;
   cursor: not-allowed;
 }
+
+/* ===== 친구 초대 기념품 신청 (2026-10-16) ===== */
+.stelvio-referral-gift-btn.is-applied { background: #fff; color: #16a34a; }
+.stelvio-gift-modal {
+  position: fixed; inset: 0; z-index: 10020001;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.stelvio-gift-modal__overlay { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.55); }
+.stelvio-gift-modal__card {
+  position: relative; width: 100%; max-width: 400px; max-height: calc(100vh - 32px); overflow-y: auto;
+  background: #fff; border-radius: 16px; padding: 20px 18px 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+  color: #0f172a; text-align: left;
+}
+.stelvio-gift-modal__title { margin: 0 0 6px; font-size: 18px; font-weight: 800; }
+.stelvio-gift-modal__desc { margin: 0 0 14px; font-size: 13px; color: #475569; line-height: 1.5; }
+.stelvio-gift-modal__note { margin: 12px 0 0; font-size: 12px; color: #ea580c; line-height: 1.5; }
+.stelvio-gift-modal__actions { display: flex; gap: 8px; margin-top: 14px; }
+.stelvio-gift-modal__actions .stelvio-gift-btn { flex: 1; padding: 11px 0; font-size: 15px; }
+.stelvio-gift-form { display: flex; flex-direction: column; gap: 12px; }
+.stelvio-gift-label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: #334155; }
+.stelvio-gift-input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px;
+  font-size: 15px; font-weight: 400; color: #0f172a; background: #fff;
+}
+.stelvio-gift-input[readonly] { background: #f8fafc; }
+.stelvio-gift-input:focus { outline: none; border-color: #16a34a; box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15); }
+.stelvio-gift-zip-row { display: flex; gap: 8px; }
+.stelvio-gift-zip-row .stelvio-gift-input { flex: 1; min-width: 0; }
+.stelvio-gift-sizes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.stelvio-gift-size { position: relative; cursor: pointer; }
+.stelvio-gift-size input { position: absolute; opacity: 0; pointer-events: none; }
+.stelvio-gift-size span {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px;
+  border: 1px solid #cbd5e1; border-radius: 10px; background: #fff;
+}
+.stelvio-gift-size b { font-size: 15px; color: #0f172a; }
+.stelvio-gift-size small { font-size: 10.5px; font-weight: 500; color: #64748b; white-space: nowrap; }
+.stelvio-gift-size input:checked + span { border-color: #16a34a; background: #f0fdf4; box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.25); }
+.stelvio-gift-size input:checked + span b { color: #15803d; }
+.stelvio-gift-btn {
+  padding: 8px 14px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer;
+  border: 1px solid #cbd5e1; background: #fff; color: #334155; white-space: nowrap;
+}
+.stelvio-gift-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.stelvio-gift-btn--primary { background: #16a34a; border-color: #16a34a; color: #fff; }
+.stelvio-gift-btn--outline { border-color: #16a34a; color: #16a34a; }
+.stelvio-gift-btn--ghost { background: #f1f5f9; border-color: #e2e8f0; }
+.stelvio-gift-summary { display: grid; grid-template-columns: 64px 1fr; gap: 8px 10px; margin: 0; font-size: 14px; }
+.stelvio-gift-summary dt { color: #64748b; font-weight: 600; }
+.stelvio-gift-summary dd { margin: 0; color: #0f172a; word-break: break-all; }
+/* 관리자 목록 */
+.stelvio-gift-admin { grid-column: 1 / -1; width: 100%; text-align: left; }
+.stelvio-gift-admin__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.stelvio-gift-admin__stat { font-size: 14px; color: #0f172a; }
+.stelvio-gift-admin__stat span { font-size: 12px; color: #64748b; }
+.stelvio-gift-admin__btns { display: flex; gap: 6px; }
+.stelvio-gift-admin__empty { padding: 24px 0; text-align: center; color: #64748b; font-size: 14px; }
+.stelvio-gift-admin__list { display: flex; flex-direction: column; gap: 8px; }
+.stelvio-gift-row { padding: 10px 12px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.stelvio-gift-row.is-dup { border-color: #fdba74; background: #fff7ed; }
+.stelvio-gift-row__top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.stelvio-gift-row__name { color: #0f172a; }
+.stelvio-gift-row__phone { color: #334155; }
+.stelvio-gift-row__size { padding: 1px 8px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 12px; font-weight: 800; }
+.stelvio-gift-row__count { margin-left: auto; font-size: 12px; font-weight: 700; color: #166534; }
+.stelvio-gift-row__count.is-short { color: #dc2626; }
+.stelvio-gift-row__addr { margin-top: 4px; font-size: 13px; color: #334155; word-break: break-all; }
+.stelvio-gift-row__meta { margin-top: 4px; font-size: 11.5px; color: #94a3b8; }
+.stelvio-gift-row .is-dup { color: #c2410c; font-weight: 700; }
+.stelvio-gift-dup { color: #ea580c; font-weight: 700; }

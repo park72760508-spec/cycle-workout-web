@@ -758,16 +758,36 @@ function setProfileScreenListMode(mode) {
 
 var PROFILE_VIEW_MODE_CARD = 'card';
 var PROFILE_VIEW_MODE_LIST = 'list';
+/** 관리자 전용: 친구 초대 기념품 신청 목록(2026-10-16) */
+var PROFILE_VIEW_MODE_GIFT = 'gift';
 
 function getProfileScreenViewMode() {
-  return window._profileScreenViewMode === PROFILE_VIEW_MODE_LIST
-    ? PROFILE_VIEW_MODE_LIST
-    : PROFILE_VIEW_MODE_CARD;
+  var m = window._profileScreenViewMode;
+  if (m === PROFILE_VIEW_MODE_LIST) return PROFILE_VIEW_MODE_LIST;
+  if (m === PROFILE_VIEW_MODE_GIFT && window._profileScreenContext) return PROFILE_VIEW_MODE_GIFT;
+  return PROFILE_VIEW_MODE_CARD;
 }
 
 function setProfileScreenViewMode(mode) {
   window._profileScreenViewMode =
-    mode === PROFILE_VIEW_MODE_LIST ? PROFILE_VIEW_MODE_LIST : PROFILE_VIEW_MODE_CARD;
+    mode === PROFILE_VIEW_MODE_LIST || mode === PROFILE_VIEW_MODE_GIFT ? mode : PROFILE_VIEW_MODE_CARD;
+}
+
+/** 기념품 신청 탭 — 이름/연락처 검색어를 그대로 적용 */
+function renderProfileGiftRequests(reload) {
+  var userList = document.getElementById('userList');
+  if (!userList) return;
+  if (!window.stelvioReferral || typeof window.stelvioReferral.renderAdminGiftRequests !== 'function') {
+    userList.innerHTML = '<div class="empty-state"><div class="empty-state-title">기념품 신청 모듈을 불러오는 중입니다</div></div>';
+    return;
+  }
+  var nameInput = document.getElementById('profileSearchName');
+  var contactInput = document.getElementById('profileSearchContact');
+  window.stelvioReferral.renderAdminGiftRequests(userList, {
+    name: nameInput && nameInput.value ? String(nameInput.value).trim() : '',
+    contact: contactInput && contactInput.value ? String(contactInput.value).trim() : '',
+    reload: !!reload
+  });
 }
 
 function getProfileScreenUsersForListMode(baseUsers) {
@@ -821,6 +841,11 @@ function renderProfileScreenSubtitle(stats) {
     '" data-profile-view-mode="' +
     PROFILE_VIEW_MODE_LIST +
     '">리스트</button>' +
+    '<button type="button" class="stelvio-toggle-btn' +
+    (viewMode === PROFILE_VIEW_MODE_GIFT ? ' active' : '') +
+    '" data-profile-view-mode="' +
+    PROFILE_VIEW_MODE_GIFT +
+    '">기념품 신청</button>' +
     '</div>';
   el.innerHTML = html;
   el.style.display = '';
@@ -837,7 +862,14 @@ function bindProfileScreenSubtitleActions() {
         : null;
     if (viewBtn) {
       ev.preventDefault();
-      setProfileScreenViewMode(viewBtn.getAttribute('data-profile-view-mode'));
+      var nextMode = viewBtn.getAttribute('data-profile-view-mode');
+      var wasGift = getProfileScreenViewMode() === PROFILE_VIEW_MODE_GIFT;
+      setProfileScreenViewMode(nextMode);
+      if (nextMode === PROFILE_VIEW_MODE_GIFT && !wasGift) {
+        renderProfileGiftRequests(true);
+        if (window._profileScreenStats) renderProfileScreenSubtitle(window._profileScreenStats);
+        return;
+      }
       if (typeof refreshProfileScreenUserList === 'function') {
         refreshProfileScreenUserList();
       }
@@ -909,6 +941,12 @@ function refreshProfileScreenUserList() {
   var userList = document.getElementById('userList');
   var ctx = window._profileScreenContext;
   if (!userList || !ctx) return;
+
+  if (getProfileScreenViewMode() === PROFILE_VIEW_MODE_GIFT) {
+    renderProfileGiftRequests(false);
+    if (window._profileScreenStats) renderProfileScreenSubtitle(window._profileScreenStats);
+    return;
+  }
 
   var modeUsers = getProfileScreenUsersForListMode();
   window._profileScreenAllUsers = modeUsers.slice();
@@ -4424,6 +4462,10 @@ function renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetI
 
 /** 프로필 선택 화면: 현재 보기 모드(카드/리스트)에 따라 렌더 함수 분기 */
 function renderProfileUserListOrCards(usersToRender, viewerGrade, viewerId, targetIds, renderOpts) {
+  if (getProfileScreenViewMode() === PROFILE_VIEW_MODE_GIFT) {
+    renderProfileGiftRequests(true);
+    return;
+  }
   if (getProfileScreenViewMode() === PROFILE_VIEW_MODE_LIST) {
     renderProfileUserListRows(usersToRender, viewerGrade, viewerId, targetIds, renderOpts);
   } else {

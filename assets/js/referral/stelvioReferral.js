@@ -7,6 +7,8 @@
  * - 추천 인정: 신규 가입 시 users/{uid} 생성과 같은 묶음 쓰기(batch)로만 referralClaims/{신규 uid} 를 만들 수 있다
  *   (보안 규칙: 가입 전 문서 없음 + 가입 후 문서 있음 + 코드 소유자 일치 + 본인 코드 불가) → 기존 회원·재가입은 인정 안 됨.
  * - 카운트: referralClaims 중 referrerUid == 나 인 문서 수. 10명 이상이면 기념품 신청(구글 폼) 활성.
+ * - 기념품 신청(2026-10-16): 구글 폼 대신 자체 신청 화면 — referralGiftRequests/{uid} 문서 1개(생성 전용)로
+ *   계정당 1회만 신청 가능. 관리자는 마이 화면 '기념품 신청' 탭에서 목록 확인·CSV(배송 파일) 다운로드.
  * - 공유: 카카오 JavaScript 키(window.STELVIO_KAKAO_JS_KEY)가 있으면 카카오톡 공유, 없으면 기기 공유 시트 → 링크 복사.
  */
 import {
@@ -24,7 +26,13 @@ import {
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
 
 export const REFERRAL_GOAL = 10;
-export const GIFT_FORM_URL = 'https://forms.gle/F8xocpUgQHaT78f79';
+export const GIFT_SIZES = [
+  { value: 'XS', label: 'XS', range: '225~240mm' },
+  { value: 'S', label: 'S', range: '240~255mm' },
+  { value: 'M', label: 'M', range: '255~270mm' },
+  { value: 'L', label: 'L', range: '270~285mm' }
+];
+const GIFT_REQ_COLLECTION = 'referralGiftRequests';
 export const GIFT_IMAGE_URL = 'https://stelvio.ai.kr/assets/img/stelviogift_v2_720.jpg';
 const SITE_URL = 'https://stelvio.ai.kr/';
 const LS_REF_KEY = 'stelvioPendingReferralCode';
@@ -266,8 +274,10 @@ export async function hydrateProfileReferralRow(uid) {
   if (!els.length) return;
   let code = '';
   let count = 0;
+  let applied = false;
   try {
     [code, count] = await Promise.all([ensureMyReferralCode(uid), countMyReferrals(uid)]);
+    if (count >= REFERRAL_GOAL) applied = !!(await getMyGiftRequest(uid).catch(() => null));
   } catch (e) {
     console.warn('[referral] 프로필 표시 실패:', e && e.message);
     return;
@@ -278,18 +288,419 @@ export async function hydrateProfileReferralRow(uid) {
       '<span class="stelvio-referral-code" title="내 추천인 코드">추천인 코드 <b>' + code + '</b></span>' +
       '<span class="stelvio-referral-count' + (done ? ' is-done' : '') + '" title="나를 추천인으로 가입한 친구 수">🎁 ' +
       count + ' / ' + REFERRAL_GOAL + '</span>' +
-      '<button type="button" class="stelvio-referral-gift-btn" ' + (done ? '' : 'disabled ') +
-      'title="' + (done ? '기념품 신청서 작성' : '친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다') + '">기념품 신청</button>';
+      '<button type="button" class="stelvio-referral-gift-btn' + (applied ? ' is-applied' : '') + '" ' + (done ? '' : 'disabled ') +
+      'title="' + (done ? (applied ? '신청 내역 보기' : '기념품 신청서 작성') : '친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다') + '">' +
+      (applied ? '신청 완료' : '기념품 신청') + '</button>';
     el.hidden = false;
     const btn = el.querySelector('.stelvio-referral-gift-btn');
     if (btn && done) {
       btn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        if (typeof window.openStelvioExternalUrl === 'function') window.openStelvioExternalUrl(GIFT_FORM_URL);
-        else window.open(GIFT_FORM_URL, '_blank', 'noopener,noreferrer');
+        openGiftRequestModal(uid);
       });
     }
   });
+}
+
+/* ===== 기념품 신청 (2026-10-16) ===== */
+
+function esc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function formatPhone(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length === 11) return d.slice(0, 3) + '-' + d.slice(3, 7) + '-' + d.slice(7);
+  if (d.length === 10) return d.slice(0, 3) + '-' + d.slice(3, 6) + '-' + d.slice(6);
+  return d;
+}
+
+function sizeLabel(v) {
+  const s = GIFT_SIZES.find((x) => x.value === v);
+  return s ? s.label + ' (' + s.range + ')' : String(v || '');
+}
+
+function tsToDate(ts) {
+  if (ts && typeof ts.toDate === 'function') return ts.toDate();
+  return null;
+}
+
+function fmtDateTime(d) {
+  if (!d) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+export async function getMyGiftRequest(uidArg) {
+  const fs = db();
+  const uid = uidArg || currentUid();
+  if (!fs || !uid) return null;
+  const snap = await getDoc(doc(fs, GIFT_REQ_COLLECTION, uid));
+  return snap.exists() ? snap.data() : null;
+}
+
+/** 주소 검색 — 중고랜드(marketScreen.js openDaumPostcode)와 동일: .embed()로 오버레이 안에 렌더링(iOS 팝업 차단 회피) */
+function openDaumPostcode(onComplete) {
+  function launch() {
+    const overlay = document.createElement('div');
+    overlay.className = 'competition-postcode-overlay';
+    overlay.innerHTML =
+      '<div class="competition-postcode-modal">' +
+      '  <div class="competition-postcode-header">' +
+      '    <span>주소 검색</span>' +
+      '    <button type="button" class="competition-postcode-close" aria-label="닫기">&times;</button>' +
+      '  </div>' +
+      '  <div class="competition-postcode-embed"></div>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    let removed = false;
+    const remove = () => {
+      if (removed) return;
+      removed = true;
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+    };
+    overlay.querySelector('.competition-postcode-close').addEventListener('click', remove);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) remove();
+    });
+    new window.daum.Postcode({
+      oncomplete: (data) => {
+        let addr = data.userSelectedType === 'R' ? data.roadAddress : data.jibunAddress;
+        let extra = '';
+        if (data.userSelectedType === 'R') {
+          if (data.bname) extra += data.bname;
+          if (data.buildingName) extra += extra ? ', ' + data.buildingName : data.buildingName;
+          if (extra) addr += ' (' + extra + ')';
+        }
+        remove();
+        onComplete({ zonecode: data.zonecode, address: addr });
+      },
+      width: '100%',
+      height: '100%'
+    }).embed(overlay.querySelector('.competition-postcode-embed'));
+  }
+  if (window.daum && window.daum.Postcode) {
+    launch();
+    return;
+  }
+  const script = document.createElement('script');
+  script.src = '//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js';
+  script.onload = launch;
+  script.onerror = () => alert('우편번호 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.');
+  document.body.appendChild(script);
+}
+
+function closeGiftModal() {
+  const m = document.getElementById('stelvioGiftRequestModal');
+  if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+function showGiftModal(innerHtml) {
+  closeGiftModal();
+  const m = document.createElement('div');
+  m.id = 'stelvioGiftRequestModal';
+  m.className = 'stelvio-gift-modal';
+  m.innerHTML =
+    '<div class="stelvio-gift-modal__overlay" data-gift-close></div>' +
+    '<div class="stelvio-gift-modal__card" role="dialog" aria-modal="true" aria-labelledby="stelvioGiftTitle">' + innerHtml + '</div>';
+  m.addEventListener('click', (e) => {
+    if (e.target.closest('[data-gift-close]')) closeGiftModal();
+  });
+  document.body.appendChild(m);
+  return m;
+}
+
+function giftSummaryHtml(req) {
+  const rows = [
+    ['성명', req.name],
+    ['연락처', req.phone],
+    ['주소', '(' + req.zipCode + ') ' + req.address1 + ' ' + req.address2],
+    ['사이즈', sizeLabel(req.size)],
+    ['신청일', fmtDateTime(tsToDate(req.createdAt))]
+  ];
+  return (
+    '<dl class="stelvio-gift-summary">' +
+    rows.map((r) => '<dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd>').join('') +
+    '</dl>'
+  );
+}
+
+/** 기념품 신청 화면 — 이미 신청했으면 신청 내역만 보여 준다(계정당 1회) */
+export async function openGiftRequestModal(uidArg) {
+  const uid = uidArg || currentUid();
+  if (!uid || uid !== currentUid()) {
+    toast('로그인한 본인 계정에서만 신청할 수 있습니다.', 'error');
+    return;
+  }
+  let existing = null;
+  let count = 0;
+  try {
+    [existing, count] = await Promise.all([getMyGiftRequest(uid), countMyReferrals(uid)]);
+  } catch (e) {
+    toast('신청 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    return;
+  }
+  if (existing) {
+    showGiftModal(
+      '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청 완료</h3>' +
+      '<p class="stelvio-gift-modal__desc">기념품 신청이 접수되었습니다. 기념품은 계정당 1회만 신청할 수 있습니다.</p>' +
+      giftSummaryHtml(existing) +
+      '<p class="stelvio-gift-modal__note">배송비 수신자 부담 · 신청 내용 변경은 STELVIO 관리자에게 문의해 주세요.</p>' +
+      '<div class="stelvio-gift-modal__actions"><button type="button" class="stelvio-gift-btn stelvio-gift-btn--primary" data-gift-close>확인</button></div>'
+    );
+    return;
+  }
+  if (count < REFERRAL_GOAL) {
+    toast('친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다. (현재 ' + count + '명)', 'info');
+    return;
+  }
+
+  let me = null;
+  try {
+    me = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+  } catch (e) {}
+  const prefillName = me && String(me.id) === uid ? me.name || '' : '';
+  const prefillPhone = me && String(me.id) === uid ? formatPhone(me.contact || '') : '';
+
+  const m = showGiftModal(
+    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청</h3>' +
+    '<p class="stelvio-gift-modal__desc">STELVIO 기념 양말 2개를 보내 드립니다. 받으실 정보를 정확히 입력해 주세요.</p>' +
+    '<form class="stelvio-gift-form" novalidate>' +
+    '  <label class="stelvio-gift-label">성명<input type="text" class="stelvio-gift-input" name="name" maxlength="30" autocomplete="name" value="' + esc(prefillName) + '" /></label>' +
+    '  <label class="stelvio-gift-label">연락처<input type="tel" class="stelvio-gift-input" name="phone" maxlength="13" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" value="' + esc(prefillPhone) + '" /></label>' +
+    '  <div class="stelvio-gift-label">주소' +
+    '    <div class="stelvio-gift-zip-row">' +
+    '      <input type="text" class="stelvio-gift-input" name="zipCode" placeholder="우편번호" readonly />' +
+    '      <button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-zip>주소 검색</button>' +
+    '    </div>' +
+    '    <input type="text" class="stelvio-gift-input" name="address1" placeholder="주소" readonly />' +
+    '    <input type="text" class="stelvio-gift-input" name="address2" maxlength="100" placeholder="상세주소" />' +
+    '  </div>' +
+    '  <div class="stelvio-gift-label">사이즈' +
+    '    <div class="stelvio-gift-sizes">' +
+    GIFT_SIZES.map(
+      (sz) =>
+        '<label class="stelvio-gift-size"><input type="radio" name="size" value="' + sz.value + '" />' +
+        '<span><b>' + sz.label + '</b><small>' + sz.range + '</small></span></label>'
+    ).join('') +
+    '    </div>' +
+    '  </div>' +
+    '  <p class="stelvio-gift-modal__note">배송비 수신자 부담 · 기념품은 계정당 1회만 신청할 수 있으며, 신청 후에는 수정할 수 없습니다.</p>' +
+    '  <div class="stelvio-gift-modal__actions">' +
+    '    <button type="button" class="stelvio-gift-btn stelvio-gift-btn--ghost" data-gift-close>취소</button>' +
+    '    <button type="submit" class="stelvio-gift-btn stelvio-gift-btn--primary">신청하기</button>' +
+    '  </div>' +
+    '</form>'
+  );
+  const form = m.querySelector('form');
+  const f = (n) => form.elements[n];
+  f('phone').addEventListener('input', () => {
+    f('phone').value = formatPhone(f('phone').value);
+  });
+  m.querySelector('[data-gift-zip]').addEventListener('click', () => {
+    openDaumPostcode((r) => {
+      f('zipCode').value = r.zonecode;
+      f('address1').value = r.address;
+      f('address2').focus();
+    });
+  });
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const name = f('name').value.trim();
+    const phone = formatPhone(f('phone').value);
+    const zipCode = f('zipCode').value.trim();
+    const address1 = f('address1').value.trim();
+    const address2 = f('address2').value.trim();
+    const sizeEl = form.querySelector('input[name="size"]:checked');
+    const size = sizeEl ? sizeEl.value : '';
+    if (!name) return toast('성명을 입력해 주세요.', 'error');
+    if (!/^\d{2,3}-\d{3,4}-\d{4}$/.test(phone)) return toast('연락처를 정확히 입력해 주세요.', 'error');
+    if (!zipCode || !address1) return toast('주소 검색으로 받으실 주소를 입력해 주세요.', 'error');
+    if (!address2) return toast('상세주소를 입력해 주세요.', 'error');
+    if (!size) return toast('사이즈를 선택해 주세요.', 'error');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '신청 중…';
+    try {
+      // 문서 ID = 내 uid, 보안 규칙상 생성만 가능(이미 있으면 거부) → 계정당 1회
+      await setDoc(doc(db(), GIFT_REQ_COLLECTION, uid), {
+        uid, name, phone, zipCode, address1, address2, size,
+        referralCount: count,
+        status: 'REQUESTED',
+        createdAt: serverTimestamp()
+      });
+      closeGiftModal();
+      toast('기념품 신청이 접수되었습니다.', 'success');
+      hydrateProfileReferralRow(uid);
+    } catch (e) {
+      const already = await getMyGiftRequest(uid).catch(() => null);
+      toast(already ? '이미 기념품을 신청하셨습니다.' : '신청에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      if (already) {
+        closeGiftModal();
+        hydrateProfileReferralRow(uid);
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '신청하기';
+      }
+    }
+  });
+}
+
+/* ----- 관리자: 마이 화면 '기념품 신청' 탭 ----- */
+
+let adminGiftRows = [];
+
+function giftDupKeys(r) {
+  const phone = String(r.phone || '').replace(/\D/g, '');
+  const addr = (String(r.zipCode || '') + String(r.address1 || '') + String(r.address2 || '')).replace(/[\s,.()-]/g, '');
+  return { phone, addr };
+}
+
+async function loadAdminGiftRows() {
+  const fs = db();
+  const snap = await getDocs(collection(fs, GIFT_REQ_COLLECTION));
+  const rows = [];
+  snap.forEach((d) => rows.push(Object.assign({ id: d.id }, d.data())));
+  rows.sort((a, b) => {
+    const ta = tsToDate(a.createdAt);
+    const tb = tsToDate(b.createdAt);
+    return (tb ? tb.getTime() : 0) - (ta ? ta.getTime() : 0);
+  });
+  // 현재 초대 인원(신청 당시 값과 별개로 서버 집계) — 관리자만 referralClaims 집계 가능
+  await Promise.all(
+    rows.map((r) =>
+      countMyReferrals(r.uid || r.id)
+        .then((n) => { r.liveCount = n; })
+        .catch(() => { r.liveCount = null; })
+    )
+  );
+  // 다른 계정이 같은 연락처·주소로 신청한 경우 표시
+  const phoneMap = new Map();
+  const addrMap = new Map();
+  rows.forEach((r) => {
+    const k = giftDupKeys(r);
+    if (k.phone) phoneMap.set(k.phone, (phoneMap.get(k.phone) || 0) + 1);
+    if (k.addr) addrMap.set(k.addr, (addrMap.get(k.addr) || 0) + 1);
+  });
+  rows.forEach((r) => {
+    const k = giftDupKeys(r);
+    r.dupPhone = !!k.phone && phoneMap.get(k.phone) > 1;
+    r.dupAddr = !!k.addr && addrMap.get(k.addr) > 1;
+  });
+  return rows;
+}
+
+function adminGiftMatches(r, nameQuery, contactDigits) {
+  if (nameQuery && String(r.name || '').indexOf(nameQuery) < 0) return false;
+  if (contactDigits && String(r.phone || '').replace(/\D/g, '').indexOf(contactDigits) < 0) return false;
+  return true;
+}
+
+/**
+ * 관리자 마이 화면 '기념품 신청' 탭 — 신청 목록 + CSV 다운로드
+ * @param {HTMLElement} container
+ * @param {{ name?: string, contact?: string, reload?: boolean }} [opts]
+ */
+export async function renderAdminGiftRequests(container, opts) {
+  if (!container) return;
+  opts = opts || {};
+  if (!adminGiftRows.length || opts.reload !== false) {
+    container.innerHTML = '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">기념품 신청 목록을 불러오는 중…</p></div>';
+    try {
+      adminGiftRows = await loadAdminGiftRows();
+    } catch (e) {
+      container.innerHTML =
+        '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">신청 목록을 불러오지 못했습니다. (' + esc(e && e.message) + ')</p></div>';
+      return;
+    }
+  }
+  const nameQuery = String(opts.name || '').trim();
+  const contactDigits = String(opts.contact || '').replace(/\D/g, '');
+  const rows = adminGiftRows.filter((r) => adminGiftMatches(r, nameQuery, contactDigits));
+  const dupCount = adminGiftRows.filter((r) => r.dupPhone || r.dupAddr).length;
+
+  const sizeCounts = GIFT_SIZES.map((sz) => sz.label + ' ' + adminGiftRows.filter((r) => r.size === sz.value).length).join(' · ');
+  let html =
+    '<div class="stelvio-gift-admin">' +
+    '<div class="stelvio-gift-admin__head">' +
+    '<div class="stelvio-gift-admin__stat">신청 <b>' + adminGiftRows.length + '</b>건 <span>(' + sizeCounts + ')</span>' +
+    (dupCount ? ' <span class="stelvio-gift-dup">중복 의심 ' + dupCount + '건</span>' : '') + '</div>' +
+    '<div class="stelvio-gift-admin__btns">' +
+    '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-admin-reload>새로고침</button>' +
+    '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--primary" data-gift-admin-csv' + (adminGiftRows.length ? '' : ' disabled') + '>CSV 다운로드</button>' +
+    '</div></div>';
+  if (!rows.length) {
+    html += '<p class="stelvio-gift-admin__empty">' + (nameQuery || contactDigits ? '검색 결과가 없습니다.' : '아직 기념품 신청이 없습니다.') + '</p>';
+  } else {
+    html += '<div class="stelvio-gift-admin__list">';
+    rows.forEach((r) => {
+      const cnt = r.liveCount == null ? (r.referralCount != null ? r.referralCount : '-') : r.liveCount;
+      const short = typeof cnt === 'number' && cnt < REFERRAL_GOAL;
+      html +=
+        '<div class="stelvio-gift-row' + (r.dupPhone || r.dupAddr ? ' is-dup' : '') + '">' +
+        '<div class="stelvio-gift-row__top">' +
+        '<b class="stelvio-gift-row__name">' + esc(r.name) + '</b>' +
+        '<span class="stelvio-gift-row__phone' + (r.dupPhone ? ' is-dup' : '') + '">' + esc(r.phone) + '</span>' +
+        '<span class="stelvio-gift-row__size">' + esc(r.size) + '</span>' +
+        '<span class="stelvio-gift-row__count' + (short ? ' is-short' : '') + '" title="현재 초대 인원">🎁 ' + esc(cnt) + '</span>' +
+        '</div>' +
+        '<div class="stelvio-gift-row__addr' + (r.dupAddr ? ' is-dup' : '') + '">(' + esc(r.zipCode) + ') ' + esc(r.address1) + ' ' + esc(r.address2) + '</div>' +
+        '<div class="stelvio-gift-row__meta">' + esc(fmtDateTime(tsToDate(r.createdAt))) +
+        (r.dupPhone ? ' · <span class="stelvio-gift-dup">연락처 중복</span>' : '') +
+        (r.dupAddr ? ' · <span class="stelvio-gift-dup">주소 중복</span>' : '') +
+        '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+  const reloadBtn = container.querySelector('[data-gift-admin-reload]');
+  if (reloadBtn) reloadBtn.addEventListener('click', () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true })));
+  const csvBtn = container.querySelector('[data-gift-admin-csv]');
+  if (csvBtn) csvBtn.addEventListener('click', () => downloadGiftCsv(adminGiftRows));
+}
+
+function downloadGiftCsv(rows) {
+  const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const header = ['신청일시', '성명', '연락처', '우편번호', '주소', '상세주소', '전체주소', '사이즈', '사이즈(mm)', '초대 인원', '중복 의심', '회원ID'];
+  const lines = [header.map(q).join(',')];
+  rows
+    .slice()
+    .reverse() // 신청 순서대로
+    .forEach((r) => {
+      const sz = GIFT_SIZES.find((x) => x.value === r.size);
+      const dup = [r.dupPhone ? '연락처' : '', r.dupAddr ? '주소' : ''].filter(Boolean).join('/');
+      lines.push(
+        [
+          fmtDateTime(tsToDate(r.createdAt)),
+          r.name,
+          r.phone,
+          r.zipCode,
+          r.address1,
+          r.address2,
+          r.address1 + ' ' + r.address2,
+          r.size,
+          sz ? sz.range : '',
+          r.liveCount == null ? r.referralCount : r.liveCount,
+          dup,
+          r.uid || r.id
+        ].map(q).join(',')
+      );
+    });
+  // 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM 추가
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'STELVIO_기념품신청_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href);
+    a.remove();
+  }, 1000);
 }
 
 /** 초대 링크(?ref=)로 접속하면 코드를 기억해 두고 사용자 등록 화면에 자동 입력 */
@@ -319,7 +730,7 @@ capturePendingReferral();
 
 window.stelvioReferral = {
   REFERRAL_GOAL,
-  GIFT_FORM_URL,
+  GIFT_SIZES,
   normalizeReferralCode,
   ensureMyReferralCode,
   lookupReferralCode,
@@ -327,6 +738,9 @@ window.stelvioReferral = {
   countMyReferrals,
   shareInvite,
   hydrateProfileReferralRow,
+  openGiftRequestModal,
+  getMyGiftRequest,
+  renderAdminGiftRequests,
   pendingReferralCode,
   clearPendingReferralCode
 };
