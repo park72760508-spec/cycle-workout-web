@@ -33880,6 +33880,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 .launch-notice-referral__note { margin-top: 6px !important; color: #64748b; font-size: 12px; }
 .launch-notice-referral__soldout { margin-top: 2px !important; color: #ea580c; font-size: 12px; font-weight: 700; }
+.launch-notice-referral__size-note { margin-top: 2px !important; color: #374151; font-size: 12px; font-weight: 600; }
 .launch-notice-slide--referral .launch-notice-modal__features { margin-bottom: 16px; }
 .launch-notice-referral__cta-box { display: flex; flex-direction: column; gap: 10px; }
 .launch-notice-referral__mycode {
