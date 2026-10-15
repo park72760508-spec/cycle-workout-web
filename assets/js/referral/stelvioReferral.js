@@ -427,8 +427,17 @@ function giftSummaryHtml(req) {
   );
 }
 
+/* 현재 열린 신청 화면의 옵션 — test: 관리자 신청 테스트(초대 인원 조건 생략), onChange: 신청·수정·취소 후 호출 */
+let giftOpts = {};
+
+function afterGiftChange(uid) {
+  hydrateProfileReferralRow(uid);
+  if (typeof giftOpts.onChange === 'function') giftOpts.onChange();
+}
+
 /** 기념품 신청 화면 — 이미 신청했으면 신청 내역(수정·신청 취소 가능)을 보여 준다(계정당 1건) */
-export async function openGiftRequestModal(uidArg) {
+export async function openGiftRequestModal(uidArg, opts) {
+  giftOpts = opts || {};
   const uid = uidArg || currentUid();
   if (!uid || uid !== currentUid()) {
     toast('로그인한 본인 계정에서만 신청할 수 있습니다.', 'error');
@@ -446,7 +455,7 @@ export async function openGiftRequestModal(uidArg) {
     showGiftRequestDetail(uid, existing, count);
     return;
   }
-  if (count < REFERRAL_GOAL) {
+  if (count < REFERRAL_GOAL && !giftOpts.test) {
     toast('친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다. (현재 ' + count + '명)', 'info');
     return;
   }
@@ -481,7 +490,7 @@ function showGiftRequestDetail(uid, req, count) {
         await deleteDoc(doc(db(), GIFT_REQ_COLLECTION, uid));
         closeGiftModal();
         toast('기념품 신청을 취소했습니다.', 'success');
-        hydrateProfileReferralRow(uid);
+        afterGiftChange(uid);
       } catch (e) {
         cancelBtn.disabled = false;
         toast('신청 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
@@ -493,7 +502,7 @@ function showGiftRequestDetail(uid, req, count) {
 /** 신청서 — prev 가 있으면 수정 모드(기존 값 채움, 신청일 유지) */
 function showGiftRequestForm(uid, count, prev) {
   const isEdit = !!prev;
-  if (isEdit && count < REFERRAL_GOAL) {
+  if (isEdit && count < REFERRAL_GOAL && !giftOpts.test) {
     toast('친구 ' + REFERRAL_GOAL + '명 이상일 때만 수정할 수 있습니다. (현재 ' + count + '명)', 'info');
     return;
   }
@@ -512,7 +521,8 @@ function showGiftRequestForm(uid, count, prev) {
   };
 
   const m = showGiftModal(
-    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">' + (isEdit ? '기념품 신청 수정' : '기념품 신청') + '</h3>' +
+    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">' + (isEdit ? '기념품 신청 수정' : '기념품 신청') +
+    (giftOpts.test ? ' <span class="stelvio-gift-test-badge">관리자 테스트</span>' : '') + '</h3>' +
     '<p class="stelvio-gift-modal__desc">STELVIO 기념 양말 2개를 보내 드립니다. 받으실 정보를 정확히 입력해 주세요.</p>' +
     '<form class="stelvio-gift-form" novalidate>' +
     '  <label class="stelvio-gift-label">성명<input type="text" class="stelvio-gift-input" name="name" maxlength="30" autocomplete="name" value="' + esc(v.name) + '" /></label>' +
@@ -593,13 +603,13 @@ function showGiftRequestForm(uid, count, prev) {
         closeGiftModal();
         toast('기념품 신청이 접수되었습니다.', 'success');
       }
-      hydrateProfileReferralRow(uid);
+      afterGiftChange(uid);
     } catch (e) {
       const cur = await getMyGiftRequest(uid).catch(() => null);
       if (!isEdit && cur) {
         toast('이미 기념품을 신청하셨습니다.', 'error');
         closeGiftModal();
-        hydrateProfileReferralRow(uid);
+        afterGiftChange(uid);
         return;
       }
       if (isEdit && cur && cur.status !== 'REQUESTED') {
@@ -694,6 +704,7 @@ export async function renderAdminGiftRequests(container, opts) {
     '<div class="stelvio-gift-admin__stat">신청 <b>' + adminGiftRows.length + '</b>건 <span>(' + sizeCounts + ')</span>' +
     (dupCount ? ' <span class="stelvio-gift-dup">중복 의심 ' + dupCount + '건</span>' : '') + '</div>' +
     '<div class="stelvio-gift-admin__btns">' +
+    '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--ghost" data-gift-admin-test title="관리자 본인 계정으로 신청 화면 테스트(초대 인원 조건 생략)">신청 테스트</button>' +
     '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-admin-reload>새로고침</button>' +
     '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--primary" data-gift-admin-csv' + (adminGiftRows.length ? '' : ' disabled') + '>CSV 다운로드</button>' +
     '</div></div>';
@@ -725,6 +736,15 @@ export async function renderAdminGiftRequests(container, opts) {
   container.innerHTML = html;
   const reloadBtn = container.querySelector('[data-gift-admin-reload]');
   if (reloadBtn) reloadBtn.addEventListener('click', () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true })));
+  const testBtn = container.querySelector('[data-gift-admin-test]');
+  if (testBtn) {
+    testBtn.addEventListener('click', () =>
+      openGiftRequestModal(currentUid(), {
+        test: true,
+        onChange: () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true }))
+      })
+    );
+  }
   const csvBtn = container.querySelector('[data-gift-admin-csv]');
   if (csvBtn) csvBtn.addEventListener('click', () => downloadGiftCsv(adminGiftRows));
 }

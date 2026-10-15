@@ -296,7 +296,8 @@ service cloud.firestore {
         request.resource.data.address1 is string && request.resource.data.address1.size() > 0 && request.resource.data.address1.size() <= 200 &&
         request.resource.data.address2 is string && request.resource.data.address2.size() > 0 && request.resource.data.address2.size() <= 100 &&
         request.resource.data.size in ['XS', 'S', 'M', 'L'] &&
-        request.resource.data.referralCount is int && request.resource.data.referralCount >= 10 &&
+        request.resource.data.referralCount is int &&
+        (request.resource.data.referralCount >= 10 || giftReqIsSiteAdmin()) && // 관리자는 신청 테스트용으로 조건 생략
         request.resource.data.status == 'REQUESTED' &&
         request.resource.data.createdAt == request.time;
       allow update: if giftReqIsSiteAdmin() || (

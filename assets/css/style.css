@@ -34024,3 +34024,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .stelvio-gift-row .is-dup { color: #c2410c; font-weight: 700; }
 .stelvio-gift-dup { color: #ea580c; font-weight: 700; }
 .stelvio-gift-btn--danger { border-color: #fecaca; color: #dc2626; background: #fff; }
+.stelvio-gift-test-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #ffedd5; color: #c2410c; font-size: 11px; font-weight: 800; vertical-align: middle; }
+.stelvio-gift-admin__btns { flex-wrap: wrap; }
