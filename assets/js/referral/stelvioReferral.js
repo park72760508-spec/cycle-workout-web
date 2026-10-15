@@ -18,6 +18,7 @@ import {
   query,
   where,
   getCountFromServer,
+  getDocs,
   writeBatch,
   serverTimestamp
 } from '/assets/js/vendor/firebasejs/10.14.1/firebase-firestore.js';
@@ -57,42 +58,64 @@ export function inviteUrl(code) {
   return SITE_URL + '?ref=' + encodeURIComponent(code);
 }
 
-/** 내 추천인 코드(없으면 발급해 users 문서에 저장) */
-export async function ensureMyReferralCode(uidArg) {
-  const fs = db();
-  const uid = uidArg || currentUid();
-  if (!fs || !uid) throw new Error('로그인 후 이용해 주세요.');
+/**
+ * 내 추천인 코드 — 2026-10-15 수정:
+ *  기준은 referralCodes 중 내 uid 로 가장 먼저 만들어진 코드(어느 기기·화면에서 불러도 같은 코드).
+ *  이전 버전은 팝업·프로필·초대 버튼이 동시에 호출하거나 기존 코드 확인이 한 번 실패하면 새 코드를 또 만들어
+ *  화면마다 다른 코드가 보였다 → ① 같은 페이지 안에서는 한 번만 조회(single-flight)
+ *  ② 조회가 실패하면 새로 만들지 않고 오류 ③ 내 코드가 하나도 없을 때만 발급.
+ *  이미 만들어진 다른 코드들도 소유자가 나이므로 그 코드로 가입한 친구는 그대로 집계된다.
+ */
+const myCodePromises = new Map();
+
+async function readMyCanonicalCode(fs, uid) {
+  const snap = await getDocs(query(collection(fs, 'referralCodes'), where('uid', '==', uid)));
+  let best = null;
+  snap.forEach((d) => {
+    const ts = d.get('createdAt');
+    const ms = ts && typeof ts.toMillis === 'function' ? ts.toMillis() : Number.MAX_SAFE_INTEGER;
+    if (!best || ms < best.ms || (ms === best.ms && d.id < best.code)) best = { code: d.id, ms };
+  });
+  return best ? best.code : '';
+}
+
+async function ensureMyReferralCodeOnce(fs, uid) {
   const userRef = doc(fs, 'users', uid);
-  const snap = await getDoc(userRef);
-  const existing = normalizeReferralCode(snap.exists() ? snap.get('referral_code') : '');
-  if (existing) {
-    // 소유 문서가 실제로 내 것인지 확인(드물게 저장만 되고 코드 문서 생성이 실패한 경우 복구)
-    const own = await getDoc(doc(fs, 'referralCodes', existing)).catch(() => null);
-    if (own && own.exists() && own.get('uid') === uid) return existing;
-    if (own && !own.exists()) {
+  let code = await readMyCanonicalCode(fs, uid); // 실패하면 그대로 throw — 새 코드를 만들지 않는다
+  if (!code) {
+    for (let i = 0; i < 6 && !code; i++) {
+      const cand = randomCode();
       try {
-        await setDoc(doc(fs, 'referralCodes', existing), { uid, createdAt: serverTimestamp() });
-        return existing;
+        await setDoc(doc(fs, 'referralCodes', cand), { uid, createdAt: serverTimestamp() }); // 생성 전용(중복이면 거부)
+        code = cand;
       } catch (e) {
-        /* 아래에서 새로 발급 */
+        if (i === 5) throw e;
       }
     }
+    // 다른 기기에서 동시에 만들었을 수 있으니 다시 읽어 가장 먼저 만든 코드로 맞춘다
+    code = (await readMyCanonicalCode(fs, uid).catch(() => '')) || code;
   }
-  for (let i = 0; i < 6; i++) {
-    const code = randomCode();
-    try {
-      // 생성 전용 규칙 — 이미 있는 코드면 권한 오류로 실패 → 다른 코드로 재시도
-      const ref = doc(fs, 'referralCodes', code);
-      const taken = await getDoc(ref).catch(() => null);
-      if (taken && taken.exists()) continue;
-      await setDoc(ref, { uid, createdAt: serverTimestamp() });
-      await updateDoc(userRef, { referral_code: code });
-      return code;
-    } catch (e) {
-      if (i === 5) throw e;
-    }
+  try {
+    const snap = await getDoc(userRef);
+    if (!snap.exists() || snap.get('referral_code') !== code) await updateDoc(userRef, { referral_code: code });
+  } catch (e) {
+    /* 표시용 사본 — 실패해도 무방 */
   }
-  throw new Error('추천인 코드를 만들지 못했습니다.');
+  return code;
+}
+
+export function ensureMyReferralCode(uidArg) {
+  const fs = db();
+  const uid = uidArg || currentUid();
+  if (!fs || !uid) return Promise.reject(new Error('로그인 후 이용해 주세요.'));
+  if (!myCodePromises.has(uid)) {
+    const p = ensureMyReferralCodeOnce(fs, uid).catch((e) => {
+      myCodePromises.delete(uid); // 실패는 캐시하지 않음(다음 호출에서 재시도)
+      throw e;
+    });
+    myCodePromises.set(uid, p);
+  }
+  return myCodePromises.get(uid);
 }
 
 /** 코드 → 추천인 uid (없으면 '') — 가입 전(비로그인)에도 조회 가능 */

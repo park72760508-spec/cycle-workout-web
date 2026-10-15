@@ -240,7 +240,8 @@ service cloud.firestore {
     // 추천인 코드(문서 ID = 6자리 코드) → 소유자 uid. 가입 화면(비로그인)에서도 코드 확인 가능(get만, 목록 불가).
     match /referralCodes/{code} {
       allow get: if true;
-      allow list: if false;
+      // 내 코드 목록만 조회 가능(where uid == 내 uid) — 가장 먼저 만든 코드를 기준 코드로 쓴다
+      allow list: if request.auth != null && resource.data.uid == request.auth.uid;
       allow create: if request.auth != null &&
         code.matches('[A-Z0-9]{6}') &&
         request.resource.data.keys().hasOnly(['uid', 'createdAt']) &&
