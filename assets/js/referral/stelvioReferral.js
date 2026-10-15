@@ -225,8 +225,9 @@ export async function shareInvite() {
     return;
   }
   const url = inviteUrl(code);
+  // 링크를 본문 위쪽에 넣어 "위에 링크로 가입" 안내와 순서를 맞춘다(공유 앱마다 url 위치가 달라 text 에 포함)
   const text =
-    'STELVIO에서 함께 훈련해요! 🚴\n아래 링크로 가입하고 사용자 등록 화면에 추천인 코드를 입력해 주세요.\n추천인 코드: ' + code;
+    'STELVIO에서 함께 훈련해요! 🚴🏃\n' + url + '\n위에 링크로 가입하고 사용자 등록 화면에 추천인 코드를 입력해 주세요.\n추천인 코드: ' + code;
 
   const kakaoKey = window.STELVIO_KAKAO_JS_KEY || '';
   const Kakao = await loadKakaoSdk(kakaoKey);
@@ -249,13 +250,13 @@ export async function shareInvite() {
   }
   if (navigator.share) {
     try {
-      await navigator.share({ title: 'STELVIO 친구 초대', text, url });
+      await navigator.share({ title: 'STELVIO 친구 초대', text });
       return;
     } catch (e) {
       if (e && e.name === 'AbortError') return;
     }
   }
-  const ok = await copyText(text + '\n' + url);
+  const ok = await copyText(text);
   toast(ok ? '초대 링크와 추천인 코드를 복사했습니다. 카카오톡 대화방에 붙여넣어 보내 주세요.' : '추천인 코드: ' + code + '\n' + url, ok ? 'success' : 'info');
 }
 
