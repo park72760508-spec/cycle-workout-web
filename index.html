@@ -4753,8 +4753,18 @@
         var prev = document.getElementById('launchNoticePrev');
         var next = document.getElementById('launchNoticeNext');
         if (!track) return;
-        track.scrollLeft = 0;
         function idx() { return Math.round(track.scrollLeft / Math.max(1, track.clientWidth)); }
+        /* 2026-10-15: 친구 초대 이벤트(2페이지)를 기본으로 표시 — 팝업이 화면에 배치된 뒤 이동 */
+        var DEFAULT_SLIDE = 1;
+        function showDefault() {
+          if (!track.clientWidth) return false;
+          track.scrollLeft = DEFAULT_SLIDE * track.clientWidth;
+          paint();
+          return true;
+        }
+        if (!showDefault()) {
+          requestAnimationFrame(function () { if (!showDefault()) setTimeout(showDefault, 60); });
+        }
         function paint() {
           var i = idx();
           for (var k = 0; k < dots.length; k++) dots[k].classList.toggle('is-active', k === i);
