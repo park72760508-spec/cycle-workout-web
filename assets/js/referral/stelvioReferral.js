@@ -502,7 +502,7 @@ export async function openGiftRequestModal(uidArg, opts) {
 function showGiftRequestDetail(uid, req, count) {
   const editable = req.status === 'REQUESTED';
   const m = showGiftModal(
-    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청 완료</h3>' +
+    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청 내역</h3>' +
     '<p class="stelvio-gift-modal__desc">기념품 신청이 접수되었습니다. 기념품은 계정당 1건만 신청할 수 있습니다.</p>' +
     giftSummaryHtml(req) +
     '<p class="stelvio-gift-modal__note">배송비 수신자 부담' +
@@ -801,12 +801,13 @@ export async function renderAdminGiftRequests(container, opts) {
   if (!rows.length) {
     html += '<p class="stelvio-gift-admin__empty">' + (nameQuery || contactDigits ? '검색 결과가 없습니다.' : '아직 기념품 신청이 없습니다.') + '</p>';
   } else {
+    const myUid = currentUid();
     html += '<div class="stelvio-gift-admin__list">';
     rows.forEach((r) => {
       const cnt = r.liveCount == null ? (r.referralCount != null ? r.referralCount : '-') : r.liveCount;
       const short = typeof cnt === 'number' && cnt < REFERRAL_GOAL;
       html +=
-        '<div class="stelvio-gift-row' + (r.dupPhone || r.dupAddr ? ' is-dup' : '') + '">' +
+        '<div class="stelvio-gift-row' + (r.dupPhone || r.dupAddr ? ' is-dup' : '') + ((r.uid || r.id) === myUid ? ' is-mine" data-gift-mine role="button" tabindex="0" title="내 신청 내역 보기' : '') + '">' +
         '<div class="stelvio-gift-row__top">' +
         '<b class="stelvio-gift-row__name">' + esc(r.name) + '</b>' +
         '<span class="stelvio-gift-row__phone' + (r.dupPhone ? ' is-dup' : '') + '">' + esc(r.phone) + '</span>' +
@@ -839,14 +840,23 @@ export async function renderAdminGiftRequests(container, opts) {
       renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true }));
     });
   }
+  // 신청 테스트 버튼·내 신청 행 → 신청 화면(이미 신청했으면 신청 내역: 수정·신청 취소)
+  const openMine = () =>
+    openGiftRequestModal(currentUid(), {
+      test: true,
+      onChange: () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true }))
+    });
   const testBtn = container.querySelector('[data-gift-admin-test]');
-  if (testBtn) {
-    testBtn.addEventListener('click', () =>
-      openGiftRequestModal(currentUid(), {
-        test: true,
-        onChange: () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true }))
-      })
-    );
+  if (testBtn) testBtn.addEventListener('click', openMine);
+  const mineRow = container.querySelector('[data-gift-mine]');
+  if (mineRow) {
+    mineRow.addEventListener('click', openMine);
+    mineRow.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openMine();
+      }
+    });
   }
   const csvBtn = container.querySelector('[data-gift-admin-csv]');
   if (csvBtn) csvBtn.addEventListener('click', () => downloadGiftCsv(adminGiftRows));
