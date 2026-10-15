@@ -34023,3 +34023,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .stelvio-gift-row__meta { margin-top: 4px; font-size: 11.5px; color: #94a3b8; }
 .stelvio-gift-row .is-dup { color: #c2410c; font-weight: 700; }
 .stelvio-gift-dup { color: #ea580c; font-weight: 700; }
+.stelvio-gift-btn--danger { border-color: #fecaca; color: #dc2626; background: #fff; }

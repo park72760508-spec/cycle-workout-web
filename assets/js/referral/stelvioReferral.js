@@ -8,7 +8,7 @@
  *   (보안 규칙: 가입 전 문서 없음 + 가입 후 문서 있음 + 코드 소유자 일치 + 본인 코드 불가) → 기존 회원·재가입은 인정 안 됨.
  * - 카운트: referralClaims 중 referrerUid == 나 인 문서 수. 10명 이상이면 기념품 신청(구글 폼) 활성.
  * - 기념품 신청(2026-10-16): 구글 폼 대신 자체 신청 화면 — referralGiftRequests/{uid} 문서 1개(생성 전용)로
- *   계정당 1회만 신청 가능. 관리자는 마이 화면 '기념품 신청' 탭에서 목록 확인·CSV(배송 파일) 다운로드.
+ *   계정당 1건(발송 전까지 본인 수정·취소 가능). 관리자는 마이 화면 '기념품 신청' 탭에서 목록 확인·CSV(배송 파일) 다운로드.
  * - 공유: 카카오 JavaScript 키(window.STELVIO_KAKAO_JS_KEY)가 있으면 카카오톡 공유, 없으면 기기 공유 시트 → 링크 복사.
  */
 import {
@@ -16,6 +16,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   query,
   where,
@@ -418,6 +419,7 @@ function giftSummaryHtml(req) {
     ['사이즈', sizeLabel(req.size)],
     ['신청일', fmtDateTime(tsToDate(req.createdAt))]
   ];
+  if (req.updatedAt) rows.push(['수정일', fmtDateTime(tsToDate(req.updatedAt))]);
   return (
     '<dl class="stelvio-gift-summary">' +
     rows.map((r) => '<dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd>').join('') +
@@ -425,7 +427,7 @@ function giftSummaryHtml(req) {
   );
 }
 
-/** 기념품 신청 화면 — 이미 신청했으면 신청 내역만 보여 준다(계정당 1회) */
+/** 기념품 신청 화면 — 이미 신청했으면 신청 내역(수정·신청 취소 가능)을 보여 준다(계정당 1건) */
 export async function openGiftRequestModal(uidArg) {
   const uid = uidArg || currentUid();
   if (!uid || uid !== currentUid()) {
@@ -441,59 +443,110 @@ export async function openGiftRequestModal(uidArg) {
     return;
   }
   if (existing) {
-    showGiftModal(
-      '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청 완료</h3>' +
-      '<p class="stelvio-gift-modal__desc">기념품 신청이 접수되었습니다. 기념품은 계정당 1회만 신청할 수 있습니다.</p>' +
-      giftSummaryHtml(existing) +
-      '<p class="stelvio-gift-modal__note">배송비 수신자 부담 · 신청 내용 변경은 STELVIO 관리자에게 문의해 주세요.</p>' +
-      '<div class="stelvio-gift-modal__actions"><button type="button" class="stelvio-gift-btn stelvio-gift-btn--primary" data-gift-close>확인</button></div>'
-    );
+    showGiftRequestDetail(uid, existing, count);
     return;
   }
   if (count < REFERRAL_GOAL) {
     toast('친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다. (현재 ' + count + '명)', 'info');
     return;
   }
+  showGiftRequestForm(uid, count, null);
+}
 
+/** 신청 내역 — 접수 상태(REQUESTED)일 때만 본인이 수정·신청 취소 가능 */
+function showGiftRequestDetail(uid, req, count) {
+  const editable = req.status === 'REQUESTED';
+  const m = showGiftModal(
+    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청 완료</h3>' +
+    '<p class="stelvio-gift-modal__desc">기념품 신청이 접수되었습니다. 기념품은 계정당 1건만 신청할 수 있습니다.</p>' +
+    giftSummaryHtml(req) +
+    '<p class="stelvio-gift-modal__note">배송비 수신자 부담' +
+    (editable ? ' · 발송 전까지 수정하거나 신청을 취소할 수 있습니다.' : ' · 발송 준비가 시작되어 변경은 STELVIO 관리자에게 문의해 주세요.') + '</p>' +
+    '<div class="stelvio-gift-modal__actions">' +
+    (editable
+      ? '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--danger" data-gift-cancel>신청 취소</button>' +
+        '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-edit>수정</button>'
+      : '') +
+    '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--primary" data-gift-close>확인</button>' +
+    '</div>'
+  );
+  const editBtn = m.querySelector('[data-gift-edit]');
+  if (editBtn) editBtn.addEventListener('click', () => showGiftRequestForm(uid, count, req));
+  const cancelBtn = m.querySelector('[data-gift-cancel]');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', async () => {
+      if (!window.confirm('기념품 신청을 취소할까요?')) return;
+      cancelBtn.disabled = true;
+      try {
+        await deleteDoc(doc(db(), GIFT_REQ_COLLECTION, uid));
+        closeGiftModal();
+        toast('기념품 신청을 취소했습니다.', 'success');
+        hydrateProfileReferralRow(uid);
+      } catch (e) {
+        cancelBtn.disabled = false;
+        toast('신청 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      }
+    });
+  }
+}
+
+/** 신청서 — prev 가 있으면 수정 모드(기존 값 채움, 신청일 유지) */
+function showGiftRequestForm(uid, count, prev) {
+  const isEdit = !!prev;
+  if (isEdit && count < REFERRAL_GOAL) {
+    toast('친구 ' + REFERRAL_GOAL + '명 이상일 때만 수정할 수 있습니다. (현재 ' + count + '명)', 'info');
+    return;
+  }
   let me = null;
   try {
     me = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
   } catch (e) {}
-  const prefillName = me && String(me.id) === uid ? me.name || '' : '';
-  const prefillPhone = me && String(me.id) === uid ? formatPhone(me.contact || '') : '';
+  const mine = me && String(me.id) === uid;
+  const v = prev || {
+    name: mine ? me.name || '' : '',
+    phone: mine ? formatPhone(me.contact || '') : '',
+    zipCode: '',
+    address1: '',
+    address2: '',
+    size: ''
+  };
 
   const m = showGiftModal(
-    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">기념품 신청</h3>' +
+    '<h3 class="stelvio-gift-modal__title" id="stelvioGiftTitle">' + (isEdit ? '기념품 신청 수정' : '기념품 신청') + '</h3>' +
     '<p class="stelvio-gift-modal__desc">STELVIO 기념 양말 2개를 보내 드립니다. 받으실 정보를 정확히 입력해 주세요.</p>' +
     '<form class="stelvio-gift-form" novalidate>' +
-    '  <label class="stelvio-gift-label">성명<input type="text" class="stelvio-gift-input" name="name" maxlength="30" autocomplete="name" value="' + esc(prefillName) + '" /></label>' +
-    '  <label class="stelvio-gift-label">연락처<input type="tel" class="stelvio-gift-input" name="phone" maxlength="13" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" value="' + esc(prefillPhone) + '" /></label>' +
+    '  <label class="stelvio-gift-label">성명<input type="text" class="stelvio-gift-input" name="name" maxlength="30" autocomplete="name" value="' + esc(v.name) + '" /></label>' +
+    '  <label class="stelvio-gift-label">연락처<input type="tel" class="stelvio-gift-input" name="phone" maxlength="13" inputmode="numeric" autocomplete="tel" placeholder="010-0000-0000" value="' + esc(v.phone) + '" /></label>' +
     '  <div class="stelvio-gift-label">주소' +
     '    <div class="stelvio-gift-zip-row">' +
-    '      <input type="text" class="stelvio-gift-input" name="zipCode" placeholder="우편번호" readonly />' +
+    '      <input type="text" class="stelvio-gift-input" name="zipCode" placeholder="우편번호" readonly value="' + esc(v.zipCode) + '" />' +
     '      <button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-zip>주소 검색</button>' +
     '    </div>' +
-    '    <input type="text" class="stelvio-gift-input" name="address1" placeholder="주소" readonly />' +
-    '    <input type="text" class="stelvio-gift-input" name="address2" maxlength="100" placeholder="상세주소" />' +
+    '    <input type="text" class="stelvio-gift-input" name="address1" placeholder="주소" readonly value="' + esc(v.address1) + '" />' +
+    '    <input type="text" class="stelvio-gift-input" name="address2" maxlength="100" placeholder="상세주소" value="' + esc(v.address2) + '" />' +
     '  </div>' +
     '  <div class="stelvio-gift-label">사이즈' +
     '    <div class="stelvio-gift-sizes">' +
     GIFT_SIZES.map(
       (sz) =>
-        '<label class="stelvio-gift-size"><input type="radio" name="size" value="' + sz.value + '" />' +
+        '<label class="stelvio-gift-size"><input type="radio" name="size" value="' + sz.value + '"' + (v.size === sz.value ? ' checked' : '') + ' />' +
         '<span><b>' + sz.label + '</b><small>' + sz.range + '</small></span></label>'
     ).join('') +
     '    </div>' +
     '  </div>' +
-    '  <p class="stelvio-gift-modal__note">배송비 수신자 부담 · 기념품은 계정당 1회만 신청할 수 있으며, 신청 후에는 수정할 수 없습니다.</p>' +
+    '  <p class="stelvio-gift-modal__note">배송비 수신자 부담 · 기념품은 계정당 1건만 신청할 수 있으며, 발송 전까지 수정·취소할 수 있습니다.</p>' +
     '  <div class="stelvio-gift-modal__actions">' +
-    '    <button type="button" class="stelvio-gift-btn stelvio-gift-btn--ghost" data-gift-close>취소</button>' +
-    '    <button type="submit" class="stelvio-gift-btn stelvio-gift-btn--primary">신청하기</button>' +
+    '    <button type="button" class="stelvio-gift-btn stelvio-gift-btn--ghost" data-gift-back>취소</button>' +
+    '    <button type="submit" class="stelvio-gift-btn stelvio-gift-btn--primary">' + (isEdit ? '수정하기' : '신청하기') + '</button>' +
     '  </div>' +
     '</form>'
   );
   const form = m.querySelector('form');
   const f = (n) => form.elements[n];
+  m.querySelector('[data-gift-back]').addEventListener('click', () => {
+    if (isEdit) showGiftRequestDetail(uid, prev, count);
+    else closeGiftModal();
+  });
   f('phone').addEventListener('input', () => {
     f('phone').value = formatPhone(f('phone').value);
   });
@@ -501,6 +554,7 @@ export async function openGiftRequestModal(uidArg) {
     openDaumPostcode((r) => {
       f('zipCode').value = r.zonecode;
       f('address1').value = r.address;
+      f('address2').value = '';
       f('address2').focus();
     });
   });
@@ -520,28 +574,42 @@ export async function openGiftRequestModal(uidArg) {
     if (!size) return toast('사이즈를 선택해 주세요.', 'error');
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
-    submitBtn.textContent = '신청 중…';
+    submitBtn.textContent = isEdit ? '수정 중…' : '신청 중…';
+    const ref = doc(db(), GIFT_REQ_COLLECTION, uid);
     try {
-      // 문서 ID = 내 uid, 보안 규칙상 생성만 가능(이미 있으면 거부) → 계정당 1회
-      await setDoc(doc(db(), GIFT_REQ_COLLECTION, uid), {
-        uid, name, phone, zipCode, address1, address2, size,
-        referralCount: count,
-        status: 'REQUESTED',
-        createdAt: serverTimestamp()
-      });
-      closeGiftModal();
-      toast('기념품 신청이 접수되었습니다.', 'success');
+      if (isEdit) {
+        // 본인 수정: 접수 상태일 때만, 신청일·상태는 그대로(보안 규칙에서 검증)
+        await updateDoc(ref, { name, phone, zipCode, address1, address2, size, referralCount: count, updatedAt: serverTimestamp() });
+        closeGiftModal();
+        toast('기념품 신청 정보를 수정했습니다.', 'success');
+      } else {
+        // 문서 ID = 내 uid, 생성은 문서가 없을 때만 가능 → 계정당 1건
+        await setDoc(ref, {
+          uid, name, phone, zipCode, address1, address2, size,
+          referralCount: count,
+          status: 'REQUESTED',
+          createdAt: serverTimestamp()
+        });
+        closeGiftModal();
+        toast('기념품 신청이 접수되었습니다.', 'success');
+      }
       hydrateProfileReferralRow(uid);
     } catch (e) {
-      const already = await getMyGiftRequest(uid).catch(() => null);
-      toast(already ? '이미 기념품을 신청하셨습니다.' : '신청에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
-      if (already) {
+      const cur = await getMyGiftRequest(uid).catch(() => null);
+      if (!isEdit && cur) {
+        toast('이미 기념품을 신청하셨습니다.', 'error');
         closeGiftModal();
         hydrateProfileReferralRow(uid);
-      } else {
-        submitBtn.disabled = false;
-        submitBtn.textContent = '신청하기';
+        return;
       }
+      if (isEdit && cur && cur.status !== 'REQUESTED') {
+        toast('발송 준비가 시작되어 수정할 수 없습니다. STELVIO 관리자에게 문의해 주세요.', 'error');
+        closeGiftModal();
+        return;
+      }
+      toast((isEdit ? '수정' : '신청') + '에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+      submitBtn.disabled = false;
+      submitBtn.textContent = isEdit ? '수정하기' : '신청하기';
     }
   });
 }
