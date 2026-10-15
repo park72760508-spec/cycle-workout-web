@@ -284,6 +284,11 @@ service cloud.firestore {
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1
           );
       }
+      // 같은 트랜잭션에서 사이즈별 재고 집계(referralGiftStock/sizes)가 함께 바뀌었는지(증감량)
+      function giftStockDelta(sz) {
+        return getAfter(/databases/$(database)/documents/referralGiftStock/sizes).data[sz] -
+          get(/databases/$(database)/documents/referralGiftStock/sizes).data[sz];
+      }
       allow get: if request.auth != null && (reqUid == request.auth.uid || giftReqIsSiteAdmin());
       allow list: if giftReqIsSiteAdmin();
       allow create: if request.auth != null &&
@@ -299,7 +304,8 @@ service cloud.firestore {
         request.resource.data.referralCount is int &&
         (request.resource.data.referralCount >= 10 || giftReqIsSiteAdmin()) && // 관리자는 신청 테스트용으로 조건 생략
         request.resource.data.status == 'REQUESTED' &&
-        request.resource.data.createdAt == request.time;
+        request.resource.data.createdAt == request.time &&
+        giftStockDelta(request.resource.data.size) == 1;
       allow update: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
@@ -315,13 +321,73 @@ service cloud.firestore {
         request.resource.data.address2 is string && request.resource.data.address2.size() > 0 && request.resource.data.address2.size() <= 100 &&
         request.resource.data.size in ['XS', 'S', 'M', 'L'] &&
         request.resource.data.referralCount is int && request.resource.data.referralCount >= 10 &&
-        request.resource.data.updatedAt == request.time
+        request.resource.data.updatedAt == request.time &&
+        (request.resource.data.size == resource.data.size ||
+          (giftStockDelta(request.resource.data.size) == 1 && giftStockDelta(resource.data.size) == -1))
       );
       allow delete: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
-        resource.data.status == 'REQUESTED'
+        resource.data.status == 'REQUESTED' &&
+        giftStockDelta(resource.data.size) == -1
       );
+    }
+    // 2026-10-16: 기념품 사이즈별 신청 수량 { XS, S, M, L } — 한도 XS 30 · S 40 · M 80 · L 50.
+    // 본인 신청 생성(+1)·사이즈 변경(-1/+1)·취소(-1)와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
+    match /referralGiftStock/{stockId} {
+      function giftStockIsSiteAdmin() {
+        return request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == '1' ||
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1
+          );
+      }
+      function giftStockCap(sz) {
+        return sz == 'XS' ? 30 : (sz == 'S' ? 40 : (sz == 'M' ? 80 : (sz == 'L' ? 50 : 0)));
+      }
+      function myGiftReq() {
+        return /databases/$(database)/documents/referralGiftRequests/$(request.auth.uid);
+      }
+      function giftStockChangedOnly(keys) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+      }
+      function giftStockInc(sz) {
+        return giftStockChangedOnly([sz]) &&
+          request.resource.data[sz] == resource.data[sz] + 1 &&
+          request.resource.data[sz] <= giftStockCap(sz);
+      }
+      function giftStockDec(sz) {
+        return giftStockChangedOnly([sz]) &&
+          request.resource.data[sz] == resource.data[sz] - 1 &&
+          request.resource.data[sz] >= 0;
+      }
+      function giftStockMove(fromSz, toSz) {
+        return giftStockChangedOnly([fromSz, toSz]) &&
+          request.resource.data[fromSz] == resource.data[fromSz] - 1 &&
+          request.resource.data[fromSz] >= 0 &&
+          request.resource.data[toSz] == resource.data[toSz] + 1 &&
+          request.resource.data[toSz] <= giftStockCap(toSz);
+      }
+      allow read: if request.auth != null;
+      allow create: if giftStockIsSiteAdmin() || (
+        request.auth != null &&
+        stockId == 'sizes' &&
+        request.resource.data == {'XS': 0, 'S': 0, 'M': 0, 'L': 0}
+      );
+      allow update: if giftStockIsSiteAdmin() || (
+        request.auth != null &&
+        stockId == 'sizes' &&
+        request.resource.data.keys().hasOnly(['XS', 'S', 'M', 'L']) &&
+        (
+          (!exists(myGiftReq()) && existsAfter(myGiftReq()) && giftStockInc(getAfter(myGiftReq()).data.size)) ||
+          (exists(myGiftReq()) && !existsAfter(myGiftReq()) && giftStockDec(get(myGiftReq()).data.size)) ||
+          (exists(myGiftReq()) && existsAfter(myGiftReq()) &&
+            get(myGiftReq()).data.size != getAfter(myGiftReq()).data.size &&
+            giftStockMove(get(myGiftReq()).data.size, getAfter(myGiftReq()).data.size))
+        )
+      );
+      allow delete: if giftStockIsSiteAdmin();
     }
 
     // 2026-10-12: 사용자별 Garmin LiveTrack 공유 링크(라이딩 모임 참석자 리스트 LIVE 아이콘) — 본인만 쓰기

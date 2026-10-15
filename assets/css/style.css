@@ -34034,3 +34034,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .stelvio-gift-btn--danger { border-color: #fecaca; color: #dc2626; background: #fff; }
 .stelvio-gift-test-badge { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: #ffedd5; color: #c2410c; font-size: 11px; font-weight: 800; vertical-align: middle; }
 .stelvio-gift-admin__btns { flex-wrap: wrap; }
+/* 사이즈별 재고(잔여/총) */
+.stelvio-gift-size__stock { font-style: normal; font-size: 11px; font-weight: 700; color: #16a34a; }
+.stelvio-gift-size.is-soldout { cursor: not-allowed; }
+.stelvio-gift-size.is-soldout span { background: #f1f5f9; border-color: #e2e8f0; opacity: 0.6; }
+.stelvio-gift-size.is-soldout .stelvio-gift-size__stock { color: #dc2626; }
+.stelvio-gift-stock-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.stelvio-gift-stock-chip { padding: 2px 8px; border-radius: 999px; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; font-size: 12px; font-weight: 700; }
+.stelvio-gift-stock-chip.is-soldout { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.stelvio-gift-stock-warn { margin-top: 6px; font-size: 12px; color: #c2410c; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.stelvio-gift-stock-warn .stelvio-gift-btn { padding: 4px 10px; font-size: 12px; }

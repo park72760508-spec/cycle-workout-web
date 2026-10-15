@@ -16,7 +16,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
+  runTransaction,
   collection,
   query,
   where,
@@ -28,12 +28,46 @@ import {
 
 export const REFERRAL_GOAL = 10;
 export const GIFT_SIZES = [
-  { value: 'XS', label: 'XS', range: '225~240mm' },
-  { value: 'S', label: 'S', range: '240~255mm' },
-  { value: 'M', label: 'M', range: '255~270mm' },
-  { value: 'L', label: 'L', range: '270~285mm' }
+  { value: 'XS', label: 'XS', range: '225~240mm', stock: 30 },
+  { value: 'S', label: 'S', range: '240~255mm', stock: 40 },
+  { value: 'M', label: 'M', range: '255~270mm', stock: 80 },
+  { value: 'L', label: 'L', range: '270~285mm', stock: 50 }
 ];
 const GIFT_REQ_COLLECTION = 'referralGiftRequests';
+/* 사이즈별 신청(사용) 수량 — referralGiftStock/sizes { XS, S, M, L }.
+ * 신청·사이즈 변경·취소 때 신청 문서와 같은 트랜잭션으로 증감하고, 보안 규칙이 짝과 한도(stock)를 검증한다. */
+const GIFT_STOCK_COLLECTION = 'referralGiftStock';
+const GIFT_STOCK_DOC = 'sizes';
+
+function stockRef() {
+  return doc(db(), GIFT_STOCK_COLLECTION, GIFT_STOCK_DOC);
+}
+
+function zeroStock() {
+  const z = {};
+  GIFT_SIZES.forEach((sz) => { z[sz.value] = 0; });
+  return z;
+}
+
+function stockCap(size) {
+  const sz = GIFT_SIZES.find((x) => x.value === size);
+  return sz ? sz.stock : 0;
+}
+
+/** 사이즈별 사용 수량 { XS: n, ... } — 문서가 없으면 0으로 만들어 둔다 */
+export async function getGiftStockUsed() {
+  const snap = await getDoc(stockRef());
+  if (snap.exists()) return Object.assign(zeroStock(), snap.data());
+  try {
+    await setDoc(stockRef(), zeroStock()); // 규칙: 전부 0일 때만 생성 가능
+  } catch (e) {
+    /* 다른 사용자가 먼저 만들었을 수 있음 */
+  }
+  const again = await getDoc(stockRef());
+  return Object.assign(zeroStock(), again.exists() ? again.data() : {});
+}
+
+class GiftStockError extends Error {}
 export const GIFT_IMAGE_URL = 'https://stelvio.ai.kr/assets/img/stelviogift_v2_720.jpg';
 const SITE_URL = 'https://stelvio.ai.kr/';
 const LS_REF_KEY = 'stelvioPendingReferralCode';
@@ -487,7 +521,15 @@ function showGiftRequestDetail(uid, req, count) {
       if (!window.confirm('기념품 신청을 취소할까요?')) return;
       cancelBtn.disabled = true;
       try {
-        await deleteDoc(doc(db(), GIFT_REQ_COLLECTION, uid));
+        const ref = doc(db(), GIFT_REQ_COLLECTION, uid);
+        await runTransaction(db(), async (tx) => {
+          const [reqSnap, stSnap] = await Promise.all([tx.get(ref), tx.get(stockRef())]);
+          if (!reqSnap.exists()) return;
+          const sz = reqSnap.get('size');
+          const st = Object.assign(zeroStock(), stSnap.exists() ? stSnap.data() : {});
+          tx.delete(ref);
+          tx.update(stockRef(), { [sz]: Math.max(0, (Number(st[sz]) || 0) - 1) }); // 취소한 수량 반환
+        });
         closeGiftModal();
         toast('기념품 신청을 취소했습니다.', 'success');
         afterGiftChange(uid);
@@ -500,8 +542,15 @@ function showGiftRequestDetail(uid, req, count) {
 }
 
 /** 신청서 — prev 가 있으면 수정 모드(기존 값 채움, 신청일 유지) */
-function showGiftRequestForm(uid, count, prev) {
+async function showGiftRequestForm(uid, count, prev) {
   const isEdit = !!prev;
+  let used;
+  try {
+    used = await getGiftStockUsed();
+  } catch (e) {
+    toast('사이즈 재고를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    return;
+  }
   if (isEdit && count < REFERRAL_GOAL && !giftOpts.test) {
     toast('친구 ' + REFERRAL_GOAL + '명 이상일 때만 수정할 수 있습니다. (현재 ' + count + '명)', 'info');
     return;
@@ -537,11 +586,17 @@ function showGiftRequestForm(uid, count, prev) {
     '  </div>' +
     '  <div class="stelvio-gift-label">사이즈' +
     '    <div class="stelvio-gift-sizes">' +
-    GIFT_SIZES.map(
-      (sz) =>
-        '<label class="stelvio-gift-size"><input type="radio" name="size" value="' + sz.value + '"' + (v.size === sz.value ? ' checked' : '') + ' />' +
-        '<span><b>' + sz.label + '</b><small>' + sz.range + '</small></span></label>'
-    ).join('') +
+    GIFT_SIZES.map((sz) => {
+      const remain = Math.max(0, sz.stock - (Number(used[sz.value]) || 0));
+      const mine = isEdit && prev.size === sz.value; // 내가 이미 받은 수량(수정 시 유지 가능)
+      const soldOut = remain <= 0 && !mine;
+      return (
+        '<label class="stelvio-gift-size' + (soldOut ? ' is-soldout' : '') + '"><input type="radio" name="size" value="' + sz.value + '"' +
+        (v.size === sz.value && !soldOut ? ' checked' : '') + (soldOut ? ' disabled' : '') + ' />' +
+        '<span><b>' + sz.label + '</b><small>' + sz.range + '</small>' +
+        '<em class="stelvio-gift-size__stock">' + (soldOut ? '소진' : remain + '/' + sz.stock) + '</em></span></label>'
+      );
+    }).join('') +
     '    </div>' +
     '  </div>' +
     '  <p class="stelvio-gift-modal__note">배송비 수신자 부담 · 기념품은 계정당 1건만 신청할 수 있으며, 발송 전까지 수정·취소할 수 있습니다.</p>' +
@@ -587,24 +642,40 @@ function showGiftRequestForm(uid, count, prev) {
     submitBtn.textContent = isEdit ? '수정 중…' : '신청 중…';
     const ref = doc(db(), GIFT_REQ_COLLECTION, uid);
     try {
-      if (isEdit) {
-        // 본인 수정: 접수 상태일 때만, 신청일·상태는 그대로(보안 규칙에서 검증)
-        await updateDoc(ref, { name, phone, zipCode, address1, address2, size, referralCount: count, updatedAt: serverTimestamp() });
-        closeGiftModal();
-        toast('기념품 신청 정보를 수정했습니다.', 'success');
-      } else {
-        // 문서 ID = 내 uid, 생성은 문서가 없을 때만 가능 → 계정당 1건
-        await setDoc(ref, {
-          uid, name, phone, zipCode, address1, address2, size,
-          referralCount: count,
-          status: 'REQUESTED',
-          createdAt: serverTimestamp()
-        });
-        closeGiftModal();
-        toast('기념품 신청이 접수되었습니다.', 'success');
-      }
+      await runTransaction(db(), async (tx) => {
+        const [reqSnap, stSnap] = await Promise.all([tx.get(ref), tx.get(stockRef())]);
+        const st = Object.assign(zeroStock(), stSnap.exists() ? stSnap.data() : {});
+        const oldSize = reqSnap.exists() ? reqSnap.get('size') : '';
+        if (!isEdit && reqSnap.exists()) throw new GiftStockError('ALREADY');
+        if (isEdit && !reqSnap.exists()) throw new GiftStockError('GONE');
+        const sizeChanged = oldSize !== size;
+        if (sizeChanged && (Number(st[size]) || 0) >= stockCap(size)) throw new GiftStockError('SOLDOUT');
+        if (isEdit) {
+          // 본인 수정: 접수 상태일 때만, 신청일·상태는 그대로(보안 규칙에서 검증)
+          tx.update(ref, { name, phone, zipCode, address1, address2, size, referralCount: count, updatedAt: serverTimestamp() });
+          if (sizeChanged) {
+            tx.update(stockRef(), { [oldSize]: (Number(st[oldSize]) || 0) - 1, [size]: (Number(st[size]) || 0) + 1 });
+          }
+        } else {
+          // 문서 ID = 내 uid, 생성은 문서가 없을 때만 가능 → 계정당 1건
+          tx.set(ref, {
+            uid, name, phone, zipCode, address1, address2, size,
+            referralCount: count,
+            status: 'REQUESTED',
+            createdAt: serverTimestamp()
+          });
+          tx.update(stockRef(), { [size]: (Number(st[size]) || 0) + 1 });
+        }
+      });
+      closeGiftModal();
+      toast(isEdit ? '기념품 신청 정보를 수정했습니다.' : '기념품 신청이 접수되었습니다.', 'success');
       afterGiftChange(uid);
     } catch (e) {
+      if (e instanceof GiftStockError && e.message === 'SOLDOUT') {
+        toast(size + ' 사이즈가 방금 소진되었습니다. 다른 사이즈를 선택해 주세요.', 'error');
+        showGiftRequestForm(uid, count, prev);
+        return;
+      }
       const cur = await getMyGiftRequest(uid).catch(() => null);
       if (!isEdit && cur) {
         toast('이미 기념품을 신청하셨습니다.', 'error');
@@ -627,6 +698,7 @@ function showGiftRequestForm(uid, count, prev) {
 /* ----- 관리자: 마이 화면 '기념품 신청' 탭 ----- */
 
 let adminGiftRows = [];
+let adminGiftStock = null;
 
 function giftDupKeys(r) {
   const phone = String(r.phone || '').replace(/\D/g, '');
@@ -685,7 +757,7 @@ export async function renderAdminGiftRequests(container, opts) {
   if (!adminGiftRows.length || opts.reload !== false) {
     container.innerHTML = '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">기념품 신청 목록을 불러오는 중…</p></div>';
     try {
-      adminGiftRows = await loadAdminGiftRows();
+      [adminGiftRows, adminGiftStock] = await Promise.all([loadAdminGiftRows(), getGiftStockUsed().catch(() => null)]);
     } catch (e) {
       container.innerHTML =
         '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">신청 목록을 불러오지 못했습니다. (' + esc(e && e.message) + ')</p></div>';
@@ -697,12 +769,25 @@ export async function renderAdminGiftRequests(container, opts) {
   const rows = adminGiftRows.filter((r) => adminGiftMatches(r, nameQuery, contactDigits));
   const dupCount = adminGiftRows.filter((r) => r.dupPhone || r.dupAddr).length;
 
-  const sizeCounts = GIFT_SIZES.map((sz) => sz.label + ' ' + adminGiftRows.filter((r) => r.size === sz.value).length).join(' · ');
+  // 사이즈별 신청 수(실제 신청 문서 기준)와 재고 집계 문서가 다르면 '재고 맞추기'로 바로잡는다
+  const actual = zeroStock();
+  adminGiftRows.forEach((r) => { if (r.size in actual) actual[r.size] += 1; });
+  const stockMismatch = !adminGiftStock || GIFT_SIZES.some((sz) => (Number(adminGiftStock[sz.value]) || 0) !== actual[sz.value]);
+  const sizeCounts = GIFT_SIZES.map((sz) => {
+    const remain = sz.stock - actual[sz.value];
+    return '<span class="stelvio-gift-stock-chip' + (remain <= 0 ? ' is-soldout' : '') + '">' + sz.label + ' ' + remain + '/' + sz.stock + '</span>';
+  }).join('');
   let html =
     '<div class="stelvio-gift-admin">' +
     '<div class="stelvio-gift-admin__head">' +
-    '<div class="stelvio-gift-admin__stat">신청 <b>' + adminGiftRows.length + '</b>건 <span>(' + sizeCounts + ')</span>' +
-    (dupCount ? ' <span class="stelvio-gift-dup">중복 의심 ' + dupCount + '건</span>' : '') + '</div>' +
+    '<div class="stelvio-gift-admin__stat">신청 <b>' + adminGiftRows.length + '</b>건' +
+    (dupCount ? ' <span class="stelvio-gift-dup">중복 의심 ' + dupCount + '건</span>' : '') +
+    '<div class="stelvio-gift-stock-row" title="잔여/총 수량">' + sizeCounts + '</div>' +
+    (stockMismatch
+      ? '<div class="stelvio-gift-stock-warn">재고 집계(' + GIFT_SIZES.map((sz) => sz.label + ' ' + (adminGiftStock ? Number(adminGiftStock[sz.value]) || 0 : '-')).join(' · ') +
+        ')가 실제 신청 수와 다릅니다. <button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-admin-fixstock>재고 맞추기</button></div>'
+      : '') +
+    '</div>' +
     '<div class="stelvio-gift-admin__btns">' +
     '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--ghost" data-gift-admin-test title="관리자 본인 계정으로 신청 화면 테스트(초대 인원 조건 생략)">신청 테스트</button>' +
     '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--outline" data-gift-admin-reload>새로고침</button>' +
@@ -736,6 +821,19 @@ export async function renderAdminGiftRequests(container, opts) {
   container.innerHTML = html;
   const reloadBtn = container.querySelector('[data-gift-admin-reload]');
   if (reloadBtn) reloadBtn.addEventListener('click', () => renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true })));
+  const fixBtn = container.querySelector('[data-gift-admin-fixstock]');
+  if (fixBtn) {
+    fixBtn.addEventListener('click', async () => {
+      fixBtn.disabled = true;
+      try {
+        await setDoc(stockRef(), actual); // 관리자만 임의 값으로 쓸 수 있음(규칙)
+        toast('사이즈별 재고 집계를 실제 신청 수에 맞췄습니다.', 'success');
+      } catch (e) {
+        toast('재고 맞추기에 실패했습니다: ' + ((e && e.message) || e), 'error');
+      }
+      renderAdminGiftRequests(container, Object.assign({}, opts, { reload: true }));
+    });
+  }
   const testBtn = container.querySelector('[data-gift-admin-test]');
   if (testBtn) {
     testBtn.addEventListener('click', () =>
@@ -819,6 +917,7 @@ capturePendingReferral();
 window.stelvioReferral = {
   REFERRAL_GOAL,
   GIFT_SIZES,
+  getGiftStockUsed,
   normalizeReferralCode,
   ensureMyReferralCode,
   lookupReferralCode,
