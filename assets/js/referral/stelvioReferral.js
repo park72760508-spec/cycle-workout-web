@@ -25,7 +25,7 @@ import {
 
 export const REFERRAL_GOAL = 10;
 export const GIFT_FORM_URL = 'https://forms.gle/F8xocpUgQHaT78f79';
-export const GIFT_IMAGE_URL = 'https://stelvio.ai.kr/assets/img/stelviogift.jpeg';
+export const GIFT_IMAGE_URL = 'https://stelvio.ai.kr/assets/img/stelviogift_v2_720.jpg';
 const SITE_URL = 'https://stelvio.ai.kr/';
 const LS_REF_KEY = 'stelvioPendingReferralCode';
 const CODE_RE = /^[A-Z0-9]{6}$/;
