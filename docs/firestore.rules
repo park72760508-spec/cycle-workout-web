@@ -293,7 +293,8 @@ service cloud.firestore {
       allow list: if giftReqIsSiteAdmin();
       allow create: if request.auth != null &&
         reqUid == request.auth.uid &&
-        request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'zipCode', 'address1', 'address2', 'size', 'referralCount', 'status', 'createdAt']) &&
+        request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'zipCode', 'address1', 'address2', 'size', 'referralCount', 'qty', 'status', 'createdAt']) &&
+        request.resource.data.qty == 2 && // 신청 1건 = 양말 2개
         request.resource.data.uid == request.auth.uid &&
         request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 30 &&
         request.resource.data.phone is string && request.resource.data.phone.matches('[0-9]{2,3}-[0-9]{3,4}-[0-9]{4}') &&
@@ -306,11 +307,16 @@ service cloud.firestore {
         request.resource.data.status == 'REQUESTED' &&
         request.resource.data.createdAt == request.time &&
         giftStockDelta(request.resource.data.size) == 2;
+      // 신청이 소진한 수량 — qty 가 없는 초기 테스트 신청은 1개
+      function giftReqQty() {
+        return resource.data.get('qty', 1);
+      }
       allow update: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
         resource.data.status == 'REQUESTED' &&
-        request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'zipCode', 'address1', 'address2', 'size', 'referralCount', 'status', 'createdAt', 'updatedAt']) &&
+        request.resource.data.keys().hasOnly(['uid', 'name', 'phone', 'zipCode', 'address1', 'address2', 'size', 'referralCount', 'qty', 'status', 'createdAt', 'updatedAt']) &&
+        request.resource.data.get('qty', 1) == resource.data.get('qty', 1) &&
         request.resource.data.uid == resource.data.uid &&
         request.resource.data.status == resource.data.status &&
         request.resource.data.createdAt == resource.data.createdAt &&
@@ -323,17 +329,17 @@ service cloud.firestore {
         request.resource.data.referralCount is int && request.resource.data.referralCount >= 10 &&
         request.resource.data.updatedAt == request.time &&
         (request.resource.data.size == resource.data.size ||
-          (giftStockDelta(request.resource.data.size) == 2 && giftStockDelta(resource.data.size) == -2))
+          (giftStockDelta(request.resource.data.size) == giftReqQty() && giftStockDelta(resource.data.size) == -giftReqQty()))
       );
       allow delete: if giftReqIsSiteAdmin() || (
         request.auth != null &&
         reqUid == request.auth.uid &&
         resource.data.status == 'REQUESTED' &&
-        giftStockDelta(resource.data.size) == -2
+        giftStockDelta(resource.data.size) == -giftReqQty()
       );
     }
     // 2026-10-16: 기념품 사이즈별 소진 수량 { XS, S, M, L } — 한도 XS 30 · S 40 · M 80 · L 50, 신청 1건 = 2개.
-    // 본인 신청 생성(+2)·사이즈 변경(-2/+2)·취소(-2)와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
+    // 본인 신청 생성(+2)·사이즈 변경(-qty/+qty)·취소(-qty) — qty 없는 초기 테스트 신청은 1와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
     match /referralGiftStock/{stockId} {
       function giftStockIsSiteAdmin() {
         return request.auth != null &&
@@ -357,16 +363,16 @@ service cloud.firestore {
           request.resource.data[sz] == resource.data[sz] + 2 &&
           request.resource.data[sz] <= giftStockCap(sz);
       }
-      function giftStockDec(sz) {
+      function giftStockDec(sz, n) {
         return giftStockChangedOnly([sz]) &&
-          request.resource.data[sz] == resource.data[sz] - 2 &&
+          request.resource.data[sz] == resource.data[sz] - n &&
           request.resource.data[sz] >= 0;
       }
-      function giftStockMove(fromSz, toSz) {
+      function giftStockMove(fromSz, toSz, n) {
         return giftStockChangedOnly([fromSz, toSz]) &&
-          request.resource.data[fromSz] == resource.data[fromSz] - 2 &&
+          request.resource.data[fromSz] == resource.data[fromSz] - n &&
           request.resource.data[fromSz] >= 0 &&
-          request.resource.data[toSz] == resource.data[toSz] + 2 &&
+          request.resource.data[toSz] == resource.data[toSz] + n &&
           request.resource.data[toSz] <= giftStockCap(toSz);
       }
       allow read: if request.auth != null;
@@ -381,10 +387,11 @@ service cloud.firestore {
         request.resource.data.keys().hasOnly(['XS', 'S', 'M', 'L']) &&
         (
           (!exists(myGiftReq()) && existsAfter(myGiftReq()) && giftStockInc(getAfter(myGiftReq()).data.size)) ||
-          (exists(myGiftReq()) && !existsAfter(myGiftReq()) && giftStockDec(get(myGiftReq()).data.size)) ||
+          (exists(myGiftReq()) && !existsAfter(myGiftReq()) &&
+            giftStockDec(get(myGiftReq()).data.size, get(myGiftReq()).data.get('qty', 1))) ||
           (exists(myGiftReq()) && existsAfter(myGiftReq()) &&
             get(myGiftReq()).data.size != getAfter(myGiftReq()).data.size &&
-            giftStockMove(get(myGiftReq()).data.size, getAfter(myGiftReq()).data.size))
+            giftStockMove(get(myGiftReq()).data.size, getAfter(myGiftReq()).data.size, get(myGiftReq()).data.get('qty', 1)))
         )
       );
       allow delete: if giftStockIsSiteAdmin();

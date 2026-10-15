@@ -39,6 +39,12 @@ const GIFT_REQ_COLLECTION = 'referralGiftRequests';
 const GIFT_STOCK_COLLECTION = 'referralGiftStock';
 /** 신청 1건당 소진 수량 — 친구 10명 달성 시 양말 2개 증정 */
 export const GIFT_PER_REQUEST = 2;
+
+/** 신청 문서에 기록된 소진 수량 — qty 필드가 없는 초기(재고 기능 이전 테스트) 신청은 1개로 본다 */
+function reqQty(r) {
+  const q = r && typeof r.get === 'function' ? r.get('qty') : r && r.qty;
+  return Number(q) > 0 ? Number(q) : 1;
+}
 const GIFT_STOCK_DOC = 'sizes';
 
 function stockRef() {
@@ -527,17 +533,23 @@ function showGiftRequestDetail(uid, req, count) {
         await runTransaction(db(), async (tx) => {
           const [reqSnap, stSnap] = await Promise.all([tx.get(ref), tx.get(stockRef())]);
           if (!reqSnap.exists()) return;
+          if (!stSnap.exists()) throw new GiftStockError('NO_STOCK');
           const sz = reqSnap.get('size');
-          const st = Object.assign(zeroStock(), stSnap.exists() ? stSnap.data() : {});
+          const st = Object.assign(zeroStock(), stSnap.data());
           tx.delete(ref);
-          tx.update(stockRef(), { [sz]: (Number(st[sz]) || 0) - GIFT_PER_REQUEST }); // 취소한 수량(2개) 반환
+          tx.update(stockRef(), { [sz]: (Number(st[sz]) || 0) - reqQty(reqSnap) }); // 신청 때 소진한 수량 반환
         });
         closeGiftModal();
         toast('기념품 신청을 취소했습니다.', 'success');
         afterGiftChange(uid);
       } catch (e) {
         cancelBtn.disabled = false;
-        toast('신청 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+        toast(
+          e instanceof GiftStockError && e.message === 'NO_STOCK'
+            ? '사이즈 재고 집계가 아직 없습니다. 관리자 기념품 신청 탭을 먼저 열어 주세요.'
+            : '신청 취소에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+          'error'
+        );
       }
     });
   }
@@ -591,7 +603,7 @@ async function showGiftRequestForm(uid, count, prev) {
     GIFT_SIZES.map((sz) => {
       const remain = Math.max(0, sz.stock - (Number(used[sz.value]) || 0));
       const mine = isEdit && prev.size === sz.value; // 내가 이미 받은 수량(수정 시 유지 가능)
-      const soldOut = remain < GIFT_PER_REQUEST && !mine;
+      const soldOut = remain < (isEdit ? reqQty(prev) : GIFT_PER_REQUEST) && !mine;
       return (
         '<label class="stelvio-gift-size' + (soldOut ? ' is-soldout' : '') + '"><input type="radio" name="size" value="' + sz.value + '"' +
         (v.size === sz.value && !soldOut ? ' checked' : '') + (soldOut ? ' disabled' : '') + ' />' +
@@ -651,14 +663,16 @@ async function showGiftRequestForm(uid, count, prev) {
         if (!isEdit && reqSnap.exists()) throw new GiftStockError('ALREADY');
         if (isEdit && !reqSnap.exists()) throw new GiftStockError('GONE');
         const sizeChanged = oldSize !== size;
-        if (sizeChanged && (Number(st[size]) || 0) + GIFT_PER_REQUEST > stockCap(size)) throw new GiftStockError('SOLDOUT');
+        const qty = isEdit ? reqQty(reqSnap) : GIFT_PER_REQUEST; // 수정 시에는 신청 때 수량 그대로 이동
+        if (sizeChanged && !stSnap.exists()) throw new GiftStockError('NO_STOCK');
+        if (sizeChanged && (Number(st[size]) || 0) + qty > stockCap(size)) throw new GiftStockError('SOLDOUT');
         if (isEdit) {
           // 본인 수정: 접수 상태일 때만, 신청일·상태는 그대로(보안 규칙에서 검증)
           tx.update(ref, { name, phone, zipCode, address1, address2, size, referralCount: count, updatedAt: serverTimestamp() });
           if (sizeChanged) {
             tx.update(stockRef(), {
-              [oldSize]: (Number(st[oldSize]) || 0) - GIFT_PER_REQUEST,
-              [size]: (Number(st[size]) || 0) + GIFT_PER_REQUEST
+              [oldSize]: (Number(st[oldSize]) || 0) - qty,
+              [size]: (Number(st[size]) || 0) + qty
             });
           }
         } else {
@@ -666,16 +680,23 @@ async function showGiftRequestForm(uid, count, prev) {
           tx.set(ref, {
             uid, name, phone, zipCode, address1, address2, size,
             referralCount: count,
+            qty,
             status: 'REQUESTED',
             createdAt: serverTimestamp()
           });
-          tx.update(stockRef(), { [size]: (Number(st[size]) || 0) + GIFT_PER_REQUEST });
+          tx.update(stockRef(), { [size]: (Number(st[size]) || 0) + qty });
         }
       });
       closeGiftModal();
       toast(isEdit ? '기념품 신청 정보를 수정했습니다.' : '기념품 신청이 접수되었습니다.', 'success');
       afterGiftChange(uid);
     } catch (e) {
+      if (e instanceof GiftStockError && e.message === 'NO_STOCK') {
+        toast('사이즈 재고 집계가 아직 없습니다. 관리자 기념품 신청 탭을 먼저 열어 주세요.', 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = isEdit ? '수정하기' : '신청하기';
+        return;
+      }
       if (e instanceof GiftStockError && e.message === 'SOLDOUT') {
         toast(size + ' 사이즈가 방금 소진되었습니다. 다른 사이즈를 선택해 주세요.', 'error');
         showGiftRequestForm(uid, count, prev);
@@ -762,7 +783,20 @@ export async function renderAdminGiftRequests(container, opts) {
   if (!adminGiftRows.length || opts.reload !== false) {
     container.innerHTML = '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">기념품 신청 목록을 불러오는 중…</p></div>';
     try {
-      [adminGiftRows, adminGiftStock] = await Promise.all([loadAdminGiftRows(), getGiftStockUsed().catch(() => null)]);
+      let stSnap;
+      [adminGiftRows, stSnap] = await Promise.all([loadAdminGiftRows(), getDoc(stockRef()).catch(() => null)]);
+      adminGiftStock = stSnap && stSnap.exists() ? Object.assign(zeroStock(), stSnap.data()) : null;
+      if (stSnap && !stSnap.exists()) {
+        // 재고 집계 문서가 아직 없으면 실제 신청 수로 처음 만든다(관리자만 임의 값 생성 가능)
+        const init = zeroStock();
+        adminGiftRows.forEach((r) => { if (r.size in init) init[r.size] += reqQty(r); });
+        try {
+          await setDoc(stockRef(), init);
+          adminGiftStock = init;
+        } catch (e2) {
+          console.warn('[referral] 재고 집계 초기화 실패:', e2 && e2.message);
+        }
+      }
     } catch (e) {
       container.innerHTML =
         '<div class="stelvio-gift-admin"><p class="stelvio-gift-admin__empty">신청 목록을 불러오지 못했습니다. (' + esc(e && e.message) + ')</p></div>';
@@ -776,7 +810,7 @@ export async function renderAdminGiftRequests(container, opts) {
 
   // 사이즈별 신청 수(실제 신청 문서 기준)와 재고 집계 문서가 다르면 '재고 맞추기'로 바로잡는다
   const actual = zeroStock();
-  adminGiftRows.forEach((r) => { if (r.size in actual) actual[r.size] += GIFT_PER_REQUEST; });
+  adminGiftRows.forEach((r) => { if (r.size in actual) actual[r.size] += reqQty(r); });
   const stockMismatch = !adminGiftStock || GIFT_SIZES.some((sz) => (Number(adminGiftStock[sz.value]) || 0) !== actual[sz.value]);
   const sizeCounts = GIFT_SIZES.map((sz) => {
     const remain = sz.stock - actual[sz.value];
