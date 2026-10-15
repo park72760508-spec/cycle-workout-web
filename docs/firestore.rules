@@ -338,7 +338,7 @@ service cloud.firestore {
         giftStockDelta(resource.data.size) == -giftReqQty()
       );
     }
-    // 2026-10-16: 기념품 사이즈별 소진 수량 { XS, S, M, L } — 한도 XS 30 · S 40 · M 80 · L 50, 신청 1건 = 2개.
+    // 2026-10-16: 기념품 사이즈별 소진 수량 { XS, S, M, L } — 한도는 caps 문서(관리자 조정, 기본 XS 30 · S 40 · M 80 · L 50), 신청 1건 = 2개.
     // 본인 신청 생성(+2)·사이즈 변경(-qty/+qty)·취소(-qty) — qty 없는 초기 테스트 신청은 1와 같은 트랜잭션에서만 바뀔 수 있다. 관리자는 직접 수정 가능(재고 맞추기).
     match /referralGiftStock/{stockId} {
       function giftStockIsSiteAdmin() {
@@ -349,8 +349,14 @@ service cloud.firestore {
             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.grade == 1
           );
       }
-      function giftStockCap(sz) {
+      // 사이즈별 할당 수량 — 관리자가 caps 문서로 조정, 없으면 기본값(XS 30 · S 40 · M 80 · L 50)
+      function giftStockDefaultCap(sz) {
         return sz == 'XS' ? 30 : (sz == 'S' ? 40 : (sz == 'M' ? 80 : (sz == 'L' ? 50 : 0)));
+      }
+      function giftStockCap(sz) {
+        return exists(/databases/$(database)/documents/referralGiftStock/caps)
+          ? get(/databases/$(database)/documents/referralGiftStock/caps).data.get(sz, giftStockDefaultCap(sz))
+          : giftStockDefaultCap(sz);
       }
       function myGiftReq() {
         return /databases/$(database)/documents/referralGiftRequests/$(request.auth.uid);
@@ -376,12 +382,12 @@ service cloud.firestore {
           request.resource.data[toSz] <= giftStockCap(toSz);
       }
       allow read: if request.auth != null;
-      allow create: if giftStockIsSiteAdmin() || (
+      allow create: if (giftStockIsSiteAdmin() && stockId != 'caps') || (
         request.auth != null &&
         stockId == 'sizes' &&
         request.resource.data == {'XS': 0, 'S': 0, 'M': 0, 'L': 0}
       );
-      allow update: if giftStockIsSiteAdmin() || (
+      allow update: if (giftStockIsSiteAdmin() && stockId != 'caps') || (
         request.auth != null &&
         stockId == 'sizes' &&
         request.resource.data.keys().hasOnly(['XS', 'S', 'M', 'L']) &&
@@ -395,6 +401,14 @@ service cloud.firestore {
         )
       );
       allow delete: if giftStockIsSiteAdmin();
+      // caps 문서(사이즈별 할당 수량): 관리자만, 0~10000 정수
+      allow create, update: if giftStockIsSiteAdmin() &&
+        stockId == 'caps' &&
+        request.resource.data.keys().hasOnly(['XS', 'S', 'M', 'L', 'updatedAt', 'updatedBy']) &&
+        request.resource.data.XS is int && request.resource.data.XS >= 0 && request.resource.data.XS <= 10000 &&
+        request.resource.data.S is int && request.resource.data.S >= 0 && request.resource.data.S <= 10000 &&
+        request.resource.data.M is int && request.resource.data.M >= 0 && request.resource.data.M <= 10000 &&
+        request.resource.data.L is int && request.resource.data.L >= 0 && request.resource.data.L <= 10000;
     }
 
     // 2026-10-12: 사용자별 Garmin LiveTrack 공유 링크(라이딩 모임 참석자 리스트 LIVE 아이콘) — 본인만 쓰기
