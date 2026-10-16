@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <title>STELVIO 친구 초대</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚴</text></svg>">
+  <!--
+    친구 초대 공유 페이지 (2026-10-16)
+    이전 버전 Android 앱(WebView)은 navigator.share 를 지원하지 않아, 앱이 이 페이지를 시스템 브라우저(Chrome)로 열고
+    여기서 기기 공유 시트(카카오톡 등)를 띄운다. ?ref=추천인코드
+  -->
+  <style>
+    :root { --bg: #f1f5f9; --card: #fff; --text: #0f172a; --muted: #64748b; --green: #16a34a; --border: #e2e8f0; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+      background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    }
+    .card { width: 100%; max-width: 380px; background: var(--card); border-radius: 18px; padding: 24px 20px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08); text-align: center; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; }
+    h1 { margin: 10px 0 6px; font-size: 21px; font-weight: 800; }
+    p.desc { margin: 0 0 16px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+    .code { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 8px 14px; border: 1px dashed #86efac; border-radius: 12px; background: #f0fdf4; font-size: 14px; color: #166534; }
+    .code b { font-size: 20px; letter-spacing: 0.12em; }
+    button { width: 100%; padding: 14px 0; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; border: 1px solid var(--border); background: #fff; color: var(--text); }
+    button + button { margin-top: 8px; }
+    .primary { background: #fee500; border-color: #fee500; color: #191919; }
+    .hint { margin: 14px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .msg { min-height: 18px; margin: 10px 0 0; font-size: 13px; font-weight: 700; color: var(--green); }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <span class="badge">EVENT</span>
+    <h1>친구 초대하고 선물 받기</h1>
+    <p class="desc">아래 버튼을 누르고 카카오톡 등 보낼 앱을 선택해 주세요.</p>
+    <div class="code" id="codeBox" hidden>추천인 코드 <b id="code"></b></div>
+    <button type="button" class="primary" id="shareBtn">카카오톡 등으로 공유하기</button>
+    <button type="button" id="copyBtn">초대 링크·코드 복사</button>
+    <p class="msg" id="msg" role="status"></p>
+    <p class="hint">공유를 마친 뒤 STELVIO 앱으로 돌아가 주세요.</p>
+  </main>
+  <script>
+    (function () {
+      var raw = new URLSearchParams(location.search).get('ref') || '';
+      var code = String(raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^[A-Z0-9]{6}$/.test(code)) code = '';
+      var url = 'https://stelvio.ai.kr/' + (code ? '?ref=' + encodeURIComponent(code) : '');
+      // stelvioReferral.js shareInvite 와 같은 문구
+      var text = code
+        ? 'STELVIO에서 함께 훈련해요! 🚴🏃\n' + url + '\n위에 링크로 가입하고 사용자 등록 화면에 추천인 코드를 입력해 주세요.\n추천인 코드: ' + code
+        : 'STELVIO에서 함께 훈련해요! 🚴🏃\n' + url;
+      var msg = document.getElementById('msg');
+      if (code) {
+        document.getElementById('code').textContent = code;
+        document.getElementById('codeBox').hidden = false;
+      }
+      function copy() {
+        function fallback() {
+          try {
+            var ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.opacity = '0';
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return Promise.resolve(ok);
+          } catch (e) {
+            return Promise.resolve(false);
+          }
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(text).then(function () { return true; }, fallback);
+        }
+        return fallback();
+      }
+      document.getElementById('shareBtn').addEventListener('click', function () {
+        if (navigator.share) {
+          navigator.share({ title: 'STELVIO 친구 초대', text: text }).catch(function () {});
+          return;
+        }
+        copy().then(function (ok) {
+          msg.textContent = ok ? '복사했습니다. 카카오톡 대화방에 붙여넣어 보내 주세요.' : '이 브라우저는 공유를 지원하지 않습니다.';
+        });
+      });
+      document.getElementById('copyBtn').addEventListener('click', function () {
+        copy().then(function (ok) {
+          msg.textContent = ok ? '복사했습니다. 카카오톡 대화방에 붙여넣어 보내 주세요.' : '복사에 실패했습니다.';
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

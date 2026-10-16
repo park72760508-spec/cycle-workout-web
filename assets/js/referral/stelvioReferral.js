@@ -298,6 +298,16 @@ function loadKakaoSdk(key) {
   return kakaoSdkP;
 }
 
+function isAndroidAppWebView() {
+  try {
+    const ua = navigator.userAgent || '';
+    if (!/Android/i.test(ua)) return false;
+    return !!window.ReactNativeWebView || window.StelvioAppChannel === 'webview-native' || /; wv\)/i.test(ua);
+  } catch (e) {
+    return false;
+  }
+}
+
 /** 친구 초대하기 — 카카오톡 공유(키 설정 시) → 기기 공유 시트 → 링크·코드 복사 */
 export async function shareInvite() {
   let code;
@@ -338,6 +348,21 @@ export async function shareInvite() {
     } catch (e) {
       if (e && e.name === 'AbortError') return;
     }
+  }
+  // 앱(Android WebView)은 navigator.share 가 없다 → 앱 공유 시트(SHARE_TEXT, 앱 1.0.6+)
+  if (window.StelvioNativeShare && window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+    try {
+      window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SHARE_TEXT', title: 'STELVIO 친구 초대', text }));
+      return;
+    } catch (e) {}
+  }
+  // 이전 버전 Android 앱: 시스템 브라우저(Chrome)에서 공유 전용 페이지를 열어 공유 시트를 띄운다(링크·코드도 미리 복사)
+  if (isAndroidAppWebView()) {
+    await copyText(text);
+    const shareUrl = SITE_URL + 'share.html?ref=' + encodeURIComponent(code);
+    if (typeof window.openStelvioExternalUrl === 'function') window.openStelvioExternalUrl(shareUrl);
+    else window.open(shareUrl, '_blank', 'noopener,noreferrer');
+    return;
   }
   const ok = await copyText(text);
   toast(ok ? '초대 링크와 추천인 코드를 복사했습니다. 카카오톡 대화방에 붙여넣어 보내 주세요.' : '추천인 코드: ' + code + '\n' + url, ok ? 'success' : 'info');
