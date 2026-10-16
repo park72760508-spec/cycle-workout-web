@@ -945,7 +945,7 @@ export async function renderAdminGiftRequests(container, opts) {
         '<b class="stelvio-gift-row__name">' + esc(r.name) + '</b>' +
         '<span class="stelvio-gift-row__phone' + (r.dupPhone ? ' is-dup' : '') + '">' + esc(r.phone) + '</span>' +
         '<span class="stelvio-gift-row__size">' + esc(r.size) + '</span>' +
-        '<span class="stelvio-gift-row__count' + (short ? ' is-short' : '') + '" title="' + (shipped ? '배송 처리됨 · ' : '') + '현재 초대 인원">' + (shipped ? '🚚 ' : '🎁 ') + esc(cnt) + '</span>' +
+        '<span class="stelvio-gift-row__count' + (short ? ' is-short' : '') + '" title="' + (shipped ? '배송 처리됨' : '신청 접수') + ' · 현재 초대 인원 ' + esc(cnt) + '명">' + (shipped ? '🚚' : '🎁') + '</span>' +
         '</div>' +
         '<div class="stelvio-gift-row__addr' + (r.dupAddr ? ' is-dup' : '') + '">(' + esc(r.zipCode) + ') ' + esc(r.address1) + ' ' + esc(r.address2) + '</div>' +
         '<div class="stelvio-gift-row__meta">' + esc(fmtDateTime(tsToDate(r.createdAt))) +
