@@ -795,6 +795,64 @@ async function showGiftRequestForm(uid, count, prev) {
 /* ----- 관리자: 마이 화면 '기념품 신청' 탭 ----- */
 
 let adminGiftRows = [];
+/** 추천인 uid → 추천 실적(가입 인원) */
+let adminReferralCounts = null;
+
+async function loadReferralCounts() {
+  const snap = await getDocs(collection(db(), 'referralClaims'));
+  const m = new Map();
+  snap.forEach((d) => {
+    const ref = d.get('referrerUid');
+    if (ref) m.set(ref, (m.get(ref) || 0) + 1);
+  });
+  return m;
+}
+
+function adminUserName(uid, fallback) {
+  try {
+    const base = window._profileScreenUsersBase || [];
+    const u = base.find((x) => String(x.id) === String(uid));
+    if (u) {
+      const n = typeof window.getProfileUserDisplayName === 'function' ? window.getProfileUserDisplayName(u) : u.name;
+      if (n) return n;
+    }
+  } catch (e) {}
+  return fallback || '(이름 없음 · ' + String(uid).slice(0, 6) + ')';
+}
+
+/** 친구 초대 실적이 1건 이상인 회원 목록(실적 많은 순) */
+function referrerListHtml(nameQuery) {
+  if (!adminReferralCounts) return '';
+  const reqByUid = new Map(adminGiftRows.map((r) => [r.uid || r.id, r]));
+  let list = Array.from(adminReferralCounts.entries()).map(([uid, count]) => {
+    const req = reqByUid.get(uid);
+    return { uid, count, name: adminUserName(uid, req && req.name), req };
+  });
+  const totalJoined = list.reduce((a, x) => a + x.count, 0);
+  const achieved = list.filter((x) => x.count >= REFERRAL_GOAL).length;
+  if (nameQuery) list = list.filter((x) => String(x.name).indexOf(nameQuery) >= 0);
+  list.sort((a, b) => b.count - a.count || String(a.name).localeCompare(String(b.name), 'ko'));
+  let html =
+    '<div class="stelvio-gift-referrers">' +
+    '<div class="stelvio-gift-referrers__title">친구 초대 실적 <small>(추천인 ' + adminReferralCounts.size + '명 · 초대 가입 ' + totalJoined + '명 · 10명 달성 ' + achieved + '명)</small></div>';
+  if (!list.length) {
+    html += '<p class="stelvio-gift-admin__empty">' + (nameQuery ? '검색 결과가 없습니다.' : '아직 추천 실적이 없습니다.') + '</p>';
+  } else {
+    html += '<div class="stelvio-gift-referrers__list">';
+    list.forEach((x) => {
+      const done = x.count >= REFERRAL_GOAL;
+      const st = x.req ? (x.req.status === 'SHIPPED' ? '🚚 배송' : '신청') : done ? '미신청' : '';
+      html +=
+        '<div class="stelvio-gift-referrer' + (done ? ' is-done' : '') + '">' +
+        '<span class="stelvio-gift-referrer__name">' + esc(x.name) + '</span>' +
+        (st ? '<span class="stelvio-gift-referrer__status' + (x.req ? ' is-applied' : '') + '">' + st + '</span>' : '') +
+        '<span class="stelvio-gift-referrer__count" title="나를 추천인으로 가입한 친구 수">🎁 ' + x.count + ' / ' + REFERRAL_GOAL + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+  }
+  return html + '</div>';
+}
 let adminGiftStock = null;
 let adminGiftCaps = null;
 
@@ -814,14 +872,15 @@ async function loadAdminGiftRows() {
     const tb = tsToDate(b.createdAt);
     return (tb ? tb.getTime() : 0) - (ta ? ta.getTime() : 0);
   });
-  // 현재 초대 인원(신청 당시 값과 별개로 서버 집계) — 관리자만 referralClaims 집계 가능
-  await Promise.all(
-    rows.map((r) =>
-      countMyReferrals(r.uid || r.id)
-        .then((n) => { r.liveCount = n; })
-        .catch(() => { r.liveCount = null; })
-    )
-  );
+  // 현재 초대 인원(신청 당시 값과 별개로 서버 집계) — 관리자만 referralClaims 전체 조회 가능
+  const counts = await loadReferralCounts().catch((e) => {
+    console.warn('[referral] 추천 실적 집계 실패:', e && e.message);
+    return null;
+  });
+  adminReferralCounts = counts;
+  rows.forEach((r) => {
+    r.liveCount = counts ? counts.get(r.uid || r.id) || 0 : null;
+  });
   // 다른 계정이 같은 연락처·주소로 신청한 경우 표시
   const phoneMap = new Map();
   const addrMap = new Map();
@@ -959,6 +1018,7 @@ export async function renderAdminGiftRequests(container, opts) {
     });
     html += '</div>';
   }
+  html += referrerListHtml(nameQuery);
   html += '</div>';
   container.innerHTML = html;
   const reloadBtn = container.querySelector('[data-gift-admin-reload]');
