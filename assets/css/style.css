@@ -34066,3 +34066,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .stelvio-gift-caps__row.is-soldout .stelvio-gift-caps__remain { color: #dc2626; }
 .stelvio-gift-caps__actions { display: flex; justify-content: flex-end; margin-top: 6px; }
 @media (max-width: 380px) { .stelvio-gift-caps__range { display: none; } .stelvio-gift-caps__row { grid-template-columns: 28px 1fr auto 60px; } }
+/* 관리자: 배송 체크 */
+.stelvio-gift-row__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+.stelvio-gift-ship { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 1px solid #cbd5e1; border-radius: 999px; background: #fff; color: #334155; font-size: 12px; font-weight: 700; cursor: pointer; }
+.stelvio-gift-ship input { margin: 0; width: 14px; height: 14px; accent-color: #2563eb; }
+.stelvio-gift-row.is-shipped { background: #f8fafc; }
+.stelvio-gift-row.is-shipped .stelvio-gift-ship { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
+.stelvio-gift-row.is-shipped .stelvio-gift-row__count { color: #1d4ed8; }

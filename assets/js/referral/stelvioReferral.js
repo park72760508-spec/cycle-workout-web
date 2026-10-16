@@ -17,6 +17,7 @@ import {
   setDoc,
   updateDoc,
   runTransaction,
+  deleteField,
   collection,
   query,
   where,
@@ -375,9 +376,14 @@ export async function hydrateProfileReferralRow(uid) {
   let code = '';
   let count = 0;
   let applied = false;
+  let shipped = false;
   try {
     [code, count] = await Promise.all([ensureMyReferralCode(uid), countMyReferrals(uid)]);
-    if (count >= REFERRAL_GOAL) applied = !!(await getMyGiftRequest(uid).catch(() => null));
+    if (count >= REFERRAL_GOAL) {
+      const myReq = await getMyGiftRequest(uid).catch(() => null);
+      applied = !!myReq;
+      shipped = !!myReq && myReq.status === 'SHIPPED';
+    }
   } catch (e) {
     console.warn('[referral] 프로필 표시 실패:', e && e.message);
     return;
@@ -390,7 +396,7 @@ export async function hydrateProfileReferralRow(uid) {
       count + ' / ' + REFERRAL_GOAL + '</span>' +
       '<button type="button" class="stelvio-referral-gift-btn' + (applied ? ' is-applied' : '') + '" ' + (done ? '' : 'disabled ') +
       'title="' + (done ? (applied ? '신청 내역 보기' : '기념품 신청서 작성') : '친구 ' + REFERRAL_GOAL + '명 가입 시 신청할 수 있습니다') + '">' +
-      (applied ? '신청 완료' : '기념품 신청') + '</button>';
+      (shipped ? '🚚 배송 처리' : applied ? '신청 완료' : '기념품 신청') + '</button>';
     el.hidden = false;
     const btn = el.querySelector('.stelvio-referral-gift-btn');
     if (btn && done) {
@@ -519,6 +525,7 @@ function giftSummaryHtml(req) {
     ['신청일', fmtDateTime(tsToDate(req.createdAt))]
   ];
   if (req.updatedAt) rows.push(['수정일', fmtDateTime(tsToDate(req.updatedAt))]);
+  if (req.status === 'SHIPPED') rows.push(['배송', '🚚 배송 처리됨' + (req.shippedAt ? ' (' + fmtDateTime(tsToDate(req.shippedAt)) + ')' : '')]);
   return (
     '<dl class="stelvio-gift-summary">' +
     rows.map((r) => '<dt>' + r[0] + '</dt><dd>' + esc(r[1]) + '</dd>').join('') +
@@ -569,7 +576,7 @@ function showGiftRequestDetail(uid, req, count) {
     '<p class="stelvio-gift-modal__desc">기념품 신청이 접수되었습니다. 기념품은 계정당 1건만 신청할 수 있습니다.</p>' +
     giftSummaryHtml(req) +
     '<p class="stelvio-gift-modal__note">배송비 수신자 부담' +
-    (editable ? ' · 발송 전까지 수정하거나 신청을 취소할 수 있습니다.' : ' · 발송 준비가 시작되어 변경은 STELVIO 관리자에게 문의해 주세요.') + '</p>' +
+    (editable ? ' · 발송 전까지 수정하거나 신청을 취소할 수 있습니다.' : ' · 배송 처리되어 수정·취소할 수 없습니다. 변경은 STELVIO 관리자에게 문의해 주세요.') + '</p>' +
     '<div class="stelvio-gift-modal__actions">' +
     (editable
       ? '<button type="button" class="stelvio-gift-btn stelvio-gift-btn--danger" data-gift-cancel>신청 취소</button>' +
@@ -774,7 +781,7 @@ async function showGiftRequestForm(uid, count, prev) {
         return;
       }
       if (isEdit && cur && cur.status !== 'REQUESTED') {
-        toast('발송 준비가 시작되어 수정할 수 없습니다. STELVIO 관리자에게 문의해 주세요.', 'error');
+        toast('배송 처리되어 수정할 수 없습니다. STELVIO 관리자에게 문의해 주세요.', 'error');
         closeGiftModal();
         return;
       }
@@ -931,18 +938,22 @@ export async function renderAdminGiftRequests(container, opts) {
     rows.forEach((r) => {
       const cnt = r.liveCount == null ? (r.referralCount != null ? r.referralCount : '-') : r.liveCount;
       const short = typeof cnt === 'number' && cnt < REFERRAL_GOAL;
+      const shipped = r.status === 'SHIPPED';
       html +=
-        '<div class="stelvio-gift-row' + (r.dupPhone || r.dupAddr ? ' is-dup' : '') + ((r.uid || r.id) === myUid ? ' is-mine" data-gift-mine role="button" tabindex="0" title="내 신청 내역 보기' : '') + '">' +
+        '<div class="stelvio-gift-row' + (r.dupPhone || r.dupAddr ? ' is-dup' : '') + (shipped ? ' is-shipped' : '') + ((r.uid || r.id) === myUid ? ' is-mine" data-gift-mine role="button" tabindex="0" title="내 신청 내역 보기' : '') + '">' +
         '<div class="stelvio-gift-row__top">' +
         '<b class="stelvio-gift-row__name">' + esc(r.name) + '</b>' +
         '<span class="stelvio-gift-row__phone' + (r.dupPhone ? ' is-dup' : '') + '">' + esc(r.phone) + '</span>' +
         '<span class="stelvio-gift-row__size">' + esc(r.size) + '</span>' +
-        '<span class="stelvio-gift-row__count' + (short ? ' is-short' : '') + '" title="현재 초대 인원">🎁 ' + esc(cnt) + '</span>' +
+        '<span class="stelvio-gift-row__count' + (short ? ' is-short' : '') + '" title="' + (shipped ? '배송 처리됨 · ' : '') + '현재 초대 인원">' + (shipped ? '🚚 ' : '🎁 ') + esc(cnt) + '</span>' +
         '</div>' +
         '<div class="stelvio-gift-row__addr' + (r.dupAddr ? ' is-dup' : '') + '">(' + esc(r.zipCode) + ') ' + esc(r.address1) + ' ' + esc(r.address2) + '</div>' +
         '<div class="stelvio-gift-row__meta">' + esc(fmtDateTime(tsToDate(r.createdAt))) +
         (r.dupPhone ? ' · <span class="stelvio-gift-dup">연락처 중복</span>' : '') +
         (r.dupAddr ? ' · <span class="stelvio-gift-dup">주소 중복</span>' : '') +
+        (shipped && r.shippedAt ? ' · 배송 ' + esc(fmtDateTime(tsToDate(r.shippedAt))) : '') +
+        '<label class="stelvio-gift-ship" title="배송 처리하면 사용자는 수정·취소할 수 없습니다">' +
+        '<input type="checkbox" data-gift-ship="' + esc(r.uid || r.id) + '"' + (shipped ? ' checked' : '') + ' /> 배송</label>' +
         '</div>' +
         '</div>';
     });
@@ -1017,6 +1028,33 @@ export async function renderAdminGiftRequests(container, opts) {
     });
   const testBtn = container.querySelector('[data-gift-admin-test]');
   if (testBtn) testBtn.addEventListener('click', openMine);
+  // 배송 체크 — SHIPPED 이면 보안 규칙상 본인 수정·취소 불가(관리자만 변경)
+  container.querySelectorAll('.stelvio-gift-ship').forEach((label) => {
+    label.addEventListener('click', (e) => e.stopPropagation()); // 내 신청 행 클릭(내역 열기)과 분리
+  });
+  container.querySelectorAll('[data-gift-ship]').forEach((cb) => {
+    cb.addEventListener('change', async () => {
+      const id = cb.getAttribute('data-gift-ship');
+      const on = cb.checked;
+      cb.disabled = true;
+      try {
+        await updateDoc(doc(db(), GIFT_REQ_COLLECTION, id), on
+          ? { status: 'SHIPPED', shippedAt: serverTimestamp(), shippedBy: currentUid() }
+          : { status: 'REQUESTED', shippedAt: deleteField(), shippedBy: deleteField() }); // 필드 제거(본인 수정 규칙 키 목록 유지)
+        const row = adminGiftRows.find((x) => (x.uid || x.id) === id);
+        if (row) {
+          row.status = on ? 'SHIPPED' : 'REQUESTED';
+          row.shippedAt = on ? { toDate: () => new Date() } : null;
+        }
+        toast(on ? '배송 처리했습니다. 사용자는 더 이상 수정·취소할 수 없습니다.' : '배송 처리를 해제했습니다.', 'success');
+        renderAdminGiftRequests(container, Object.assign({}, opts, { reload: false }));
+      } catch (e) {
+        cb.checked = !on;
+        cb.disabled = false;
+        toast('배송 처리 변경에 실패했습니다: ' + ((e && e.message) || e), 'error');
+      }
+    });
+  });
   const mineRow = container.querySelector('[data-gift-mine]');
   if (mineRow) {
     mineRow.addEventListener('click', openMine);
@@ -1033,7 +1071,7 @@ export async function renderAdminGiftRequests(container, opts) {
 
 function downloadGiftCsv(rows) {
   const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const header = ['신청일시', '성명', '연락처', '우편번호', '주소', '상세주소', '전체주소', '사이즈', '사이즈(mm)', '초대 인원', '중복 의심', '회원ID'];
+  const header = ['신청일시', '성명', '연락처', '우편번호', '주소', '상세주소', '전체주소', '사이즈', '사이즈(mm)', '초대 인원', '중복 의심', '배송', '배송일시', '회원ID'];
   const lines = [header.map(q).join(',')];
   rows
     .slice()
@@ -1054,6 +1092,8 @@ function downloadGiftCsv(rows) {
           sz ? sz.range : '',
           r.liveCount == null ? r.referralCount : r.liveCount,
           dup,
+          r.status === 'SHIPPED' ? 'Y' : '',
+          r.status === 'SHIPPED' ? fmtDateTime(tsToDate(r.shippedAt)) : '',
           r.uid || r.id
         ].map(q).join(',')
       );
