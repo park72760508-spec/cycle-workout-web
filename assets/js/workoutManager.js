@@ -1685,8 +1685,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
           rpmY = padding.top + chartHeight - (chartHeight * (targetRpm / maxRpm));
         }
         
-        // 빨강색 실선 그리기 (세그먼트 막대 넓이만큼)
-        ctx.strokeStyle = '#FF4D4D'; // 밝은 레드
+        // 2026-10-16: 훈련 화면(모바일·개인/태블릿·그룹·코치)은 RPM 가이드·값을 연한 회색, 훈련 준비 화면은 빨강 유지
+        const rpmGuideMuted = canvasId !== 'segmentPreviewGraph';
+        // 실선 그리기 (세그먼트 막대 넓이만큼)
+        ctx.strokeStyle = rpmGuideMuted ? 'rgba(203, 213, 225, 0.75)' : '#FF4D4D'; // 연한 회색 / 밝은 레드
         ctx.lineWidth = 2; // 선명한 두께
         ctx.setLineDash([]); // 실선 (점선 해제)
         ctx.beginPath();
@@ -1695,7 +1697,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         ctx.stroke();
         
         // RPM 값 라벨 표시 (세그먼트 막대 중앙 상단, 한글 폰트 통일)
-        ctx.fillStyle = '#FF3B30'; // 숫자 색상
+        ctx.fillStyle = rpmGuideMuted ? '#cbd5e1' : '#FF3B30'; // 숫자 색상(연한 회색 / 빨강)
         ctx.font = `bold 10px ${textFontFamily}`;
         ctx.textAlign = 'center';
         const labelY = rpmY - 5; // 점선 위에 표시
