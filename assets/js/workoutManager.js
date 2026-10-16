@@ -974,8 +974,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const boxX = padding.left + chartWidth - boxWidth - 2; // 오른쪽 끝에서 약간 여백
       const boxY = ftpY - boxHeight / 2; // 점선 중앙에 배치 (ftpY가 점선의 Y 위치)
       
-      // 빨강색 바탕 둥근 상자 그리기
-      ctx.fillStyle = 'rgba(239, 68, 68, 0.9)'; // 빨강색 바탕
+      // 2026-10-16: 훈련 화면 RPM 기준(90) 표시는 연한 회색 바탕
+      ctx.fillStyle = '#cbd5e1'; // 연한 회색 바탕
       ctx.beginPath();
       const radius = 3;
       ctx.moveTo(boxX + radius, boxY);
@@ -990,8 +990,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.closePath();
       ctx.fill();
       
-      // 흰색 텍스트 표시
-      ctx.fillStyle = '#ffffff';
+      // 진한 텍스트 표시
+      ctx.fillStyle = '#0f172a';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
@@ -1002,11 +1002,11 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
       const cx = padding.left + chartWidth - circleR - 2;
       const cy = ftpY;
-      ctx.fillStyle = '#10b981';
+      ctx.fillStyle = '#cbd5e1'; // 2026-10-16: 민트 → 연한 회색
       ctx.beginPath();
       ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#000000';
+      ctx.fillStyle = '#0f172a';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, cx, cy);
@@ -1018,7 +1018,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const boxY = ftpY - boxHeight / 2;
       const rpmBoxMint = isIndividualDashboardCanvas;
       
-      ctx.fillStyle = rpmBoxMint ? '#10b981' : 'rgba(239, 68, 68, 0.9)';
+      ctx.fillStyle = rpmBoxMint ? '#cbd5e1' : 'rgba(239, 68, 68, 0.9)'; // 2026-10-16: 훈련 화면 민트 → 연한 회색
       ctx.beginPath();
       const radius = 3;
       ctx.moveTo(boxX + radius, boxY);
@@ -1033,7 +1033,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.closePath();
       ctx.fill();
       
-      ctx.fillStyle = rpmBoxMint ? '#000000' : '#ffffff';
+      ctx.fillStyle = rpmBoxMint ? '#0f172a' : '#ffffff';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
