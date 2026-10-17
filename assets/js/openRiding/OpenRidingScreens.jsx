@@ -4833,24 +4833,127 @@ function OpenRidingCalendarMain(props) {
   var ridesMonthRaw = hook.ridesMonth;
   var ridesMyListRaw = hook.ridesMyList || [];
   var loadingRides = hook.loadingRides;
+  /** 내가 가입한 클럽/크루 id — 그 클럽의 그룹세션(인도어 훈련 모임)도 이 달력에 보여 주기 위해 1회 조회(2026-10-17).
+      (subscribeMyRidingGroupsAsMember 는 폴링 구독이라 첫 응답을 받으면 바로 해제한다) */
+  var _myGroupIds = useState(null);
+  var myGroupIds = _myGroupIds[0];
+  var setMyGroupIds = _myGroupIds[1];
+  useEffect(
+    function () {
+      if (!userId) {
+        setMyGroupIds(null);
+        return undefined;
+      }
+      var gs = typeof window !== 'undefined' ? window.openRidingGroupService || {} : {};
+      if (typeof gs.subscribeMyRidingGroupsAsMember !== 'function') return undefined;
+      var done = false;
+      var unsub = null;
+      try {
+        unsub = gs.subscribeMyRidingGroupsAsMember(firestore, userId, function (rows) {
+          if (done) return;
+          done = true;
+          var ids = {};
+          (rows || []).forEach(function (g) {
+            var gid = g && g.id != null ? String(g.id).trim() : '';
+            if (gid) ids[gid] = true;
+          });
+          setMyGroupIds(ids);
+          if (unsub) {
+            try { unsub(); } catch (e) {}
+            unsub = null;
+          }
+        });
+        if (done && unsub) {
+          try { unsub(); } catch (e) {}
+          unsub = null;
+        }
+      } catch (e) {}
+      return function () {
+        done = true;
+        if (unsub) {
+          try { unsub(); } catch (e) {}
+        }
+      };
+    },
+    [firestore, userId]
+  );
+  /** 그룹세션은 공개 모임이 아니므로 내가 가입한 클럽의 것만 표시(그 외 클럽 그룹세션은 클럽 상세 캘린더에서만) */
+  function isVisibleInMainCalendar(r) {
+    if (!openRidingRideMatchesMoimCategory(r, moimCategory)) return false;
+    if (!r.isGroupSession) return true;
+    var gid = r.groupId != null ? String(r.groupId).trim() : '';
+    return !!(gid && myGroupIds && myGroupIds[gid]);
+  }
   var ridesMonth = useMemo(
     function () {
-      /* 그룹세션(인도어 훈련 모임)은 클럽 상세의 라이딩 모임 캘린더에만 표시되고, 일반(공개)
-         라이딩 모임 캘린더에는 노출되지 않는다(2026-09) — OpenRidingGroupCalendarSection은
-         이 컴포넌트를 거치지 않고 useOpenRiding을 직접 호출해 별도로 groupId 필터링한다. */
-      return (ridesMonthRaw || []).filter(function (r) {
-        return !r.isGroupSession && openRidingRideMatchesMoimCategory(r, moimCategory);
-      });
+      return (ridesMonthRaw || []).filter(isVisibleInMainCalendar);
     },
-    [ridesMonthRaw, moimCategory]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ridesMonthRaw, moimCategory, myGroupIds]
   );
   var ridesMyList = useMemo(
     function () {
-      return (ridesMyListRaw || []).filter(function (r) {
-        return !r.isGroupSession && openRidingRideMatchesMoimCategory(r, moimCategory);
-      });
+      return (ridesMyListRaw || []).filter(isVisibleInMainCalendar);
     },
-    [ridesMyListRaw, moimCategory]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ridesMyListRaw, moimCategory, myGroupIds]
+  );
+
+  /** 그룹세션 목록 행의 "워크아웃명(훈련시간)" — 클럽 상세 캘린더(OpenRidingGroupCalendarSection)와 같은 방식으로 조회 */
+  var _workoutInfoMain = useState({});
+  var workoutInfoById = _workoutInfoMain[0];
+  var setWorkoutInfoById = _workoutInfoMain[1];
+  var groupSessionWorkoutKey = useMemo(
+    function () {
+      return ridesMonth
+        .filter(function (r) { return r.isGroupSession && r.workoutId; })
+        .map(function (r) { return String(r.workoutSource || '') + ':' + String(r.groupId || '') + ':' + String(r.workoutId); })
+        .sort()
+        .join('|');
+    },
+    [ridesMonth]
+  );
+  useEffect(
+    function () {
+      if (!groupSessionWorkoutKey) return undefined;
+      var cancelled = false;
+      var clubGroupIds = {};
+      var gasIds = {};
+      groupSessionWorkoutKey.split('|').forEach(function (k) {
+        var parts = k.split(':');
+        if (parts[0] === 'club') {
+          if (parts[1]) clubGroupIds[parts[1]] = true;
+        } else if (parts[2]) {
+          gasIds[parts[2]] = true;
+        }
+      });
+      var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
+      var clubPromise =
+        typeof svcGroup.fetchClubWorkouts === 'function'
+          ? Promise.all(Object.keys(clubGroupIds).map(function (gid) {
+              return svcGroup.fetchClubWorkouts(gid).catch(function () { return []; });
+            }))
+          : Promise.resolve([]);
+      var gasPromise =
+        typeof window !== 'undefined' && typeof window.apiGetWorkout === 'function'
+          ? Promise.all(Object.keys(gasIds).map(function (id) {
+              return window.apiGetWorkout(id).then(function (r) { return r && r.success && r.item ? r.item : null; }).catch(function () { return null; });
+            }))
+          : Promise.resolve([]);
+      Promise.all([clubPromise, gasPromise]).then(function (results) {
+        if (cancelled) return;
+        var map = {};
+        (results[0] || []).forEach(function (list) {
+          (list || []).forEach(function (w) { if (w && w.id != null) map[String(w.id)] = w; });
+        });
+        (results[1] || []).forEach(function (w) { if (w && w.id != null) map[String(w.id)] = w; });
+        setWorkoutInfoById(map);
+      });
+      return function () {
+        cancelled = true;
+      };
+    },
+    [groupSessionWorkoutKey]
   );
 
   /** 클럽/크루에서 생성된 모임인 경우 날짜 목록 행에 그 그룹 아바타 배지를 보여주기 위해,
@@ -5930,7 +6033,8 @@ function OpenRidingCalendarMain(props) {
       userId: userId,
       onSelectRide: onSelectRide,
       inviteCheckPhone: inviteCheckPhone,
-      groupPhotoByGroupId: groupPhotoByGroupId
+      groupPhotoByGroupId: groupPhotoByGroupId,
+      workoutInfoById: workoutInfoById
     });
   }
 
