@@ -125,6 +125,147 @@ function getBluetoothCoachSessionId() {
   return 'session_room_1';
 }
 
+/* ==========================================================================================
+ * 2026-10-18: Coach RTDB 전송 계층 — 휴대폰(WebView 등)에서 RTDB SDK(웹소켓·compat Auth)가 응답 없이 멈춰
+ * 휴대폰 Coach 화면에 슬롯(참가자)·상태·워크아웃이 전혀 반영되지 않던 문제(PC 는 정상). Player 화면
+ * (bluetoothIndividual.js __indivWatch, 2026-10-10)과 같은 방식:
+ *  - 구독: SDK on('value') 우선, 5초 안에 응답이 없으면 RTDB REST 스트리밍(EventSource, v9 ID 토큰)으로 전환.
+ *  - 단건 조회: SDK 시간 초과 시 REST GET.  - 쓰기: SDK 연결 중이면 SDK, 아니면 REST(PATCH/PUT/DELETE).
+ * ========================================================================================== */
+var bluetoothCoachRtdbConnected = false;
+try {
+  if (typeof db !== 'undefined' && db && db.ref) {
+    db.ref('.info/connected').on('value', function (s) { bluetoothCoachRtdbConnected = !!(s && s.val()); });
+  }
+} catch (eConn) {}
+
+function bluetoothCoachRtdbBase() {
+  try {
+    var u = window.firebase && firebase.apps && firebase.apps.length && firebase.app().options.databaseURL;
+    if (u) return String(u).replace(/\/+$/, '');
+  } catch (e) {}
+  return 'https://stelvio-ai-default-rtdb.firebaseio.com';
+}
+function bluetoothCoachIdToken() {
+  var u = (window.authV9 && window.authV9.currentUser) || (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+  if (!u || typeof u.getIdToken !== 'function') return Promise.reject(new Error('NO_AUTH'));
+  return u.getIdToken();
+}
+function bluetoothCoachRestUrl(path, token) {
+  return bluetoothCoachRtdbBase() + '/' + String(path).replace(/^\/+|\/+$/g, '') + '.json?auth=' + encodeURIComponent(token);
+}
+/** ref(compat) → 'sessions/1/users' 같은 경로 */
+function bluetoothCoachRefPath(ref) {
+  try {
+    var full = String(ref.toString());
+    var base = bluetoothCoachRtdbBase();
+    if (full.indexOf(base) === 0) full = full.slice(base.length);
+    return decodeURIComponent(full.replace(/^\/+/, ''));
+  } catch (e) { return ''; }
+}
+async function bluetoothCoachRest(method, path, body, ms) {
+  var token = await bluetoothCoachIdToken();
+  var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms || 8000);
+  try {
+    var res = await fetch(bluetoothCoachRestUrl(path, token), {
+      method: method,
+      cache: 'no-store',
+      headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    if (!res.ok) throw new Error('RTDB REST HTTP ' + res.status);
+    var txt = await res.text();
+    return txt ? JSON.parse(txt) : null;
+  } finally {
+    clearTimeout(t);
+  }
+}
+/** 쓰기: SDK 연결 상태면 SDK, 아니면 REST */
+function bluetoothCoachRtdbUpdate(path, data) {
+  if (bluetoothCoachRtdbConnected) return db.ref(path).update(data);
+  return bluetoothCoachRest('PATCH', path, data, 8000);
+}
+function bluetoothCoachRtdbSet(path, data) {
+  if (bluetoothCoachRtdbConnected) return db.ref(path).set(data);
+  return bluetoothCoachRest('PUT', path, data === undefined ? null : data, 8000);
+}
+function bluetoothCoachRtdbRemove(path) {
+  if (bluetoothCoachRtdbConnected) return db.ref(path).remove();
+  return bluetoothCoachRest('DELETE', path, undefined, 8000);
+}
+function bluetoothCoachSetAtPath(root, relPath, data, merge) {
+  var parts = String(relPath || '/').split('/').filter(Boolean);
+  if (!parts.length) {
+    if (merge && data && typeof data === 'object' && root && typeof root === 'object' && !Array.isArray(root)) {
+      var m = Object.assign({}, root);
+      Object.keys(data).forEach(function (k) { if (data[k] === null) delete m[k]; else m[k] = data[k]; });
+      return m;
+    }
+    return merge ? Object.assign({}, root || {}, data || {}) : data;
+  }
+  var base = root && typeof root === 'object' ? (Array.isArray(root) ? root.slice() : Object.assign({}, root)) : {};
+  var head = parts[0];
+  var child = bluetoothCoachSetAtPath(base[head], '/' + parts.slice(1).join('/'), data, merge);
+  if (child === null || child === undefined) delete base[head];
+  else base[head] = child;
+  return base;
+}
+/** RTDB REST 스트리밍(EventSource) — 토큰 만료·오류 시 새 토큰으로 재연결. 반환: off() */
+function bluetoothCoachRestStream(path, onValue) {
+  var es = null, closed = false, value = null, retryTimer = null;
+  function reopen(ms) { if (closed) return; clearTimeout(retryTimer); retryTimer = setTimeout(open, ms); }
+  function open() {
+    if (closed || typeof EventSource === 'undefined') return;
+    bluetoothCoachIdToken().then(function (token) {
+      if (closed) return;
+      try { if (es) es.close(); } catch (e) {}
+      es = new EventSource(bluetoothCoachRestUrl(path, token));
+      es.addEventListener('put', function (e) {
+        try { var m = JSON.parse(e.data); value = bluetoothCoachSetAtPath(value, m.path, m.data, false); onValue(value); } catch (err) {}
+      });
+      es.addEventListener('patch', function (e) {
+        try { var m = JSON.parse(e.data); value = bluetoothCoachSetAtPath(value, m.path, m.data, true); onValue(value); } catch (err) {}
+      });
+      es.addEventListener('auth_revoked', function () { reopen(500); });
+      es.addEventListener('cancel', function () { reopen(5000); });
+      es.onerror = function () { try { es.close(); } catch (e2) {} reopen(3000); };
+    }).catch(function () { reopen(5000); });
+  }
+  open();
+  return function off() { closed = true; clearTimeout(retryTimer); try { if (es) es.close(); } catch (e) {} };
+}
+/**
+ * on('value') 대체 — SDK 우선, 5초 안에 첫 응답이 없으면 REST 스트림 병행. 같은 값은 JSON 비교로 한 번만 전달.
+ * handler(snapshotLike{val()}). 반환: 구독 해제 함수
+ */
+function bluetoothCoachWatch(dbInstance, path, handler) {
+  var last;
+  function deliver(v) {
+    var key;
+    try { key = JSON.stringify(v === undefined ? null : v); } catch (e) { key = String(Math.random()); }
+    if (key === last) return;
+    last = key;
+    try { handler({ val: function () { return v === undefined ? null : v; } }); } catch (err) { console.warn('[Bluetooth Coach] 구독 처리 오류:', path, err); }
+  }
+  var ref = dbInstance.ref(path);
+  var sdkCb = ref.on('value', function (snap) { deliver(snap ? snap.val() : null); }, function (err) {
+    console.warn('[Bluetooth Coach] SDK 구독 오류:', path, err && err.message);
+  });
+  var offStream = null;
+  var timer = setTimeout(function () {
+    if (last !== undefined) return; // SDK 가 이미 응답
+    console.warn('[Bluetooth Coach] SDK 구독 무응답 → REST 스트림 전환:', path);
+    offStream = bluetoothCoachRestStream(path, deliver);
+  }, 5000);
+  return function () {
+    clearTimeout(timer);
+    try { ref.off('value', sdkCb); } catch (e) {}
+    if (offStream) offStream();
+  };
+}
+
 /**
  * RTDB once('value') 에 시간 제한 — 연결 재수립 중(모바일 네트워크 전환·앱 복귀 직후)에는 once 가
  * 성공도 실패도 하지 않고 계속 대기해, 트랙 구성 조회가 끝나지 않으면 슬롯 목록이 영영 만들어지지 않았다(2026-09-29).
@@ -135,7 +276,12 @@ function bluetoothCoachOnceWithTimeout(ref, ms) {
     var tid = setTimeout(function () {
       if (done) return;
       done = true;
-      reject(new Error('rtdb_once_timeout'));
+      // 2026-10-18: SDK 무응답(휴대폰) → REST GET 으로 한 번 더 시도
+      var path = bluetoothCoachRefPath(ref);
+      if (!path) { reject(new Error('rtdb_once_timeout')); return; }
+      bluetoothCoachRest('GET', path, undefined, 8000).then(function (v) {
+        resolve({ val: function () { return v; } });
+      }, function () { reject(new Error('rtdb_once_timeout')); });
     }, ms || 5000);
     ref.once('value').then(function (snap) {
       if (done) return;
@@ -1162,14 +1308,34 @@ async function setupFirebaseSubscriptions() {
   window.bluetoothCoachState.firebaseSubscriptions = {};
   
   // 각 트랙에 대한 구독 설정
+  // 2026-10-18: SDK 는 트랙별 구독, SDK 무응답(휴대폰)이면 트랙마다 스트림을 열지 않고 users 전체 스트림 1개로 나눠 전달
   const powerMeters = window.bluetoothCoachState.powerMeters;
   if (Array.isArray(powerMeters)) {
+    const userHandlers = {};
+    const userLastKey = {};
+    let anyUserSdkReply = false;
+    function deliverUser(trackId, v) {
+      let key;
+      try { key = JSON.stringify(v == null ? null : v); } catch (e) { key = String(Math.random()); }
+      if (userLastKey[trackId] === key) return;
+      userLastKey[trackId] = key;
+      const h = userHandlers[trackId];
+      if (h) h({ val: function () { return v == null ? null : v; } });
+    }
     powerMeters.forEach(pm => {
       const trackId = pm && pm.id;
       if (trackId == null) return;
       const userRef = dbInstance.ref(`sessions/${sessionId}/users/${trackId}`);
-      
-      const unsubscribe = userRef.on('value', (snapshot) => {
+      const sdkCb = userRef.on('value', function (snap) {
+        anyUserSdkReply = true;
+        deliverUser(trackId, snap ? snap.val() : null);
+      }, function (err) {
+        console.warn('[Bluetooth Coach] SDK 구독 오류(users/' + trackId + '):', err && err.message);
+      });
+      window.bluetoothCoachState.firebaseSubscriptions[`user_${trackId}`] = function () {
+        try { userRef.off('value', sdkCb); } catch (e) {}
+      };
+      userHandlers[trackId] = (snapshot) => {
         try {
           if (!snapshot) return;
           const userData = snapshot.val();
@@ -1181,17 +1347,29 @@ async function setupFirebaseSubscriptions() {
         } catch (e) {
           console.warn('[Bluetooth Coach] user value callback error:', e);
         }
-      });
-      
-      window.bluetoothCoachState.firebaseSubscriptions[`user_${trackId}`] = unsubscribe;
+      };
     });
+    let offUsersStream = null;
+    const usersFallbackTimer = setTimeout(function () {
+      if (anyUserSdkReply) return;
+      console.warn('[Bluetooth Coach] SDK 참가자 구독 무응답 → REST 스트림(users) 전환');
+      offUsersStream = bluetoothCoachRestStream(`sessions/${sessionId}/users`, function (all) {
+        const map = all && typeof all === 'object' ? all : {};
+        Object.keys(userHandlers).forEach(function (tid) {
+          deliverUser(tid, map[tid] != null ? map[tid] : null);
+        });
+      });
+    }, 5000);
+    window.bluetoothCoachState.firebaseSubscriptions['users_rest'] = function () {
+      clearTimeout(usersFallbackTimer);
+      if (offUsersStream) offUsersStream();
+    };
   } else {
     console.warn('[Bluetooth Coach] powerMeters가 배열이 아닙니다.');
   }
   
   // 워크아웃 상태 구독 (Indoor Training과 동일한 방식)
-  const statusRef = dbInstance.ref(`sessions/${sessionId}/status`);
-  const statusUnsubscribe = statusRef.on('value', (snapshot) => {
+  const statusUnsubscribe = bluetoothCoachWatch(dbInstance, `sessions/${sessionId}/status`, (snapshot) => {
     try {
       if (!snapshot) return;
       const status = snapshot.val();
@@ -1206,8 +1384,7 @@ async function setupFirebaseSubscriptions() {
   window.bluetoothCoachState.firebaseSubscriptions['status'] = statusUnsubscribe;
   
   // 워크아웃 플랜 구독 (Firebase에서 워크아웃 변경 감지)
-  const workoutPlanRef = dbInstance.ref(`sessions/${sessionId}/workoutPlan`);
-  const workoutPlanUnsubscribe = workoutPlanRef.on('value', (snapshot) => {
+  const workoutPlanUnsubscribe = bluetoothCoachWatch(dbInstance, `sessions/${sessionId}/workoutPlan`, (snapshot) => {
     try {
       if (!snapshot) return;
       const workoutPlan = snapshot.val();
@@ -1271,8 +1448,7 @@ async function setupFirebaseSubscriptions() {
 
   /* 다른 Coach 화면에서 고른 워크아웃의 ID·제목(동기화용) */
   ['workoutId', 'workoutTitle'].forEach(function (key) {
-    const ref = dbInstance.ref(`sessions/${sessionId}/${key}`);
-    const unsub = ref.on('value', function (snap) {
+    const unsub = bluetoothCoachWatch(dbInstance, `sessions/${sessionId}/${key}`, function (snap) {
       const v = snap && snap.val();
       if (v == null) return;
       if (key === 'workoutId') window.bluetoothCoachState._syncWorkoutId = String(v);
@@ -1283,7 +1459,7 @@ async function setupFirebaseSubscriptions() {
         if (key === 'workoutTitle' && !cw.title) cw.title = String(v);
       }
     });
-    window.bluetoothCoachState.firebaseSubscriptions[key] = function () { ref.off('value', unsub); };
+    window.bluetoothCoachState.firebaseSubscriptions[key] = unsub;
   });
   
   console.log('[Bluetooth Coach] Firebase 구독 설정 완료');
@@ -1306,7 +1482,7 @@ async function loadInitialUserDataForTracks() {
   if (!authed) return;
 
   try {
-    const usersSnapshot = await db.ref(`sessions/${sessionId}/users`).once('value');
+    const usersSnapshot = await bluetoothCoachOnceWithTimeout(db.ref(`sessions/${sessionId}/users`), 5000);
     const usersData = usersSnapshot.val();
     
     if (usersData) {
@@ -1651,7 +1827,7 @@ async function getFirebaseDevicesForTrackBluetoothCoach(trackId) {
   }
   
   try {
-    const snapshot = await db.ref(`sessions/${sessionId}/devices/${trackId}`).once('value');
+    const snapshot = await bluetoothCoachOnceWithTimeout(db.ref(`sessions/${sessionId}/devices/${trackId}`), 5000);
     return snapshot.val();
   } catch (error) {
     console.error(`[Bluetooth Coach] Firebase 디바이스 정보 가져오기 실패 (트랙 ${trackId}):`, error);
@@ -1839,6 +2015,7 @@ function bluetoothCoachSegmentTargetPower(currentSegment, ftp) {
   return targetPower;
 }
 if (typeof window !== 'undefined') window.bluetoothCoachSegmentTargetPower = bluetoothCoachSegmentTargetPower;
+if (typeof window !== 'undefined') window.bluetoothCoachWatch = bluetoothCoachWatch;
 
 /**
  * 파워미터 바늘 궤적 업데이트 (Indoor Training의 updatePowerMeterTrail 참고)
@@ -2307,7 +2484,7 @@ function updateTrainingStatus(status) {
       });
       const sessionId = getBluetoothCoachSessionId();
       if (sessionId && typeof db !== 'undefined') {
-        db.ref(`sessions/${sessionId}/status`).update({
+        bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
           state: 'finished',
           completionMessage: '모든 세그먼트 훈련이 완료되었습니다.',
           completedAt: Date.now()
@@ -2846,7 +3023,7 @@ window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
     }
     
     // Firebase devices DB에 track 값 저장 (지정한 개수로 설정)
-    await db.ref(`sessions/${sessionId}/devices`).update({
+    await bluetoothCoachRtdbUpdate(`sessions/${sessionId}/devices`, {
       track: targetTrackCount
     });
     
@@ -2898,9 +3075,9 @@ window.addTracksToBluetoothCoach = async function addTracksToBluetoothCoach() {
       const deletePromises = [];
       for (let i = targetTrackCount + 1; i <= currentMaxTracks; i++) {
         // users 삭제
-        deletePromises.push(db.ref(`sessions/${sessionId}/users/${i}`).remove());
+        deletePromises.push(bluetoothCoachRtdbRemove(`sessions/${sessionId}/users/${i}`));
         // devices 삭제 (track 필드는 devices 루트에 있으므로 개별 트랙 devices만 삭제)
-        deletePromises.push(db.ref(`sessions/${sessionId}/devices/${i}`).remove());
+        deletePromises.push(bluetoothCoachRtdbRemove(`sessions/${sessionId}/devices/${i}`));
       }
       await Promise.all(deletePromises);
       console.log(`[Bluetooth Coach] 초과 트랙(${targetTrackCount + 1}~${currentMaxTracks}) 데이터 삭제 완료`);
@@ -3089,7 +3266,7 @@ function applyBluetoothCoachSelectedWorkout(loadedWorkout) {
     const sessionId = getBluetoothCoachSessionId();
     if (sessionId) {
       // workoutPlan 저장 (세그먼트 배열)
-      db.ref(`sessions/${sessionId}/workoutPlan`).set(loadedWorkout.segments)
+      bluetoothCoachRtdbSet(`sessions/${sessionId}/workoutPlan`, loadedWorkout.segments)
         .then(() => {
           console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutPlan Firebase 저장 완료:', sessionId);
         })
@@ -3098,12 +3275,12 @@ function applyBluetoothCoachSelectedWorkout(loadedWorkout) {
         });
       
       // 워크아웃 제목 저장 — 같은 방의 다른 Coach 화면 동기화용
-      db.ref(`sessions/${sessionId}/workoutTitle`).set(String(loadedWorkout.title || loadedWorkout.name || ''))
+      bluetoothCoachRtdbSet(`sessions/${sessionId}/workoutTitle`, String(loadedWorkout.title || loadedWorkout.name || ''))
         .catch(function () {});
 
       // workoutId 저장
       if (loadedWorkout.id) {
-        db.ref(`sessions/${sessionId}/workoutId`).set(loadedWorkout.id)
+        bluetoothCoachRtdbSet(`sessions/${sessionId}/workoutId`, loadedWorkout.id)
           .then(() => {
             console.log('[Bluetooth Coach] 워크아웃 선택 시 workoutId Firebase 저장 완료:', loadedWorkout.id, sessionId);
           })
@@ -3113,7 +3290,7 @@ function applyBluetoothCoachSelectedWorkout(loadedWorkout) {
       }
       
       // Firebase status에 idle 상태 저장 (워크아웃 선택 시, 사용자 접속 시 현재 상황 바로 반영)
-      db.ref(`sessions/${sessionId}/status`).update({
+      bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
         state: 'idle',
         segmentIndex: 0,
         elapsedTime: 0,
@@ -3317,7 +3494,7 @@ function startBluetoothCoachTrainingWithCountdown() {
     const sessionId = getBluetoothCoachSessionId();
     let countdown = 5;
     // Firebase에 카운트다운 시작 신호 전송
-    db.ref(`sessions/${sessionId}/status`).update({
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       countdownRemainingSec: countdown,
       state: 'countdown' // 카운트다운 중임을 표시
     }).catch(e => console.warn('[Bluetooth Coach] 카운트다운 상태 전송 실패:', e));
@@ -3326,13 +3503,13 @@ function startBluetoothCoachTrainingWithCountdown() {
     const countdownInterval = setInterval(() => {
       countdown--;
       if (countdown >= 0) {
-        db.ref(`sessions/${sessionId}/status`).update({
+        bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
           countdownRemainingSec: countdown
         }).catch(e => console.warn('[Bluetooth Coach] 카운트다운 상태 업데이트 실패:', e));
       } else {
         clearInterval(countdownInterval);
         // 카운트다운 종료 후 running 상태로 변경
-        db.ref(`sessions/${sessionId}/status`).update({
+        bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
           countdownRemainingSec: null,
           state: 'running'
         }).catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
@@ -3511,7 +3688,7 @@ function startBluetoothCoachTraining() {
       });
     }
     
-    db.ref(`sessions/${sessionId}/status`).update(updateData)
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, updateData)
       .catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
   }
   
@@ -3578,7 +3755,7 @@ function pauseBluetoothCoachTraining() {
   // Firebase에 일시정지 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       state: 'paused'
     }).catch(e => console.warn('[Bluetooth Coach] 일시정지 상태 전송 실패:', e));
   }
@@ -3612,7 +3789,7 @@ function resumeBluetoothCoachTraining() {
   // Firebase에 재개 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       state: 'running'
     }).catch(e => console.warn('[Bluetooth Coach] 재개 상태 전송 실패:', e));
   }
@@ -3641,7 +3818,7 @@ function stopBluetoothCoachTraining() {
   // Firebase에 종료 상태 전송
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
-    db.ref(`sessions/${sessionId}/status`).update({
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       state: 'idle',
       segmentIndex: 0,
       elapsedTime: 0
@@ -3738,7 +3915,7 @@ function skipCurrentBluetoothCoachSegmentTraining() {
       });
     }
     
-    db.ref(`sessions/${sessionId}/status`).update(updateData)
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, updateData)
       .catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 및 목표값 업데이트 실패:', e));
   }
   
@@ -3827,7 +4004,7 @@ function startBluetoothCoachTrainingTimer() {
       updateData.segmentTargetValue = currentSegment.target_value !== undefined ? currentSegment.target_value : null;
     }
     
-    db.ref(`sessions/${sessionId}/status`).update(updateData)
+    bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, updateData)
       .catch(e => console.warn('[Bluetooth Coach] 경과 시간 및 세그먼트 정보 업데이트 실패:', e));
   }
   
@@ -3915,7 +4092,7 @@ function startBluetoothCoachTrainingTimer() {
           // Firebase에 완료 상태 전송
           if (typeof db !== 'undefined') {
             const sessionId = getBluetoothCoachSessionId();
-            db.ref(`sessions/${sessionId}/status`).update({
+            bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
               state: 'finished',
               completionMessage: '모든 세그먼트 훈련이 완료되었습니다.',
               completedAt: Date.now()
@@ -3972,7 +4149,7 @@ function startBluetoothCoachTrainingTimer() {
               });
             }
             
-            db.ref(`sessions/${sessionId}/status`).update(updateData)
+            bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, updateData)
               .catch(e => console.warn('[Bluetooth Coach] 세그먼트 인덱스 및 목표값 업데이트 실패:', e));
           }
           

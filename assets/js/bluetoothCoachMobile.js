@@ -312,13 +312,19 @@
         : (window.SESSION_ID || window.currentTrainingRoomId);
       var db = window.db || (window.firebase && window.firebase.database && window.firebase.database());
       if (!sid || !db) return;
-      st.planRef = db.ref('sessions/' + sid + '/workoutPlan');
-      st.planCb = st.planRef.on('value', function (snap) {
+      // 2026-10-18: SDK 무응답 휴대폰 대비 — Coach 엔진의 SDK 우선 + REST 스트림 폴백 구독 사용
+      var watch = typeof window.bluetoothCoachWatch === 'function'
+        ? window.bluetoothCoachWatch
+        : function (dbi, path, cb) {
+            var r = dbi.ref(path);
+            var c = r.on('value', cb);
+            return function () { try { r.off('value', c); } catch (e) {} };
+          };
+      st.planUnsub = watch(db, 'sessions/' + sid + '/workoutPlan', function (snap) {
         var v = snap && snap.val();
         st.fbPlan = Array.isArray(v) ? v : (v && typeof v === 'object' ? Object.keys(v).sort(function (a, b) { return a - b; }).map(function (k) { return v[k]; }) : null);
       });
-      st.statusRef = db.ref('sessions/' + sid + '/status');
-      st.statusCb = st.statusRef.on('value', function (snap) {
+      st.statusUnsub = watch(db, 'sessions/' + sid + '/status', function (snap) {
         var s = snap && snap.val();
         st.fbStatus = s || null;
         var overlay = $('coachmCountdownOverlay');
@@ -386,16 +392,14 @@
   }
 
   function unsubscribeStatus() {
-    if (st.statusRef && st.statusCb) {
-      try { st.statusRef.off('value', st.statusCb); } catch (e) {}
+    if (typeof st.statusUnsub === 'function') {
+      try { st.statusUnsub(); } catch (e) {}
     }
-    if (st.planRef && st.planCb) {
-      try { st.planRef.off('value', st.planCb); } catch (e) {}
+    if (typeof st.planUnsub === 'function') {
+      try { st.planUnsub(); } catch (e) {}
     }
-    st.statusRef = null;
-    st.statusCb = null;
-    st.planRef = null;
-    st.planCb = null;
+    st.statusUnsub = null;
+    st.planUnsub = null;
     st.fbStatus = null;
     st.fbPlan = null;
   }
