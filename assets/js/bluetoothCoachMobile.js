@@ -614,18 +614,22 @@
     return target <= 0 || (lap / target) * 100 >= 98.5 ? 'ok' : 'low';
   }
 
+  /* 모니터 화면 = [위: 랩 카운트다운] + [카드 그리드], 하단 통계(CADENCE·LAP AVG·HEART RATE) 자리에 건너뛰기·시작·종료 버튼 */
   function monitorGrid() {
     var grid = $('coachmMonitorGrid');
     if (grid) return grid;
     var screen = $(SCREEN_ID);
     var gauge = screen && screen.querySelector('.mobile-gauge-container');
     if (!gauge || !gauge.parentNode) return null;
-    grid = document.createElement('div');
-    grid.id = 'coachmMonitorGrid';
-    grid.className = 'coachm-monitor';
-    grid.setAttribute('role', 'list');
-    grid.setAttribute('aria-label', '모니터 대시보드');
-    gauge.parentNode.insertBefore(grid, gauge.nextSibling);
+    var wrap = document.createElement('div');
+    wrap.id = 'coachmMonitor';
+    wrap.className = 'coachm-monitor';
+    wrap.innerHTML =
+      '<div class="coachm-monitor__lap"><span class="coachm-monitor__lap-label">LAP</span><span id="coachmMonitorLapTime" class="coachm-monitor__lap-time">00:00</span></div>' +
+      '<div id="coachmMonitorGrid" class="coachm-monitor__grid" role="list" aria-label="모니터 대시보드"></div>';
+    gauge.parentNode.insertBefore(wrap, gauge.nextSibling);
+    grid = $('coachmMonitorGrid');
+    ensureMonitorControls();
     grid.addEventListener('click', function (e) {
       var card = e.target.closest && e.target.closest('.coachm-mcard[data-track]');
       if (!card) return;
@@ -638,12 +642,29 @@
     return grid;
   }
 
+  /** 하단 버튼(건너뛰기·시작/일시정지·종료) — 계기판 버튼과 같은 함수 호출 */
+  function ensureMonitorControls() {
+    if ($('coachmMonitorControls')) return;
+    var screen = $(SCREEN_ID);
+    var footer = screen && screen.querySelector('.mobile-stats-footer');
+    if (!footer || !footer.parentNode) return;
+    var bar = document.createElement('div');
+    bar.id = 'coachmMonitorControls';
+    bar.className = 'coachm-monitor-controls';
+    bar.innerHTML =
+      '<button type="button" class="coachm-mctl" aria-label="건너뛰기" onclick="handleCoachMobileSkip()"><img src="assets/img/next0.png" alt=""></button>' +
+      '<button type="button" class="coachm-mctl coachm-mctl--main" aria-label="시작/일시정지" onclick="handleCoachMobileToggle()"><img id="coachmMonitorToggleImg" src="assets/img/play0.png" alt=""></button>' +
+      '<button type="button" class="coachm-mctl" aria-label="종료" onclick="handleCoachMobileStop()"><img src="assets/img/stop0.png" alt=""></button>';
+    footer.parentNode.insertBefore(bar, footer.nextSibling);
+  }
+
   function applyMonitorMode() {
     var screen = $(SCREEN_ID);
     var gauge = screen && screen.querySelector('.mobile-gauge-container');
     var grid = monitorGrid();
+    var wrap = $('coachmMonitor');
     if (gauge) gauge.style.display = st.monitorMode ? 'none' : '';
-    if (grid) grid.style.display = st.monitorMode ? 'grid' : 'none';
+    if (wrap) wrap.style.display = st.monitorMode ? 'flex' : 'none';
     var label = $('coachmMonitorMenuLabel');
     if (label) label.textContent = st.monitorMode ? '계기판 보기' : '모니터 대시보드';
     if (screen) screen.classList.toggle('coachm-monitor-on', !!st.monitorMode);
@@ -673,6 +694,16 @@
     if (!st.monitorMode) return;
     var grid = monitorGrid();
     if (!grid) return;
+    // 랩 카운트다운·시작 버튼 아이콘은 계기판(숨김)과 같은 값
+    var lapSrc = $('coachm-ui-lap-time');
+    var lapEl = $('coachmMonitorLapTime');
+    if (lapSrc && lapEl && lapEl.textContent !== lapSrc.textContent) lapEl.textContent = lapSrc.textContent;
+    var tgSrc = $('coachmToggleImg');
+    var tgEl = $('coachmMonitorToggleImg');
+    if (tgSrc && tgEl) {
+      var href = tgSrc.getAttribute('href') || tgSrc.getAttribute('xlink:href');
+      if (href && tgEl.getAttribute('src') !== href) tgEl.setAttribute('src', href);
+    }
     var pms = powerMeters().slice(0, MONITOR_MAX);
     var sig = pms.map(function (pm) { return pm.id; }).join(',');
     if (force || sig !== st.monitorSig) {
