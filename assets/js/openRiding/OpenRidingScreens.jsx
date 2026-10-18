@@ -13384,6 +13384,17 @@ function OpenRidingDetail(props) {
             </div>
           ) : null}
         </div>
+        {/* 그룹세션: 참석자(+) 바로 아래에 라이딩 모임과 같은 정산하기(+) (2026-10-18). 일반 모임은 '내 상태' 아래 기존 위치 */}
+        {ride.isGroupSession ? (
+          <OpenRidingSettlementFold
+            ride={ride}
+            rideId={rideId}
+            firestore={firestore}
+            userId={userId}
+            isHost={isHost}
+            reload={reload}
+          />
+        ) : null}
         {ride.isGroupSession ? null : (
         <>
         {viewerCanSeeInviteFold && (isHost || inviteRows.length > 0) ? (
