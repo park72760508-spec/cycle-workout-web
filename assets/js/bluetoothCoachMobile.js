@@ -273,6 +273,7 @@
       st.rafId = null;
       return;
     }
+    checkLoadingDone();
     var pm = selectedPm();
     var target = pm && pm.userName ? Math.max(0, Number(pm.currentPower) || 0) : 0;
     var diff = target - st.displayPower;
@@ -407,7 +408,53 @@
     st.fbPlan = null;
   }
 
+  /* ---------- 슬롯 정보 로딩 스피너 (2026-10-18) ----------
+   * 진입 후 슬롯(트랙)이 만들어지고 참가자 정보가 처음 들어올 때까지 녹색 스피너 오버레이.
+   * (Coach 엔진이 bluetoothCoachState._usersDataAt 에 첫 수신 시각 기록) 25초가 지나면 그냥 닫는다. */
+  var LOADING_MAX_MS = 25000;
+  function loadingEl() {
+    var el = $('coachmLoadingOverlay');
+    if (el) return el;
+    var screen = $(SCREEN_ID);
+    if (!screen) return null;
+    el = document.createElement('div');
+    el.id = 'coachmLoadingOverlay';
+    el.className = 'coachm-loading-overlay';
+    el.setAttribute('role', 'status');
+    el.setAttribute('aria-live', 'polite');
+    el.innerHTML =
+      '<div class="auth-transition-spinner-stage coachm-loading-overlay__spinner" aria-hidden="true">' +
+      '<div class="auth-transition-spinner-glow"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--track"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--inner"></div>' +
+      '</div>' +
+      '<p class="coachm-loading-overlay__msg">슬롯 정보를 불러오는 중...</p>';
+    el.addEventListener('click', hideLoading); // 기다리지 않고 바로 화면을 보려면 탭해서 닫기
+    screen.appendChild(el);
+    return el;
+  }
+  function showLoading() {
+    var el = loadingEl();
+    if (!el) return;
+    st.loadingSince = Date.now();
+    el.style.display = 'flex';
+  }
+  function hideLoading() {
+    st.loadingSince = 0;
+    var el = $('coachmLoadingOverlay');
+    if (el) el.style.display = 'none';
+  }
+  /** loop 에서 호출 — 슬롯이 있고 참가자 정보가 들어왔으면(또는 시간 초과) 닫기 */
+  function checkLoadingDone() {
+    if (!st.loadingSince) return;
+    var cs = coachState();
+    var ready = powerMeters().length > 0 && Number(cs._usersDataAt) > 0;
+    if (ready || Date.now() - st.loadingSince > LOADING_MAX_MS) hideLoading();
+  }
+
   function onEnter() {
+    showLoading();
     st.userPicked = false;
     st.trackId = null;
     st.displayPower = 0;
@@ -438,6 +485,7 @@
   }
 
   function onLeave() {
+    hideLoading();
     if (slotWatchdogTimer) { clearTimeout(slotWatchdogTimer); slotWatchdogTimer = null; }
     unsubscribeStatus();
     closeMenu();

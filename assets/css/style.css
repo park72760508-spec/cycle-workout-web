@@ -34085,3 +34085,26 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .stelvio-gift-referrer__status.is-applied { background: #dbeafe; color: #1d4ed8; }
 .stelvio-gift-referrer__count { margin-left: auto; font-weight: 800; color: #334155; white-space: nowrap; }
 .stelvio-gift-referrer.is-done .stelvio-gift-referrer__count { color: #166534; }
+
+/* Coach 휴대폰 화면: 슬롯 정보 로딩 녹색 스피너 오버레이(2026-10-18) — 스피너 모양은 .auth-transition-spinner-* 재사용 */
+.coachm-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(18, 18, 18, 0.88);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+}
+.coachm-loading-overlay__spinner { margin-bottom: 22px; }
+.coachm-loading-overlay__msg {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #4ade80;
+  letter-spacing: -0.02em;
+  animation: authTransitionMsgPulse 1.8s ease-in-out infinite;
+}

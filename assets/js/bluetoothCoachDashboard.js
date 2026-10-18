@@ -1314,7 +1314,10 @@ async function setupFirebaseSubscriptions() {
     const userHandlers = {};
     const userLastKey = {};
     let anyUserSdkReply = false;
+    // 휴대폰 Coach 화면 로딩 스피너용: 참가자 정보가 처음 들어온 시각(SDK·REST 어느 쪽이든)
+    window.bluetoothCoachState._usersDataAt = 0;
     function deliverUser(trackId, v) {
+      if (!window.bluetoothCoachState._usersDataAt) window.bluetoothCoachState._usersDataAt = Date.now();
       let key;
       try { key = JSON.stringify(v == null ? null : v); } catch (e) { key = String(Math.random()); }
       if (userLastKey[trackId] === key) return;
