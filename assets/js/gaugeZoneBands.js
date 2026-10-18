@@ -17,7 +17,7 @@
   var R = 80;
   var BAND_OPACITY = 0.45;
   var ZONE_BAND_WIDTH = 12; // 존 띠 두께(고정)
-  var TARGET_ARC_WIDTH = 6; // 목표값·존 상한 원호 두께 = 존 띠의 50% — 바깥·안쪽 3씩 존 색상 노출(2026-10-18)
+  var TARGET_ARC_WIDTH = ZONE_BAND_WIDTH * 0.7; // 목표값·존 상한 원호 두께 = 존 띠의 70%(8.4) — 바깥·안쪽 1.8씩 존 색상 노출(2026-10-18)
   var TARGET_UNDERLAY_COLOR = '#333'; // 목표 원호 아래 바탕(회색 배경과 동일) — 존 색과 섞이지 않게
   var BG_D = 'M 20 140 A 80 80 0 0 1 180 140';
 
@@ -143,7 +143,7 @@
 
   window.stelvioRenderGaugeZoneBands = render;
 
-  /* 목표값 원호(및 존 상한 원호)는 두께 6(존 띠 12의 50%) — 바깥·안쪽 3씩 존 색상이 보여
+  /* 목표값 원호(및 존 상한 원호)는 두께 = 존 띠의 70%(8.4) — 바깥·안쪽 1.8씩 존 색상이 보여
      존 영역과 목표 원호가 함께 구분돼 보인다(2026-10-18). 화면마다 원호를 따로 만들므로 CSS 로 일괄 적용
      (CSS stroke-width 가 SVG 속성 stroke-width="12" 보다 우선). id 끝이 gauge-target-arc / gauge-max-arc 인 원호 대상
      (laptop-, mobile-, indiv-, coachm-, bluetoothIndividual.html 의 접두사 없는 id). */
