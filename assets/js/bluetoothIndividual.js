@@ -2558,6 +2558,31 @@ function indivStopSegmentCountdown() {
 
 // TARGET 파워 업데이트 함수 (Firebase에서 계산된 값 우선 사용)
 // Bluetooth 개인훈련 대시보드 전용 (다른 화면과 독립)
+/** ftp_pctz(존) 목표 "56~76" · "56/76" · "56,76" · [56,76] → { min, max } (2026-10-18) */
+function indivParsePctzRange(targetValue) {
+    let min = 60;
+    let max = 75;
+    if (Array.isArray(targetValue) && targetValue.length >= 2) {
+        min = Number(targetValue[0]) || min;
+        max = Number(targetValue[1]) || max;
+    } else if (targetValue !== undefined && targetValue !== null) {
+        const parts = String(targetValue).replace(/%/g, '').split(/[~\/,]/).map(s => s.trim()).filter(Boolean);
+        if (parts.length >= 2) {
+            min = Number(parts[0]) || min;
+            max = Number(parts[1]) || max;
+        } else if (parts.length === 1) {
+            min = Number(parts[0]) || min;
+        }
+    }
+    if (max < min) { const t = min; min = max; max = t; }
+    return { min, max };
+}
+
+/** 존 훈련 목표 % — 2026-10-18: 하한값 대신 존 상·하한의 중간값(예: Zone2 56~76% → 66%) */
+function indivPctzMidPercent(range) {
+    return (range.min + range.max) / 2;
+}
+
 function updateTargetPower() {
     // Bluetooth 개인훈련 대시보드 화면인지 확인 (독립적 구동 보장)
     const isBluetoothIndividualScreen = window.location.pathname.includes('bluetoothIndividual.html') || __indivIdPrefix;
@@ -2888,15 +2913,15 @@ function updateTargetPower() {
             maxPercent = Number(targetValue[1]) || 75;
         }
         
-        // 하한값을 목표 파워값으로 사용
-        targetPower = Math.round(ftp * (minPercent / 100));
-        if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
+        // 존 상·하한의 중간값을 목표 파워값으로 사용(2026-10-18, 이전: 하한값)
+        targetPower = Math.round(ftp * (indivPctzMidPercent({ min: minPercent, max: maxPercent }) / 100));
+        if (__stelvioBtIndivVerboseLog()) console.log('[updateTargetPower] ftp_pctz 계산: FTP', ftp, '* 중간', (minPercent + maxPercent) / 2, '% =', targetPower, 'W (하한:', minPercent, '% 상한:', maxPercent, '%)');
         
-        // 상한값을 전역 변수에 저장 (updateTargetPowerArc에서 사용)
+        // 상·하한값을 전역 변수에 저장 (updateTargetPowerArc 존 원호에서 사용)
         const baseMaxPower = Math.round(ftp * (maxPercent / 100));
         // 강도 조절 비율 적용 (나중에 adjustedTargetPower와 함께 적용)
         window.currentSegmentMaxPower = baseMaxPower; // 일단 기본값 저장, 나중에 강도 조절 적용
-        window.currentSegmentMinPower = targetPower; // 일단 기본값 저장, 나중에 강도 조절 적용
+        window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100)); // 일단 기본값 저장, 나중에 강도 조절 적용
     } else {
         window.currentSegmentMaxPower = null;
         window.currentSegmentMinPower = null;
@@ -2908,7 +2933,7 @@ function updateTargetPower() {
     // ftp_pctz 타입인 경우 상한값에도 강도 조절 비율 적용
     if (targetType === 'ftp_pctz' && window.currentSegmentMaxPower) {
         window.currentSegmentMaxPower = Math.round(window.currentSegmentMaxPower * individualIntensityAdjustment);
-        window.currentSegmentMinPower = adjustedTargetPower; // adjustedTargetPower는 이미 강도 조절이 적용된 값
+        window.currentSegmentMinPower = Math.round((window.currentSegmentMinPower || 0) * individualIntensityAdjustment); // 목표(중간값)와 별개로 하한 유지
     }
     
     if (__stelvioBtIndivVerboseLog()) {
@@ -3212,13 +3237,14 @@ function updateSpeedometerTargetForSegment(segmentIndex) {
                 maxPercent = Number(targetValue[1]) || 75;
             }
             
-            const baseTargetPower = Math.round(ftp * (minPercent / 100));
+            // 존 상·하한의 중간값을 목표로(2026-10-18, 이전: 하한값)
+            const baseTargetPower = Math.round(ftp * (indivPctzMidPercent({ min: minPercent, max: maxPercent }) / 100));
             const adjustedTargetPower = Math.round(baseTargetPower * intensityAdjustment);
             
-            // 상한값 저장 (원호 표시용)
+            // 상·하한값 저장 (존 원호 표시용)
             const baseMaxPower = Math.round(ftp * (maxPercent / 100));
             window.currentSegmentMaxPower = Math.round(baseMaxPower * intensityAdjustment);
-            window.currentSegmentMinPower = adjustedTargetPower;
+            window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100) * intensityAdjustment);
             
             if (targetLabelEl) {
                 targetLabelEl.textContent = 'TARGET';
@@ -3380,8 +3406,12 @@ function updateSpeedometerSegmentInfo() {
             }
             
             segmentText = `${segmentName} - FTP ${ftpPercent}% / RPM ${targetRpm || 0}`;
+        } else if (targetType === 'ftp_pctz') {
+            // 존 타입: "세그먼트 이름 - FTP 56 ~ 76%" (2026-10-18: "56~76"을 숫자로 읽지 못해 FTP 100%로 표시되던 오류 수정)
+            const range = indivParsePctzRange(targetValue);
+            segmentText = `${segmentName} - FTP ${range.min} ~ ${range.max}%`;
         } else {
-            // ftp_pct 또는 ftp_pctz 타입: "세그먼트 이름 - FTP 값%"
+            // ftp_pct 타입: "세그먼트 이름 - FTP 값%"
             const ftpPercent = Number(targetValue) || 100;
             segmentText = `${segmentName} - FTP ${ftpPercent}%`;
         }
@@ -3561,7 +3591,7 @@ function formatSegmentInfo(targetType, targetValue) {
             maxPercent = Number(targetValue[1]) || 75;
         }
         
-        return `FTP ${minPercent}-${maxPercent}%`;
+        return `FTP ${minPercent} ~ ${maxPercent}%`;
     } else {
         // 알 수 없는 타입: 기본값 표시
         const segIdx = (currentSegmentIndex >= 0 ? currentSegmentIndex + 1 : 1);
@@ -3918,7 +3948,12 @@ window.updateIndivSpeedArc = updateIndivSpeedArc;
  * - 바늘은 매 프레임 부드럽게 이동 (Lerp 적용)
  * - Indoor Training의 바늘 움직임 로직과 동일
  */
-function startGaugeAnimationLoop() {
+/*
+ * 2026-10-18: 전역 이름 충돌 수정 — indoorTrainingDashboard.js·bluetoothCoachDashboard.js(나중에 로드)의
+ * 같은 이름 startGaugeAnimationLoop 가 이 함수를 덮어써, SPA 그룹훈련 Player 화면에서 화면 진입 시 코치 대시보드용
+ * 루프가 실행되고 이 화면(indiv-) 바늘 루프는 돌지 않아 현재 파워 바늘이 0W에 고정됐다 → indiv 고유 이름 사용.
+ */
+function indivStartGaugeAnimationLoop() {
     // 이미 실행 중이면 중복 실행 방지
     if (gaugeAnimationFrameId !== null) return;
     
@@ -3992,7 +4027,7 @@ function startGaugeAnimationLoop() {
     // 루프 시작
     gaugeAnimationFrameId = requestAnimationFrame(loop);
 }
-window.startGaugeAnimationLoop = startGaugeAnimationLoop;
+window.indivStartGaugeAnimationLoop = indivStartGaugeAnimationLoop;
 
 /**
  * 훈련 결과 팝업 표시
@@ -5732,7 +5767,7 @@ function runBluetoothIndividualScreenInit() {
         if (typeof updateIndivSpeedArc === 'function') updateIndivSpeedArc();
         console.log('[BluetoothIndividual] 초기 속도계 눈금 및 레이블 생성 완료');
     }, 100);
-    startGaugeAnimationLoop();
+    indivStartGaugeAnimationLoop();
     setTimeout(() => initBluetoothIndividualErgController(), 500);
     setTimeout(() => {
         updateBluetoothConnectionStatus();

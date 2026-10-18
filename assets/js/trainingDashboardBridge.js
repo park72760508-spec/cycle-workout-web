@@ -1020,8 +1020,9 @@
         teardownTrainingDashboardBridge();
       }
       original(screenId, skipHistory);
-      if (screenId === 'bluetoothIndividualScreen' && typeof global.startGaugeAnimationLoop === 'function') {
-        global.startGaugeAnimationLoop();
+      // Player(bluetoothIndividual) 화면 바늘 루프 — 다른 대시보드의 같은 이름 함수와 충돌하지 않도록 indiv 전용 함수 호출
+      if (screenId === 'bluetoothIndividualScreen' && typeof global.indivStartGaugeAnimationLoop === 'function') {
+        global.indivStartGaugeAnimationLoop();
       }
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();

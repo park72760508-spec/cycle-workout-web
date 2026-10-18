@@ -1816,8 +1816,14 @@ function bluetoothCoachSegmentTargetPower(currentSegment, ftp) {
       ftpPercent = Number(targetValue) || 100;
     }
     targetPower = (ftp * ftpPercent) / 100;
+  } else if (targetType === 'ftp_pctz') {
+    // 존 타입 "56~76": 2026-10-18 하한값 대신 상·하한의 중간값을 목표로(Player 화면과 동일)
+    const zParts = String(Array.isArray(targetValue) ? targetValue.join('~') : targetValue)
+      .replace(/%/g, '').split(/[~\/,]/).map(s => Number(s.trim())).filter(n => n > 0);
+    ftpPercent = zParts.length >= 2 ? (zParts[0] + zParts[1]) / 2 : (zParts[0] || 100);
+    targetPower = (ftp * ftpPercent) / 100;
   } else {
-    // ftp_pct 타입 (ftp_pctz 등 "/" 또는 "~" 구분자 사용 시 첫 값 사용)
+    // ftp_pct 타입 ("/" 또는 "~" 구분자 사용 시 첫 값 사용)
     if (typeof targetValue === 'string') {
       const pctDelim = (targetValue.includes('~') || targetValue.includes('/')) ? (targetValue.includes('~') ? '~' : '/') : null;
       if (pctDelim) {
