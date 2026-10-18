@@ -4527,8 +4527,8 @@ function updateTargetPowerArc() {
             targetArc.setAttribute('fill', 'none');
             targetArc.setAttribute('stroke-width', '12');
             targetArc.setAttribute('stroke-linecap', 'round');
-            // 원호 배경 뒤에, 눈금 앞에 배치
-            const arcBg = svg.querySelector('path[d*="M 20 140"]');
+            // 원호 배경(및 존 색상 띠, gaugeZoneBands.js) 뒤에, 눈금 앞에 배치 → 목표 원호가 존 띠 위에 겹쳐 보임
+            const arcBg = svg.querySelector('.stelvio-gauge-zone-bands') || svg.querySelector('path[d*="M 20 140"]');
             if (arcBg && arcBg.nextSibling) {
                 svg.insertBefore(targetArc, arcBg.nextSibling);
             } else {
