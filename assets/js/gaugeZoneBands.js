@@ -82,9 +82,19 @@
   var ARC_SELECTOR = 'path[id$="gauge-target-arc"], path[id$="gauge-max-arc"]';
   var UNDERLAY_CLASS = 'stelvio-gauge-target-underlay';
 
+  /** 목표값 원호 색 = 계기판 목표값 숫자 색(#ff8c00 주황 / #00d4aa 민트)과 같은 불투명 톤(2026-10-18).
+   *  화면별 코드가 rgba(…, 0.5) 반투명으로 칠하므로 알파만 떼어 같은 RGB 불투명으로 맞춘다(달성 시 민트 전환은 그대로). */
+  function solidifyTargetArcColor(arc) {
+    if (!/gauge-target-arc$/.test(arc.id || '')) return; // 존 상한 원호(gauge-max-arc)는 범위 표시라 반투명 유지
+    var c = arc.getAttribute('stroke') || '';
+    var m = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*[\d.]+\s*\)$/i.exec(c);
+    if (m) arc.setAttribute('stroke', 'rgb(' + m[1] + ', ' + m[2] + ', ' + m[3] + ')');
+  }
+
   function syncUnderlay(arc) {
     var parent = arc.parentNode;
     if (!parent) return;
+    solidifyTargetArcColor(arc);
     var ul = arc.previousSibling;
     if (!ul || ul.nodeType !== 1 || !ul.classList || !ul.classList.contains(UNDERLAY_CLASS)) {
       ul = document.createElementNS(arc.namespaceURI || 'http://www.w3.org/2000/svg', 'path');
@@ -123,7 +133,7 @@
         return;
       }
     });
-    mo.observe(svg, { subtree: true, childList: true, attributes: true, attributeFilter: ['d', 'style', 'display'] });
+    mo.observe(svg, { subtree: true, childList: true, attributes: true, attributeFilter: ['d', 'style', 'display', 'stroke'] });
   }
 
   /** 문서(또는 root) 안 계기판에 존 띠를 1회 추가 */
