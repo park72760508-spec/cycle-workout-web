@@ -969,40 +969,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     const boxWidth = textWidth + boxPadding * 2;
     const boxHeight = textHeight + boxPadding * 2;
     
-    // Indoor Training 화면: 점선 오른쪽 끝에 배치
-    if (canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-      const boxX = padding.left + chartWidth - boxWidth - 2; // 오른쪽 끝에서 약간 여백
-      const boxY = ftpY - boxHeight / 2; // 점선 중앙에 배치 (ftpY가 점선의 Y 위치)
-      
-      // 2026-10-16: 훈련 화면 RPM 기준(90) 표시는 연한 회색 바탕
-      ctx.fillStyle = '#cbd5e1'; // 연한 회색 바탕
-      ctx.beginPath();
-      const radius = 3;
-      ctx.moveTo(boxX + radius, boxY);
-      ctx.lineTo(boxX + boxWidth - radius, boxY);
-      ctx.quadraticCurveTo(boxX + boxWidth, boxY, boxX + boxWidth, boxY + radius);
-      ctx.lineTo(boxX + boxWidth, boxY + boxHeight - radius);
-      ctx.quadraticCurveTo(boxX + boxWidth, boxY + boxHeight, boxX + boxWidth - radius, boxY + boxHeight);
-      ctx.lineTo(boxX + radius, boxY + boxHeight);
-      ctx.quadraticCurveTo(boxX, boxY + boxHeight, boxX, boxY + boxHeight - radius);
-      ctx.lineTo(boxX, boxY + radius);
-      ctx.quadraticCurveTo(boxX, boxY, boxX + radius, boxY);
-      ctx.closePath();
-      ctx.fill();
-      
-      // 진한 텍스트 표시
-      ctx.fillStyle = '#0f172a';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(rpm90Text, boxX + boxWidth / 2, boxY + boxHeight / 2);
-      ctx.textAlign = 'right'; // 원래 정렬 복원
-      ctx.textBaseline = 'alphabetic'; // 원래 기준선 복원
-    } else if (canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph') {
-      // 모바일 대시보드: FTP 기준선 끝 = 민트 원 + "90" (2026-10-14: 빨강 → 민트, FTP 라벨이 빨강)
+    // 훈련 화면(모바일·개인/태블릿·그룹훈련 Player·코치·실내 훈련): 연한 회색 원 + "90"
+    // (2026-10-18: 그룹훈련·실내 훈련의 둥근 사각형도 개인훈련(모바일) 화면과 같은 원으로 통일, 훈련 준비 화면만 아래 빨강 사각형)
+    if (canvasId !== 'segmentPreviewGraph') {
       const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
       const cx = padding.left + chartWidth - circleR - 2;
       const cy = ftpY;
-      ctx.fillStyle = '#cbd5e1'; // 2026-10-16: 민트 → 연한 회색
+      ctx.fillStyle = '#cbd5e1'; // 연한 회색
       ctx.beginPath();
       ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
       ctx.fill();
@@ -1013,7 +986,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.textAlign = 'right';
       ctx.textBaseline = 'alphabetic';
     } else {
-      // 개인훈련 대시보드 등: 기존 둥근 사각형 (2026-10-14: 개인·그룹 훈련 화면은 민트, 훈련 준비 화면은 빨강 유지)
+      // 훈련 준비 화면(segmentPreviewGraph): 빨강 둥근 사각형 유지
       const boxX = padding.left + chartWidth - boxWidth - 2;
       const boxY = ftpY - boxHeight / 2;
       const rpmBoxMint = isIndividualDashboardCanvas;
