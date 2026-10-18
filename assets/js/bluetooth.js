@@ -357,10 +357,16 @@ function getStrictFiltersForType(deviceType) {
     ];
   }
   if (deviceType === 'powerMeter') {
-    return [
+    /* 2026-10-19: 광고(advertising)에 Cycling Power 서비스가 안 실리는 파워미터(예: 시마노 FC-R9200-P)는
+       서비스 필터로는 선택 창에 안 나온다 → 주요 브랜드 이름 접두어로도 찾는다(필터끼리는 OR). */
+    var powerFilters = [
       { services: [UUIDS.CPS_SERVICE] },
       { services: [UUIDS.CSC_SERVICE] }
     ];
+    ['FC-', 'SHIMANO', 'Shimano', 'ASSIOMA', 'Assioma', 'Favero', '4iiii', 'STAGES', 'Stages', 'QUARQ', 'Quarq', 'SRAM',
+      'XPEDO', 'Xpedo', 'power2max', 'P2M', 'ROTOR', 'Rotor', 'INPEAK', 'SIGEYI', 'Rally', 'RS200', 'Vector', 'Magene P']
+      .forEach(function (p) { powerFilters.push({ namePrefix: p }); });
+    return powerFilters;
   }
   if (deviceType === 'speed') {
     return [

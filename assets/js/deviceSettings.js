@@ -40,7 +40,7 @@
   var RESCAN_WRAP_ID = 'deviceScanRescanWrap';
 
   /** 스캔 완료로 간주하는 대기 시간(ms). 이 시간 후 "기기 검색 완료" + 재검색 버튼 표시 */
-  var SCAN_COMPLETE_MS = 12000;
+  var SCAN_COMPLETE_MS = 16000; // 앱 고감도 스캔 15초(2026-10-19) 뒤 완료 표시
   var _scanCompleteTimeoutId = null;
 
   /** 현재 스캔/연결 대상 deviceType (hr, power, trainer, speed) */
@@ -83,12 +83,19 @@
     speed: '1816'
   };
 
+  var POWER_NAME_KEYWORDS = [
+    'power', 'assioma', 'stages', 'quarq', 'vector', 'rally',
+    'shimano', 'fc-r', 'fc-', 'dura-ace', 'dura ace', 'ultegra', '4iiii', 'precision', 'favero', 'sram',
+    'xpedo', 'power2max', 'p2m', 'rotor', 'inpeak', 'pioneer', 'sigeyi', 'axo', 'magene p', 'spider', 'crank', 'pedal'
+  ];
+
   /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사). UUID 매칭 실패 시에도 이름에 키워드 있으면 표시 */
   var NAME_KEYWORDS_BY_TYPE = {
     hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
     heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
-    power: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
-    powerMeter: ['power', 'assioma', 'stages', 'quarq', 'vector', 'rally'],
+    // 2026-10-19: 시마노(FC-R9200-P 등 'FC-' 이름) 등 주요 파워미터 브랜드 보강 — 광고에 0x1818 이 안 실려도 이름으로 찾음
+    power: POWER_NAME_KEYWORDS,
+    powerMeter: POWER_NAME_KEYWORDS,
     trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart', '스마트로라', 'smartrola', 'rola'],
     speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
   };
@@ -227,8 +234,7 @@
     if (rescanWrap) rescanWrap.style.display = 'none';
     var modal = document.getElementById(MODAL_ID);
     if (modal) modal.classList.remove('device-scan-state-complete');
-    addedDeviceIds.clear();
-    if (list) list.innerHTML = '';
+    resetScanLists();
     try {
       safePostToNative({ type: 'START_SCAN', deviceType: savedTargetType, allowReplace: true });
       safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: savedTargetType });
@@ -262,7 +268,7 @@
       modal.classList.remove('device-scan-state-complete');
     }
     if (titleEl) titleEl.textContent = '기기 검색 중...';
-    if (list) list.innerHTML = '';
+    resetScanLists();
     if (hint) {
       hint.textContent = '기기 검색 중...';
       hint.style.display = '';
@@ -469,10 +475,89 @@
 
     var id = detail.id != null ? detail.id : detail.deviceId;
     var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
-
-    if (!deviceMatchesCategory(detail, targetType)) return;
     if (!id) return;
-    addDeviceItemToList(String(id), name);
+    var rssi = Number(detail.rssi);
+    var opts = { rssi: isFinite(rssi) && rssi < 0 ? rssi : null };
+
+    if (!deviceMatchesCategory(detail, targetType)) {
+      /* 2026-10-19: 카테고리 판별(서비스 UUID·이름 키워드)에 안 맞아도 이름이 있는 기기는 버리지 않고
+         접힌 '기타 기기' 목록에 넣는다 — 광고에 서비스가 안 실리는 파워미터(예: 시마노)도 직접 고를 수 있게 */
+      if (!hasNameOrLocalName(detail) || name === '이름 없음') return;
+      opts.other = true;
+    }
+    addDeviceItemToList(String(id), name, opts);
+  }
+
+  /* ---------- 검색 목록 보강(2026-10-19): 신호 세기순 정렬 · 기타 기기 · 재수신 갱신 ---------- */
+  var OTHER_WRAP_ID = 'deviceScanOtherWrap';
+  var OTHER_LIST_ID = 'deviceScanOtherList';
+
+  function resetScanLists() {
+    addedDeviceIds.clear();
+    var list = document.getElementById(LIST_ID);
+    if (list) list.innerHTML = '';
+    var other = document.getElementById(OTHER_LIST_ID);
+    if (other) other.innerHTML = '';
+    updateOtherWrap();
+  }
+
+  function updateOtherWrap() {
+    var wrap = document.getElementById(OTHER_WRAP_ID);
+    var other = document.getElementById(OTHER_LIST_ID);
+    if (!wrap || !other) return;
+    var n = other.children.length;
+    wrap.style.display = n ? '' : 'none';
+    var cnt = document.getElementById('deviceScanOtherCount');
+    if (cnt) cnt.textContent = String(n);
+  }
+
+  function signalBars(rssi) {
+    if (rssi == null) return '';
+    var lv = rssi >= -60 ? 4 : rssi >= -70 ? 3 : rssi >= -80 ? 2 : 1;
+    var html = '<span class="device-scan-signal" title="신호 ' + rssi + ' dBm" aria-label="신호 세기 ' + lv + '/4">';
+    for (var i = 1; i <= 4; i++) html += '<i class="' + (i <= lv ? 'on' : '') + '"></i>';
+    return html + '</span>';
+  }
+
+  /** 신호가 강한(가까운) 기기가 위로 — 신호 정보가 없는 기기는 아래 */
+  function placeByRssi(list, li) {
+    var r = li.dataset.rssi !== undefined && li.dataset.rssi !== '' ? Number(li.dataset.rssi) : -999;
+    var kids = list.children;
+    for (var i = 0; i < kids.length; i++) {
+      var k = kids[i];
+      if (k === li) continue;
+      var kr = k.dataset.rssi !== undefined && k.dataset.rssi !== '' ? Number(k.dataset.rssi) : -999;
+      if (r > kr) {
+        if (li.nextSibling !== k) list.insertBefore(li, k);
+        return;
+      }
+    }
+    if (list.lastChild !== li) list.appendChild(li);
+  }
+
+  /** 이미 목록에 있는 기기의 재수신: 이름·신호 갱신, 기타 → 본 목록 승격, 재정렬 */
+  function refreshExistingItem(idStr, name, opts) {
+    var sel = 'li[data-device-id="' + (window.CSS && CSS.escape ? CSS.escape(idStr) : idStr) + '"]';
+    var li = document.querySelector('#' + LIST_ID + ' ' + sel) || document.querySelector('#' + OTHER_LIST_ID + ' ' + sel);
+    if (!li) return;
+    var nameEl = li.querySelector('.device-scan-name');
+    if (nameEl && name && name !== '알 수 없는 기기' && nameEl.textContent !== name) nameEl.textContent = name;
+    if (opts && opts.rssi != null) {
+      li.dataset.rssi = String(opts.rssi);
+      var old = li.querySelector('.device-scan-signal');
+      var tmp = document.createElement('span');
+      tmp.innerHTML = signalBars(opts.rssi);
+      if (old) old.replaceWith(tmp.firstChild);
+      else li.insertBefore(tmp.firstChild, li.firstChild);
+    }
+    var main = document.getElementById(LIST_ID);
+    var inOther = li.parentNode && li.parentNode.id === OTHER_LIST_ID;
+    if (inOther && opts && !opts.other && main) {
+      placeByRssi(main, li);
+      updateOtherWrap();
+    } else if (li.parentNode) {
+      placeByRssi(li.parentNode, li);
+    }
   }
 
   function escapeHtml(s) {
@@ -484,16 +569,22 @@
   /**
    * 스캔/knownDevices 목록에 기기 한 건 추가 (중복 제거, 동일 클릭·저장·연결 로직)
    */
-  function addDeviceItemToList(idStr, name) {
-    if (!idStr || addedDeviceIds.has(idStr)) return;
+  function addDeviceItemToList(idStr, name, opts) {
+    opts = opts || {};
+    if (!idStr) return;
+    if (addedDeviceIds.has(idStr)) {
+      refreshExistingItem(idStr, name, opts);
+      return;
+    }
     addedDeviceIds.add(idStr);
-    var list = document.getElementById(LIST_ID);
+    var list = document.getElementById(opts.other ? OTHER_LIST_ID : LIST_ID) || document.getElementById(LIST_ID);
     var hint = document.getElementById(HINT_ID);
     if (hint) hint.textContent = '검색된 기기를 탭하면 연결합니다.';
     if (!list) return;
     var li = document.createElement('li');
     li.dataset.deviceId = idStr;
-    li.innerHTML = '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
+    if (opts.rssi != null) li.dataset.rssi = String(opts.rssi);
+    li.innerHTML = signalBars(opts.rssi) + '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
@@ -537,7 +628,8 @@
         }
       }, CONNECT_FALLBACK_MS);
     });
-    list.appendChild(li);
+    placeByRssi(list, li);
+    if (opts.other) updateOtherWrap();
   }
 
   /** deviceType(hr, power, trainer, speed, smartrola) → window.connectedDevices 키. smartrola → trainer */

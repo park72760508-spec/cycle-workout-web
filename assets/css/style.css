@@ -34291,3 +34291,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .coachm-user-back { font-weight: 800; color: #000; margin-right: -2px; }
 .coachm-user-name-wrap--back { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .coachm-user-name-wrap--back:active { filter: brightness(0.9); }
+
+/* 기기 검색: 신호 세기 표시 · 기타 기기 (2026-10-19) */
+.device-scan-list li { position: relative; padding-right: 40px; }
+.device-scan-signal { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: flex-end; gap: 2px; height: 12px; }
+.device-scan-signal i { display: block; width: 3px; border-radius: 1px; background: #cbd5e1; }
+.device-scan-signal i:nth-child(1) { height: 4px; }
+.device-scan-signal i:nth-child(2) { height: 6px; }
+.device-scan-signal i:nth-child(3) { height: 9px; }
+.device-scan-signal i:nth-child(4) { height: 12px; }
+.device-scan-signal i.on { background: #22c55e; }
+.device-scan-other { margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
+.device-scan-other__summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #475569; padding: 4px 2px; list-style: revert; }
+.device-scan-list--other { margin-top: 6px; opacity: 0.9; }

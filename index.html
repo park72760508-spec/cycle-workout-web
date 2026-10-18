@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261019roomListPad" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261019deviceScan" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -5897,6 +5897,11 @@
         </div>
         <p class="device-scan-modal-hint" id="deviceScanModalHint">검색된 기기를 탭하면 연결합니다.</p>
         <ul class="device-scan-list" id="deviceScanList"></ul>
+        <!-- 2026-10-19: 종류 판별이 안 된 주변 기기(광고에 서비스 정보가 없는 파워미터 등) — 접어서 표시, 탭하면 같은 방식으로 연결 -->
+        <details id="deviceScanOtherWrap" class="device-scan-other" style="display: none;">
+          <summary class="device-scan-other__summary">내 기기가 없나요? 기타 기기 (<span id="deviceScanOtherCount">0</span>)</summary>
+          <ul class="device-scan-list device-scan-list--other" id="deviceScanOtherList"></ul>
+        </details>
         <div id="deviceScanRescanWrap" class="device-scan-rescan-wrap" style="display: none;">
           <button type="button" id="deviceScanRescanBtn" class="btn btn-primary device-scan-rescan-btn">재검색</button>
         </div>
@@ -34781,7 +34786,7 @@
 <script src="assets/js/stravaManager.js"></script>
 <script src="assets/js/trainingResultsManager.js"></script>
 <script src="assets/js/resultManager.js?v=segments-robust-lookup-20260820a"></script>
-<script src="assets/js/bluetooth.js"></script>
+<script src="assets/js/bluetooth.js?v=20261019pmScan"></script>
 <script src="assets/js/ErgController.js"></script>
 <script src="assets/js/ergMode.js"></script>
 <script src="assets/js/training.js"></script>
@@ -34811,7 +34816,7 @@
   <!-- 앱(WebView) deviceConnected 브릿지 → localStorage 영구 저장 (메모리 누수 방지 포함) -->
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
-  <script src="assets/js/deviceSettings.js"></script>
+  <script src="assets/js/deviceSettings.js?v=20261019scan"></script>
   <script src="assets/js/app.js?v=20261018solidArc"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
