@@ -34090,17 +34090,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .coachm-loading-overlay {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   z-index: 9000;
   display: none;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   background: rgba(18, 18, 18, 0.88);
   -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
 }
-.coachm-loading-overlay__spinner { margin-bottom: 22px; }
+.coachm-loading-overlay__spinner { margin: 0; flex-shrink: 0; } /* 원이 화면 정중앙 */
 .coachm-loading-overlay__msg {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 56px + 22px); /* 원(112px) 아래 22px */
+  text-align: center;
   margin: 0;
   font-size: 15px;
   font-weight: 600;

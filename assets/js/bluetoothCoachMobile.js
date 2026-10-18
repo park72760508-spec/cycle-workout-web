@@ -415,8 +415,6 @@
   function loadingEl() {
     var el = $('coachmLoadingOverlay');
     if (el) return el;
-    var screen = $(SCREEN_ID);
-    if (!screen) return null;
     el = document.createElement('div');
     el.id = 'coachmLoadingOverlay';
     el.className = 'coachm-loading-overlay';
@@ -430,7 +428,8 @@
       '</div>' +
       '<p class="coachm-loading-overlay__msg">슬롯 정보를 불러오는 중...</p>';
     el.addEventListener('click', hideLoading); // 기다리지 않고 바로 화면을 보려면 탭해서 닫기
-    screen.appendChild(el);
+    // 화면(스크린) 요소 안에 두면 그 요소 높이·변형 기준으로 배치돼 휴대폰 화면 중앙에서 벗어날 수 있어 body 에 붙인다
+    document.body.appendChild(el);
     return el;
   }
   function showLoading() {
