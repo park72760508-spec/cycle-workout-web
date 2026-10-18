@@ -49,9 +49,20 @@
       p.setAttribute('stroke', z[2]);
       p.setAttribute('stroke-opacity', String(BAND_OPACITY));
       p.setAttribute('stroke-width', '12');
-      // 양 끝만 둥글게(회색 배경과 같은 모양), 존 경계는 맞닿게
-      p.setAttribute('stroke-linecap', i === 0 || i === ZONES.length - 1 ? 'round' : 'butt');
+      // 존 경계는 모두 직선(butt) — 2026-10-18: Z1·Z7 에 round 캡을 주면 안쪽 끝(Z1|Z2, Z6|Z7 경계)에도 둥근 돌출이 생겼다
+      p.setAttribute('stroke-linecap', 'butt');
       g.appendChild(p);
+    });
+    // 계기판 바깥쪽 양 끝만 둥글게(회색 배경의 round 캡과 같은 모양): 끝점 아래쪽 반원을 채워 그린다
+    [[0, ZONES[0][2]], [2, ZONES[ZONES.length - 1][2]]].forEach(function (end) {
+      var c = pointAt(end[0]);
+      var half = 6; // stroke-width 12 의 절반
+      var cap = document.createElementNS(svgNs, 'path');
+      cap.setAttribute('d', 'M ' + (c.x - half) + ' ' + c.y + ' A ' + half + ' ' + half + ' 0 0 0 ' + (c.x + half) + ' ' + c.y + ' Z');
+      cap.setAttribute('fill', end[1]);
+      cap.setAttribute('fill-opacity', String(BAND_OPACITY));
+      cap.setAttribute('stroke', 'none');
+      g.appendChild(cap);
     });
     return g;
   }
