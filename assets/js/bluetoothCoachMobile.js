@@ -426,8 +426,7 @@
       '<div class="auth-transition-spinner-stage coachm-loading-overlay__spinner" aria-hidden="true">' +
       '<div class="auth-transition-spinner-glow"></div>' +
       '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--track"></div>' +
-      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin"></div>' +
-      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--inner"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin"></div>' + // 바깥 원 1개만(안쪽 원 없음)
       '</div>' +
       '<p class="coachm-loading-overlay__msg">슬롯 정보를 불러오는 중...</p>';
     el.addEventListener('click', hideLoading); // 기다리지 않고 바로 화면을 보려면 탭해서 닫기
