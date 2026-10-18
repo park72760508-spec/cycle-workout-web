@@ -34132,9 +34132,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .coachm-monitor__lap {
   flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  flex-direction: column; /* LAP / 00:00 두 줄 */
+  align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 2px;
   line-height: 1;
 }
 .coachm-monitor__lap-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; color: #888; }
