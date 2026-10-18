@@ -175,6 +175,71 @@
     new MutationObserver(update).observe(needle, { attributes: true, attributeFilter: ['transform'] });
   }
 
+  /* ---------- LAP AVG ▼ 표시 ----------
+   * 존 띠 바깥 가장자리(반지름 86)와 눈금 숫자(반지름 98, 글자 10) 사이 공간에 현재 LAP AVG 파워 위치를
+   * 주황 ▼ 로 표시(2026-10-18). 높이 6 — 공간(약 7)보다 작게. 끝이 띠 바깥 가장자리를 가리킨다.
+   * LAP AVG 값: 바늘 id 접두사(mobile-/indiv-/coachm-/없음) + 'ui-lap-power' 요소 텍스트.
+   * 계기판 끝 값(FTP×2)은 눈금 숫자 중 최댓값에서 읽는다(화면마다 FTP 를 따로 받지 않음). */
+  var LAP_TRI_TIP_R = R + ZONE_BAND_WIDTH / 2 + 0.5; // 86.5
+  var LAP_TRI_H = 6;
+  var LAP_TRI_HALF_W = 3.6;
+  var LAP_TRI_COLOR = '#ff8c00';
+
+  function parseWatts(text) {
+    var n = Number(String(text || '').replace(/[^\d.]/g, ''));
+    return isFinite(n) ? n : 0;
+  }
+
+  function gaugeMaxPower(svg) {
+    var labels = svg.querySelector('[id$="gauge-labels"]');
+    if (!labels) return 0;
+    var max = 0;
+    var texts = labels.querySelectorAll('text');
+    for (var i = 0; i < texts.length; i++) {
+      var v = parseWatts(texts[i].textContent);
+      if (v > max) max = v;
+    }
+    return max;
+  }
+
+  function watchLapMarker(svg) {
+    var needle = svg.querySelector('[id$="gauge-needle"]');
+    if (!needle || svg.__stelvioLapMarker || typeof MutationObserver !== 'function') return;
+    var prefix = String(needle.id).replace(/gauge-needle$/, '');
+    var lapEl = document.getElementById(prefix + 'ui-lap-power');
+    if (!lapEl) return; // LAP AVG 표시가 없는 계기판(노트북 등)은 생략
+    var ns = svg.namespaceURI || 'http://www.w3.org/2000/svg';
+    var tri = document.createElementNS(ns, 'path');
+    tri.setAttribute('class', 'stelvio-gauge-lap-marker');
+    tri.setAttribute('d', 'M 0 0 L ' + (-LAP_TRI_HALF_W) + ' ' + (-LAP_TRI_H) + ' L ' + LAP_TRI_HALF_W + ' ' + (-LAP_TRI_H) + ' Z');
+    tri.setAttribute('fill', LAP_TRI_COLOR);
+    tri.setAttribute('aria-hidden', 'true');
+    tri.setAttribute('pointer-events', 'none');
+    tri.style.display = 'none';
+    svg.appendChild(tri);
+    svg.__stelvioLapMarker = tri;
+    var last = '';
+    function update() {
+      var lap = parseWatts(lapEl.textContent);
+      var maxP = gaugeMaxPower(svg);
+      if (!(lap > 0) || !(maxP > 0)) {
+        if (last !== 'hidden') { tri.style.display = 'none'; last = 'hidden'; }
+        return;
+      }
+      var ratio = Math.min(Math.max(lap / maxP, 0), 1);
+      var deg = (-90 + ratio * 180).toFixed(2);
+      if (deg === last) return;
+      last = deg;
+      // 바늘과 같은 회전 기준: 중심(100,140)에서 deg 만큼 돌린 뒤 반지름 방향으로 띠 바깥 가장자리까지 이동
+      tri.setAttribute('transform', 'translate(' + CX + ', ' + CY + ') rotate(' + deg + ') translate(0, ' + (-LAP_TRI_TIP_R) + ')');
+      tri.style.display = '';
+    }
+    update();
+    new MutationObserver(update).observe(lapEl, { childList: true, characterData: true, subtree: true });
+    var labels = svg.querySelector('[id$="gauge-labels"]');
+    if (labels) new MutationObserver(update).observe(labels, { childList: true, characterData: true, subtree: true });
+  }
+
   /** 문서(또는 root) 안 계기판에 존 띠를 1회 추가 */
   function render(root) {
     var scope = root || document;
@@ -189,6 +254,7 @@
       if (svg.ownerSVGElement == null) {
         watchSvg(svg);
         watchNeedle(svg, bands);
+        watchLapMarker(svg);
       }
     }
   }
