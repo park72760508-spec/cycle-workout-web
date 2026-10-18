@@ -262,6 +262,9 @@
       return;
     }
     var idx = cs.trainingState === 'idle' ? -1 : (cs.currentSegmentIndex || 0);
+    // 그래프 FTP = 선택한 슬롯 사용자의 FTP (없으면 workoutManager 기본 로직)
+    var pmSel = selectedPm();
+    window.__coachmGraphFtp = Number(pmSel && pmSel.userName && pmSel.userFTP) || 0;
     window.drawSegmentGraph(w.segments, idx, 'coachmSegmentGraph', Number(cs.totalElapsedTime) || 0);
   }
 

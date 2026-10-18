@@ -730,7 +730,17 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 사용자 FTP 가져오기
   // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
   let ftp = 200;
-  if (isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
+  /* 2026-10-18: 훈련 화면(개인 모바일·태블릿·그룹훈련 Player·Coach 휴대폰/PC·실내 훈련) 막대는 워크아웃 목록 카드
+     그래프(renderSegmentedWorkoutGraph)와 같은 디자인 — Zone 원색(Z1~Z7), 막대 사이 1px, 위쪽 모서리 4px 둥글게.
+     훈련 준비 화면·훈련 스케줄 상세는 기존 디자인 유지. */
+  const useCardBarDesign = isIndividualDashboardCanvas ||
+    canvasId === 'trainingSegmentGraph' ||
+    canvasId === 'selectedWorkoutSegmentGraphCanvas' ||
+    canvasId === 'bluetoothCoachSegmentGraphCanvas';
+  if (canvasId === 'coachmSegmentGraph' && Number(window.__coachmGraphFtp) > 0) {
+    // 2026-10-18: Coach 휴대폰 화면 — 선택한 슬롯 사용자의 FTP(bluetoothCoachMobile.js 가 설정). 예전엔 window.userFTP 기본값 200 고정
+    ftp = Number(window.__coachmGraphFtp);
+  } else if (isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
     // individual.js 등에서 설정된 userFTP 사용 (훈련 스케줄 상세 포함)
     ftp = Number(window.userFTP) || Number(window.mobileUserFTP) || Number(window.currentUser?.ftp) || 200;
   } else {
@@ -1331,8 +1341,32 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         }
       }
       
-      // ftp_pctz 타입일 때는 하한과 상한을 구분하여 그리기
-      if (isFtpPctz && minPower > 0 && maxPower > minPower) {
+      if (useCardBarDesign) {
+        // 워크아웃 목록 카드 그래프와 동일: Zone 원색 단색 막대(존 훈련은 상한까지 한 막대), 막대 사이 1px, 위 모서리 4px
+        const zoneHex = STELVIO_CARD_ZONE_COLORS[getSegmentZoneFromFtpPercent(seg)] || STELVIO_CARD_ZONE_COLORS[1];
+        const zr = parseInt(zoneHex.slice(1, 3), 16);
+        const zg = parseInt(zoneHex.slice(3, 5), 16);
+        const zb = parseInt(zoneHex.slice(5, 7), 16);
+        color = `rgba(${zr}, ${zg}, ${zb}, 1)`; // 아래 테두리 색 계산에도 사용
+        const gap = barWidth > 2 ? 0.5 : 0; // 좌우 0.5px → 막대 사이 1px
+        const bx = x + gap;
+        const bw = Math.max(0.5, barWidth - gap * 2);
+        const cardH = Math.max(barHeight, 3);
+        const cardY = padding.top + chartHeight - cardH;
+        const cr = Math.min(4, bw / 2, cardH);
+        ctx.fillStyle = zoneHex;
+        ctx.beginPath();
+        ctx.moveTo(bx + cr, cardY);
+        ctx.lineTo(bx + bw - cr, cardY);
+        ctx.quadraticCurveTo(bx + bw, cardY, bx + bw, cardY + cr);
+        ctx.lineTo(bx + bw, cardY + cardH);
+        ctx.lineTo(bx, cardY + cardH);
+        ctx.lineTo(bx, cardY + cr);
+        ctx.quadraticCurveTo(bx, cardY, bx + cr, cardY);
+        ctx.closePath();
+        ctx.fill();
+      } else if (isFtpPctz && minPower > 0 && maxPower > minPower) {
+        // ftp_pctz 타입일 때는 하한과 상한을 구분하여 그리기
         // 하한값까지의 높이 계산
         const minBarHeight = Math.max(2, (minPower / maxTargetPower) * chartHeight);
         const minY = padding.top + chartHeight - minBarHeight;
@@ -1431,8 +1465,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       // 현재 진행 중인 세그먼트인지 확인
       const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
       
-      // ftp_pctz 타입일 때는 하한과 상한 구간 모두에 테두리 그리기
-      if (isFtpPctz && minPower > 0 && maxPower > minPower) {
+      // ftp_pctz 타입일 때는 하한과 상한 구간 모두에 테두리 그리기 (카드 디자인은 한 막대라 일반 테두리)
+      if (!useCardBarDesign && isFtpPctz && minPower > 0 && maxPower > minPower) {
         const minBarHeight = Math.max(2, (minPower / maxTargetPower) * chartHeight);
         const minY = padding.top + chartHeight - minBarHeight;
         const maxBarHeight = barHeight;
@@ -7208,6 +7242,9 @@ function getSegmentFtpPercentForZone(seg) {
   }
   return getSegmentFtpPercentForPreview(seg);
 }
+
+/** 워크아웃 목록 카드 그래프의 Zone 색(style.css --zone-1 ~ --zone-7)과 동일 — 캔버스 훈련 그래프용 */
+var STELVIO_CARD_ZONE_COLORS = { 1: '#9E9E9E', 2: '#3498DB', 3: '#2ECC71', 4: '#F1C40F', 5: '#E67E22', 6: '#E74C3C', 7: '#9B59B6' };
 
 function getSegmentZoneFromFtpPercent(seg) {
   if (!seg) return 1;
