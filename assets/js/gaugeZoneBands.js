@@ -88,7 +88,7 @@
 
   window.stelvioRenderGaugeZoneBands = render;
 
-  /* 목표값 원호(및 존 상한 원호)는 존 띠 두께의 90%(12 → 10.8) — 바깥·안쪽 5%씩 존 색상이 보여
+  /* 목표값 원호(및 존 상한 원호)는 존 띠 두께의 80%(12 → 9.6, 2026-10-18 90%→80%) — 바깥·안쪽 10%씩 존 색상이 보여
      존 영역과 목표 원호가 함께 구분돼 보인다(2026-10-18). 화면마다 원호를 따로 만들므로 CSS 로 일괄 적용
      (CSS stroke-width 가 SVG 속성 stroke-width="12" 보다 우선). id 끝이 gauge-target-arc / gauge-max-arc 인 원호 대상
      (laptop-, mobile-, indiv-, coachm-, bluetoothIndividual.html 의 접두사 없는 id). */
@@ -97,7 +97,7 @@
     var st = document.createElement('style');
     st.id = 'stelvio-gauge-zone-style';
     st.textContent =
-      'path[id$="gauge-target-arc"], path[id$="gauge-max-arc"] { stroke-width: ' + (12 * 0.9) + 'px; }';
+      'path[id$="gauge-target-arc"], path[id$="gauge-max-arc"] { stroke-width: ' + (12 * 0.8) + 'px; }';
     (document.head || document.documentElement).appendChild(st);
   })();
 
