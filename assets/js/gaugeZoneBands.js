@@ -165,11 +165,35 @@
     var needle = svg.querySelector('[id$="gauge-needle"]');
     if (!needle || needle.__stelvioZoneWatched || typeof MutationObserver !== 'function') return;
     needle.__stelvioZoneWatched = true;
+    /* 바늘 중심 흰 원 안에 현재 파워 존(Z1~Z7) 표시(2026-10-19) — 원은 반지름 6 → 8 로 키워 글자가 읽히게.
+       글자는 회전하는 바늘 그룹 밖(중심 100,140)에 두고 바늘 위에 그린다. */
+    var hub = needle.querySelector('circle');
+    if (hub) hub.setAttribute('r', '8');
+    var ns = svg.namespaceURI || 'http://www.w3.org/2000/svg';
+    var zoneText = document.createElementNS(ns, 'text');
+    zoneText.setAttribute('class', 'stelvio-gauge-zone-label');
+    zoneText.setAttribute('x', String(CX));
+    zoneText.setAttribute('y', String(CY));
+    zoneText.setAttribute('text-anchor', 'middle');
+    zoneText.setAttribute('dominant-baseline', 'central');
+    zoneText.setAttribute('font-size', '7');
+    zoneText.setAttribute('font-weight', '800');
+    zoneText.setAttribute('fill', '#111827');
+    zoneText.setAttribute('pointer-events', 'none');
+    if (needle.nextSibling) needle.parentNode.insertBefore(zoneText, needle.nextSibling);
+    else needle.parentNode.appendChild(zoneText);
+    var lastLabel = null;
     function update() {
       var m = /rotate\(\s*(-?[\d.]+)/.exec(needle.getAttribute('transform') || '');
       var angle = m ? Number(m[1]) : -90;
       var ftpRatio = ((angle + 90) / 180) * 2;
-      highlightZone(bands, zoneIndexForFtpRatio(ftpRatio));
+      var idx = zoneIndexForFtpRatio(ftpRatio);
+      highlightZone(bands, idx);
+      var label = idx >= 0 ? 'Z' + (idx + 1) : '';
+      if (label !== lastLabel) {
+        lastLabel = label;
+        zoneText.textContent = label;
+      }
     }
     update();
     new MutationObserver(update).observe(needle, { attributes: true, attributeFilter: ['transform'] });
