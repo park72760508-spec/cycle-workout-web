@@ -633,6 +633,8 @@
     grid.addEventListener('click', function (e) {
       var card = e.target.closest && e.target.closest('.coachm-mcard[data-track]');
       if (!card) return;
+      // 사용자가 접속한 카드만 계기판으로 전환(빈 슬롯 카드는 무시)
+      if (card.classList.contains('coachm-mcard--idle')) return;
       st.trackId = card.getAttribute('data-track');
       st.userPicked = true;
       st.displayPower = 0;

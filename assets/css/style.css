@@ -34225,7 +34225,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .coachm-mcard--ok { background: #22c55e; color: #ffffff; }
 .coachm-mcard--low { background: #ff8c00; color: #ffffff; }
 .coachm-mcard--waiting { background: #c2e9fd; color: #0f172a; }
-.coachm-mcard--idle { background: #ffffff; color: #334155; opacity: 0.32; }
+.coachm-mcard--idle { background: #ffffff; color: #334155; opacity: 0.32; cursor: default; }
+.coachm-mcard--idle:active { transform: none; } /* 빈 슬롯은 눌러도 반응 없음 */
 .coachm-mcard.is-selected { box-shadow: 0 0 0 2px #ffffff, 0 0 12px rgba(255, 255, 255, 0.45); }
 
 .coachm-mcard__head { display: flex; align-items: center; gap: 3px; min-width: 0; }
