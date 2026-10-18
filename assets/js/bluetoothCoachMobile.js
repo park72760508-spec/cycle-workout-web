@@ -207,7 +207,8 @@
     // 접속자가 없는 슬롯은 엔진 기본값(목표 등) 대신 0 으로 표시
     var pm = pmRaw && pmRaw.userName ? pmRaw : (pmRaw ? { id: pmRaw.id } : null);
     var name = pm ? (pm.userName || ('슬롯 ' + pm.id)) : '슬롯 선택';
-    setText('coachm-user-name', pm ? pm.id + ' : ' + name : name);
+    // 계기판: "< 1: 박지성"(누르면 모니터 대시보드) / 모니터 대시보드: "대시보드"
+    setText('coachm-user-name', st.monitorMode ? '대시보드' : (pm ? pm.id + ': ' + name : name));
     setText('coachm-main-timer', textOf('bluetoothCoachElapsedTime') || '00:00:00');
     setText('coachm-ui-lap-time', textOf('bluetoothCoachLapCountdown') || '00:00');
 
@@ -669,6 +670,26 @@
     if (wrap) wrap.style.display = st.monitorMode ? 'flex' : 'none';
     var label = $('coachmMonitorMenuLabel');
     if (label) label.textContent = st.monitorMode ? '계기판 보기' : '모니터 대시보드';
+    // 상단 좌측 이름 배지: 계기판에서는 "<" 를 붙여 모니터 대시보드로 돌아가는 버튼, 대시보드에서는 "대시보드" 표시만
+    var back = $('coachm-user-back');
+    if (back) back.style.display = st.monitorMode ? 'none' : '';
+    var nameWrap = $('coachm-user-name-wrap');
+    if (nameWrap) {
+      nameWrap.classList.toggle('coachm-user-name-wrap--back', !st.monitorMode);
+      if (!nameWrap.__coachmBackBound) {
+        nameWrap.__coachmBackBound = true;
+        nameWrap.addEventListener('click', function () {
+          if (!st.monitorMode) setMonitorMode(true);
+        });
+      }
+      nameWrap.setAttribute('role', st.monitorMode ? '' : 'button');
+      nameWrap.setAttribute('aria-label', st.monitorMode ? '대시보드' : '모니터 대시보드로 돌아가기');
+    }
+    setText('coachm-user-name', st.monitorMode ? '대시보드' : (function () {
+      var p = selectedPm();
+      var n = p ? (p.userName || ('슬롯 ' + p.id)) : '슬롯 선택';
+      return p ? p.id + ': ' + n : n;
+    })());
     if (screen) screen.classList.toggle('coachm-monitor-on', !!st.monitorMode);
     st.monitorSig = '';
     if (st.monitorMode) renderMonitor(true);

@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261019coachmMonitor4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261019coachmMonitor5" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35666,6 +35666,7 @@
   <div id="bluetoothCoachMobileScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Noto Sans KR', 'Pretendard', sans-serif; margin: 0; overflow: hidden; flex-direction: column; min-height: 100vh; min-height: 100dvh;">
     <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative; z-index: 10001;">
       <div id="coachm-user-name-wrap" class="mobile-dashboard-user-name-wrap" style="display: inline-flex; align-items: center; gap: 6px; background-color: #00d4aa; color: #000; border-radius: 6px; padding: 2px 10px; line-height: 1.25; font-weight: 600; font-size: 1em; box-sizing: border-box; max-width: 38vw;" title="선택된 사용자">
+        <span id="coachm-user-back" class="coachm-user-back" aria-hidden="true">&lt;</span>
         <span id="coachm-user-name" style="color: #000; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">슬롯 선택</span>
       </div>
       <div id="coachm-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
@@ -35886,7 +35887,7 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js?v=20261018loading"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20261019monitor3"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20261019monitor4"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js?v=shared-mint-20260928"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

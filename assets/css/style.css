@@ -34283,3 +34283,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .coachm-mcard__row { display: flex; align-items: baseline; justify-content: space-between; gap: 2px; line-height: 1.15; }
 .coachm-mcard__row i { font-style: normal; font-size: 8px; font-weight: 700; letter-spacing: 0.02em; opacity: 0.78; }
 .coachm-mcard__row b { font-size: 11px; font-weight: 800; }
+/* Coach 휴대폰 상단 이름 배지: 계기판에서 "< 1: 박지성" 누르면 모니터 대시보드로 */
+.coachm-user-back { font-weight: 800; color: #000; margin-right: -2px; }
+.coachm-user-name-wrap--back { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.coachm-user-name-wrap--back:active { filter: brightness(0.9); }
