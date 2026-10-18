@@ -16,6 +16,8 @@
   var CY = 140;
   var R = 80;
   var BAND_OPACITY = 0.45;
+  var ZONE_BAND_WIDTH = 12; // 존 띠 두께(고정)
+  var TARGET_ARC_WIDTH = 8; // 목표값·존 상한 원호 두께 — 바깥·안쪽 2씩 존 색상 노출(2026-10-18)
   var BG_D = 'M 20 140 A 80 80 0 0 1 180 140';
 
   /** [시작 FTP 비율, 끝 FTP 비율, 색상] — 계기판 끝은 FTP×2.0 */
@@ -48,7 +50,7 @@
       p.setAttribute('fill', 'none');
       p.setAttribute('stroke', z[2]);
       p.setAttribute('stroke-opacity', String(BAND_OPACITY));
-      p.setAttribute('stroke-width', '12');
+      p.setAttribute('stroke-width', String(ZONE_BAND_WIDTH));
       // 존 경계는 모두 직선(butt) — 2026-10-18: Z1·Z7 에 round 캡을 주면 안쪽 끝(Z1|Z2, Z6|Z7 경계)에도 둥근 돌출이 생겼다
       p.setAttribute('stroke-linecap', 'butt');
       g.appendChild(p);
@@ -56,7 +58,7 @@
     // 계기판 바깥쪽 양 끝만 둥글게(회색 배경의 round 캡과 같은 모양): 끝점 아래쪽 반원을 채워 그린다
     [[0, ZONES[0][2]], [2, ZONES[ZONES.length - 1][2]]].forEach(function (end) {
       var c = pointAt(end[0]);
-      var half = 6; // stroke-width 12 의 절반
+      var half = ZONE_BAND_WIDTH / 2;
       var cap = document.createElementNS(svgNs, 'path');
       cap.setAttribute('d', 'M ' + (c.x - half) + ' ' + c.y + ' A ' + half + ' ' + half + ' 0 0 0 ' + (c.x + half) + ' ' + c.y + ' Z');
       cap.setAttribute('fill', end[1]);
@@ -88,7 +90,7 @@
 
   window.stelvioRenderGaugeZoneBands = render;
 
-  /* 목표값 원호(및 존 상한 원호)는 존 띠 두께의 80%(12 → 9.6, 2026-10-18 90%→80%) — 바깥·안쪽 10%씩 존 색상이 보여
+  /* 목표값 원호(및 존 상한 원호)는 두께 8(존 띠 12) — 바깥·안쪽 2씩 존 색상이 보여
      존 영역과 목표 원호가 함께 구분돼 보인다(2026-10-18). 화면마다 원호를 따로 만들므로 CSS 로 일괄 적용
      (CSS stroke-width 가 SVG 속성 stroke-width="12" 보다 우선). id 끝이 gauge-target-arc / gauge-max-arc 인 원호 대상
      (laptop-, mobile-, indiv-, coachm-, bluetoothIndividual.html 의 접두사 없는 id). */
@@ -97,7 +99,7 @@
     var st = document.createElement('style');
     st.id = 'stelvio-gauge-zone-style';
     st.textContent =
-      'path[id$="gauge-target-arc"], path[id$="gauge-max-arc"] { stroke-width: ' + (12 * 0.8) + 'px; }';
+      'path[id$="gauge-target-arc"], path[id$="gauge-max-arc"] { stroke-width: ' + TARGET_ARC_WIDTH + 'px; }';
     (document.head || document.documentElement).appendChild(st);
   })();
 
