@@ -27101,6 +27101,10 @@ line[id^="needle-"] {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
   margin-bottom: 20px;
+  /* 2026-10-19: 카드 선택·hover 시 translateY(-2px)·바깥 그림자(2px)가 스크롤 영역 위 경계에 잘려
+     첫 번째 카드 상단 테두리가 숨겨지던 문제 — 위·좌 여유 여백(오른쪽·아래는 각 목록의 기존 값 유지) */
+  padding-top: 6px;
+  padding-left: 3px;
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 212, 170, 0.5) rgba(0, 0, 0, 0.1);
   width: 100%;
