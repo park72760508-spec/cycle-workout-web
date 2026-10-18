@@ -167,7 +167,7 @@
     var ex = 100 + 80 * Math.cos(endRad);
     var ey = 140 + 80 * Math.sin(endRad);
     arc.setAttribute('d', 'M ' + sx + ' ' + sy + ' A 80 80 0 0 1 ' + ex + ' ' + ey);
-    arc.setAttribute('stroke', ok ? 'rgba(0, 212, 170, 0.5)' : 'rgba(255, 140, 0, 0.5)');
+    arc.setAttribute('stroke', ok ? '#00d4aa' : '#ff8c00'); // 목표값 숫자와 같은 진한 민트/주황(2026-10-18)
     arc.style.display = 'block';
     if (targetEl) targetEl.setAttribute('fill', ok ? '#00d4aa' : '#ff8c00');
   }

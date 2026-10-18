@@ -18296,8 +18296,8 @@ function updateMobileTargetPowerArc() {
   // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
   // 개인훈련 대시보드와 동일한 로직 (ftp_pctz 타입도 달성도에 따라 색상 결정)
   const arcColor = achievementRatio >= 0.985 
-    ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
-    : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+    ? '#00d4aa'  // 진한 민트색(목표값 숫자와 동일, 2026-10-18)
+    : '#ff8c00'; // 진한 주황색(목표값 숫자와 동일)
   
   // FTP 기반으로 최대 파워 계산
   const ftp = mobileUserFTP || window.userFTP || window.mobileUserFTP || 200;
@@ -18537,7 +18537,7 @@ function updateLaptopTargetPowerArc() {
   const lapPowerEl = safeGetElement('avgSegmentPowerValue');
   const lapPower = lapPowerEl ? Number(lapPowerEl.textContent) || 0 : 0;
   const achievementRatio = targetPower > 0 ? lapPower / targetPower : 0;
-  const arcColor = achievementRatio >= 0.985 ? 'rgba(0, 212, 170, 0.5)' : 'rgba(255, 140, 0, 0.5)';
+  const arcColor = achievementRatio >= 0.985 ? '#00d4aa' : '#ff8c00'; // 목표값 숫자와 같은 진한 민트/주황(2026-10-18)
   const ftp = laptopUserFTP || window.userFTP || 200;
   const maxPower = ftp * 2;
   if (maxPower <= 0) return;

@@ -4466,8 +4466,8 @@ function updateTargetPowerArc() {
     
     // 색상 결정: 비율이 0.985 이상이면 민트색, 미만이면 주황색
     const arcColor = achievementRatio >= 0.985 
-        ? 'rgba(0, 212, 170, 0.5)'  // 투명 민트색 (#00d4aa)
-        : 'rgba(255, 140, 0, 0.5)'; // 투명 주황색
+        ? '#00d4aa'  // 진한 민트색(목표값 숫자와 동일, 2026-10-18)
+        : '#ff8c00'; // 진한 주황색(목표값 숫자와 동일)
     
     // FTP 기반으로 최대 파워 계산
     const maxPower = userFTP * 2;
