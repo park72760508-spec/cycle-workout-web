@@ -274,6 +274,13 @@
       return;
     }
     checkLoadingDone();
+    if (st.monitorMode) {
+      var nowM = Date.now();
+      if (!st.lastMonitorAt || nowM - st.lastMonitorAt >= 300) {
+        st.lastMonitorAt = nowM;
+        renderMonitor(false);
+      }
+    }
     var pm = selectedPm();
     var target = pm && pm.userName ? Math.max(0, Number(pm.currentPower) || 0) : 0;
     var diff = target - st.displayPower;
@@ -453,6 +460,7 @@
 
   function onEnter() {
     showLoading();
+    applyMonitorMode();
     st.userPicked = false;
     st.trackId = null;
     st.displayPower = 0;
@@ -581,6 +589,127 @@
         st.lastTextAt = 0;
         closeMenu();
       });
+    });
+  }
+
+  /* ---------- 모니터 대시보드 (2026-10-18) ----------
+   * 연결 메뉴 > 모니터 대시보드: 속도계 계기판 자리에 슬롯 카드 최대 20개(한 줄 5개).
+   * 카드: 슬롯번호 · 사용자명 · 현재 파워 · 랩 평균 파워 · RPM · BPM.
+   * 카드 바탕색은 PC Coach 슬롯 정보창(updateBluetoothCoachInfoBarColor)과 같은 규칙:
+   *   흰색 = 접속자 없음 / 연한 하늘색 = 접속했지만 10초 데이터 없음·훈련 전 / 초록 = 훈련 중 랩 달성 98.5% 이상 / 주황 = 미만
+   * 카드를 누르면 그 슬롯을 선택하고 계기판 화면으로 돌아간다. */
+  var MONITOR_MAX = 20;
+  var MONITOR_LS = 'coachmMonitorMode';
+  st.monitorMode = (function () { try { return localStorage.getItem(MONITOR_LS) === '1'; } catch (e) { return false; } })();
+
+  function monitorCardState(pm) {
+    if (!pm || !pm.userName) return 'idle';
+    var fresh = Date.now() - Number(pm.lastUpdateTime || 0) <= 10000;
+    var hasData = fresh && ((Number(pm.currentPower) || 0) > 0 || (Number(pm.cadence) || 0) > 0 || (Number(pm.heartRate) || 0) > 0);
+    var cs = coachState();
+    var state = (st.fbStatus && st.fbStatus.state) || cs.trainingState;
+    if (!hasData || state !== 'running') return 'waiting';
+    var target = Number(userTargetPower(pm)) || Number(pm.targetPower) || 0;
+    var lap = Number(pm.segmentPower) || 0;
+    return target <= 0 || (lap / target) * 100 >= 98.5 ? 'ok' : 'low';
+  }
+
+  function monitorGrid() {
+    var grid = $('coachmMonitorGrid');
+    if (grid) return grid;
+    var screen = $(SCREEN_ID);
+    var gauge = screen && screen.querySelector('.mobile-gauge-container');
+    if (!gauge || !gauge.parentNode) return null;
+    grid = document.createElement('div');
+    grid.id = 'coachmMonitorGrid';
+    grid.className = 'coachm-monitor';
+    grid.setAttribute('role', 'list');
+    grid.setAttribute('aria-label', '모니터 대시보드');
+    gauge.parentNode.insertBefore(grid, gauge.nextSibling);
+    grid.addEventListener('click', function (e) {
+      var card = e.target.closest && e.target.closest('.coachm-mcard[data-track]');
+      if (!card) return;
+      st.trackId = card.getAttribute('data-track');
+      st.userPicked = true;
+      st.displayPower = 0;
+      st.lastTextAt = 0;
+      setMonitorMode(false); // 고른 슬롯을 계기판으로 크게 보기
+    });
+    return grid;
+  }
+
+  function applyMonitorMode() {
+    var screen = $(SCREEN_ID);
+    var gauge = screen && screen.querySelector('.mobile-gauge-container');
+    var grid = monitorGrid();
+    if (gauge) gauge.style.display = st.monitorMode ? 'none' : '';
+    if (grid) grid.style.display = st.monitorMode ? 'grid' : 'none';
+    var label = $('coachmMonitorMenuLabel');
+    if (label) label.textContent = st.monitorMode ? '계기판 보기' : '모니터 대시보드';
+    if (screen) screen.classList.toggle('coachm-monitor-on', !!st.monitorMode);
+    st.monitorSig = '';
+    if (st.monitorMode) renderMonitor(true);
+  }
+
+  function setMonitorMode(on) {
+    st.monitorMode = !!on;
+    try { localStorage.setItem(MONITOR_LS, on ? '1' : '0'); } catch (e) {}
+    applyMonitorMode();
+  }
+
+  window.toggleCoachMobileMonitor = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    setMonitorMode(!st.monitorMode);
+  };
+
+  function monitorNum(v) {
+    var n = Math.round(Number(v) || 0);
+    return n > 0 ? String(n) : '–';
+  }
+
+  /** 카드 목록(슬롯 구성)이 바뀔 때만 다시 만들고, 값·색은 매번 제자리 갱신 */
+  function renderMonitor(force) {
+    if (!st.monitorMode) return;
+    var grid = monitorGrid();
+    if (!grid) return;
+    var pms = powerMeters().slice(0, MONITOR_MAX);
+    var sig = pms.map(function (pm) { return pm.id; }).join(',');
+    if (force || sig !== st.monitorSig) {
+      st.monitorSig = sig;
+      if (!pms.length) {
+        grid.innerHTML = '<div class="coachm-monitor__empty">슬롯 정보를 불러오는 중...</div>';
+        return;
+      }
+      grid.innerHTML = pms.map(function (pm) {
+        return '<div class="coachm-mcard" role="listitem" data-track="' + escapeText(pm.id) + '">' +
+          '<div class="coachm-mcard__head"><span class="coachm-mcard__no"></span><span class="coachm-mcard__name"></span></div>' +
+          '<div class="coachm-mcard__power"><b class="coachm-mcard__pw"></b><small>W</small></div>' +
+          '<div class="coachm-mcard__stats">' +
+          '<div class="coachm-mcard__row"><i>LAP</i><b class="coachm-mcard__lap"></b></div>' +
+          '<div class="coachm-mcard__row"><i>RPM</i><b class="coachm-mcard__rpm"></b></div>' +
+          '<div class="coachm-mcard__row"><i>BPM</i><b class="coachm-mcard__bpm"></b></div>' +
+          '</div></div>';
+      }).join('');
+    }
+    var sel = st.trackId;
+    var cards = grid.querySelectorAll('.coachm-mcard');
+    pms.forEach(function (pm, i) {
+      var card = cards[i];
+      if (!card) return;
+      var state = monitorCardState(pm);
+      var cls = 'coachm-mcard coachm-mcard--' + state + (sel != null && String(sel) === String(pm.id) ? ' is-selected' : '');
+      if (card.className !== cls) card.className = cls;
+      function put(selector, text) {
+        var el = card.querySelector(selector);
+        if (el && el.textContent !== text) el.textContent = text;
+      }
+      put('.coachm-mcard__no', String(pm.id));
+      put('.coachm-mcard__name', pm.userName ? String(pm.userName) : '비어 있음');
+      put('.coachm-mcard__pw', pm.userName ? String(Math.round(Number(pm.currentPower) || 0)) : '–');
+      put('.coachm-mcard__lap', pm.userName ? monitorNum(pm.segmentPower) : '–');
+      put('.coachm-mcard__rpm', pm.userName ? monitorNum(pm.cadence) : '–');
+      put('.coachm-mcard__bpm', pm.userName ? monitorNum(pm.heartRate) : '–');
     });
   }
 
