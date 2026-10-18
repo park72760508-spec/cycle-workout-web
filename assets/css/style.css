@@ -34093,7 +34093,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   width: 100vw;
   height: 100vh;
   height: 100dvh;
-  z-index: 9000;
+  /* Coach 휴대폰 화면(#bluetoothCoachMobileScreen.active z-index 100100, 헤더 100200)보다 앞에 — 9000 이면 화면 뒤에 가려졌다 */
+  z-index: 100500;
   display: none;
   align-items: center;
   justify-content: center;
