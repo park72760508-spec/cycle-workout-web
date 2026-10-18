@@ -54,10 +54,11 @@
       p.setAttribute('stroke-width', String(ZONE_BAND_WIDTH));
       // 존 경계는 모두 직선(butt) — 2026-10-18: Z1·Z7 에 round 캡을 주면 안쪽 끝(Z1|Z2, Z6|Z7 경계)에도 둥근 돌출이 생겼다
       p.setAttribute('stroke-linecap', 'butt');
+      p.setAttribute('data-zone', String(i));
       g.appendChild(p);
     });
     // 계기판 바깥쪽 양 끝만 둥글게(회색 배경의 round 캡과 같은 모양): 끝점 아래쪽 반원을 채워 그린다
-    [[0, ZONES[0][2]], [2, ZONES[ZONES.length - 1][2]]].forEach(function (end) {
+    [[0, ZONES[0][2], 0], [2, ZONES[ZONES.length - 1][2], ZONES.length - 1]].forEach(function (end) {
       var c = pointAt(end[0]);
       var half = ZONE_BAND_WIDTH / 2;
       var cap = document.createElementNS(svgNs, 'path');
@@ -65,6 +66,7 @@
       cap.setAttribute('fill', end[1]);
       cap.setAttribute('fill-opacity', String(BAND_OPACITY));
       cap.setAttribute('stroke', 'none');
+      cap.setAttribute('data-zone', String(end[2]));
       g.appendChild(cap);
     });
     return g;
@@ -136,6 +138,43 @@
     mo.observe(svg, { subtree: true, childList: true, attributes: true, attributeFilter: ['d', 'style', 'display', 'stroke'] });
   }
 
+  /* ---------- 현재 파워 존 강조 ----------
+   * 현재 파워가 속한 존 띠만 반투명을 없앤 원색으로, 나머지는 반투명(2026-10-18).
+   * 화면마다 파워·FTP 를 따로 받지 않고 계기판 바늘 각도(= -90 + 파워/(FTP×2) × 180, 모든 화면 공통 공식)로
+   * 현재 FTP 비율을 구한다 → 바늘이 가리키는 존 = 강조 존. 바늘이 0(파워 없음)이면 강조 없음. */
+  function zoneIndexForFtpRatio(ftpRatio) {
+    if (!(ftpRatio > 0.005)) return -1;
+    for (var i = 0; i < ZONES.length; i++) {
+      if (ftpRatio < ZONES[i][1] || i === ZONES.length - 1) return i;
+    }
+    return -1;
+  }
+
+  function highlightZone(bands, idx) {
+    if (bands.__activeZone === idx) return;
+    bands.__activeZone = idx;
+    var kids = bands.children;
+    for (var i = 0; i < kids.length; i++) {
+      var z = Number(kids[i].getAttribute('data-zone'));
+      var op = String(z === idx ? 1 : BAND_OPACITY);
+      kids[i].setAttribute(kids[i].getAttribute('fill') === 'none' ? 'stroke-opacity' : 'fill-opacity', op);
+    }
+  }
+
+  function watchNeedle(svg, bands) {
+    var needle = svg.querySelector('[id$="gauge-needle"]');
+    if (!needle || needle.__stelvioZoneWatched || typeof MutationObserver !== 'function') return;
+    needle.__stelvioZoneWatched = true;
+    function update() {
+      var m = /rotate\(\s*(-?[\d.]+)/.exec(needle.getAttribute('transform') || '');
+      var angle = m ? Number(m[1]) : -90;
+      var ftpRatio = ((angle + 90) / 180) * 2;
+      highlightZone(bands, zoneIndexForFtpRatio(ftpRatio));
+    }
+    update();
+    new MutationObserver(update).observe(needle, { attributes: true, attributeFilter: ['transform'] });
+  }
+
   /** 문서(또는 root) 안 계기판에 존 띠를 1회 추가 */
   function render(root) {
     var scope = root || document;
@@ -147,7 +186,10 @@
       if (!svg || (svg.querySelector && svg.querySelector('.stelvio-gauge-zone-bands'))) continue;
       var bands = buildBands(bg.namespaceURI || 'http://www.w3.org/2000/svg');
       bg.parentNode.insertBefore(bands, bg.nextSibling);
-      if (svg.ownerSVGElement == null) watchSvg(svg);
+      if (svg.ownerSVGElement == null) {
+        watchSvg(svg);
+        watchNeedle(svg, bands);
+      }
     }
   }
 
