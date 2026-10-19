@@ -99,18 +99,20 @@
     if (!ticks || !labels || ticks.childNodes.length) return;
     var ns = 'http://www.w3.org/2000/svg';
     var cx = 100, cy = 140, r = 80;
-    // 눈금: 5 km/h 간격(10 단위는 길게)
-    for (var v = 0; v <= GAUGE_MAX_KMH; v += 5) {
-      var rad = Math.PI + (v / GAUGE_MAX_KMH) * Math.PI;
-      var major = v % 10 === 0;
-      var r1 = r - 10, r2 = r - 10 + (major ? 7 : 4);
+    // 눈금: 모바일 개인훈련 속도계와 같은 디자인 — 총 25개(주눈금 7 + 보조 18), 흰색,
+    // 주눈금(10 km/h마다) 길이 14·두께 2.5, 보조(2.5 km/h마다) 길이 7·두께 1.5, 안쪽 시작 반지름 70
+    var innerR = r - 10;
+    for (var i0 = 0; i0 <= 24; i0++) {
+      var major = i0 % 4 === 0;
+      var rad = Math.PI + (i0 / 24) * Math.PI;
+      var len = major ? 14 : 7;
       var ln = document.createElementNS(ns, 'line');
-      ln.setAttribute('x1', cx + r1 * Math.cos(rad));
-      ln.setAttribute('y1', cy + r1 * Math.sin(rad));
-      ln.setAttribute('x2', cx + r2 * Math.cos(rad));
-      ln.setAttribute('y2', cy + r2 * Math.sin(rad));
-      ln.setAttribute('stroke', major ? '#ffffff' : '#777');
-      ln.setAttribute('stroke-width', major ? '1.6' : '1');
+      ln.setAttribute('x1', cx + innerR * Math.cos(rad));
+      ln.setAttribute('y1', cy + innerR * Math.sin(rad));
+      ln.setAttribute('x2', cx + (innerR + len) * Math.cos(rad));
+      ln.setAttribute('y2', cy + (innerR + len) * Math.sin(rad));
+      ln.setAttribute('stroke', '#ffffff');
+      ln.setAttribute('stroke-width', major ? '2.5' : '1.5');
       ticks.appendChild(ln);
     }
     // 숫자: 0km/h, 10, 20, 30, 40, 50, 60 (원 바깥, 다른 계기판과 같은 반지름 98)
