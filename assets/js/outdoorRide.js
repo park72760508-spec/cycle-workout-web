@@ -70,6 +70,104 @@
   function toast(msg, type) {
     if (typeof window.showToast === 'function') window.showToast(msg, type);
   }
+  /* ---------- 소리 안내(2026-10-20): 알림음(Web Audio) + 한국어 음성(speechSynthesis) ----------
+   * 모드: 'voice'(음성+알림음) → 'beep'(알림음만) → 'off'. 기기에 기억(localStorage).
+   * 휴대폰은 사용자가 화면을 터치한 뒤에만 소리를 낼 수 있어 시작·메뉴·경로 선택 때 unlockAudio() 로 미리 깨운다. */
+  var SOUND_LS = 'stelvioOutdoorSound';
+  var soundMode = (function () { try { return localStorage.getItem(SOUND_LS) || 'voice'; } catch (e) { return 'voice'; } })();
+  var audioCtx = null;
+  function unlockAudio() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) {}
+    // 음성 엔진도 첫 터치 때 빈 문장으로 깨움(iOS)
+    try {
+      if (!unlockAudio.spoke && window.speechSynthesis && window.SpeechSynthesisUtterance) {
+        unlockAudio.spoke = true;
+        var u = new SpeechSynthesisUtterance(' ');
+        u.volume = 0;
+        window.speechSynthesis.speak(u);
+      }
+    } catch (e) {}
+  }
+  /** seq: [[주파수Hz, 길이ms, 시작지연ms], ...] — 짧은 사인파 음(부드러운 시작·끝) */
+  function playTones(seq, vol) {
+    if (soundMode === 'off' || !audioCtx) return;
+    try {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      // 앞 소리가 끝난 뒤 이어서(겹치지 않게)
+      var t0 = Math.max(audioCtx.currentTime + 0.02, playTones.busyUntil || 0);
+      var endMs = 0;
+      seq.forEach(function (n) { endMs = Math.max(endMs, (n[2] || 0) + n[1]); });
+      playTones.busyUntil = t0 + endMs / 1000 + 0.12;
+      seq.forEach(function (n) {
+        var osc = audioCtx.createOscillator();
+        var g = audioCtx.createGain();
+        var start = t0 + (n[2] || 0) / 1000;
+        var dur = n[1] / 1000;
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(n[0], start);
+        g.gain.setValueAtTime(0.0001, start);
+        g.gain.exponentialRampToValueAtTime(vol || 0.35, start + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+        osc.connect(g);
+        g.connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + dur + 0.02);
+      });
+    } catch (e) {}
+  }
+  /** priority: 재탐색·이탈·도착 안내 — 바로 뒤 회전 안내가 이 말을 끊지 않고 이어서 말한다 */
+  function speak(text, priority) {
+    if (soundMode !== 'voice' || !text) return;
+    try {
+      var synth = window.speechSynthesis;
+      if (!synth || !window.SpeechSynthesisUtterance) return;
+      var now = Date.now();
+      var keep = !priority && speak.priorityUntil && now < speak.priorityUntil;
+      if (!keep) synth.cancel();
+      if (priority) speak.priorityUntil = now + 3500;
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.rate = 1.05;
+      u.volume = 1;
+      var ko = (synth.getVoices() || []).filter(function (v) { return /^ko/i.test(v.lang); })[0];
+      if (ko) u.voice = ko;
+      // 알림음이 끝난 뒤 말하도록 살짝 늦춤
+      setTimeout(function () { try { synth.speak(u); } catch (e) {} }, 380);
+    } catch (e) {}
+  }
+  function voiceDist(dm) {
+    var m = dm >= 100 ? Math.round(dm / 10) * 10 : Math.max(10, Math.round(dm / 5) * 5);
+    return m >= 1000 ? (m / 1000).toFixed(1) + '킬로미터' : m + '미터';
+  }
+  /** 상황별 소리 */
+  function cue(kind, text) {
+    switch (kind) {
+      case 'turnFar': playTones([[880, 140, 0], [1175, 200, 160]]); break; // 분기점 접근: 띵-띵
+      case 'turnNear': playTones([[1319, 110, 0], [1319, 110, 150], [1568, 220, 300]], 0.4); break; // 바로 앞: 빠른 세 번
+      case 'off': playTones([[440, 260, 0], [330, 360, 300]], 0.4); break; // 이탈: 낮은 경고음
+      case 'reroute': playTones([[784, 120, 0], [988, 120, 140], [1319, 220, 280]]); break; // 재탐색 완료
+      case 'arrive': playTones([[784, 160, 0], [988, 160, 180], [1175, 160, 360], [1568, 420, 540]]); break; // 도착
+      default: break;
+    }
+    speak(text, kind === 'reroute' || kind === 'off' || kind === 'arrive');
+  }
+  function soundLabel() {
+    return soundMode === 'voice' ? '소리 안내: 음성 + 알림음' : soundMode === 'beep' ? '소리 안내: 알림음만' : '소리 안내: 끔';
+  }
+  window.cycleOutdoorSound = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    unlockAudio();
+    soundMode = soundMode === 'voice' ? 'beep' : soundMode === 'beep' ? 'off' : 'voice';
+    try { localStorage.setItem(SOUND_LS, soundMode); } catch (err) {}
+    setText('outdSoundLabel', soundLabel());
+    if (soundMode !== 'off') cue('turnFar', soundMode === 'voice' ? '소리 안내를 켰습니다' : '');
+  };
+
   function isActive() {
     var el = $(SCREEN_ID);
     return !!(el && el.classList.contains('active'));
@@ -689,13 +787,18 @@
     if (distEl.textContent !== dist) distEl.textContent = dist;
     el.classList.toggle('is-near', dm <= 40);
     el.style.display = 'flex';
-    // 진동: 150m 진입 1회, 40m 진입 1회
-    try {
-      if (navigator.vibrate) {
-        if (!st.turnBuzz.far) { st.turnBuzz.far = true; navigator.vibrate(150); }
-        if (dm <= 40 && !st.turnBuzz.near) { st.turnBuzz.near = true; navigator.vibrate([120, 80, 120]); }
-      }
-    } catch (e) {}
+    // 150m 진입 1회·40m 진입 1회: 진동 + 알림음 + 음성
+    var word = turn.text || turnWord(turn.delta);
+    if (!st.turnBuzz.far) {
+      st.turnBuzz.far = true;
+      try { if (navigator.vibrate) navigator.vibrate(150); } catch (e) {}
+      cue('turnFar', voiceDist(dm) + ' 후 ' + word);
+    }
+    if (dm <= 40 && !st.turnBuzz.near) {
+      st.turnBuzz.near = true;
+      try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
+      cue('turnNear', '곧 ' + turnWord(turn.delta));
+    }
     drawTurnOnMap(turn);
     if (st.follow && st.map && st.lastFix && st.map.getZoom() < TURN_ZOOM && !st.turnZoomed) {
       st.turnZoomed = true;
@@ -767,15 +870,18 @@
       var toCourse = bearing(lat, lng, p[0], p[1]);
       hideTurnBig();
       setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + Math.round(r.dist) + 'm');
+      if (!st.offCued && st.speedKmh >= 3) { st.offCued = true; cue('off', c.isRoute ? '경로를 벗어났습니다' : '코스를 벗어났습니다'); }
       maybeReroute();
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(toCourse) + 'deg)';
       return;
     }
     st.offRouteSince = 0;
+    st.offCued = false;
     st.lastOnRouteIdx = r.idx;
     if (remainM < 30) {
       hideTurnBig();
       setText('outdNavText', c.isRoute ? '목적지에 도착했습니다' : '도착 지점입니다');
+      if (!c.arrivedCue) { c.arrivedCue = true; cue('arrive', c.isRoute ? '목적지에 도착했습니다' : '코스 도착 지점입니다'); }
       if (arrow) { arrow.textContent = '🏁'; arrow.style.transform = 'none'; }
       return;
     }
@@ -1033,9 +1139,12 @@
         how = rj ? '원래 경로로 합류' : '새 경로';
       }
       if (!pick) throw new Error('no route');
+      // 재탐색 안내를 먼저 말하고, 이어서 새 경로의 첫 회전 안내(useRouteAsCourse → showTurnBig)가 뒤따르게
+      cue('reroute', '경로를 다시 안내합니다');
       useRouteAsCourse(pick, c.dest);
       st.offRouteSince = 0;
       try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
+      st.offCued = false;
       toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + (mode === 'short' ? '최단 거리' : '자전거도로 우선') + ')', 'info');
     }).catch(function () {
       setText('outdNavText', '경로를 다시 찾지 못했습니다 · 잠시 후 다시 시도합니다');
@@ -1136,6 +1245,7 @@
           '<span class="outd-route__optname">' + (rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>' : '📏 최단 거리') + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분</span>';
         item.addEventListener('click', function () {
+          unlockAudio();
           $('outdRouteSheet').style.display = 'none';
           useRouteAsCourse(rt, dest);
           toast('길안내를 시작합니다 · ' + rt.km.toFixed(1) + ' km', 'success');
@@ -1162,6 +1272,8 @@
   /* ---------- 메뉴 · 코스 선택 ---------- */
   window.toggleOutdoorRideMenu = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    unlockAudio();
+    setText('outdSoundLabel', soundLabel());
     var m = $('outdMenu');
     if (m) m.classList.toggle('show');
   };
@@ -1251,6 +1363,7 @@
   }
 
   window.toggleOutdoorRide = function () {
+    unlockAudio();
     if (st.status === 'running') {
       st.elapsedMs += Date.now() - st.runSince;
       st.runSince = 0;
