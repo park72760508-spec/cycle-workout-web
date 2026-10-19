@@ -261,6 +261,7 @@
     renderGps(acc);
     st.lastFixAt = Date.now();
     if (acc != null && acc <= 35) updateHeading(c, lat, lng);
+    maybeResumeFollow();
     updateMeOnMap(lat, lng);
 
     var prev = st.lastFix;
@@ -354,8 +355,8 @@
     }).addTo(st.map);
     st.map.setView([37.5665, 126.978], 13);
     st.trail = L.polyline([], { color: '#00d4aa', weight: 4, opacity: 0.95 }).addTo(st.map);
-    // 사용자가 지도를 직접 움직이면 따라가기 해제(◎ 버튼으로 복귀)
-    st.map.on('dragstart', function () { st.follow = false; });
+    st.map.dragging.disable();
+    bindRotatedDrag();
     return st.map;
   }
 
@@ -385,10 +386,8 @@
     var needle = $('outdCompassNeedle');
     if (needle) needle.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)'; // 빨간 끝 = 북쪽
     setText('outdCompassMode', st.headingUp ? '진행' : '북쪽');
-    if (st.map && st.map.dragging) {
-      if (st.headingUp) st.map.dragging.disable();
-      else st.map.dragging.enable();
-    }
+    // 지도 끌기는 Leaflet 기본 대신 회전 보정 핸들러(bindRotatedDrag)가 맡는다
+    if (st.map && st.map.dragging) st.map.dragging.disable();
   }
 
   function updateHeading(c, lat, lng) {
@@ -428,6 +427,54 @@
       center = destPoint(lat, lng, st.heading, hPx * 0.15 * mpp);
     }
     map.setView(center, z, { animate: animate !== false, duration: 0.8 });
+  }
+
+  /* 회전된 지도 끌기(2026-10-20): Leaflet 기본 끌기는 회전된 지도에서 손가락과 다른 방향으로 움직여서,
+     화면에서 움직인 양을 지도 회전만큼 되돌려(panBy) 손가락을 정확히 따라가게 한다. 한 손가락만(두 손가락은 확대·축소).
+     끌면 따라가기 일시 해제 → 주행 중 10초 동안 손대지 않으면 자동으로 진행 방향 따라가기로 복귀(◎ 로 즉시 복귀). */
+  var FOLLOW_RESUME_MS = 10000;
+  function bindRotatedDrag() {
+    var el = $('outdMap');
+    if (!el || el.__rotDragBound) return;
+    el.__rotDragBound = true;
+    var pointers = {};
+    var last = null;
+    function count() { return Object.keys(pointers).length; }
+    el.addEventListener('pointerdown', function (e) {
+      pointers[e.pointerId] = true;
+      if (count() === 1) {
+        last = { x: e.clientX, y: e.clientY, id: e.pointerId };
+        try { el.setPointerCapture(e.pointerId); } catch (err) {}
+      } else {
+        last = null; // 두 손가락 → 확대·축소(Leaflet touchZoom)
+      }
+    });
+    el.addEventListener('pointermove', function (e) {
+      if (!last || e.pointerId !== last.id || count() !== 1 || !st.map) return;
+      var sx = e.clientX - last.x, sy = e.clientY - last.y;
+      if (!sx && !sy) return;
+      last.x = e.clientX;
+      last.y = e.clientY;
+      var th = ((st.mapRotDeg || 0) * Math.PI) / 180;
+      var mx = sx * Math.cos(th) + sy * Math.sin(th);
+      var my = -sx * Math.sin(th) + sy * Math.cos(th);
+      if (st.follow) st.follow = false;
+      st.userPanAt = Date.now();
+      st.map.panBy([-mx, -my], { animate: false });
+    });
+    function end(e) {
+      delete pointers[e.pointerId];
+      if (last && e.pointerId === last.id) last = null;
+    }
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+
+  /** 끌어서 둘러본 뒤 주행 중 10초 손대지 않으면 따라가기 복귀 */
+  function maybeResumeFollow() {
+    if (st.follow || st.status !== 'running') return;
+    if (Date.now() - (st.userPanAt || 0) < FOLLOW_RESUME_MS) return;
+    st.follow = true;
   }
 
   window.toggleOutdoorHeadingUp = function (e) {
