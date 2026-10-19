@@ -772,6 +772,7 @@
       return;
     }
     st.offRouteSince = 0;
+    st.lastOnRouteIdx = r.idx;
     if (remainM < 30) {
       hideTurnBig();
       setText('outdNavText', c.isRoute ? '목적지에 도착했습니다' : '도착 지점입니다');
@@ -902,10 +903,24 @@
     });
   }
 
-  /** @param {'bike'|'short'} mode */
-  function fetchBikeRoute(from, to, mode) {
+  /**
+   * @param {'bike'|'short'} mode
+   * @param {{ heading?: number, via?: {lat:number,lng:number} }} [opt]
+   *   heading: 출발 시 진행 방향(°) — 지금 달리는 방향으로 출발하는 경로(바로 유턴 안내 방지)
+   *   via: 경유(through) 지점 — 원래 경로 앞쪽에 다시 합류하는 재탐색 후보용
+   */
+  function fetchBikeRoute(from, to, mode, opt) {
+    opt = opt || {};
+    var start = { lat: from.lat, lon: from.lng };
+    if (opt.heading != null && isFinite(opt.heading)) {
+      start.heading = Math.round(opt.heading);
+      start.heading_tolerance = 60;
+    }
+    var locs = [start];
+    if (opt.via) locs.push({ lat: opt.via.lat, lon: opt.via.lng, type: 'through' });
+    locs.push({ lat: to.lat, lon: to.lng });
     var body = {
-      locations: [{ lat: from.lat, lon: from.lng }, { lat: to.lat, lon: to.lng }],
+      locations: locs,
       costing: 'bicycle',
       costing_options: {
         bicycle: mode === 'short'
@@ -948,6 +963,7 @@
     st.course = course;
     st.courseIdx = 0;
     st.offRouteSince = 0;
+    st.lastOnRouteIdx = null;
     drawCourse();
     drawDestMarker(dest);
     if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
@@ -962,19 +978,69 @@
     }).addTo(st.courseLayer);
   }
 
+  /*
+   * 경로 이탈 재탐색(2026-10-20) — 자전거 내비(가민·코무트 방식) 기준
+   *  1) 판정: GPS 정확도에 맞춘 허용 거리 밖 + 실제 이동 중(3 km/h↑) + 경로에서 점점 멀어지거나 80m 이상 → 약 6초 유지 시 이탈
+   *     (경로 옆에서 쉬거나 교차로를 도는 순간은 재탐색하지 않음)
+   *  2) 원래 선택한 방식(자전거도로 우선 / 최단 거리) 그대로, 현재 진행 방향으로 출발하는 경로(heading)
+   *  3) 후보 두 개 비교: ① 원래 경로 앞쪽(약 200m 앞)으로 합류 후 목적지 ② 목적지까지 새 경로
+   *     → ①이 ②보다 15% 이내로 길면 ①(고른 경로 유지), 아니면 ②
+   *  4) 간격: 첫 재탐색 6초, 연속이면 15초 → 30초. 목적지 150m 안에서는 재탐색 안 함.
+   */
+  var REROUTE_STEPS_MS = [0, 15000, 30000];
   function maybeReroute() {
     var c = st.course;
-    if (!c || !c.isRoute || !st.lastFix) return;
+    if (!c || !c.isRoute || !st.lastFix || st.rerouting) return;
     var now = Date.now();
-    if (!st.offRouteSince) { st.offRouteSince = now; return; }
-    if (now - st.offRouteSince < 10000 || now - (st.lastRerouteAt || 0) < 30000) return;
+    var fix = st.lastFix;
+    var r = nearestCourseIdx(fix.lat, fix.lng);
+    var destDist = hav(fix.lat, fix.lng, c.dest.lat, c.dest.lng);
+    if (destDist < 150) return;
+    if (st.speedKmh < 3) { st.offRouteSince = 0; return; } // 멈춰 있으면(휴식 등) 재탐색 안 함
+    if (!st.offRouteSince) {
+      st.offRouteSince = now;
+      st.offRouteStartDist = r.dist;
+      return;
+    }
+    var gettingFarther = r.dist > (st.offRouteStartDist || 0) + 5 || r.dist > 80;
+    if (now - st.offRouteSince < 6000 || !gettingFarther) return;
+    // 연속 재탐색 간격(2분 안에 반복되면 점점 길게)
+    if (now - (st.lastRerouteAt || 0) > 120000) st.rerouteCount = 0;
+    var wait = REROUTE_STEPS_MS[Math.min(st.rerouteCount || 0, REROUTE_STEPS_MS.length - 1)];
+    if (now - (st.lastRerouteAt || 0) < wait) return;
     st.lastRerouteAt = now;
+    st.rerouteCount = (st.rerouteCount || 0) + 1;
+    st.rerouting = true;
     setText('outdNavText', '경로를 다시 찾는 중...');
-    fetchBikeRoute({ lat: st.lastFix.lat, lng: st.lastFix.lng }, c.dest, c.routeMode || 'bike').then(function (route) {
-      useRouteAsCourse(route, c.dest);
-      toast('새 경로로 안내합니다 · ' + route.km.toFixed(1) + ' km', 'info');
+
+    var mode = c.routeMode || 'bike';
+    var from = { lat: fix.lat, lng: fix.lng };
+    var heading = st.heading != null && st.speedKmh >= 5 ? st.heading : null;
+    // 합류 지점: 마지막으로 경로 위에 있던 곳에서 약 200m 앞(남은 경로가 짧으면 목적지)
+    var baseIdx = st.lastOnRouteIdx != null ? st.lastOnRouteIdx : r.idx;
+    var rejoinAt = c.cum[baseIdx] + 200;
+    var via = rejoinAt < c.totalM - 150 ? (function () { var p = pointAtDist(rejoinAt); return { lat: p[0], lng: p[1] }; })() : null;
+
+    var fresh = fetchBikeRoute(from, c.dest, mode, { heading: heading }).catch(function () { return null; });
+    var rejoin = via ? fetchBikeRoute(from, c.dest, mode, { heading: heading, via: via }).catch(function () { return null; }) : Promise.resolve(null);
+    Promise.all([rejoin, fresh]).then(function (res) {
+      var rj = res[0], fr = res[1];
+      var pick = null, how = '';
+      if (rj && fr) {
+        if (rj.km <= fr.km * 1.15) { pick = rj; how = '원래 경로로 합류'; } else { pick = fr; how = '새 경로'; }
+      } else {
+        pick = rj || fr;
+        how = rj ? '원래 경로로 합류' : '새 경로';
+      }
+      if (!pick) throw new Error('no route');
+      useRouteAsCourse(pick, c.dest);
+      st.offRouteSince = 0;
+      try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
+      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + (mode === 'short' ? '최단 거리' : '자전거도로 우선') + ')', 'info');
     }).catch(function () {
-      setText('outdNavText', '경로를 다시 찾지 못했습니다');
+      setText('outdNavText', '경로를 다시 찾지 못했습니다 · 잠시 후 다시 시도합니다');
+    }).then(function () {
+      st.rerouting = false;
     });
   }
 
@@ -1054,8 +1120,8 @@
     box.innerHTML = '<div class="coachm-picker__empty">자전거 경로를 찾는 중...</div>';
     var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
     Promise.all([
-      fetchBikeRoute(from, dest, 'bike').catch(function () { return null; }),
-      fetchBikeRoute(from, dest, 'short').catch(function () { return null; })
+      fetchBikeRoute(from, dest, 'bike', { heading: st.speedKmh >= 5 ? st.heading : null }).catch(function () { return null; }),
+      fetchBikeRoute(from, dest, 'short', { heading: st.speedKmh >= 5 ? st.heading : null }).catch(function () { return null; })
     ]).then(function (routes) {
       routes = routes.filter(Boolean);
       if (!routes.length) {
