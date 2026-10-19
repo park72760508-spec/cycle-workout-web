@@ -766,13 +766,15 @@
       var p = c.latlngs[r.idx];
       var toCourse = bearing(lat, lng, p[0], p[1]);
       hideTurnBig();
-      setText('outdNavText', '코스를 벗어났습니다 · ' + Math.round(r.dist) + 'm');
+      setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + Math.round(r.dist) + 'm');
+      maybeReroute();
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(toCourse) + 'deg)';
       return;
     }
+    st.offRouteSince = 0;
     if (remainM < 30) {
       hideTurnBig();
-      setText('outdNavText', '도착 지점입니다');
+      setText('outdNavText', c.isRoute ? '목적지에 도착했습니다' : '도착 지점입니다');
       if (arrow) { arrow.textContent = '🏁'; arrow.style.transform = 'none'; }
       return;
     }
@@ -785,7 +787,7 @@
     if (next && next.at - here <= TURN_ANNOUNCE_M) {
       var dm = next.at - here;
       var dist = dm >= 100 ? Math.round(dm / 10) * 10 + 'm' : Math.max(10, Math.round(dm / 5) * 5) + 'm';
-      setText('outdNavText', dist + ' 후 ' + turnWord(next.delta));
+      setText('outdNavText', dist + ' 후 ' + (next.text || turnWord(next.delta)));
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(Math.max(-150, Math.min(150, next.delta))) + 'deg)';
       if (dm <= TURN_BIG_M) showTurnBig(next, dm);
       else hideTurnBig();
@@ -834,6 +836,262 @@
         toast('코스맵을 불러오지 못했습니다: ' + ((e && e.message) || e), 'error');
       });
   }
+
+  /* ---------- 길찾기(2026-10-20): 목적지 검색 + 자전거 경로 안내 ----------
+   * 검색: Photon(OSM, 입력하는 대로, 현재 위치 우선) → 결과 없으면 Nominatim(OSM).
+   * 경로: Valhalla(FOSSGIS 공개 서버) 자전거 모드 — 자전거 통행 금지 도로(자동차 전용·bicycle=no) 자동 제외,
+   *   [자전거도로 우선] use_roads 0.2(자전거 도로·한적한 길 선호) / [최단 거리] shortest. 한국어 회전 안내문 사용.
+   * 안내: 기존 코스 안내(회전 카드·지도 강조·진동) 재사용, 경로 이탈 10초 이상이면 현재 위치에서 다시 탐색(30초에 1회). */
+  var VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
+  var PHOTON_URL = 'https://photon.komoot.io/api/';
+  var NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
+
+  function decodePolyline6(str) {
+    var idx = 0, lat = 0, lng = 0, out = [];
+    while (idx < str.length) {
+      var b, shift = 0, res = 0;
+      do { b = str.charCodeAt(idx++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lat += res & 1 ? ~(res >> 1) : res >> 1;
+      shift = 0; res = 0;
+      do { b = str.charCodeAt(idx++) - 63; res |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lng += res & 1 ? ~(res >> 1) : res >> 1;
+      out.push([lat / 1e6, lng / 1e6]);
+    }
+    return out;
+  }
+
+  /** Valhalla 회전 종류 → 화살표 각도(+ 오른쪽). 안내하지 않는 종류는 null */
+  function maneuverDelta(type) {
+    switch (type) {
+      case 9: return 35; case 10: return 90; case 11: return 135; case 12: return 170;
+      case 13: return -170; case 14: return -135; case 15: return -90; case 16: return -35;
+      case 18: case 20: case 23: return 25; case 19: case 21: case 24: return -25;
+      case 26: case 27: return 90; // 회전교차로
+      default: return null;
+    }
+  }
+
+  function fetchJson(url, opts) {
+    var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    var t = setTimeout(function () { if (ctrl) ctrl.abort(); }, 15000);
+    return fetch(url, Object.assign({ signal: ctrl ? ctrl.signal : undefined }, opts || {}))
+      .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .finally(function () { clearTimeout(t); });
+  }
+
+  /** @returns {Promise<{ name: string, sub: string, lat: number, lng: number }[]>} */
+  function searchPlaces(q) {
+    var here = st.lastFix;
+    // lang=default: 기기 언어(영문 등)와 무관하게 현지(한글) 이름
+    var url = PHOTON_URL + '?limit=8&lang=default&q=' + encodeURIComponent(q) + (here ? '&lat=' + here.lat.toFixed(5) + '&lon=' + here.lng.toFixed(5) : '');
+    return fetchJson(url).then(function (d) {
+      var list = (d && d.features || []).map(function (f) {
+        var p = f.properties || {};
+        var c = f.geometry && f.geometry.coordinates;
+        if (!c) return null;
+        var sub = [p.city || p.county || '', p.district || p.locality || '', p.street ? p.street + (p.housenumber ? ' ' + p.housenumber : '') : '']
+          .filter(Boolean).join(' ');
+        return { name: p.name || p.street || q, sub: sub, lat: c[1], lng: c[0] };
+      }).filter(Boolean);
+      if (list.length) return list;
+      return fetchJson(NOMINATIM_URL + '?format=jsonv2&limit=8&countrycodes=kr&accept-language=ko&q=' + encodeURIComponent(q)).then(function (n) {
+        return (n || []).map(function (x) {
+          return { name: x.name || String(x.display_name || '').split(',')[0], sub: String(x.display_name || '').split(',').slice(1, 4).join(','), lat: Number(x.lat), lng: Number(x.lon) };
+        });
+      });
+    });
+  }
+
+  /** @param {'bike'|'short'} mode */
+  function fetchBikeRoute(from, to, mode) {
+    var body = {
+      locations: [{ lat: from.lat, lon: from.lng }, { lat: to.lat, lon: to.lng }],
+      costing: 'bicycle',
+      costing_options: {
+        bicycle: mode === 'short'
+          ? { bicycle_type: 'Hybrid', shortest: true }
+          : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 }
+      },
+      language: 'ko-KR',
+      units: 'kilometers'
+    };
+    return fetchJson(VALHALLA_URL + '?json=' + encodeURIComponent(JSON.stringify(body))).then(function (d) {
+      var trip = d && d.trip;
+      if (!trip || trip.status !== 0 || !trip.legs || !trip.legs.length) throw new Error('경로를 찾지 못했습니다.');
+      var leg = trip.legs[0];
+      return {
+        mode: mode,
+        latlngs: decodePolyline6(leg.shape),
+        maneuvers: leg.maneuvers || [],
+        km: trip.summary.length,
+        min: Math.round(trip.summary.time / 60)
+      };
+    });
+  }
+
+  /** 경로를 코스로 등록(회전 안내는 Valhalla 안내문 기준) */
+  function useRouteAsCourse(route, dest) {
+    hideTurnBig();
+    var course = prepareCourse(dest.name, route.latlngs);
+    var turns = [];
+    route.maneuvers.forEach(function (m) {
+      var delta = maneuverDelta(m.type);
+      var i = m.begin_shape_index;
+      if (delta == null || i == null || i <= 0 || i >= course.cum.length) return;
+      var text = String(m.instruction || '').replace(/\.$/, '');
+      turns.push({ at: course.cum[i], delta: delta, idx: i, text: text });
+    });
+    if (turns.length) course.turns = turns;
+    course.isRoute = true;
+    course.dest = dest;
+    course.routeMode = route.mode;
+    st.course = course;
+    st.courseIdx = 0;
+    st.offRouteSince = 0;
+    drawCourse();
+    drawDestMarker(dest);
+    if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
+  }
+
+  function drawDestMarker(dest) {
+    if (!st.map || !st.courseLayer) return;
+    var L = window.L;
+    L.marker([dest.lat, dest.lng], {
+      icon: L.divIcon({ className: '', html: '<div class="outd-dest-pin">🏁</div>', iconSize: [28, 28], iconAnchor: [14, 26] }),
+      interactive: false
+    }).addTo(st.courseLayer);
+  }
+
+  function maybeReroute() {
+    var c = st.course;
+    if (!c || !c.isRoute || !st.lastFix) return;
+    var now = Date.now();
+    if (!st.offRouteSince) { st.offRouteSince = now; return; }
+    if (now - st.offRouteSince < 10000 || now - (st.lastRerouteAt || 0) < 30000) return;
+    st.lastRerouteAt = now;
+    setText('outdNavText', '경로를 다시 찾는 중...');
+    fetchBikeRoute({ lat: st.lastFix.lat, lng: st.lastFix.lng }, c.dest, c.routeMode || 'bike').then(function (route) {
+      useRouteAsCourse(route, c.dest);
+      toast('새 경로로 안내합니다 · ' + route.km.toFixed(1) + ' km', 'info');
+    }).catch(function () {
+      setText('outdNavText', '경로를 다시 찾지 못했습니다');
+    });
+  }
+
+  function routeSheet() {
+    var el = $('outdRouteSheet');
+    if (el) return el;
+    var screen = $(SCREEN_ID);
+    el = document.createElement('div');
+    el.id = 'outdRouteSheet';
+    el.className = 'coachm-picker outd-route';
+    el.style.display = 'none';
+    el.innerHTML =
+      '<div class="coachm-picker__sheet outd-route__sheet">' +
+      '<div class="coachm-picker__head"><span>길찾기</span><button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
+      '<div class="outd-route__search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search"></div>' +
+      '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
+      '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: Photon/Nominatim(OSM)</div>' +
+      '</div>';
+    screen.appendChild(el);
+    el.addEventListener('click', function (e) {
+      if (e.target === el || e.target.closest('[data-route-close]')) el.style.display = 'none';
+    });
+    var input = el.querySelector('#outdRouteInput');
+    var timer = null;
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = input.value.trim();
+      if (q.length < 2) { renderRouteList([]); return; }
+      timer = setTimeout(function () { runSearch(q); }, 450);
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { clearTimeout(timer); var q = input.value.trim(); if (q) runSearch(q); }
+    });
+    return el;
+  }
+
+  var searchSeq = 0;
+  function runSearch(q) {
+    var seq = ++searchSeq;
+    $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색 중...</div>';
+    searchPlaces(q).then(function (list) {
+      if (seq !== searchSeq) return;
+      renderRouteList(list);
+    }).catch(function () {
+      if (seq !== searchSeq) return;
+      $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
+    });
+  }
+
+  function renderRouteList(list) {
+    var box = $('outdRouteList');
+    if (!box) return;
+    if (!list.length) {
+      box.innerHTML = '<div class="coachm-picker__empty">' + ($('outdRouteInput').value.trim().length >= 2 ? '검색 결과가 없습니다.' : '가고 싶은 장소나 주소를 입력하세요.') + '</div>';
+      return;
+    }
+    box.innerHTML = '';
+    list.forEach(function (p) {
+      var item = document.createElement('div');
+      item.className = 'coachm-picker__item outd-route__place';
+      var d = st.lastFix ? hav(st.lastFix.lat, st.lastFix.lng, p.lat, p.lng) / 1000 : null;
+      item.innerHTML = '<span class="outd-route__name"></span><span class="outd-route__sub"></span><span class="coachm-picker__item-min"></span>';
+      item.children[0].textContent = p.name;
+      item.children[1].textContent = p.sub || '';
+      item.children[2].textContent = d != null ? (d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km') : '';
+      item.addEventListener('click', function () { chooseDestination(p); });
+      box.appendChild(item);
+    });
+  }
+
+  function chooseDestination(dest) {
+    var box = $('outdRouteList');
+    if (!st.lastFix) {
+      box.innerHTML = '<div class="coachm-picker__empty">현재 위치(GPS)를 찾는 중입니다. 잠시 후 다시 선택해 주세요.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="coachm-picker__empty">자전거 경로를 찾는 중...</div>';
+    var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
+    Promise.all([
+      fetchBikeRoute(from, dest, 'bike').catch(function () { return null; }),
+      fetchBikeRoute(from, dest, 'short').catch(function () { return null; })
+    ]).then(function (routes) {
+      routes = routes.filter(Boolean);
+      if (!routes.length) {
+        box.innerHTML = '<div class="coachm-picker__empty">자전거로 갈 수 있는 경로를 찾지 못했습니다.</div>';
+        return;
+      }
+      box.innerHTML = '<div class="outd-route__dest">🏁 ' + escHtml(dest.name) + '</div>';
+      routes.forEach(function (rt) {
+        var item = document.createElement('div');
+        item.className = 'coachm-picker__item outd-route__opt' + (rt.mode === 'bike' ? ' is-reco' : '');
+        item.innerHTML =
+          '<span class="outd-route__optname">' + (rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>' : '📏 최단 거리') + '</span>' +
+          '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분</span>';
+        item.addEventListener('click', function () {
+          $('outdRouteSheet').style.display = 'none';
+          useRouteAsCourse(rt, dest);
+          toast('길안내를 시작합니다 · ' + rt.km.toFixed(1) + ' km', 'success');
+        });
+        box.appendChild(item);
+      });
+    });
+  }
+
+  function escHtml(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+  }
+
+  window.openOutdoorRouteSearch = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    var el = routeSheet();
+    el.style.display = 'flex';
+    var input = $('outdRouteInput');
+    renderRouteList([]);
+    setTimeout(function () { try { input.focus(); } catch (err) {} }, 50);
+  };
 
   /* ---------- 메뉴 · 코스 선택 ---------- */
   window.toggleOutdoorRideMenu = function (e) {

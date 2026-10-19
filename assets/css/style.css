@@ -34566,3 +34566,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 아웃도어 지도: 한 손가락 끌기는 outdoorRide.js 회전 보정 핸들러가 처리 — 브라우저 기본 스크롤·확대 제스처 막기 */
 #outdoorRideScreen #outdMap { touch-action: none; cursor: grab; }
 #outdoorRideScreen .outd-menu-svg { width: 24px; height: 24px; flex-shrink: 0; }
+/* 아웃도어: 길찾기 */
+#outdoorRideScreen .outd-route__sheet { max-height: 82vh; }
+#outdoorRideScreen .outd-route__search { padding: 8px 14px 4px; }
+#outdoorRideScreen .outd-route__search input {
+  width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 10px;
+  border: 1px solid #3a3a3a; background: #121212; color: #fff; font-size: 15px; outline: none;
+}
+#outdoorRideScreen .outd-route__search input:focus { border-color: #00d4aa; }
+#outdoorRideScreen .outd-route__list { min-height: 120px; }
+#outdoorRideScreen .outd-route__place { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 8px; align-items: center; }
+#outdoorRideScreen .outd-route__name { grid-column: 1; font-size: 14px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-route__sub { grid-column: 1; font-size: 11px; color: #94a3b8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-route__place .coachm-picker__item-min { grid-column: 2; grid-row: 1 / span 2; }
+#outdoorRideScreen .outd-route__dest { padding: 8px 14px; font-size: 14px; font-weight: 800; color: #fff; }
+#outdoorRideScreen .outd-route__opt { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+#outdoorRideScreen .outd-route__opt.is-reco { border-color: #00d4aa; }
+#outdoorRideScreen .outd-route__optname { font-size: 15px; font-weight: 800; color: #fff; }
+#outdoorRideScreen .outd-route__optname em { font-style: normal; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: #00d4aa; color: #062a22; margin-left: 4px; vertical-align: middle; }
+#outdoorRideScreen .outd-route__optinfo { font-size: 13px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+#outdoorRideScreen .outd-route__credit { padding: 6px 14px 10px; font-size: 10px; color: #64748b; text-align: right; }
+.outd-dest-pin { font-size: 22px; line-height: 28px; text-align: center; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5)); }
