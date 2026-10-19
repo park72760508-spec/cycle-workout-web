@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261019outdoor8" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261019outdoor9" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29867,7 +29867,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261019h"></script>
+  <script src="assets/js/outdoorRide.js?v=20261019i"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -35875,7 +35875,9 @@
           <path d="M 14 140 A 86 86 0 0 1 186 140" fill="none" stroke="#bfe6ff" stroke-opacity="0.45" stroke-width="0.8"/>
           <path d="M 26 140 A 74 74 0 0 1 174 140" fill="none" stroke="#000814" stroke-opacity="0.55" stroke-width="0.8"/>
           <!-- 현재 속도까지 차오르는 하늘색 스윕 -->
-          <path id="outd-gauge-sweep" d="" fill="none" stroke="url(#outdSweepGrad)" stroke-opacity="0.9" stroke-width="12" stroke-linecap="round" filter="url(#outdGlow)" style="display: none;"/>
+          <!-- 움직이는 요소는 블러 필터 없이(매 프레임 블러 재계산 = 발열) 넓은 반투명 선으로 빛 번짐 표현 -->
+          <path id="outd-gauge-sweep-glow" d="" fill="none" stroke="#5cc8ff" stroke-opacity="0.22" stroke-width="22" stroke-linecap="round" style="display: none;"/>
+          <path id="outd-gauge-sweep" d="" fill="none" stroke="url(#outdSweepGrad)" stroke-opacity="0.92" stroke-width="12" stroke-linecap="round" style="display: none;"/>
           <g id="outd-gauge-ticks"></g>
           <g id="outd-gauge-labels"></g>
           <text x="100" y="93" text-anchor="middle" fill="#888" font-size="6">km</text>
@@ -35886,7 +35888,8 @@
           <!-- 현재 속도: 정수는 가운데, 소수점 이하는 작게 -->
           <text id="outd-ui-speed" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
           <text id="outd-ui-speed-dec" x="114" y="200" text-anchor="start" fill="#fff" font-size="22" font-weight="bold">.0</text>
-          <g id="outd-gauge-needle" transform="translate(100, 140) rotate(-90)" filter="url(#outdNeedleGlow)">
+          <g id="outd-gauge-needle" transform="translate(100, 140) rotate(-90)">
+            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff3b3b" stroke-opacity="0.28" stroke-width="10" stroke-linecap="round"/>
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
             <circle cx="0" cy="0" r="6" fill="#fff"/>
           </g>

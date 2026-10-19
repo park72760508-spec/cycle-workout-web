@@ -173,13 +173,29 @@
     var now = new Date();
     setText('outd-ui-clock', String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'));
     // GPS 신호가 5초 넘게 끊기면 속도 0 으로
-    if (Date.now() - st.lastFixAt > 5000) st.speedKmh = 0;
+    if (Date.now() - st.lastFixAt > 5000 && st.speedKmh !== 0) {
+      st.speedKmh = 0;
+      kickLoop();
+    }
   }
 
-  function loop() {
-    if (!isActive()) { st.rafId = null; return; }
+  /* 배터리·발열 최적화(2026-10-19): 바늘 애니메이션은 초당 최대 30번, 목표 속도에 도달하면 멈추고
+     새 GPS 값이 오면(kickLoop) 다시 시작. 화면이 가려져 있으면(document.hidden) 그리지 않는다. */
+  var FRAME_MS = 33;
+  function kickLoop() {
+    if (st.rafId == null && isActive() && !document.hidden) st.rafId = requestAnimationFrame(loop);
+  }
+  function loop(ts) {
+    st.rafId = null;
+    if (!isActive() || document.hidden) return;
+    if (st.lastFrameTs && ts - st.lastFrameTs < FRAME_MS) {
+      st.rafId = requestAnimationFrame(loop);
+      return;
+    }
+    st.lastFrameTs = ts;
     var diff = st.speedKmh - st.displaySpeed;
-    st.displaySpeed = Math.abs(diff) > 0.05 ? st.displaySpeed + diff * 0.15 : st.speedKmh;
+    var settled = Math.abs(diff) <= 0.05;
+    st.displaySpeed = settled ? st.speedKmh : st.displaySpeed + diff * 0.25;
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
@@ -192,12 +208,19 @@
         var end = Math.PI + ratio * Math.PI;
         var ex = (100 + 80 * Math.cos(end)).toFixed(2);
         var ey = (140 + 80 * Math.sin(end)).toFixed(2);
-        sweep.setAttribute('d', 'M 20 140 A 80 80 0 0 1 ' + ex + ' ' + ey);
+        var dPath = 'M 20 140 A 80 80 0 0 1 ' + ex + ' ' + ey;
+        sweep.setAttribute('d', dPath);
         if (sweep.style.display === 'none') sweep.style.display = '';
+      }
+      // 빛 번짐(블러 필터 대신 넓은 반투명 선 — 매 프레임 블러 재계산 없이 같은 느낌)
+      var glow = $('outd-gauge-sweep-glow');
+      if (glow) {
+        if (sweep.style.display === 'none') { if (glow.style.display !== 'none') glow.style.display = 'none'; }
+        else { glow.setAttribute('d', sweep.getAttribute('d')); if (glow.style.display === 'none') glow.style.display = ''; }
       }
     }
     setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', st.speedKmh, 1);
-    st.rafId = requestAnimationFrame(loop);
+    if (!settled) st.rafId = requestAnimationFrame(loop);
   }
 
   function renderToggle() {
@@ -246,6 +269,7 @@
     if (spd == null && accOk && prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
     if (!accOk) spd = 0;
     if (spd != null && isFinite(spd)) st.speedKmh = spd < 1.5 ? 0 : Math.min(spd, 120);
+    kickLoop();
 
     if (st.status === 'running') {
       // 거리 누적: 정확도가 괜찮고(≤35m), 순간 이동(>30m/s)이 아니며, 실제로 움직였을 때만
@@ -268,7 +292,12 @@
         var pt = [lat, lng, c.altitude != null && isFinite(c.altitude) ? Math.round(c.altitude * 10) / 10 : null, t];
         st.track.push(pt);
         st.lastTrackPt = pt;
-        if (st.trail) st.trail.addLatLng([lat, lng]);
+        // 지나온 경로 선은 15m마다만 다시 그림(저장용 track 은 5m 간격 그대로)
+        var tl = st.lastTrailPt;
+        if (st.trail && (!tl || hav(tl[0], tl[1], lat, lng) >= 15)) {
+          st.trail.addLatLng([lat, lng]);
+          st.lastTrailPt = [lat, lng];
+        }
       }
     }
     updateNavigation(lat, lng);
@@ -304,6 +333,8 @@
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       updateWhenIdle: true,
+      updateWhenZooming: false,
+      keepBuffer: 1,
       attribution: '&copy; OpenStreetMap'
     }).addTo(st.map);
     st.map.setView([37.5665, 126.978], 13);
@@ -319,16 +350,27 @@
     var L = window.L;
     if (!st.meMarker) {
       st.meMarker = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: '<div class="outd-me-marker"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+        icon: L.divIcon({ className: '', html: '<div class="outd-me"><span class="outd-me__pulse"></span><span class="outd-me__pulse outd-me__pulse--2"></span><span class="outd-me__dot"></span></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
         interactive: false,
         zIndexOffset: 1000
       }).addTo(map);
       map.setView([lat, lng], Math.max(map.getZoom(), 16));
     } else {
       st.meMarker.setLatLng([lat, lng]);
-      if (st.follow) map.panTo([lat, lng], { animate: true, duration: 0.5 });
+      // 따라가기: 매초 지도를 옮기지 않고 내 위치가 가운데 영역(가로·세로 40%)을 벗어날 때만 이동
+      if (st.follow) {
+        var sz = map.getSize();
+        var cp = map.latLngToContainerPoint([lat, lng]);
+        if (Math.abs(cp.x - sz.x / 2) > sz.x * 0.2 || Math.abs(cp.y - sz.y / 2) > sz.y * 0.2) {
+          map.panTo([lat, lng], { animate: true, duration: 0.6 });
+        }
+      }
     }
   }
+
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) kickLoop();
+  });
 
   window.recenterOutdoorMap = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -370,7 +412,7 @@
     var L = window.L;
     if (st.courseLayer) map.removeLayer(st.courseLayer);
     st.courseLayer = L.layerGroup().addTo(map);
-    L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 5, opacity: 0.85 }).addTo(st.courseLayer);
+    L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 5, opacity: 0.85, smoothFactor: 1.5 }).addTo(st.courseLayer);
     var first = st.course.latlngs[0], lastP = st.course.latlngs[st.course.latlngs.length - 1];
     L.circleMarker(first, { radius: 6, color: '#fff', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }).addTo(st.courseLayer);
     L.circleMarker(lastP, { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 }).addTo(st.courseLayer);
@@ -396,7 +438,11 @@
       }
     }
     scan(st.courseIdx - 30, st.courseIdx + 200);
-    if (bestD > OFF_COURSE_M * 2) scan(0, n);
+    // 코스 전체 검색은 5초에 한 번만(이탈 상태에서 매초 최대 3만 점 계산 방지)
+    if (bestD > OFF_COURSE_M * 2 && Date.now() - (st.lastFullScanAt || 0) > 5000) {
+      st.lastFullScanAt = Date.now();
+      scan(0, n);
+    }
     return { idx: best, dist: bestD };
   }
 
@@ -693,7 +739,7 @@
   /* ---------- 시작 · 일시정지 · 종료 ---------- */
   function startTimer() {
     if (st.timer) return;
-    st.timer = setInterval(renderStats, 500);
+    st.timer = setInterval(renderStats, 1000);
   }
 
   window.toggleOutdoorRide = function () {
@@ -825,6 +871,7 @@
     st.track = [];
     st.lastTrackPt = null;
     if (st.trail) st.trail.setLatLngs([]);
+    st.lastTrailPt = null;
     renderToggle();
     renderStats();
   }
@@ -937,7 +984,7 @@
     }, 80);
     setTimeout(fixMapSize, 600);
     startGps();
-    if (st.rafId == null) st.rafId = requestAnimationFrame(loop);
+    kickLoop();
   };
 
   window.exitOutdoorRide = function (e) {
