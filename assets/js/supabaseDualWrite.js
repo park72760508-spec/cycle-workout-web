@@ -507,6 +507,9 @@ async function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidNamespace)
     distance_km: num(log.distance_km),
     elevation_gain_m: num(log.elevation_gain),
     avg_speed_kmh: num(log.avg_speed_kmh),
+    // 2026-10-20: 아웃도어 라이딩(GPS) — 값이 있을 때만 보냄(다른 기록 저장 시 기존 값을 null 로 덮지 않게)
+    ...(log.max_speed_kmh != null && Number(log.max_speed_kmh) > 0 ? { max_speed_kmh: num(log.max_speed_kmh) } : {}),
+    ...(log.moving_time_sec != null && Number(log.moving_time_sec) > 0 ? { moving_time_sec: int(log.moving_time_sec) } : {}),
     weight_at_ride_kg: num(log.weight),
     ftp_at_time: num(log.ftp_at_time),
     avg_watts: num(log.avg_watts),

@@ -476,7 +476,10 @@ async function saveStravaActivityToFirebase(activity, options) {
       ...(markTssApplied ? { tss_applied_at: new Date().toISOString() } : {}),
       created_at: activity.created_at || new Date().toISOString(),
       // 2026-10-19: 아웃도어 라이딩(GPS) 경로 — Supabase rides.summary_polyline(Google encoded) 로 훈련 일지 지도 표시
-      ...(activity.summary_polyline ? { summary_polyline: String(activity.summary_polyline) } : {})
+      ...(activity.summary_polyline ? { summary_polyline: String(activity.summary_polyline) } : {}),
+      ...(activity.elevation_profile && activity.elevation_profile.length ? { elevation_profile: activity.elevation_profile } : {}),
+      ...(Number(activity.max_speed_kmh) > 0 ? { max_speed_kmh: Number(activity.max_speed_kmh) } : {}),
+      ...(Number(activity.moving_time_sec) > 0 ? { moving_time_sec: Math.round(Number(activity.moving_time_sec)) } : {})
     };
 
     if (supabaseOnly) {

@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261020outdoor2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020outdoor3" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29629,7 +29629,7 @@
   <script src="assets/js/journal/journalWorkoutGraphUtils.js?v=seg-cache-20260929"></script>
   <script src="assets/js/journal/JournalWorkoutGraphPreview.jsx?v=seg-cache-20260929" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalDailySummary.jsx?v=actual-power-overlay-20260819a" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/journal/JournalDetailBottomSheet.jsx?v=sheet-scroll-lock-20261013" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/journal/JournalDetailBottomSheet.jsx?v=outdoor-20261020" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN 기록 일지 (CYCLE 라이딩 기록과 분리) -->
@@ -29867,7 +29867,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261020b"></script>
+  <script src="assets/js/outdoorRide.js?v=20261020e"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -34785,7 +34785,7 @@
 <script src="assets/js/strava_auth.js"></script>
 <script src="assets/js/stelvioRtss.js"></script>
 <script src="assets/js/stravaManager.js"></script>
-<script src="assets/js/trainingResultsManager.js?v=20261019outdoor"></script>
+<script src="assets/js/trainingResultsManager.js?v=20261020outdoor"></script>
 <script src="assets/js/resultManager.js?v=segments-robust-lookup-20260820a"></script>
 <script src="assets/js/bluetooth.js?v=20261019pmScan"></script>
 <script src="assets/js/ErgController.js"></script>
@@ -35818,6 +35818,10 @@
             <div class="mobile-bluetooth-dropdown-item" onclick="openOutdoorCoursePicker(event)">
               <img src="assets/img/route.svg" alt="" class="outd-menu-img" style="filter: brightness(0) invert(1);">
               <span>코스맵 선택</span>
+            </div>
+            <div class="mobile-bluetooth-dropdown-item" onclick="startOutdoorFreeRide(event)">
+              <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>
+              <span>자유 라이딩</span>
             </div>
             <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitOutdoorRide(event)">
               <img src="assets/img/logout.png" alt="">

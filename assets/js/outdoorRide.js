@@ -53,6 +53,8 @@
     turnLayerIdx: null,
     turnZoomed: false,
     zoomBeforeTurn: 16,
+    maxSpeedKmh: 0,
+    movingMs: 0,
     headingUp: true,
     heading: null,
     appliedHeading: null,
@@ -168,11 +170,18 @@
     }
   }
 
+  /** 평균 속도 = 거리 ÷ 이동 시간(멈춘 시간 제외, 스트라바·가민과 같은 기준). 이동 시간이 없으면 경과 시간 */
+  function avgSpeedKmh() {
+    var ms = st.movingMs > 0 ? st.movingMs : elapsedNow();
+    var v = ms > 0 ? (st.distanceM / 1000) / (ms / 3600000) : 0;
+    return isFinite(v) ? v : 0;
+  }
+
   function renderStats() {
     var el = elapsedNow();
     setText('outd-main-timer', fmtHms(el));
     setSplitNumber('outd-ui-distance', 'outd-ui-distance-dec', st.distanceM / 1000, 2);
-    var avg = el > 0 ? (st.distanceM / 1000) / (el / 3600000) : 0;
+    var avg = avgSpeedKmh();
     setText('outd-ui-avg', (isFinite(avg) ? avg : 0).toFixed(1));
     setText('outd-ui-elev', Math.round(st.elevGainM));
     var now = new Date();
@@ -279,6 +288,13 @@
     kickLoop();
 
     if (st.status === 'running') {
+      // 이동 시간(멈춘 시간 제외)·최고 속도 — 정확도 좋은 값만(위치 튐으로 인한 순간 고속 제외)
+      if (accOk && prev && dt > 0 && dt < 10 && st.speedKmh >= 3) {
+        // 시작(재개) 이전 구간은 빼고, 경과 시간을 넘지 않게
+        var fromMs = Math.max(prev.t, st.runSince || 0);
+        if (t > fromMs) st.movingMs = Math.min(st.movingMs + (t - fromMs), elapsedNow());
+      }
+      if (accOk && st.speedKmh > st.maxSpeedKmh && st.speedKmh < 100) st.maxSpeedKmh = st.speedKmh;
       // 거리 누적: 정확도가 괜찮고(≤35m), 순간 이동(>30m/s)이 아니며, 실제로 움직였을 때만
       if (prev && acc <= 35 && dt > 0 && d / dt < 30 && (st.speedKmh >= 1.5 || d > Math.max(3, acc * 0.5))) {
         st.distanceM += d;
@@ -879,6 +895,26 @@
       list.innerHTML = '<div class="coachm-picker__empty">코스맵 목록을 불러오지 못했습니다.</div>';
     });
   };
+  /** 자유 라이딩: 코스맵 없이 현재 위치 기준으로 기록(코스 안내·회전 안내 끄기) */
+  window.startOutdoorFreeRide = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    hideTurnBig();
+    st.course = null;
+    st.courseIdx = 0;
+    if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
+    var nav = $('outdNav');
+    if (nav) nav.style.display = 'none';
+    var empty = $('outdMapEmpty');
+    if (empty) {
+      empty.innerHTML = '자유 라이딩 · 현재 위치 기준으로 기록합니다<br><small>시작 버튼을 누르면 기록이 시작됩니다</small>';
+      empty.style.display = '';
+    }
+    st.follow = true;
+    if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map ? st.map.getZoom() : 16, 16));
+    toast('자유 라이딩 모드 · 코스 없이 현재 위치 기준으로 기록합니다', 'info');
+  };
+
   window.closeOutdoorCoursePicker = function () {
     var picker = $('outdCoursePicker');
     if (picker) picker.style.display = 'none';
@@ -979,6 +1015,13 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   }
 
+  /** 훈련 일지 고도 그래프용: 경로를 따라 고도값 최대 200개(고도 없는 점 제외) */
+  function elevationProfile() {
+    var elev = st.track.filter(function (p) { return p[2] != null && isFinite(p[2]); }).map(function (p) { return p[2]; });
+    if (elev.length < 2) return null;
+    return thin(elev.map(function (v) { return [v]; }), 200).map(function (a) { return Math.round(a[0] * 10) / 10; });
+  }
+
   function saveRide() {
     var uid = currentUid();
     if (!uid) return Promise.reject(new Error('로그인 후 저장할 수 있습니다.'));
@@ -987,7 +1030,7 @@
     var d = new Date(st.startedAt || Date.now());
     var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     var km = Math.round(st.distanceM / 10) / 100;
-    var avg = el > 0 ? Math.round(((st.distanceM / 1000) / (el / 3600000)) * 10) / 10 : 0;
+    var avg = Math.round(avgSpeedKmh() * 10) / 10;
     var weight = Number((window.currentUser && (window.currentUser.weight || window.currentUser.weightKg)) || 0);
     return window.saveStravaActivityToFirebase({
       activity_id: 'outdoor_' + uid.slice(0, 8) + '_' + (st.startedAt || Date.now()),
@@ -995,7 +1038,7 @@
       source: 'stelvio_outdoor',
       activity_type: 'Ride',
       date: dateStr,
-      title: '아웃도어 라이딩' + (st.course && st.course.title ? ' · ' + st.course.title : ''),
+      title: st.course && st.course.title ? '아웃도어 라이딩 · ' + st.course.title : '자유 라이딩',
       distance_km: km,
       duration_sec: Math.round(el / 1000),
       time: Math.round(el / 1000),
@@ -1003,7 +1046,10 @@
       avg_speed_kmh: avg,
       tss: 0,
       weight: weight > 0 ? weight : null,
-      summary_polyline: st.track.length >= 2 ? encodePolyline(thin(st.track, 1500)) : null
+      summary_polyline: st.track.length >= 2 ? encodePolyline(thin(st.track, 1500)) : null,
+      elevation_profile: elevationProfile(),
+      max_speed_kmh: st.maxSpeedKmh > 0 ? Math.round(st.maxSpeedKmh * 10) / 10 : null,
+      moving_time_sec: st.movingMs > 0 ? Math.round(st.movingMs / 1000) : null
     });
   }
 
@@ -1014,6 +1060,8 @@
     st.startedAt = 0;
     st.distanceM = 0;
     st.elevGainM = 0;
+    st.maxSpeedKmh = 0;
+    st.movingMs = 0;
     st.altBase = null;
     st.altEma = null;
     st.track = [];
@@ -1037,7 +1085,7 @@
       renderToggle();
     }
     var el = elapsedNow();
-    var avg = el > 0 ? (st.distanceM / 1000) / (el / 3600000) : 0;
+    var avg = avgSpeedKmh();
     var old = $('outdFinishModal');
     if (old) old.remove();
     var m = document.createElement('div');
@@ -1051,6 +1099,8 @@
       '<div><dt>시간</dt><dd>' + fmtHms(el) + '</dd></div>' +
       '<div><dt>평균 속도</dt><dd>' + (isFinite(avg) ? avg : 0).toFixed(1) + ' km/h</dd></div>' +
       '<div><dt>누적 고도</dt><dd>' + Math.round(st.elevGainM) + ' m</dd></div>' +
+      '<div><dt>이동 시간</dt><dd>' + fmtHms(st.movingMs) + '</dd></div>' +
+      '<div><dt>최고 속도</dt><dd>' + st.maxSpeedKmh.toFixed(1) + ' km/h</dd></div>' +
       '</dl>' +
       '<div class="outd-finish__btns">' +
       '<button type="button" class="outd-finish__btn outd-finish__btn--primary" data-act="save">훈련 일지에 저장하고 종료</button>' +

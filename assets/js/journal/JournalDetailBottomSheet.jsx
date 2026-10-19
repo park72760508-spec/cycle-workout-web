@@ -870,6 +870,13 @@
       DetailRow({ label: '라이딩 시간', value: formatDuration(log.duration_sec), isPr: false }),
       DetailRow({ label: '평균 속도', value: formatSpeedKmh(spd), isPr: false }),
       DetailRow({ label: '상승고도', value: formatElevationM(log.elevation_gain), isPr: false }),
+      // 2026-10-20: 아웃도어 라이딩(GPS) 기록 — 이동 시간(멈춘 시간 제외)·최고 속도가 있을 때만
+      log.moving_time_sec != null && Number(log.moving_time_sec) > 0
+        ? DetailRow({ label: '이동 시간', value: formatDuration(Number(log.moving_time_sec)), isPr: false })
+        : null,
+      log.max_speed_kmh != null && Number(log.max_speed_kmh) > 0
+        ? DetailRow({ label: '최고 속도', value: formatSpeedKmh(Number(log.max_speed_kmh)), isPr: false })
+        : null,
       DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
       DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false }),

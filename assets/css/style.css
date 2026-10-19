@@ -34565,3 +34565,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-compass__mode { font-size: 9px; font-weight: 800; color: #e2e8f0; line-height: 1; }
 /* 아웃도어 지도: 한 손가락 끌기는 outdoorRide.js 회전 보정 핸들러가 처리 — 브라우저 기본 스크롤·확대 제스처 막기 */
 #outdoorRideScreen #outdMap { touch-action: none; cursor: grab; }
+#outdoorRideScreen .outd-menu-svg { width: 24px; height: 24px; flex-shrink: 0; }
