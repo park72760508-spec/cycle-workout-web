@@ -282,8 +282,8 @@
     var avg = avgSpeedKmh();
     setText('outd-ui-avg', (isFinite(avg) ? avg : 0).toFixed(1));
     setText('outd-ui-elev', Math.round(st.elevGainM));
-    var now = new Date();
-    setText('outd-ui-clock', String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0'));
+    // 남은 거리: 코스맵(피니쉬)·길찾기(목적지)까지. 코스가 없으면(자유 라이딩) --
+    if (!st.course) setText('outd-ui-remain', '--');
     // GPS 신호가 5초 넘게 끊기면 속도 0 으로
     if (Date.now() - st.lastFixAt > 5000 && st.speedKmh !== 0) {
       st.speedKmh = 0;
@@ -685,6 +685,7 @@
     if (nav) nav.style.display = 'flex';
     setText('outdNavText', st.course.title ? st.course.title : '코스를 따라 이동하세요');
     setText('outdNavRemain', (st.course.totalM / 1000).toFixed(1) + ' km');
+    setText('outd-ui-remain', (st.course.totalM / 1000).toFixed(st.course.totalM < 10000 ? 2 : 1));
   }
 
   /** 현재 위치에서 코스상 가장 가까운 지점(직전 위치 주변을 먼저 찾고, 멀면 전체 검색) */
@@ -862,6 +863,7 @@
     var arrow = $('outdNavArrow');
     var remainM = Math.max(0, c.totalM - c.cum[r.idx]);
     setText('outdNavRemain', '남은 ' + (remainM / 1000).toFixed(1) + ' km');
+    setText('outd-ui-remain', (remainM / 1000).toFixed(remainM < 10000 ? 2 : 1));
     var offCourse = r.dist > OFF_COURSE_M + Math.min(30, (st.lastFix && st.lastFix.acc) || 0);
     if (nav) nav.classList.toggle('is-off', offCourse);
     if (offCourse) {
