@@ -239,10 +239,12 @@
 
     // 현재 속도: 기기가 주는 speed(m/s) 우선, 없으면 직전 위치와의 거리/시간
     var spd = null;
-    if (c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
+    var accOk = acc != null && acc <= 35; // 위치 정확도가 나쁘면(실내·PC 네트워크 위치 등) 위치가 튀어 엉뚱한 속도가 나온다
+    if (accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
     var d = prev ? hav(prev.lat, prev.lng, lat, lng) : 0;
     var dt = prev ? (t - prev.t) / 1000 : 0;
-    if (spd == null && prev && dt > 0) spd = (d / dt) * 3.6;
+    if (spd == null && accOk && prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
+    if (!accOk) spd = 0;
     if (spd != null && isFinite(spd)) st.speedKmh = spd < 1.5 ? 0 : Math.min(spd, 120);
 
     if (st.status === 'running') {
