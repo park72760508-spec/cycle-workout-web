@@ -124,7 +124,7 @@
       t.setAttribute('y', cy + 98 * Math.sin(ang));
       t.setAttribute('text-anchor', 'middle');
       t.setAttribute('dominant-baseline', 'middle');
-      t.setAttribute('fill', '#ffffff');
+      t.setAttribute('fill', val === 30 ? '#ef4444' : '#ffffff'); // 30 km/h 는 빨간색
       t.setAttribute('font-size', '10');
       t.setAttribute('font-weight', '600');
       t.textContent = val === 0 ? '0km/h' : String(val);
@@ -175,6 +175,19 @@
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
+    // 현재 속도까지 원호가 하늘색으로 차오름(벤츠 디지털 계기판 스윕)
+    var sweep = $('outd-gauge-sweep');
+    if (sweep) {
+      if (ratio < 0.005) {
+        if (sweep.style.display !== 'none') sweep.style.display = 'none';
+      } else {
+        var end = Math.PI + ratio * Math.PI;
+        var ex = (100 + 80 * Math.cos(end)).toFixed(2);
+        var ey = (140 + 80 * Math.sin(end)).toFixed(2);
+        sweep.setAttribute('d', 'M 20 140 A 80 80 0 0 1 ' + ex + ' ' + ey);
+        if (sweep.style.display === 'none') sweep.style.display = '';
+      }
+    }
     setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', st.speedKmh, 1);
     st.rafId = requestAnimationFrame(loop);
   }
