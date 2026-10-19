@@ -130,10 +130,33 @@
     }
   }
 
+  /** 정수 부분은 가운데(text-anchor middle), 소수점 이하는 정수 오른쪽 끝에 작게 붙인다 */
+  function setSplitNumber(intId, decId, value, decimals) {
+    var intEl = $(intId);
+    var decEl = $(decId);
+    if (!intEl || !decEl) return;
+    var v = Math.max(0, Number(value) || 0);
+    var str = v.toFixed(decimals);
+    var dot = str.indexOf('.');
+    var ip = dot >= 0 ? str.slice(0, dot) : str;
+    var dp = dot >= 0 ? str.slice(dot) : '';
+    var changed = false;
+    if (intEl.textContent !== ip) { intEl.textContent = ip; changed = true; }
+    if (decEl.textContent !== dp) { decEl.textContent = dp; changed = true; }
+    if (changed || !decEl.__placed) {
+      var w = 0;
+      try { w = intEl.getComputedTextLength(); } catch (e) {}
+      if (w > 0) {
+        decEl.setAttribute('x', (Number(intEl.getAttribute('x')) + w / 2 + 1).toFixed(1));
+        decEl.__placed = true;
+      }
+    }
+  }
+
   function renderStats() {
     var el = elapsedNow();
     setText('outd-main-timer', fmtHms(el));
-    setText('outd-ui-distance', (st.distanceM / 1000).toFixed(2));
+    setSplitNumber('outd-ui-distance', 'outd-ui-distance-dec', st.distanceM / 1000, 2);
     var avg = el > 0 ? (st.distanceM / 1000) / (el / 3600000) : 0;
     setText('outd-ui-avg', (isFinite(avg) ? avg : 0).toFixed(1));
     setText('outd-ui-elev', Math.round(st.elevGainM));
@@ -150,7 +173,7 @@
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
-    setText('outd-ui-speed', st.speedKmh.toFixed(1));
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', st.speedKmh, 1);
     st.rafId = requestAnimationFrame(loop);
   }
 
