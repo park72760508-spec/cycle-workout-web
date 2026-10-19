@@ -3986,7 +3986,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261019outdoor9" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261020outdoor" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29867,7 +29867,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261019i"></script>
+  <script src="assets/js/outdoorRide.js?v=20261020a"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -35831,7 +35831,13 @@
     <!-- 코스 지도 (워크아웃 그래프 자리) -->
     <div class="mobile-segment-graph-section outd-map-section">
       <div class="outd-map-wrap">
-        <div id="outdMap" class="outd-map"></div>
+        <!-- 진행 방향이 위로 오게 회전하는 판(지도 대각선 크기) — outdoorRide.js 가 크기·회전 제어 -->
+        <div id="outdMapRot" class="outd-map-rot"><div id="outdMap" class="outd-map"></div></div>
+        <button type="button" id="outdCompass" class="outd-compass" onclick="toggleOutdoorHeadingUp(event)" aria-label="지도 방향 전환(진행 방향 위 / 북쪽 위)">
+          <span id="outdCompassNeedle" class="outd-compass__needle"><i class="n"></i><i class="s"></i></span>
+          <b id="outdCompassMode" class="outd-compass__mode">진행</b>
+        </button>
+        <div class="outd-attrib">© OpenStreetMap</div>
         <div id="outdNav" class="outd-nav" style="display: none;">
           <span id="outdNavArrow" class="outd-nav__arrow">↑</span>
           <span id="outdNavText" class="outd-nav__text">코스를 따라 이동하세요</span>

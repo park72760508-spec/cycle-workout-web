@@ -52,7 +52,12 @@
     turnLayer: null,
     turnLayerIdx: null,
     turnZoomed: false,
-    zoomBeforeTurn: 16
+    zoomBeforeTurn: 16,
+    headingUp: true,
+    heading: null,
+    appliedHeading: null,
+    mapRotDeg: null,
+    lastHeadPt: null
   };
 
   function $(id) { return document.getElementById(id); }
@@ -255,6 +260,7 @@
     var t = pos.timestamp || Date.now();
     renderGps(acc);
     st.lastFixAt = Date.now();
+    if (acc != null && acc <= 35) updateHeading(c, lat, lng);
     updateMeOnMap(lat, lng);
 
     var prev = st.lastFix;
@@ -329,7 +335,16 @@
   function ensureMap() {
     if (st.map || typeof window.L === 'undefined') return st.map;
     var L = window.L;
-    st.map = L.map('outdMap', { zoomControl: false, attributionControl: true, fadeAnimation: false });
+    sizeRotLayer();
+    // 확대·축소는 항상 지도 가운데(=회전 중심) 기준 — 회전한 지도에서도 손가락 확대가 어긋나지 않게
+    st.map = L.map('outdMap', {
+      zoomControl: false,
+      attributionControl: false, // 출처 표시는 회전판 밖(.outd-attrib)에 고정
+      fadeAnimation: false,
+      touchZoom: 'center',
+      scrollWheelZoom: 'center',
+      doubleClickZoom: 'center'
+    });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       updateWhenIdle: true,
@@ -344,6 +359,86 @@
     return st.map;
   }
 
+  /* ---------- 진행 방향 위(헤딩업) 지도 (2026-10-20) ----------
+   * 자동차 내비처럼 진행 방향이 항상 화면 위쪽. 지도를 대각선 크기 정사각형 회전판에 올려 회전(모서리 빈틈 없음).
+   * 진행 방향: GPS heading(3 km/h 이상) → 없으면 최근 8m 이상 이동한 방향, 부드럽게 보정, 3° 이상 바뀔 때만 회전.
+   * 내 위치는 화면 아래쪽(약 65% 높이)에 두어 앞길이 더 보이게. 나침반 버튼으로 '북쪽 위' 전환(이때만 지도 끌기 가능). */
+  function sizeRotLayer() {
+    var rot = $('outdMapRot');
+    var wrap = rot && rot.parentNode;
+    if (!rot || !wrap) return;
+    var w = wrap.clientWidth, h = wrap.clientHeight;
+    if (!w || !h) return;
+    var D = Math.ceil(Math.sqrt(w * w + h * h)) + 2;
+    rot.style.width = D + 'px';
+    rot.style.height = D + 'px';
+    rot.style.left = Math.round((w - D) / 2) + 'px';
+    rot.style.top = Math.round((h - D) / 2) + 'px';
+  }
+
+  function applyRotation() {
+    var target = st.headingUp && st.heading != null ? -st.heading : 0;
+    // 누적 각도로 회전(359°→1° 에서 한 바퀴 반대로 도는 것 방지)
+    st.mapRotDeg = st.mapRotDeg == null ? target : st.mapRotDeg + angleDiff(st.mapRotDeg, target);
+    var rot = $('outdMapRot');
+    if (rot) rot.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)';
+    var needle = $('outdCompassNeedle');
+    if (needle) needle.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)'; // 빨간 끝 = 북쪽
+    setText('outdCompassMode', st.headingUp ? '진행' : '북쪽');
+    if (st.map && st.map.dragging) {
+      if (st.headingUp) st.map.dragging.disable();
+      else st.map.dragging.enable();
+    }
+  }
+
+  function updateHeading(c, lat, lng) {
+    var h = null;
+    var spdKmh = c.speed != null && isFinite(c.speed) ? c.speed * 3.6 : 0;
+    if (c.heading != null && isFinite(c.heading) && spdKmh >= 3) h = c.heading;
+    var hp = st.lastHeadPt;
+    if (h == null && hp && hav(hp[0], hp[1], lat, lng) >= 8) h = bearing(hp[0], hp[1], lat, lng);
+    if (!hp || h != null) st.lastHeadPt = [lat, lng];
+    if (h == null) return;
+    st.heading = st.heading == null ? h : (st.heading + angleDiff(st.heading, h) * 0.5 + 360) % 360;
+    if (st.appliedHeading == null || Math.abs(angleDiff(st.appliedHeading, st.heading)) >= 3) {
+      st.appliedHeading = st.heading;
+      applyRotation();
+    }
+  }
+
+  /** 위도·경도에서 방위각 brg 로 dist(m) 떨어진 지점 */
+  function destPoint(lat, lng, brg, dist) {
+    var R = 6371000, toR = Math.PI / 180;
+    var d = dist / R, b = brg * toR, p1 = lat * toR, l1 = lng * toR;
+    var p2 = Math.asin(Math.sin(p1) * Math.cos(d) + Math.cos(p1) * Math.sin(d) * Math.cos(b));
+    var l2 = l1 + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(p1), Math.cos(d) - Math.sin(p1) * Math.sin(p2));
+    return [p2 / toR, l2 / toR];
+  }
+
+  /** 따라가기: 헤딩업이면 내 위치가 화면 아래쪽(65%)에 오도록 진행 방향 앞쪽을 지도 중심으로 */
+  function followUser(lat, lng, zoom, animate) {
+    var map = st.map;
+    if (!map) return;
+    var z = zoom != null ? zoom : map.getZoom();
+    var center = [lat, lng];
+    if (st.headingUp && st.heading != null) {
+      var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+      var hPx = wrap ? wrap.clientHeight : 300;
+      var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
+      center = destPoint(lat, lng, st.heading, hPx * 0.15 * mpp);
+    }
+    map.setView(center, z, { animate: animate !== false, duration: 0.8 });
+  }
+
+  window.toggleOutdoorHeadingUp = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    st.headingUp = !st.headingUp;
+    st.follow = true;
+    applyRotation();
+    if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng);
+    toast(st.headingUp ? '진행 방향이 위로 오도록 지도를 회전합니다' : '북쪽이 위로 오도록 지도를 고정합니다', 'info');
+  };
+
   function updateMeOnMap(lat, lng) {
     var map = ensureMap();
     if (!map) return;
@@ -354,11 +449,14 @@
         interactive: false,
         zIndexOffset: 1000
       }).addTo(map);
-      map.setView([lat, lng], Math.max(map.getZoom(), 16));
+      followUser(lat, lng, Math.max(map.getZoom(), 16), false);
     } else {
       st.meMarker.setLatLng([lat, lng]);
-      // 따라가기: 매초 지도를 옮기지 않고 내 위치가 가운데 영역(가로·세로 40%)을 벗어날 때만 이동
-      if (st.follow) {
+      if (st.follow && st.headingUp) {
+        // 헤딩업: 회전 중심이 지도 가운데라 매 위치마다 진행 방향 앞쪽으로 중심을 맞춘다(부드럽게 이동)
+        followUser(lat, lng);
+      } else if (st.follow) {
+        // 북쪽 위: 매초 지도를 옮기지 않고 내 위치가 가운데 영역(가로·세로 40%)을 벗어날 때만 이동
         var sz = map.getSize();
         var cp = map.latLngToContainerPoint([lat, lng]);
         if (Math.abs(cp.x - sz.x / 2) > sz.x * 0.2 || Math.abs(cp.y - sz.y / 2) > sz.y * 0.2) {
@@ -375,7 +473,9 @@
   window.recenterOutdoorMap = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     st.follow = true;
-    if (st.map && st.lastFix) st.map.setView([st.lastFix.lat, st.lastFix.lng], Math.max(st.map.getZoom(), 16));
+    st.headingUp = true;
+    applyRotation();
+    if (st.map && st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map.getZoom(), 16));
   };
 
   /* ---------- 코스 & 내비게이션 ---------- */
@@ -537,7 +637,7 @@
     if (st.follow && st.map && st.lastFix && st.map.getZoom() < TURN_ZOOM && !st.turnZoomed) {
       st.turnZoomed = true;
       st.zoomBeforeTurn = st.map.getZoom();
-      st.map.setView([st.lastFix.lat, st.lastFix.lng], TURN_ZOOM, { animate: true });
+      followUser(st.lastFix.lat, st.lastFix.lng, TURN_ZOOM);
     }
   }
 
@@ -547,7 +647,8 @@
     st.turnBigIdx = null;
     clearTurnOnMap();
     if (st.turnZoomed && st.map && st.follow) {
-      st.map.setZoom(st.zoomBeforeTurn || 16, { animate: true });
+      if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, st.zoomBeforeTurn || 16);
+      else st.map.setZoom(st.zoomBeforeTurn || 16, { animate: true });
     }
     st.turnZoomed = false;
   }
@@ -943,7 +1044,9 @@
 
   /* 지도는 화면이 실제로 보인 뒤 크기를 다시 계산해야 타일이 전체에 그려진다 — 화면 활성화·회전·크기 변경 때 재계산 */
   function fixMapSize() {
-    if (st.map && isActive()) st.map.invalidateSize();
+    if (!isActive()) return;
+    sizeRotLayer();
+    if (st.map) st.map.invalidateSize();
   }
   (function watchScreen() {
     var el = $(SCREEN_ID);
@@ -980,6 +1083,7 @@
     setTimeout(function () {
       ensureMap();
       fixMapSize();
+      applyRotation();
       if (opts.gpxUrl) loadCourseFromUrl(opts.gpxUrl, opts.title || '');
     }, 80);
     setTimeout(fixMapSize, 600);
