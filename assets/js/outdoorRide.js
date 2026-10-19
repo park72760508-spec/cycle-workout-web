@@ -16,6 +16,8 @@
   var OFF_COURSE_M = 45; // 코스에서 이만큼 벗어나면 이탈 경고
   var TURN_MIN_DEG = 35; // 이 각도 이상 꺾이면 회전 안내
   var TURN_ANNOUNCE_M = 400; // 이 거리 안의 다음 회전만 안내
+  var TURN_BIG_M = 150; // 이 거리 안이면 큰 회전 화살표 카드 + 지도 확대 + 회전 구간 강조
+  var TURN_ZOOM = 18;
 
   var st = {
     status: 'idle', // idle | running | paused
@@ -44,7 +46,13 @@
     rafId: null,
     prevScreen: '',
     gpsQuality: 0,
-    lastNavText: ''
+    lastNavText: '',
+    turnBigIdx: null,
+    turnBuzz: {},
+    turnLayer: null,
+    turnLayerIdx: null,
+    turnZoomed: false,
+    zoomBeforeTurn: 16
   };
 
   function $(id) { return document.getElementById(id); }
@@ -398,6 +406,137 @@
     return side + '측 방향';
   }
 
+  /* ---------- 회전 지점 확대 안내(2026-10-19) ----------
+   * 다음 회전이 150m 안에 들어오면: 지도 위 큰 회전 화살표 카드(꺾이는 각도대로) + 남은 거리,
+   * 지도에 회전 구간(앞뒤 40m) 노란 강조선·화살촉, 지도 확대(따라가기 중일 때), 150m·40m 진동 */
+  function pointAtDist(D) {
+    var c = st.course;
+    var lo = 0, hi = c.cum.length - 1;
+    D = Math.max(0, Math.min(c.totalM, D));
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (c.cum[mid] < D) lo = mid + 1; else hi = mid;
+    }
+    var i = Math.max(1, lo);
+    var a = c.latlngs[i - 1], b = c.latlngs[i];
+    var seg = c.cum[i] - c.cum[i - 1];
+    var t = seg > 0 ? (D - c.cum[i - 1]) / seg : 0;
+    return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  }
+
+  /** 꺾이는 각도대로 그린 회전 화살표 SVG(위로 들어와서 delta 만큼 꺾여 나감) */
+  function turnArrowSvg(delta) {
+    if (Math.abs(delta) >= 135) {
+      // 유턴: 위로 올라가 반원을 그리며 옆으로 내려오는 U 화살표(좌유턴은 좌우 대칭)
+      var right = delta > 0;
+      var fx = function (x) { return right ? x : 100 - x; };
+      return '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">' +
+        '<path d="M ' + fx(34) + ' 94 L ' + fx(34) + ' 42 A 20 20 0 0 ' + (right ? 1 : 0) + ' ' + fx(74) + ' 42 L ' + fx(74) + ' 62" ' +
+        'fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>' +
+        '<polygon points="' + fx(74) + ',84 ' + fx(61) + ',62 ' + fx(87) + ',62" fill="#ffffff"/>' +
+        '</svg>';
+    }
+    var d = Math.max(-170, Math.min(170, delta)) * Math.PI / 180;
+    var cx = 50, cy = 56, L = 34;
+    var ex = cx + L * Math.sin(d), ey = cy - L * Math.cos(d);
+    // 화살촉
+    var hx = Math.sin(d), hy = -Math.cos(d);
+    var px = -hy, py = hx;
+    var tipX = ex + hx * 12, tipY = ey + hy * 12;
+    var l1x = ex + px * 11, l1y = ey + py * 11, l2x = ex - px * 11, l2y = ey - py * 11;
+    return '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">' +
+      '<path d="M 50 96 L 50 ' + cy + ' Q 50 ' + (cy - 6) + ' ' + (cx + 6 * Math.sin(d)).toFixed(1) + ' ' + (cy - 6 * Math.cos(d)).toFixed(1) + ' L ' + ex.toFixed(1) + ' ' + ey.toFixed(1) + '" ' +
+      'fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<polygon points="' + tipX.toFixed(1) + ',' + tipY.toFixed(1) + ' ' + l1x.toFixed(1) + ',' + l1y.toFixed(1) + ' ' + l2x.toFixed(1) + ',' + l2y.toFixed(1) + '" fill="#ffffff"/>' +
+      '</svg>';
+  }
+
+  function turnBigEl() {
+    var el = $('outdTurnBig');
+    if (el) return el;
+    var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+    if (!wrap) return null;
+    el = document.createElement('div');
+    el.id = 'outdTurnBig';
+    el.className = 'outd-turn-big';
+    el.innerHTML = '<div class="outd-turn-big__arrow"></div><div class="outd-turn-big__info"><b class="outd-turn-big__dist"></b><span class="outd-turn-big__word"></span></div>';
+    wrap.appendChild(el);
+    return el;
+  }
+
+  function showTurnBig(turn, dm) {
+    var el = turnBigEl();
+    if (!el) return;
+    if (st.turnBigIdx !== turn.idx) {
+      st.turnBigIdx = turn.idx;
+      el.querySelector('.outd-turn-big__arrow').innerHTML = turnArrowSvg(turn.delta);
+      el.querySelector('.outd-turn-big__word').textContent = turnWord(turn.delta);
+      st.turnBuzz = {};
+    }
+    var dist = dm >= 100 ? Math.round(dm / 10) * 10 + 'm' : Math.max(0, Math.round(dm / 5) * 5) + 'm';
+    var distEl = el.querySelector('.outd-turn-big__dist');
+    if (distEl.textContent !== dist) distEl.textContent = dist;
+    el.classList.toggle('is-near', dm <= 40);
+    el.style.display = 'flex';
+    // 진동: 150m 진입 1회, 40m 진입 1회
+    try {
+      if (navigator.vibrate) {
+        if (!st.turnBuzz.far) { st.turnBuzz.far = true; navigator.vibrate(150); }
+        if (dm <= 40 && !st.turnBuzz.near) { st.turnBuzz.near = true; navigator.vibrate([120, 80, 120]); }
+      }
+    } catch (e) {}
+    drawTurnOnMap(turn);
+    if (st.follow && st.map && st.lastFix && st.map.getZoom() < TURN_ZOOM && !st.turnZoomed) {
+      st.turnZoomed = true;
+      st.zoomBeforeTurn = st.map.getZoom();
+      st.map.setView([st.lastFix.lat, st.lastFix.lng], TURN_ZOOM, { animate: true });
+    }
+  }
+
+  function hideTurnBig() {
+    var el = $('outdTurnBig');
+    if (el && el.style.display !== 'none') el.style.display = 'none';
+    st.turnBigIdx = null;
+    clearTurnOnMap();
+    if (st.turnZoomed && st.map && st.follow) {
+      st.map.setZoom(st.zoomBeforeTurn || 16, { animate: true });
+    }
+    st.turnZoomed = false;
+  }
+
+  function drawTurnOnMap(turn) {
+    if (!st.map || st.turnLayerIdx === turn.idx) return;
+    clearTurnOnMap();
+    var L = window.L;
+    var pts = [];
+    for (var dd = -40; dd <= 40; dd += 5) pts.push(pointAtDist(turn.at + dd));
+    st.turnLayer = L.layerGroup().addTo(st.map);
+    L.polyline(pts, { color: '#111827', weight: 11, opacity: 0.55, lineCap: 'round', lineJoin: 'round' }).addTo(st.turnLayer);
+    L.polyline(pts, { color: '#fbbf24', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(st.turnLayer);
+    // 화살촉: 끝점에서 진행 방향으로 삼각형
+    var e1 = pts[pts.length - 2], e2 = pts[pts.length - 1];
+    var map = st.map;
+    var p1 = map.latLngToLayerPoint(e1), p2 = map.latLngToLayerPoint(e2);
+    var vx = p2.x - p1.x, vy = p2.y - p1.y;
+    var len = Math.sqrt(vx * vx + vy * vy) || 1;
+    vx /= len; vy /= len;
+    var size = 14;
+    var tip = L.point(p2.x + vx * size, p2.y + vy * size);
+    var left = L.point(p2.x - vy * size * 0.7, p2.y + vx * size * 0.7);
+    var right = L.point(p2.x + vy * size * 0.7, p2.y - vx * size * 0.7);
+    L.polygon([map.layerPointToLatLng(tip), map.layerPointToLatLng(left), map.layerPointToLatLng(right)], {
+      color: '#111827', weight: 2, fillColor: '#fbbf24', fillOpacity: 1
+    }).addTo(st.turnLayer);
+    st.turnLayerIdx = turn.idx;
+    if (st.meMarker && st.meMarker.bringToFront) st.meMarker.setZIndexOffset(1000);
+  }
+
+  function clearTurnOnMap() {
+    if (st.turnLayer && st.map) st.map.removeLayer(st.turnLayer);
+    st.turnLayer = null;
+    st.turnLayerIdx = null;
+  }
+
   function updateNavigation(lat, lng) {
     if (!st.course || !st.course.latlngs.length) return;
     var r = nearestCourseIdx(lat, lng);
@@ -414,11 +553,13 @@
       // 코스로 돌아가는 방향
       var p = c.latlngs[r.idx];
       var toCourse = bearing(lat, lng, p[0], p[1]);
+      hideTurnBig();
       setText('outdNavText', '코스를 벗어났습니다 · ' + Math.round(r.dist) + 'm');
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(toCourse) + 'deg)';
       return;
     }
     if (remainM < 30) {
+      hideTurnBig();
       setText('outdNavText', '도착 지점입니다');
       if (arrow) { arrow.textContent = '🏁'; arrow.style.transform = 'none'; }
       return;
@@ -434,7 +575,10 @@
       var dist = dm >= 100 ? Math.round(dm / 10) * 10 + 'm' : Math.max(10, Math.round(dm / 5) * 5) + 'm';
       setText('outdNavText', dist + ' 후 ' + turnWord(next.delta));
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(Math.max(-150, Math.min(150, next.delta))) + 'deg)';
+      if (dm <= TURN_BIG_M) showTurnBig(next, dm);
+      else hideTurnBig();
     } else {
+      hideTurnBig();
       setText('outdNavText', next ? '코스를 따라 직진 · ' + ((next.at - here) / 1000).toFixed(1) + ' km 후 회전' : '코스를 따라 직진');
       if (arrow) arrow.style.transform = 'none';
     }
@@ -468,6 +612,7 @@
       .then(function (txt) {
         var latlngs = parseCourseGpx(txt);
         if (latlngs.length < 2) throw new Error('코스 포인트가 없습니다.');
+        hideTurnBig();
         st.course = prepareCourse(title || '', latlngs);
         st.courseIdx = 0;
         drawCourse();
