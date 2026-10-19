@@ -34475,4 +34475,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-map-section { flex: 1 1 0 !important; min-height: 0; }
 #outdoorRideScreen .mobile-main-content { flex: 1 1 0 !important; min-height: 0 !important; height: auto !important; display: flex; }
 #outdoorRideScreen .mobile-gauge-segment-wrap { flex: 1 1 0 !important; min-height: 0; height: 100% !important; display: flex; align-items: center; justify-content: center; }
-#outdoorRideScreen .mobile-gauge-container { width: auto !important; height: 100% !important; max-width: 100% !important; aspect-ratio: 230 / 260; margin: 0 auto !important; }
+/* 속도계 SVG 는 위쪽 빈 공간(랩 시간 자리)을 잘라 viewBox -15 28 230 222 — 같은 높이에서 좌우 여백 없이 더 크게 */
+#outdoorRideScreen .mobile-gauge-container { width: auto !important; height: 100% !important; max-width: 100% !important; aspect-ratio: 230 / 222 !important; margin: 0 auto !important; }
