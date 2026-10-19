@@ -369,7 +369,7 @@
     st.lastFixAt = Date.now();
     if (acc != null && acc <= 35) updateHeading(c, lat, lng);
     maybeResumeFollow();
-    updateMeOnMap(lat, lng);
+    ensureMap();
 
     var prev = st.lastFix;
     st.lastFix = { lat: lat, lng: lng, t: t, acc: acc };
@@ -421,7 +421,8 @@
         }
       }
     }
-    updateNavigation(lat, lng);
+    updateNavigation(lat, lng); // 길 방향(route-up) 먼저 정하고
+    updateMeOnMap(lat, lng); // 그 방향 기준으로 지도 중심·내 위치 표시
   }
 
   function onPositionError(err) {
@@ -504,7 +505,18 @@
     if (st.map && st.map.dragging) st.map.dragging.disable();
   }
 
+  /** 지도 방향 적용(3° 이상 바뀔 때만 회전) */
+  function setMapHeading(h) {
+    st.heading = h;
+    if (st.appliedHeading == null || Math.abs(angleDiff(st.appliedHeading, h)) >= 3) {
+      st.appliedHeading = h;
+      applyRotation();
+    }
+  }
+
   function updateHeading(c, lat, lng) {
+    // 코스·경로를 따라가는 중이면 지도 방향은 길 방향(route-up, updateNavigation)이 정한다
+    if (st.course && st.onRoute) return;
     var h = null;
     var spdKmh = c.speed != null && isFinite(c.speed) ? c.speed * 3.6 : 0;
     if (c.heading != null && isFinite(c.heading) && spdKmh >= 3) h = c.heading;
@@ -512,11 +524,7 @@
     if (h == null && hp && hav(hp[0], hp[1], lat, lng) >= 8) h = bearing(hp[0], hp[1], lat, lng);
     if (!hp || h != null) st.lastHeadPt = [lat, lng];
     if (h == null) return;
-    st.heading = st.heading == null ? h : (st.heading + angleDiff(st.heading, h) * 0.5 + 360) % 360;
-    if (st.appliedHeading == null || Math.abs(angleDiff(st.appliedHeading, st.heading)) >= 3) {
-      st.appliedHeading = st.heading;
-      applyRotation();
-    }
+    setMapHeading(st.heading == null ? h : (st.heading + angleDiff(st.heading, h) * 0.5 + 360) % 360);
   }
 
   /** 위도·경도에서 방위각 brg 로 dist(m) 떨어진 지점 */
@@ -867,6 +875,7 @@
     var offCourse = r.dist > OFF_COURSE_M + Math.min(30, (st.lastFix && st.lastFix.acc) || 0);
     if (nav) nav.classList.toggle('is-off', offCourse);
     if (offCourse) {
+      st.onRoute = false; // 이탈 중에는 진행 방향(GPS) 기준으로 지도 회전
       // 코스로 돌아가는 방향
       var p = c.latlngs[r.idx];
       var toCourse = bearing(lat, lng, p[0], p[1]);
@@ -880,6 +889,13 @@
     st.offRouteSince = 0;
     st.offCued = false;
     st.lastOnRouteIdx = r.idx;
+    // 길 방향이 항상 화면 위쪽(route-up): 내 위치에서 약 40m 앞 경로 방향 — 멈춰 있어도·출발 전에도 맞춰짐
+    st.onRoute = true;
+    var hereD = c.cum[r.idx];
+    if (hereD < c.totalM - 5) {
+      var pa = pointAtDist(hereD), pb = pointAtDist(Math.min(c.totalM, hereD + 40));
+      if (hav(pa[0], pa[1], pb[0], pb[1]) > 3) setMapHeading(bearing(pa[0], pa[1], pb[0], pb[1]));
+    }
     if (remainM < 30) {
       hideTurnBig();
       setText('outdNavText', c.isRoute ? '목적지에 도착했습니다' : '도착 지점입니다');
@@ -1074,7 +1090,11 @@
     st.lastOnRouteIdx = null;
     drawCourse();
     drawDestMarker(dest);
-    if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
+    if (st.lastFix) {
+      updateNavigation(st.lastFix.lat, st.lastFix.lng);
+      st.follow = true;
+      followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map ? st.map.getZoom() : 16, 16));
+    }
   }
 
   function drawDestMarker(dest) {
@@ -1340,6 +1360,7 @@
     hideTurnBig();
     st.course = null;
     st.courseIdx = 0;
+    st.onRoute = false;
     if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
     var nav = $('outdNav');
     if (nav) nav.style.display = 'none';
