@@ -13174,6 +13174,18 @@ function OpenRidingDetail(props) {
               GPX 파일 다운로드
             </a>
           ) : null}
+          {/* 2026-10-19: 이 코스로 아웃도어 라이딩(GPS 속도·거리 + 코스 실시간 안내) — 라이딩(CYCLE) 모임 코스만 */}
+          {ride.gpxUrl && !isRunDetail && !isCancelled && typeof window !== 'undefined' && typeof window.openOutdoorRide === 'function' ? (
+            <button
+              type="button"
+              className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-bold px-4 py-2.5 shadow-sm"
+              onClick={function () {
+                window.openOutdoorRide({ gpxUrl: String(ride.gpxUrl), title: ride.title || '', rideId: rideId });
+              }}
+            >
+              <span aria-hidden>🚴</span> 이 코스로 아웃도어 라이딩
+            </button>
+          ) : null}
         </div>
         )}
         <div className="open-riding-detail-participant-fold open-riding-detail-invite-fold--block w-full min-w-0">

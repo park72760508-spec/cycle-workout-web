@@ -474,7 +474,9 @@ async function saveStravaActivityToFirebase(activity, options) {
       // TSS 포인트 적립 여부 추적 (중복 적립 방지) — markTssApplied 시 1회 저장에 포함
       tss_applied: markTssApplied,
       ...(markTssApplied ? { tss_applied_at: new Date().toISOString() } : {}),
-      created_at: activity.created_at || new Date().toISOString()
+      created_at: activity.created_at || new Date().toISOString(),
+      // 2026-10-19: 아웃도어 라이딩(GPS) 경로 — Supabase rides.summary_polyline(Google encoded) 로 훈련 일지 지도 표시
+      ...(activity.summary_polyline ? { summary_polyline: String(activity.summary_polyline) } : {})
     };
 
     if (supabaseOnly) {

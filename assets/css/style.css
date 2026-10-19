@@ -373,7 +373,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#bluetoothCoachMobileScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
+.screen.active:not(#mobileDashboardScreen):not(#bluetoothCoachMobileScreen):not(#outdoorRideScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -27194,7 +27194,8 @@ line[id^="needle-"] {
 
 /* ========== 모바일 대시보드 화면 스타일 (individual.html과 동일) ========== */
 #mobileDashboardScreen,
-#bluetoothCoachMobileScreen {
+#bluetoothCoachMobileScreen,
+#outdoorRideScreen {
   background-color: #121212 !important;
   color: #ffffff;
   font-family: "Noto Sans KR", "Pretendard", sans-serif;
@@ -27256,7 +27257,8 @@ body.bluetooth-individual-screen-active {
 /* 모바일 대시보드 가로 모드 방지 */
 @media screen and (orientation: landscape) {
   #mobileDashboardScreen.active,
-#bluetoothCoachMobileScreen.active {
+#bluetoothCoachMobileScreen.active,
+#outdoorRideScreen.active {
     display: flex !important;
     flex-direction: column;
     justify-content: center;
@@ -27264,7 +27266,8 @@ body.bluetooth-individual-screen-active {
   }
   
   #mobileDashboardScreen.active::before,
-#bluetoothCoachMobileScreen.active::before {
+#bluetoothCoachMobileScreen.active::before,
+#outdoorRideScreen.active::before {
     content: '세로 모드로 기기를 회전해주세요';
     position: absolute;
     top: 50%;
@@ -27282,7 +27285,8 @@ body.bluetooth-individual-screen-active {
   }
   
   #mobileDashboardScreen.active > *,
-#bluetoothCoachMobileScreen.active > * {
+#bluetoothCoachMobileScreen.active > *,
+#outdoorRideScreen.active > * {
     opacity: 0.3;
     pointer-events: none;
   }
@@ -27290,35 +27294,41 @@ body.bluetooth-individual-screen-active {
   #mobileDashboardScreen.active .mobile-dashboard-header,
   #mobileDashboardScreen.active .mobile-dashboard-header *,
 #bluetoothCoachMobileScreen.active .mobile-dashboard-header,
-#bluetoothCoachMobileScreen.active .mobile-dashboard-header * {
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header *,
+#outdoorRideScreen.active .mobile-dashboard-header,
+#outdoorRideScreen.active .mobile-dashboard-header * {
     opacity: 1;
     pointer-events: auto;
   }
 }
 
 #mobileDashboardScreen.screen,
-#bluetoothCoachMobileScreen.screen {
+#bluetoothCoachMobileScreen.screen,
+#outdoorRideScreen.screen {
   display: none !important;
 }
 
 /* 모바일 대시보드가 활성화되었을 때만 표시 */
 /* 글래스 하단 네비(#globalHubBottomGlassNavRoot 99999) 위에 쌓여야 훈련 하단 슬라이더(특히 가로 트랙 중앙) 터치가 먹힘—부모(1000)는 자식 z로 네비를 뚫을 수 없음 */
 #mobileDashboardScreen.active,
-#bluetoothCoachMobileScreen.active {
+#bluetoothCoachMobileScreen.active,
+#outdoorRideScreen.active {
   display: flex !important;
   z-index: 100100 !important;
 }
 
 /* 모바일 대시보드 내부 요소들 */
 #mobileDashboardScreen > *,
-#bluetoothCoachMobileScreen > * {
+#bluetoothCoachMobileScreen > *,
+#outdoorRideScreen > * {
   position: relative;
   z-index: 1;
 }
 
 /* 훈련 전체 z-index(100100) + 하단 슬라이더 isolate 이후에도 상단(좌·우 버튼) 히트가 먹도록 헤더만 스택 최상단 + 네비와 동일 터치 규칙 */
 #mobileDashboardScreen.active .mobile-dashboard-header,
-#bluetoothCoachMobileScreen.active .mobile-dashboard-header {
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header,
+#outdoorRideScreen.active .mobile-dashboard-header {
   z-index: 100200 !important;
   position: relative;
   pointer-events: auto;
@@ -27332,13 +27342,17 @@ body.bluetooth-individual-screen-active {
 #mobileDashboardScreen.active .mobile-dashboard-header .mobile-timer,
 #mobileDashboardScreen.active #mobile-main-timer,
 #bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-timer,
-#bluetoothCoachMobileScreen.active #mobile-main-timer {
+#bluetoothCoachMobileScreen.active #mobile-main-timer,
+#outdoorRideScreen.active .mobile-dashboard-header .mobile-timer,
+#outdoorRideScreen.active #mobile-main-timer {
   pointer-events: none;
 }
 #mobileDashboardScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
 #mobileDashboardScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap,
 #bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
-#bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap {
+#bluetoothCoachMobileScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap,
+#outdoorRideScreen.active .mobile-dashboard-header .mobile-bluetooth-connect-btn,
+#outdoorRideScreen.active .mobile-dashboard-header .mobile-dashboard-user-name-wrap {
   position: relative;
   z-index: 1;
   touch-action: manipulation;
@@ -27360,11 +27374,19 @@ body.bluetooth-individual-screen-active {
 #bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-label,
 #bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-value,
 #bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-min,
-#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-max {
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-max,
+#outdoorRideScreen .mobile-stat-label,
+#outdoorRideScreen .mobile-stat-value,
+#outdoorRideScreen .mobile-stat-value .unit,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-label,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-value,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-min,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-max {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
 }
 #mobileDashboardScreen .mobile-gauge-container svg text,
-#bluetoothCoachMobileScreen .mobile-gauge-container svg text {
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text,
+#outdoorRideScreen .mobile-gauge-container svg text {
   font-family: "Noto Sans KR", "Pretendard", sans-serif !important;
   pointer-events: none; /* 큰 파워 숫자 등이 컨트롤 버튼 히트를 가리지 않도록 */
 }
@@ -27546,7 +27568,8 @@ body.bluetooth-individual-screen-active {
  * (자식 span이 히트를 가로채지 않게·range에 터치 최적화). 레이아웃·여백·배경 스타일 불변.
  */
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-slider-wrapper,
-#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider-wrapper {
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider-wrapper,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-slider-wrapper {
   position: relative;
   z-index: 2;
   isolation: isolate;
@@ -27568,15 +27591,23 @@ body.bluetooth-individual-screen-active {
   .mobile-individual-intensity-adjustment-min,
 #bluetoothCoachMobileScreen
   .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-max,
+#outdoorRideScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
+  .mobile-individual-intensity-adjustment-min,
+#outdoorRideScreen
+  .mobile-individual-intensity-adjustment-slider-wrapper
   .mobile-individual-intensity-adjustment-max {
   pointer-events: none;
 }
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-label span,
-#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-label span {
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-label span,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-label span {
   pointer-events: none;
 }
 #mobileDashboardScreen .mobile-individual-intensity-adjustment-slider,
-#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider {
+#bluetoothCoachMobileScreen .mobile-individual-intensity-adjustment-slider,
+#outdoorRideScreen .mobile-individual-intensity-adjustment-slider {
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -27639,7 +27670,8 @@ body.bluetooth-individual-screen-active {
 
 /* 재생/일시정지: 투명 히트 원 확대 — 그룹 onclick 버블 수신, 모바일 중앙 탭 안정화 */
 #mobileDashboardScreen .svg-btn-hit-area,
-#bluetoothCoachMobileScreen .svg-btn-hit-area {
+#bluetoothCoachMobileScreen .svg-btn-hit-area,
+#outdoorRideScreen .svg-btn-hit-area {
   cursor: pointer;
   touch-action: manipulation;
 }
@@ -28441,7 +28473,8 @@ body.bluetooth-individual-screen-active {
 /* 정기 구독 모드에서 네비가 10000000으로 올라갈 때에도 훈련 전체화면·하단 슬라이더가 네비에 가리지 않도록 */
 html.global-hub-nav-over-subscribe #mobileDashboardScreen.active,
 html.global-hub-nav-over-subscribe #bluetoothIndividualScreen.indiv-screen-wrap.active,
-html.global-hub-nav-over-subscribe #bluetoothCoachMobileScreen.active {
+html.global-hub-nav-over-subscribe #bluetoothCoachMobileScreen.active,
+html.global-hub-nav-over-subscribe #outdoorRideScreen.active {
   z-index: 10000001 !important;
 }
 #bluetoothIndividualScreen .indiv-header {
@@ -33478,14 +33511,16 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 
 /* ========== Live Training Room Coach — 휴대폰 전용 화면 (bluetoothCoachMobile.js) ==========
    (워크아웃 선택 창 .coachm-picker 는 2026-10-03부터 PC Coach 화면에서도 사용 — 선택자 양쪽 지정) */
-#bluetoothCoachMobileScreen .coachm-menu {
+#bluetoothCoachMobileScreen .coachm-menu,
+#outdoorRideScreen .coachm-menu {
   min-width: 250px;
   max-width: calc(100vw - 24px);
   max-height: 70vh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item {
+#bluetoothCoachMobileScreen .coachm-slot-item,
+#outdoorRideScreen .coachm-slot-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -33495,63 +33530,77 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   cursor: pointer;
 }
 #bluetoothCoachMobileScreen .coachm-slot-item:active,
-#bluetoothCoachMobileScreen .coachm-slot-item.selected {
+#bluetoothCoachMobileScreen .coachm-slot-item.selected,
+#outdoorRideScreen .coachm-slot-item:active,
+#outdoorRideScreen .coachm-slot-item.selected {
   background: rgba(0, 212, 170, 0.18);
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__no {
+#bluetoothCoachMobileScreen .coachm-slot-item__no,
+#outdoorRideScreen .coachm-slot-item__no {
   min-width: 26px;
   font-weight: 700;
   color: #00d4aa;
   font-variant-numeric: tabular-nums;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__name {
+#bluetoothCoachMobileScreen .coachm-slot-item__name,
+#outdoorRideScreen .coachm-slot-item__name {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item--empty .coachm-slot-item__name {
+#bluetoothCoachMobileScreen .coachm-slot-item--empty .coachm-slot-item__name,
+#outdoorRideScreen .coachm-slot-item--empty .coachm-slot-item__name {
   color: #777;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__dot {
+#bluetoothCoachMobileScreen .coachm-slot-item__dot,
+#outdoorRideScreen .coachm-slot-item__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #444;
   flex-shrink: 0;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__dot.on {
+#bluetoothCoachMobileScreen .coachm-slot-item__dot.on,
+#outdoorRideScreen .coachm-slot-item__dot.on {
   background: #00d4aa;
 }
-#bluetoothCoachMobileScreen .coachm-menu .mobile-bluetooth-dropdown-item span {
+#bluetoothCoachMobileScreen .coachm-menu .mobile-bluetooth-dropdown-item span,
+#outdoorRideScreen .coachm-menu .mobile-bluetooth-dropdown-item span {
   white-space: nowrap;
 }
 /* 세그먼트 달성도 점 (사용자 계기판 목표 원호와 같은 색) */
-#bluetoothCoachMobileScreen .coachm-slot-item__ach {
+#bluetoothCoachMobileScreen .coachm-slot-item__ach,
+#outdoorRideScreen .coachm-slot-item__ach {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
   margin-left: 6px;
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__ach--ok {
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--ok,
+#outdoorRideScreen .coachm-slot-item__ach--ok {
   background: #00d4aa;
   box-shadow: 0 0 6px rgba(0, 212, 170, 0.7);
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__ach--under {
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--under,
+#outdoorRideScreen .coachm-slot-item__ach--under {
   background: #ff8c00;
   box-shadow: 0 0 6px rgba(255, 140, 0, 0.7);
 }
-#bluetoothCoachMobileScreen .coachm-slot-item__ach--rest {
+#bluetoothCoachMobileScreen .coachm-slot-item__ach--rest,
+#outdoorRideScreen .coachm-slot-item__ach--rest {
   background: #6b7280;
 }
-#bluetoothCoachMobileScreen .coachm-menu-divider {
+#bluetoothCoachMobileScreen .coachm-menu-divider,
+#outdoorRideScreen .coachm-menu-divider {
   height: 1px;
   margin: 4px 0;
   background: rgba(255, 255, 255, 0.18);
 }
-#bluetoothCoachMobileScreen .coachm-countdown-overlay {
+#bluetoothCoachMobileScreen .coachm-countdown-overlay,
+#outdoorRideScreen .coachm-countdown-overlay {
   position: fixed;
   inset: 0;
   z-index: 10050;
@@ -33561,13 +33610,15 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   background: rgba(0, 0, 0, 0.55);
   pointer-events: none;
 }
-#bluetoothCoachMobileScreen .coachm-countdown-overlay span {
+#bluetoothCoachMobileScreen .coachm-countdown-overlay span,
+#outdoorRideScreen .coachm-countdown-overlay span {
   font-size: 120px;
   font-weight: 800;
   color: #00d4aa;
   text-shadow: 0 0 24px rgba(0, 212, 170, 0.6);
 }
-#bluetoothCoachMobileScreen .coachm-picker, #bluetoothTrainingCoachScreen .coachm-picker {
+#bluetoothCoachMobileScreen .coachm-picker, #bluetoothTrainingCoachScreen .coachm-picker,
+#outdoorRideScreen .coachm-picker {
   position: fixed;
   inset: 0;
   z-index: 10060;
@@ -33576,7 +33627,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   justify-content: center;
   background: rgba(0, 0, 0, 0.55);
 }
-#bluetoothCoachMobileScreen .coachm-picker__sheet, #bluetoothTrainingCoachScreen .coachm-picker__sheet {
+#bluetoothCoachMobileScreen .coachm-picker__sheet, #bluetoothTrainingCoachScreen .coachm-picker__sheet,
+#outdoorRideScreen .coachm-picker__sheet {
   width: 100%;
   max-width: 520px;
   max-height: 75vh;
@@ -33587,7 +33639,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   border-top-right-radius: 16px;
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
-#bluetoothCoachMobileScreen .coachm-picker__head, #bluetoothTrainingCoachScreen .coachm-picker__head {
+#bluetoothCoachMobileScreen .coachm-picker__head, #bluetoothTrainingCoachScreen .coachm-picker__head,
+#outdoorRideScreen .coachm-picker__head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33596,25 +33649,29 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   font-size: 16px;
   border-bottom: 1px solid #333;
 }
-#bluetoothCoachMobileScreen .coachm-picker__close, #bluetoothTrainingCoachScreen .coachm-picker__close {
+#bluetoothCoachMobileScreen .coachm-picker__close, #bluetoothTrainingCoachScreen .coachm-picker__close,
+#outdoorRideScreen .coachm-picker__close {
   background: none;
   border: none;
   color: #aaa;
   font-size: 18px;
   cursor: pointer;
 }
-#bluetoothCoachMobileScreen .coachm-picker__list, #bluetoothTrainingCoachScreen .coachm-picker__list {
+#bluetoothCoachMobileScreen .coachm-picker__list, #bluetoothTrainingCoachScreen .coachm-picker__list,
+#outdoorRideScreen .coachm-picker__list {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding: 6px 0 12px;
 }
-#bluetoothCoachMobileScreen .coachm-picker__group, #bluetoothTrainingCoachScreen .coachm-picker__group {
+#bluetoothCoachMobileScreen .coachm-picker__group, #bluetoothTrainingCoachScreen .coachm-picker__group,
+#outdoorRideScreen .coachm-picker__group {
   padding: 10px 16px 4px;
   font-size: 12px;
   color: #00d4aa;
   font-weight: 700;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item, #bluetoothTrainingCoachScreen .coachm-picker__item {
+#bluetoothCoachMobileScreen .coachm-picker__item, #bluetoothTrainingCoachScreen .coachm-picker__item,
+#outdoorRideScreen .coachm-picker__item {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -33629,22 +33686,26 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   text-align: left;
   cursor: pointer;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item.selected, #bluetoothTrainingCoachScreen .coachm-picker__item.selected {
+#bluetoothCoachMobileScreen .coachm-picker__item.selected, #bluetoothTrainingCoachScreen .coachm-picker__item.selected,
+#outdoorRideScreen .coachm-picker__item.selected {
   background: rgba(0, 212, 170, 0.15);
 }
-#bluetoothCoachMobileScreen .coachm-picker__item-title, #bluetoothTrainingCoachScreen .coachm-picker__item-title {
+#bluetoothCoachMobileScreen .coachm-picker__item-title, #bluetoothTrainingCoachScreen .coachm-picker__item-title,
+#outdoorRideScreen .coachm-picker__item-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-#bluetoothCoachMobileScreen .coachm-picker__item-min, #bluetoothTrainingCoachScreen .coachm-picker__item-min {
+#bluetoothCoachMobileScreen .coachm-picker__item-min, #bluetoothTrainingCoachScreen .coachm-picker__item-min,
+#outdoorRideScreen .coachm-picker__item-min {
   flex-shrink: 0;
   font-size: 12px;
   color: #aaa;
 }
-#bluetoothCoachMobileScreen .coachm-picker__empty, #bluetoothTrainingCoachScreen .coachm-picker__empty {
+#bluetoothCoachMobileScreen .coachm-picker__empty, #bluetoothTrainingCoachScreen .coachm-picker__empty,
+#outdoorRideScreen .coachm-picker__empty {
   padding: 30px 16px;
   text-align: center;
   color: #888;
@@ -33652,7 +33713,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
 }
 
 /* Coach 휴대폰: 워크아웃 미설정 그래프 placeholder (훈련 준비 화면과 같은 막대) */
-#bluetoothCoachMobileScreen .coachm-graph-placeholder {
+#bluetoothCoachMobileScreen .coachm-graph-placeholder,
+#outdoorRideScreen .coachm-graph-placeholder {
   position: absolute;
   left: 0;
   right: 0;
@@ -33664,7 +33726,8 @@ html.market-glass-nav-ios-phone .market-detail-floating-bar {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-#bluetoothCoachMobileScreen .coachm-graph-placeholder__bars {
+#bluetoothCoachMobileScreen .coachm-graph-placeholder__bars,
+#outdoorRideScreen .coachm-graph-placeholder__bars {
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -33775,7 +33838,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   visibility: hidden !important;
   opacity: 0 !important;
 }
-#bluetoothCoachMobileScreen.active {
+#bluetoothCoachMobileScreen.active,
+#outdoorRideScreen.active {
   animation: coachm-fade-in 0.22s ease-out both;
 }
 @keyframes coachm-fade-in {
@@ -34161,9 +34225,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   gap: 6px;
 }
 /* 모니터 모드: 하단 통계(CADENCE·LAP AVG·HEART RATE) 숨기고 그 자리에 건너뛰기·시작·종료 */
-#bluetoothCoachMobileScreen.coachm-monitor-on .mobile-stats-footer { display: none !important; }
+#bluetoothCoachMobileScreen.coachm-monitor-on .mobile-stats-footer,
+#outdoorRideScreen.coachm-monitor-on .mobile-stats-footer { display: none !important; }
 .coachm-monitor-controls { display: none; }
-#bluetoothCoachMobileScreen.coachm-monitor-on .coachm-monitor-controls {
+#bluetoothCoachMobileScreen.coachm-monitor-on .coachm-monitor-controls,
+#outdoorRideScreen.coachm-monitor-on .coachm-monitor-controls {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -34304,3 +34370,104 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .device-scan-other { margin-top: 10px; border-top: 1px dashed #cbd5e1; padding-top: 8px; }
 .device-scan-other__summary { cursor: pointer; font-size: 13px; font-weight: 600; color: #475569; padding: 4px 2px; list-style: revert; }
 .device-scan-list--other { margin-top: 6px; opacity: 0.9; }
+
+/* ===== 아웃도어 라이딩 (2026-10-19) ===== */
+#outdoorRideScreen .outd-map-section { padding: 0; }
+#outdoorRideScreen .outd-map-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%; /* 그래프 영역(.mobile-segment-graph-section) 높이에 맞춤 — 아래 버튼·안내가 가려지지 않게 */
+  min-height: 150px;
+  background: #1b2430;
+  overflow: hidden;
+}
+#outdoorRideScreen .outd-map { position: absolute; inset: 0; z-index: 1; }
+#outdoorRideScreen .outd-map .leaflet-control-attribution { font-size: 8px; background: rgba(0, 0, 0, 0.45); color: #ccc; }
+#outdoorRideScreen .outd-map .leaflet-control-attribution a { color: #ddd; }
+#outdoorRideScreen .outd-map-empty {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  z-index: 500;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #e2e8f0;
+  font-size: 12px;
+  text-align: center;
+  line-height: 1.4;
+  pointer-events: none;
+  white-space: nowrap;
+}
+#outdoorRideScreen .outd-map-empty small { color: #94a3b8; }
+#outdoorRideScreen .outd-nav {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.88);
+  border: 1px solid rgba(0, 212, 170, 0.5);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+#outdoorRideScreen .outd-nav.is-off { border-color: #ef4444; background: rgba(127, 29, 29, 0.92); }
+#outdoorRideScreen .outd-nav__arrow { font-size: 26px; font-weight: 800; color: #00d4aa; width: 30px; text-align: center; line-height: 1; transition: transform 0.3s ease; }
+#outdoorRideScreen .outd-nav.is-off .outd-nav__arrow { color: #fca5a5; }
+#outdoorRideScreen .outd-nav__text { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 700; color: #fff; line-height: 1.25; }
+#outdoorRideScreen .outd-nav__remain { flex-shrink: 0; font-size: 12px; font-weight: 700; color: #94a3b8; text-align: right; }
+#outdoorRideScreen .outd-recenter {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 600;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 0;
+  background: rgba(17, 24, 39, 0.85);
+  color: #00d4aa;
+  font-size: 18px;
+  line-height: 34px;
+  cursor: pointer;
+}
+#outdoorRideScreen .outd-gps-dot { width: 9px; height: 9px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.25); flex-shrink: 0; }
+#outdoorRideScreen .outd-gps-dot.is-weak { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25); }
+#outdoorRideScreen .outd-gps-dot.is-good { background: #22c55e; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.3); }
+#outdoorRideScreen .outd-gps-bars { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; margin-right: 6px; }
+#outdoorRideScreen .outd-gps-bars i { display: block; width: 4px; border-radius: 1px; background: #475569; }
+#outdoorRideScreen .outd-gps-bars i:nth-child(1) { height: 4px; }
+#outdoorRideScreen .outd-gps-bars i:nth-child(2) { height: 7px; }
+#outdoorRideScreen .outd-gps-bars i:nth-child(3) { height: 10px; }
+#outdoorRideScreen .outd-gps-bars i:nth-child(4) { height: 14px; }
+#outdoorRideScreen .outd-gps-bars i.on { background: #22c55e; }
+#outdoorRideScreen .outd-gps-row { cursor: default; }
+#outdoorRideScreen .outd-menu-ico { width: 18px; text-align: center; font-size: 15px; }
+#outdoorRideScreen .outd-back { cursor: pointer; }
+.outd-me-marker {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #00d4aa;
+  border: 3px solid #fff;
+  box-shadow: 0 0 0 4px rgba(0, 212, 170, 0.3), 0 2px 6px rgba(0, 0, 0, 0.5);
+  box-sizing: border-box;
+}
+/* 아웃도어 라이딩 종료 창 */
+.outd-finish { position: fixed; inset: 0; z-index: 100600; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.7); }
+.outd-finish__card { width: 100%; max-width: 360px; background: #1e1e1e; color: #fff; border: 1px solid #333; border-radius: 16px; padding: 18px 16px 14px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+.outd-finish__card h3 { margin: 0 0 12px; font-size: 18px; font-weight: 800; text-align: center; }
+.outd-finish__stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 14px; }
+.outd-finish__stats div { background: #121212; border-radius: 10px; padding: 8px 10px; }
+.outd-finish__stats dt { font-size: 11px; color: #888; margin: 0 0 2px; }
+.outd-finish__stats dd { margin: 0; font-size: 17px; font-weight: 800; color: #00d4aa; font-variant-numeric: tabular-nums; }
+.outd-finish__btns { display: flex; flex-direction: column; gap: 8px; }
+.outd-finish__btn { padding: 12px 0; border-radius: 12px; border: 1px solid #444; background: #2a2a2a; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; }
+.outd-finish__btn--primary { background: #00d4aa; border-color: #00d4aa; color: #062a22; }
+.outd-finish__btn--ghost { background: transparent; color: #aaa; }
+.outd-finish__btn:disabled { opacity: 0.6; }

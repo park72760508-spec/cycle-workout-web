@@ -273,6 +273,7 @@
       if (!isGaugeBg(bg)) continue;
       var svg = bg.ownerSVGElement || bg.parentNode;
       if (!svg || (svg.querySelector && svg.querySelector('.stelvio-gauge-zone-bands'))) continue;
+      if (svg.getAttribute && svg.getAttribute('data-no-zone-bands')) continue; // 속도계(아웃도어 라이딩) 등 파워 존이 아닌 계기판
       var bands = buildBands(bg.namespaceURI || 'http://www.w3.org/2000/svg');
       bg.parentNode.insertBefore(bands, bg.nextSibling);
       if (svg.ownerSVGElement == null) {
