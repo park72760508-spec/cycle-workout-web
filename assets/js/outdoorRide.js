@@ -2107,15 +2107,18 @@
       } else if (act === 'gpx') {
         downloadGpx();
       } else if (act === 'discard') {
-        if (!window.confirm('이번 라이딩 기록을 저장하지 않고 종료할까요?')) return;
+        if (!window.confirm('이번 기록을 저장하지 않고 종료할까요?')) return;
         m.remove();
         resetRide();
-        toast('라이딩을 종료했습니다.', 'info');
+        toast('기록을 저장하지 않고 종료했습니다.', 'info');
       } else if (act === 'save') {
+        // 저장 종목은 화면에서 선택돼 보이는 버튼 기준(표시와 저장이 어긋나지 않게)
+        var onBtn = m.querySelector('.outd-finish__kindbtn.is-on');
+        var savedKind = onBtn ? onBtn.getAttribute('data-kind') : chosen;
+        if (savedKind !== 'ride' && savedKind !== 'run' && savedKind !== 'walk') savedKind = chosen;
         var label = btn.textContent;
         btn.disabled = true;
         btn.textContent = '저장 중...';
-        var savedKind = chosen;
         saveRide(savedKind).then(function () {
           m.remove();
           resetRide();

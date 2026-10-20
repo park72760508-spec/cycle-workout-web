@@ -73,7 +73,7 @@ BEGIN
   END IF;
   v_type := CASE v_kind WHEN 'run' THEN 'Run' ELSE 'Walk' END;
 
-  -- activities.id·run_activity_efforts.id 는 기본값이 없어 서버(processRunningActivity)와 같이 max+1 — 동시 저장 대비 잠금
+  -- activities.id 는 기본값이 없어 서버(processRunningActivity)와 같이 max+1 — 동시 저장 대비 잠금
   PERFORM pg_advisory_xact_lock(hashtext('public.activities.id'));
 
   SELECT id INTO v_id FROM public.activities WHERE user_id = v_uid AND activity_id = v_aid;
@@ -107,12 +107,12 @@ BEGIN
 
   -- 러닝만 구간 최고 기록(랭킹·대시보드 피크 페이스). 걷기는 RUN 랭킹 제외 정책(20260618)과 동일하게 저장 안 함
   IF v_kind = 'run' AND jsonb_typeof(v_eff) = 'object' THEN
-    PERFORM pg_advisory_xact_lock(hashtext('public.run_activity_efforts.id'));
+    -- run_activity_efforts.id 는 IDENTITY(ALWAYS) — 지정하지 않는다
     INSERT INTO public.run_activity_efforts (
-      id, user_id, activity_id, activity_date,
+      user_id, activity_id, activity_date,
       speed_1k, speed_3k, speed_5k, speed_7k, speed_10k, speed_20k, speed_42k, updated_at
     ) VALUES (
-      (SELECT coalesce(max(id), 0) + 1 FROM public.run_activity_efforts), v_uid, v_aid, v_start,
+      v_uid, v_aid, v_start,
       -- 사람 한계(calculateAndSaveRunEfforts RUN_EFFORT_MAX_PLAUSIBLE_SPEED_MPS) 초과는 GPS 오류로 버림
       CASE WHEN (v_eff ->> 'speed_1k')::float8 BETWEEN 0.5 AND 8.3 THEN (v_eff ->> 'speed_1k')::float8 END,
       CASE WHEN (v_eff ->> 'speed_3k')::float8 BETWEEN 0.5 AND 7.5 THEN (v_eff ->> 'speed_3k')::float8 END,
