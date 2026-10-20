@@ -1070,6 +1070,11 @@
    *   [자전거도로 우선] use_roads 0.2(자전거 도로·한적한 길 선호) / [최단 거리] shortest. 한국어 회전 안내문 사용.
    * 안내: 기존 코스 안내(회전 카드·지도 강조·진동) 재사용, 경로 이탈 10초 이상이면 현재 위치에서 다시 탐색(30초에 1회). */
   var VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
+  /** 길찾기 이동 수단: 'bike'(기본) | 'walk' */
+  var travelMode = 'bike';
+  var lastDest = null;
+  var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
+  var ICON_WALK = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="1.8"/><path d="M10.5 21l2-6.5 2.5 2.5V21"/><path d="M8 11.5l2.5-3.5h3l2.5 3.5 2 1"/><path d="M12.5 14.5l-1-6.5"/><path d="M9 21l1.5-4.5"/></svg>';
   var PHOTON_URL = 'https://photon.komoot.io/api/';
   var NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
@@ -1145,14 +1150,19 @@
     var locs = [start];
     if (opt.via) locs.push({ lat: opt.via.lat, lon: opt.via.lng, type: 'through' });
     locs.push({ lat: to.lat, lon: to.lng });
+    // 2026-10-20: 걷기(보행자) — 'walk' 인도·보행로 우선(walkway/sidewalk 가중치↓, 골목·진입로·계단·나루터 회피), 'walkShort' 최단
+    var walking = mode === 'walk' || mode === 'walkShort';
+    var costingOptions = walking
+      ? { pedestrian: mode === 'walkShort'
+          ? { shortest: true, use_ferry: 0 }
+          : { walkway_factor: 0.6, sidewalk_factor: 0.6, alley_factor: 2, driveway_factor: 5, step_penalty: 30, use_ferry: 0 } }
+      : { bicycle: mode === 'short'
+          ? { bicycle_type: 'Hybrid', shortest: true }
+          : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 } };
     var body = {
       locations: locs,
-      costing: 'bicycle',
-      costing_options: {
-        bicycle: mode === 'short'
-          ? { bicycle_type: 'Hybrid', shortest: true }
-          : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 }
-      },
+      costing: walking ? 'pedestrian' : 'bicycle',
+      costing_options: costingOptions,
       language: 'ko-KR',
       units: 'kilometers'
     };
@@ -1269,7 +1279,7 @@
       st.offRouteSince = 0;
       try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
       st.offCued = false;
-      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + (mode === 'short' ? '최단 거리' : '자전거도로 우선') + ')', 'info');
+      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + ({ bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'info');
     }).catch(function () {
       setText('outdNavText', '경로를 다시 찾지 못했습니다 · 잠시 후 다시 시도합니다');
     }).then(function () {
@@ -1287,14 +1297,28 @@
     el.style.display = 'none';
     el.innerHTML =
       '<div class="coachm-picker__sheet outd-route__sheet">' +
-      '<div class="coachm-picker__head"><span>길찾기</span><button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
+      '<div class="coachm-picker__head"><span class="outd-route__title">길찾기' +
+      '<span class="outd-route__modes" role="radiogroup" aria-label="이동 수단">' +
+      '<button type="button" class="outd-route__mode" data-travel="bike" role="radio" aria-label="자전거">' + ICON_BIKE + '</button>' +
+      '<button type="button" class="outd-route__mode" data-travel="walk" role="radio" aria-label="걷기">' + ICON_WALK + '</button>' +
+      '</span></span>' +
+      '<button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
       '<div class="outd-route__search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
       '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: Photon/Nominatim(OSM)</div>' +
       '</div>';
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
-      if (e.target === el || e.target.closest('[data-route-close]')) el.style.display = 'none';
+      if (e.target === el || e.target.closest('[data-route-close]')) { el.style.display = 'none'; return; }
+      var mb = e.target.closest && e.target.closest('[data-travel]');
+      if (mb) {
+        var m = mb.getAttribute('data-travel');
+        if (m === travelMode) return;
+        travelMode = m;
+        renderTravelModes();
+        // 경로 후보를 보고 있었다면 같은 목적지로 새 이동 수단 경로를 다시 찾음
+        if (lastDest && $('outdRouteList').querySelector('.outd-route__opt')) chooseDestination(lastDest);
+      }
     });
     var input = el.querySelector('#outdRouteInput');
     var timer = null;
@@ -1308,6 +1332,16 @@
       if (e.key === 'Enter') { clearTimeout(timer); var q = input.value.trim(); if (q) runSearch(q); }
     });
     return el;
+  }
+
+  function renderTravelModes() {
+    var sheet = $('outdRouteSheet');
+    if (!sheet) return;
+    Array.prototype.forEach.call(sheet.querySelectorAll('[data-travel]'), function (b) {
+      var on = b.getAttribute('data-travel') === travelMode;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+    });
   }
 
   var searchSeq = 0;
@@ -1350,23 +1384,32 @@
       box.innerHTML = '<div class="coachm-picker__empty">현재 위치(GPS)를 찾는 중입니다. 잠시 후 다시 선택해 주세요.</div>';
       return;
     }
-    box.innerHTML = '<div class="coachm-picker__empty">자전거 경로를 찾는 중...</div>';
+    lastDest = dest;
+    var walk = travelMode === 'walk';
+    box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '도보 경로를 찾는 중...' : '자전거 경로를 찾는 중...') + '</div>';
     var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
-    Promise.all([
-      fetchBikeRoute(from, dest, 'bike', { heading: st.speedKmh >= 5 ? st.heading : null }).catch(function () { return null; }),
-      fetchBikeRoute(from, dest, 'short', { heading: st.speedKmh >= 5 ? st.heading : null }).catch(function () { return null; })
-    ]).then(function (routes) {
+    var hd = { heading: st.speedKmh >= 5 ? st.heading : null };
+    var modes = walk ? ['walk', 'walkShort'] : ['bike', 'short'];
+    var reqMode = travelMode;
+    Promise.all(modes.map(function (m) {
+      return fetchBikeRoute(from, dest, m, hd).catch(function () { return null; });
+    })).then(function (routes) {
+      if (reqMode !== travelMode) return; // 그사이 이동 수단을 바꿨으면 무시
       routes = routes.filter(Boolean);
       if (!routes.length) {
-        box.innerHTML = '<div class="coachm-picker__empty">자전거로 갈 수 있는 경로를 찾지 못했습니다.</div>';
+        box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '걸어서 갈 수 있는 경로를 찾지 못했습니다.' : '자전거로 갈 수 있는 경로를 찾지 못했습니다.') + '</div>';
         return;
       }
       box.innerHTML = '<div class="outd-route__dest">🏁 ' + escHtml(dest.name) + '</div>';
       routes.forEach(function (rt) {
         var item = document.createElement('div');
-        item.className = 'coachm-picker__item outd-route__opt' + (rt.mode === 'bike' ? ' is-reco' : '');
+        var reco = rt.mode === 'bike' || rt.mode === 'walk';
+        var optName = rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>'
+          : rt.mode === 'walk' ? '🚶 인도 우선 <em>추천</em>'
+          : '📏 최단 거리';
+        item.className = 'coachm-picker__item outd-route__opt' + (reco ? ' is-reco' : '');
         item.innerHTML =
-          '<span class="outd-route__optname">' + (rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>' : '📏 최단 거리') + '</span>' +
+          '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분</span>';
         item.addEventListener('click', function () {
           unlockAudio();
@@ -1387,6 +1430,7 @@
     if (e && e.stopPropagation) e.stopPropagation();
     closeMenu();
     var el = routeSheet();
+    renderTravelModes();
     el.style.display = 'flex';
     var input = $('outdRouteInput');
     renderRouteList([]);
