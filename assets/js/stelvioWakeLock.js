@@ -79,6 +79,14 @@
     } catch (e2) {
       console.warn(LOG + ' Native iOS 오류:', e2);
     }
+    // 2026-10-21: STELVIO 앱(React Native WebView) — 1.0.7+ 앱이 KEEP_SCREEN_ON 으로 화면 꺼짐 방지(keep-awake).
+    // 이전 버전 앱은 이 메시지를 무시하므로 false 를 돌려 Web API·영상 방식도 그대로 함께 쓴다.
+    try {
+      if (global.ReactNativeWebView && typeof global.ReactNativeWebView.postMessage === 'function') {
+        global.ReactNativeWebView.postMessage(JSON.stringify({ type: 'KEEP_SCREEN_ON', on: !!on }));
+        if (on) logOk('Native', 'ReactNativeWebView KEEP_SCREEN_ON');
+      }
+    } catch (e3) {}
     return false;
   }
 

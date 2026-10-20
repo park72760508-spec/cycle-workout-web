@@ -125,9 +125,17 @@
     if (soundMode !== 'voice' || !text) return;
     try {
       var synth = window.speechSynthesis;
-      if (!synth || !window.SpeechSynthesisUtterance) return;
       var now = Date.now();
       var keep = !priority && speak.priorityUntil && now < speak.priorityUntil;
+      if (!synth || !window.SpeechSynthesisUtterance) {
+        // Android 앱(WebView)은 speechSynthesis 가 없다 — 1.0.7 이상 앱의 네이티브 TTS(AndroidBridge.speak) 사용
+        var ab = window.AndroidBridge;
+        if (ab && typeof ab.speak === 'function') {
+          if (priority) speak.priorityUntil = now + 3500;
+          setTimeout(function () { try { ab.speak(String(text), !keep); } catch (e) {} }, 380);
+        }
+        return;
+      }
       if (!keep) synth.cancel();
       if (priority) speak.priorityUntil = now + 3500;
       var u = new SpeechSynthesisUtterance(text);
