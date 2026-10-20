@@ -34614,3 +34614,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-route__mode.is-on { color: #ffffff; background: #2a2a2a; }
 #outdoorRideScreen .outd-route__mode svg { width: 22px; height: 22px; }
+
+/* 사용자 등록: 인증번호 확인 중 오버레이(2026-10-21) — 로그인 로딩 녹색 원 스피너 재사용, 등록 화면 위 반투명 */
+.phone-verify-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(248, 250, 251, 0.82);
+  pointer-events: auto;
+}
+.phone-verify-overlay.hidden {
+  display: none !important;
+}

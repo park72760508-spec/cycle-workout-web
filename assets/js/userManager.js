@@ -5163,7 +5163,8 @@ function applyUserCategoryFormState(formKey, category, selectedChallenge, select
   var dualWrap = document.getElementById(ids.challengeDualWrap);
   var weightEl = document.getElementById(ids.weight);
 
-  if (categoryEl && categoryEl.value !== cat) categoryEl.value = cat;
+  // 빈 값(사용자 등록 "선택하세요")이면 선택 상자는 그대로 두고 입력 항목만 CYCLE 기준으로 표시(2026-10-21)
+  if (categoryEl && String(category || '').trim() && categoryEl.value !== cat) categoryEl.value = cat;
 
   if (singleWrap) {
     singleWrap.style.display = isDual ? 'none' : '';

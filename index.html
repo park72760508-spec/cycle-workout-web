@@ -588,6 +588,8 @@
         return;
       }
       if (verifyBtn) { verifyBtn.disabled = true; verifyBtn.textContent = '확인 중...'; }
+      if (codeInput) codeInput.blur(); // 휴대폰 키보드를 내려 스피너가 가려지지 않게
+      stelvioPhoneVerifyOverlay(true);
       try {
         var res = await fetch(STELVIO_PHONE_OTP_VERIFY_URL, {
           method: 'POST',
@@ -618,8 +620,18 @@
       } catch (e) {
         stelvioSetPhoneOtpStatus((e && e.message) || '인증번호가 올바르지 않습니다.', 'error');
         if (verifyBtn) { verifyBtn.disabled = false; verifyBtn.textContent = '확인'; }
+      } finally {
+        stelvioPhoneVerifyOverlay(false);
       }
     };
+    /** 인증번호 확인(서버 검증) 중 화면 앞 녹색 원 스피너 오버레이(2026-10-21) */
+    function stelvioPhoneVerifyOverlay(show) {
+      var el = document.getElementById('phoneVerifyOverlay');
+      if (!el) return;
+      el.classList.toggle('hidden', !show);
+      el.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+    window.stelvioPhoneVerifyOverlay = stelvioPhoneVerifyOverlay;
     // 인증완료 후 번호를 다시 바꾸면(readOnly 해제 등 예외 상황 대비) 인증 상태를 초기화해
     // 재인증 없이 다른 번호로 가입되는 것을 막는다.
     // 전화번호 문자인증(또는 재가입 모드로 판정된 경우)만 완료되면 "가입 완료" 버튼이
@@ -3988,7 +4000,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261021outdsave" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261021regverify" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4070,6 +4082,17 @@
         <div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin" aria-hidden="true"></div>
       </div>
       <p class="auth-transition-message">사용자 정보 로딩 중......</p>
+    </div>
+  </div>
+  <!-- 사용자 등록: 인증번호 확인(서버 검증) 중 화면 앞 녹색 원 스피너 — 로그인 로딩과 같은 원(2026-10-21) -->
+  <div id="phoneVerifyOverlay" class="phone-verify-overlay hidden" aria-hidden="true" aria-live="polite">
+    <div class="auth-transition-overlay__inner">
+      <div class="auth-transition-spinner-stage" role="status" aria-label="인증번호 확인 중">
+        <div class="auth-transition-spinner-glow" aria-hidden="true"></div>
+        <div class="auth-transition-spinner-ring auth-transition-spinner-ring--track" aria-hidden="true"></div>
+        <div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin" aria-hidden="true"></div>
+      </div>
+      <p class="auth-transition-message">인증번호 확인 중...</p>
     </div>
   </div>
   <script>
@@ -4875,7 +4898,8 @@
             <div class="auth-input-group">
               <label for="registerCategoryInput" class="auth-label-left">카테고리 *</label>
               <select id="registerCategoryInput" data-form-key="register" required onchange="if(typeof onUserCategoryChange==='function')onUserCategoryChange(this);">
-                <option value="CYCLE" selected>CYCLE (사이클)</option>
+                <option value="" selected>선택하세요</option>
+                <option value="CYCLE">CYCLE (사이클)</option>
                 <option value="RUN">RUN (러닝)</option>
                 <option value="CYCLE+RUN">CYCLE+RUN (사이클·러닝)</option>
               </select>
@@ -9381,7 +9405,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20261016gift"></script>
+  <script src="assets/js/userManager.js?v=20261021regcat"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -32787,7 +32811,8 @@
 
         if (typeof applyUserCategoryFormState === 'function') {
           var regCatEl = document.getElementById('registerCategoryInput');
-          applyUserCategoryFormState('register', (regCatEl && regCatEl.value) || 'CYCLE');
+          // 빈 값("선택하세요")은 그대로 두고 입력 항목만 CYCLE 기준으로 표시
+          applyUserCategoryFormState('register', (regCatEl && regCatEl.value) || '');
         }
         
         // 첫 번째 입력 필드에 포커스
@@ -32859,12 +32884,12 @@
             el.disabled = false;
             el.style.background = '';
             if (el.id === 'registerChallengeInput') el.value = 'Fitness';
-            else if (el.id === 'registerCategoryInput') el.value = 'CYCLE';
+            else if (el.id === 'registerCategoryInput') el.value = ''; // "선택하세요"
             else el.value = '';
           }
         });
         if (typeof applyUserCategoryFormState === 'function') {
-          applyUserCategoryFormState('register', 'CYCLE', 'Fitness');
+          applyUserCategoryFormState('register', '', 'Fitness');
         }
         ['registerPasswordInput','registerBirthYearInput'].forEach(function(id) {
           var el = document.getElementById(id);
@@ -32990,6 +33015,12 @@
       })();
 
       // 유효성 검사
+      // 2026-10-21: 카테고리 기본값이 "선택하세요"(빈 값) — 고르지 않으면 진행하지 않음(재가입은 기존 값 고정)
+      if (!_isRejoinMode && categoryInput && !categoryInput.disabled && !String(categoryInput.value || '').trim()) {
+        showRegisterStatus('카테고리를 선택해 주세요.', 'error');
+        categoryInput.focus();
+        return;
+      }
       if (!phone) {
         showRegisterStatus('전화번호를 입력해주세요.', 'error');
         phoneInput.focus();
@@ -33244,8 +33275,10 @@
               var el = document.getElementById(id);
               if (el) { el.disabled = false; el.style.background = ''; }
             });
+            var _regCatReset = document.getElementById('registerCategoryInput');
+            if (_regCatReset) _regCatReset.value = ''; // "선택하세요"
             if (typeof applyUserCategoryFormState === 'function') {
-              applyUserCategoryFormState('register', 'CYCLE', 'Fitness');
+              applyUserCategoryFormState('register', '', 'Fitness');
             }
             /* 헤더/설명 복원 */
             var hdr = document.querySelector('#registerScreen h3');
