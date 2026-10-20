@@ -1216,6 +1216,88 @@
    *   via: 경유(through) 지점 — 원래 경로 앞쪽에 다시 합류하는 재탐색 후보용
    */
   function fetchBikeRoute(from, to, mode, opt) {
+    if (mode === 'walk' || mode === 'walkShort') return fetchWalkRoute(from, to, mode, opt);
+    return fetchValhallaRoute(from, to, mode, opt);
+  }
+
+  /* 걷기 경로 보완(2026-10-20): 국내 OSM 은 큰길 인도가 따로 그려지지 않은 곳이 많아 보행자 경로가 차도 중앙선 위에 그려진다.
+   * 자전거도로 우선 경로(대부분 자전거·보행자 겸용도로)를 함께 받아, 보행자로 통행 가능한지 확인한 뒤
+   * 큰길 중앙선 구간이 더 짧고 거리 차이가 허용 범위 안이면 그쪽을 쓴다. */
+  var WALK_CYCLE_MAX_RATIO = { walk: 1.35, walkShort: 1.1 };
+  var cycleWalkMemo = { key: '', at: 0, promise: null };
+
+  function walkCycleCandidate(from, to, opt) {
+    var key = [from.lat.toFixed(5), from.lng.toFixed(5), to.lat.toFixed(5), to.lng.toFixed(5),
+      opt && opt.via ? opt.via.lat.toFixed(5) + ',' + opt.via.lng.toFixed(5) : ''].join('|');
+    var now = Date.now();
+    if (cycleWalkMemo.key !== key || now - cycleWalkMemo.at > 30000) {
+      cycleWalkMemo = {
+        key: key,
+        at: now,
+        promise: fetchValhallaRoute(from, to, 'walkCycle', opt).then(function (rt) {
+          return measureBigRoadKm(rt).then(function (bigKm) {
+            if (bigKm == null) return null; // 보행자로 매칭 안 되는 경로(보행 불가 구간 포함)는 버림
+            rt.bigRoadKm = bigKm;
+            return rt;
+          });
+        }).catch(function () { return null; })
+      };
+    }
+    return cycleWalkMemo.promise;
+  }
+
+  /** 경로 중 큰길(간선·보조간선·집산도로) 차도 중앙선 길이(km). 보행자로 매칭 실패 시 null */
+  function measureBigRoadKm(rt) {
+    var body = {
+      encoded_polyline: rt.shape,
+      shape_match: 'edge_walk',
+      costing: 'pedestrian',
+      filters: { attributes: ['edge.use', 'edge.road_class', 'edge.length'], action: 'include' }
+    };
+    return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_attributes') + '?json=' + encodeURIComponent(JSON.stringify(body)))
+      .then(function (d) {
+        var edges = d && d.edges;
+        if (!edges || !edges.length) return null;
+        var km = 0;
+        edges.forEach(function (e) {
+          if ((e.use === 'road' || e.use === 'turn_channel') &&
+            ['motorway', 'trunk', 'primary', 'secondary', 'tertiary'].indexOf(e.road_class) >= 0) km += e.length || 0;
+        });
+        return km;
+      })
+      .catch(function () { return null; });
+  }
+
+  function fetchWalkRoute(from, to, mode, opt) {
+    var ped = fetchValhallaRoute(from, to, mode, opt);
+    return Promise.all([
+      ped.then(function (rt) { return measureBigRoadKm(rt).then(function (k) { rt.bigRoadKm = k; return rt; }); }),
+      walkCycleCandidate(from, to, opt)
+    ]).then(function (r) {
+      var p = r[0], c = r[1];
+      if (!c || p.bigRoadKm == null) return p;
+      var ratio = WALK_CYCLE_MAX_RATIO[mode] || 1.2;
+      // 큰길 중앙선이 50m 이상 줄고 거리는 허용 범위 안일 때만 자전거도로 경로로.
+      // 인도 우선은 늘어난 거리가 줄어든 중앙선 길이 이하면 1.5배까지 허용(예: 송파→올림픽공원 중앙선 1.3km → 0)
+      var saved = p.bigRoadKm - c.bigRoadKm;
+      var withinLen = c.km <= p.km * ratio ||
+        (mode === 'walk' && c.km <= p.km * 1.5 && c.km - p.km <= saved);
+      if (saved > 0.05 && withinLen) {
+        return {
+          mode: mode,
+          latlngs: c.latlngs,
+          maneuvers: c.maneuvers,
+          km: c.km,
+          min: Math.round(c.km / 5.1 * 60), // 자전거 시간 대신 걷기 시간(5.1km/h)
+          shape: c.shape,
+          viaCycleway: true
+        };
+      }
+      return p;
+    }, function () { return ped; });
+  }
+
+  function fetchValhallaRoute(from, to, mode, opt) {
     opt = opt || {};
     var start = { lat: from.lat, lon: from.lng };
     if (opt.heading != null && isFinite(opt.heading)) {
@@ -1235,7 +1317,10 @@
           : { walkway_factor: 0.25, sidewalk_factor: 0.25, alley_factor: 2, driveway_factor: 5, service_factor: 1.5, step_penalty: 10, use_living_streets: 0.6, use_ferry: 0 } }
       : { bicycle: mode === 'short'
           ? { bicycle_type: 'Hybrid', shortest: true }
-          : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 } };
+          : mode === 'walkCycle'
+            // 걷기 보완 후보: 차도 대신 자전거도로를 최대한(use_roads 0)
+            ? { bicycle_type: 'Hybrid', use_roads: 0, use_living_streets: 0.3, use_hills: 0.5, avoid_bad_surfaces: 0, use_ferry: 0 }
+            : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 } };
     var body = {
       locations: locs,
       costing: walking ? 'pedestrian' : 'bicycle',
@@ -1252,7 +1337,8 @@
         latlngs: decodePolyline6(leg.shape),
         maneuvers: leg.maneuvers || [],
         km: trip.summary.length,
-        min: Math.round(trip.summary.time / 60)
+        min: Math.round(trip.summary.time / 60),
+        shape: leg.shape
       };
     });
   }
@@ -1487,7 +1573,8 @@
         item.className = 'coachm-picker__item outd-route__opt' + (reco ? ' is-reco' : '');
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
-          '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분</span>';
+          '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
+          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
           $('outdRouteSheet').style.display = 'none';
