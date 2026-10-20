@@ -29867,7 +29867,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261020l"></script>
+  <script src="assets/js/outdoorRide.js?v=20261020m"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -35871,9 +35871,10 @@
               <stop offset="50%" stop-color="#1e88ff" stop-opacity="0.45"/>
               <stop offset="100%" stop-color="#5cc8ff" stop-opacity="0.55"/>
             </linearGradient>
+            <!-- 현재 속도 원호 띠: 초록 톤(2026-10-20) -->
             <linearGradient id="outdSweepGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stop-color="#2f80ff"/>
-              <stop offset="100%" stop-color="#7fe3ff"/>
+              <stop offset="0%" stop-color="#15803d"/>
+              <stop offset="100%" stop-color="#4ade80"/>
             </linearGradient>
             <!-- 필터 범위를 계기판 전체(사용자 좌표)로 고정 — 선 크기 기준(%)이면 짧은 스윕(시작 부분)에서 범위가 좁아져 곡선이 잘려 직선처럼 보였다 -->
             <filter id="outdGlow" filterUnits="userSpaceOnUse" x="-20" y="30" width="240" height="140">
@@ -35894,7 +35895,6 @@
           <path d="M 26 140 A 74 74 0 0 1 174 140" fill="none" stroke="#000814" stroke-opacity="0.55" stroke-width="0.8"/>
           <!-- 현재 속도까지 차오르는 하늘색 스윕 -->
           <!-- 움직이는 요소는 블러 필터 없이(매 프레임 블러 재계산 = 발열) 넓은 반투명 선으로 빛 번짐 표현 -->
-          <path id="outd-gauge-sweep-glow" d="" fill="none" stroke="#5cc8ff" stroke-opacity="0.22" stroke-width="22" stroke-linecap="round" style="display: none;"/>
           <path id="outd-gauge-sweep" d="" fill="none" stroke="url(#outdSweepGrad)" stroke-opacity="0.92" stroke-width="12" stroke-linecap="round" style="display: none;"/>
           <g id="outd-gauge-ticks"></g>
           <g id="outd-gauge-labels"></g>
@@ -35907,7 +35907,6 @@
           <text id="outd-ui-speed" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
           <text id="outd-ui-speed-dec" x="114" y="200" text-anchor="start" fill="#fff" font-size="22" font-weight="bold">.0</text>
           <g id="outd-gauge-needle" transform="translate(100, 140) rotate(-90)">
-            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff3b3b" stroke-opacity="0.28" stroke-width="10" stroke-linecap="round"/>
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
             <circle cx="0" cy="0" r="6" fill="#fff"/>
           </g>
