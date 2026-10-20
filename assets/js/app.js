@@ -18355,13 +18355,16 @@ function updateMobileTargetPowerArc() {
   }
   
   // 하한값 원호 경로 및 색상 업데이트
+  // 2026-10-21: 달성 시 원호는 민트 대신 아웃도어 속도계와 같은 녹색 그라데이션(index.html #stelvioGaugeGreenGrad)
+  const arcOk = achievementRatio >= 0.985;
   targetArc.setAttribute('d', minPathData);
-  targetArc.setAttribute('stroke', arcColor);
+  targetArc.setAttribute('stroke', arcOk ? 'url(#stelvioGaugeGreenGrad)' : arcColor);
+  targetArc.setAttribute('stroke-opacity', arcOk ? '0.92' : '1');
   targetArc.style.display = 'block';
-  
+
   // 목표 파워값 색상: 원호가 녹색(민트)이면 Lap 타임 색상, 주황이면 원래 주황색
   targetPowerEl.setAttribute('fill', achievementRatio >= 0.985 ? '#00d4aa' : '#ff8c00');
-  
+
   // ftp_pctz 타입인 경우 상한값 원호 추가 (모바일 전용 상태 우선 사용)
   const mts = window.mobileTrainingState || {};
   const maxPowerValue = mts.currentSegmentMaxPower || window.currentSegmentMaxPower;

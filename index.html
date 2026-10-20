@@ -4038,6 +4038,16 @@
 </head>
 
 <body>
+  <!-- 속도계 공용 녹색 그라데이션(아웃도어 속도계 #outdSweepGrad 와 같은 색) — 모바일·그룹훈련·Coach 폰 화면 목표 원호(달성 시)에서 url(#stelvioGaugeGreenGrad) 로 참조.
+       각 화면 SVG 가 숨겨져 있어도 쓸 수 있게 항상 렌더되는 0 크기 SVG 에 둔다(2026-10-21) -->
+  <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="stelvioGaugeGreenGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#15803d"/>
+        <stop offset="100%" stop-color="#4ade80"/>
+      </linearGradient>
+    </defs>
+  </svg>
   <!-- 스플래시: 흰 배경 + 중앙 로고(짧게) 후 인증/베이스캠프 라우팅 -->
   <div id="splashScreen" class="screen active">
     <div class="splash-container splash-container--simple">
@@ -34808,7 +34818,7 @@
 <script src="assets/js/trainingTimerModule.js"></script>
 <script src="assets/js/stelvioWakeLock.js?v=20261019outdoor"></script>
 <script src="assets/js/wakeLockManager.js"></script>
-<script src="assets/js/bluetoothIndividual.js?v=20261018solidArc"></script>
+<script src="assets/js/bluetoothIndividual.js?v=20261021greenArc"></script>
 <script src="assets/js/gaugeZoneBands.js?v=20261019outdoor"></script>
 <!-- Bluetooth Training 모듈 -->
 <script src="assets/js/bluetoothTrainingManager.js?v=20261010rtdbRest"></script>
@@ -34820,7 +34830,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261019scan"></script>
-  <script src="assets/js/app.js?v=20261018solidArc"></script>
+  <script src="assets/js/app.js?v=20261021greenArc"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
@@ -36054,7 +36064,7 @@
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
   <script src="assets/js/bluetoothCoachDashboard.js?v=20261018loading"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20261019monitor4"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20261021greenArc"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js?v=shared-mint-20260928"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

@@ -4541,7 +4541,10 @@ function updateTargetPowerArc() {
     
     // 하한값 원호 경로 및 색상 업데이트
     targetArc.setAttribute('d', minPathData);
-    targetArc.setAttribute('stroke', arcColor);
+    // 2026-10-21: 달성 시 원호는 민트 대신 아웃도어 속도계와 같은 녹색 그라데이션(index.html #stelvioGaugeGreenGrad)
+    const arcOk = achievementRatio >= 0.985;
+    targetArc.setAttribute('stroke', arcOk ? 'url(#stelvioGaugeGreenGrad)' : arcColor);
+    targetArc.setAttribute('stroke-opacity', arcOk ? '0.92' : '1');
     targetArc.style.display = 'block';
     
     // 목표 파워값 색상: 원호가 녹색(민트)이면 Lap 타임 색상, 주황이면 원래 주황색

@@ -788,6 +788,15 @@
     </style>
 </head>
 <body>
+  <!-- 목표 원호(달성 시) 녹색 그라데이션 — index.html 과 동일(2026-10-21) -->
+  <svg width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="stelvioGaugeGreenGrad" x1="20" y1="0" x2="180" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="#15803d"/>
+        <stop offset="100%" stop-color="#4ade80"/>
+      </linearGradient>
+    </defs>
+  </svg>
 
     <div class="header">
         <button type="button" id="bluetooth-user-name-wrap" class="bluetooth-user-name-wrap" style="display: inline-flex; align-items: center; gap: 6px; background: #00d4aa; border: none; cursor: pointer; padding: 2px 10px; border-radius: 6px; line-height: 1.25; font-weight: 600; font-size: 1em; color: #000; box-sizing: border-box;" title="베이스캠프로 이동">
@@ -1605,7 +1614,7 @@
     
     <script src="assets/js/bluetooth.js"></script>
     <script src="assets/js/ErgController.js"></script>
-    <script src="assets/js/bluetoothIndividual.js?v=20261018solidArc"></script>
+    <script src="assets/js/bluetoothIndividual.js?v=20261021greenArc"></script>
     <script src="assets/js/gaugeZoneBands.js?v=20261019outdoor"></script>
 </body>
 </html>
