@@ -34623,7 +34623,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(248, 250, 251, 0.82);
+  background: rgba(248, 250, 251, 0.94);
   pointer-events: auto;
 }
 .phone-verify-overlay.hidden {
