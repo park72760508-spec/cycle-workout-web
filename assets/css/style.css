@@ -34590,14 +34590,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 내 위치 원 안 흰 진행 방향 삼각형(JS 가 .outd-me__dir 를 진행 방위각만큼 회전) */
 .outd-me__dir { position: absolute; inset: 0; transition: transform 0.4s ease-out; }
-.outd-me__dir i {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-  border-left: 5px solid transparent;
-  border-right: 5px solid transparent;
-  border-bottom: 9px solid #ffffff;
-  transform: translate(-50%, -60%);
-}
+.outd-me__dir { display: flex; align-items: center; justify-content: center; }
+.outd-me__dir svg { display: block; margin-top: -1px; } /* 밑변을 삼각형으로 파낸 내비 화살촉 */
+/* 2026-10-20: 회전 카드가 앞쪽 분기점 화살표(화면 위쪽)를 가리지 않게 지도 왼쪽 아래로, 나침반은 ◎ 위로 */
+#outdoorRideScreen .outd-turn-big { top: auto; bottom: 8px; left: 8px; }
+#outdoorRideScreen .outd-compass { left: auto; right: 8px; bottom: 50px; }

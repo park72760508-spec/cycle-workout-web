@@ -667,7 +667,7 @@
     var L = window.L;
     if (!st.meMarker) {
       st.meMarker = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: '<div class="outd-me"><span class="outd-me__pulse"></span><span class="outd-me__pulse outd-me__pulse--2"></span><span class="outd-me__dot"></span><span class="outd-me__dir"><i></i></span></div>', iconSize: [27, 27], iconAnchor: [13.5, 13.5] }),
+        icon: L.divIcon({ className: '', html: '<div class="outd-me"><span class="outd-me__pulse"></span><span class="outd-me__pulse outd-me__pulse--2"></span><span class="outd-me__dot"></span><span class="outd-me__dir"><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="M10 2 L16.5 17 L10 12.6 L3.5 17 Z" fill="#ffffff" stroke="#ffffff" stroke-width="1" stroke-linejoin="round"/></svg></span></div>', iconSize: [27, 27], iconAnchor: [13.5, 13.5] }),
         interactive: false,
         zIndexOffset: 1000
       }).addTo(map);
@@ -885,37 +885,64 @@
     st.turnZoomed = false;
   }
 
+  /*
+   * 분기점 화살표(2026-10-20) — 티맵·카카오내비 방식: 코스 위에 [그림자 → 짙은 남색 테두리 → 흰 몸통] 굵은 화살표,
+   * 끝에 넓은 흰 화살촉(같은 남색 테두리). 화살촉은 화면 픽셀 크기로 그려 확대·축소(zoomend) 때 다시 계산.
+   */
+  var TURN_ARROW_BACK_M = 35, TURN_ARROW_FWD_M = 28;
   function drawTurnOnMap(turn) {
     if (!st.map || st.turnLayerIdx === turn.idx) return;
     clearTurnOnMap();
+    st.turnLayerIdx = turn.idx;
+    st.turnLayerTurn = turn;
+    renderTurnArrow();
+    if (!st.turnZoomBound) {
+      st.turnZoomBound = true;
+      st.map.on('zoomend', function () { if (st.turnLayerTurn) renderTurnArrow(); });
+    }
+  }
+
+  function renderTurnArrow() {
+    var turn = st.turnLayerTurn;
+    if (!st.map || !turn) return;
     var L = window.L;
-    var pts = [];
-    for (var dd = -40; dd <= 40; dd += 5) pts.push(pointAtDist(turn.at + dd));
-    st.turnLayer = L.layerGroup().addTo(st.map);
-    L.polyline(pts, { color: '#111827', weight: 11, opacity: 0.55, lineCap: 'round', lineJoin: 'round' }).addTo(st.turnLayer);
-    L.polyline(pts, { color: '#fbbf24', weight: 7, opacity: 1, lineCap: 'round', lineJoin: 'round' }).addTo(st.turnLayer);
-    // 화살촉: 끝점에서 진행 방향으로 삼각형
-    var e1 = pts[pts.length - 2], e2 = pts[pts.length - 1];
     var map = st.map;
-    var p1 = map.latLngToLayerPoint(e1), p2 = map.latLngToLayerPoint(e2);
-    var vx = p2.x - p1.x, vy = p2.y - p1.y;
+    if (st.turnLayer) map.removeLayer(st.turnLayer);
+    st.turnLayer = L.layerGroup().addTo(map);
+    var pts = [];
+    for (var dd = -TURN_ARROW_BACK_M; dd <= TURN_ARROW_FWD_M; dd += 4) pts.push(pointAtDist(turn.at + dd));
+    // 화살촉 방향: 마지막 구간
+    var e1 = map.latLngToLayerPoint(pts[pts.length - 2]);
+    var e2 = map.latLngToLayerPoint(pts[pts.length - 1]);
+    var vx = e2.x - e1.x, vy = e2.y - e1.y;
     var len = Math.sqrt(vx * vx + vy * vy) || 1;
     vx /= len; vy /= len;
-    var size = 14;
-    var tip = L.point(p2.x + vx * size, p2.y + vy * size);
-    var left = L.point(p2.x - vy * size * 0.7, p2.y + vx * size * 0.7);
-    var right = L.point(p2.x + vy * size * 0.7, p2.y - vx * size * 0.7);
-    L.polygon([map.layerPointToLatLng(tip), map.layerPointToLatLng(left), map.layerPointToLatLng(right)], {
-      color: '#111827', weight: 2, fillColor: '#fbbf24', fillOpacity: 1
-    }).addTo(st.turnLayer);
-    st.turnLayerIdx = turn.idx;
-    if (st.meMarker && st.meMarker.bringToFront) st.meMarker.setZIndexOffset(1000);
+    var px = -vy, py = vx; // 수직
+    var headLen = 20, headHalf = 15;
+    // 몸통은 화살촉 밑변까지만(겹침 없이 깔끔하게)
+    var bodyEnd = map.layerPointToLatLng(L.point(e2.x - vx * 2, e2.y - vy * 2));
+    var body = pts.slice(0, -1).concat([bodyEnd]);
+    var tip = L.point(e2.x + vx * headLen, e2.y + vy * headLen);
+    var bl = L.point(e2.x + px * headHalf, e2.y + py * headHalf);
+    var br = L.point(e2.x - px * headHalf, e2.y - py * headHalf);
+    var head = [map.layerPointToLatLng(tip), map.layerPointToLatLng(bl), map.layerPointToLatLng(br)];
+    var opt = { lineCap: 'round', lineJoin: 'round', interactive: false };
+    // 그림자
+    L.polyline(body, Object.assign({ color: '#000000', weight: 19, opacity: 0.22 }, opt)).addTo(st.turnLayer);
+    L.polygon(head, { color: '#000000', weight: 7, opacity: 0.22, fillColor: '#000000', fillOpacity: 0.22, lineJoin: 'round', interactive: false }).addTo(st.turnLayer);
+    // 남색 테두리
+    L.polyline(body, Object.assign({ color: '#1e3a8a', weight: 15, opacity: 1 }, opt)).addTo(st.turnLayer);
+    L.polygon(head, { color: '#1e3a8a', weight: 5, opacity: 1, fillColor: '#1e3a8a', fillOpacity: 1, lineJoin: 'round', interactive: false }).addTo(st.turnLayer);
+    // 흰 몸통·화살촉
+    L.polyline(body, Object.assign({ color: '#ffffff', weight: 9, opacity: 1 }, opt)).addTo(st.turnLayer);
+    L.polygon(head, { color: '#ffffff', weight: 1, opacity: 1, fillColor: '#ffffff', fillOpacity: 1, lineJoin: 'round', interactive: false }).addTo(st.turnLayer);
   }
 
   function clearTurnOnMap() {
     if (st.turnLayer && st.map) st.map.removeLayer(st.turnLayer);
     st.turnLayer = null;
     st.turnLayerIdx = null;
+    st.turnLayerTurn = null;
   }
 
   /** 코스 위 진행 거리(here, m)까지를 회색으로 — 5m 이상 나아갔을 때만 다시 그림 */
