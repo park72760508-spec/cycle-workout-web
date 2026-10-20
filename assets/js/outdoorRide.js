@@ -812,51 +812,64 @@
     return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
   }
 
-  /** 꺾이는 각도대로 그린 회전 화살표 SVG(위로 들어와서 delta 만큼 꺾여 나감) */
   /**
-   * 회전 안내 카드 화살표(2026-10-21, 티맵·카카오내비 교차로 안내 방식)
-   * - 교차로의 다른 길(직진·반대쪽)은 흐린 회색 굵은 선으로 깔고
-   * - 진행할 길은 둥근 끝의 굵은 흰 선 + 넓은 둥근 화살촉, 아래에 은은한 그림자
+   * 회전 안내 카드 화살표(녹색·황색 카드 공통, 2026-10-21 티맵·카카오내비 방식)
+   * - 교차로의 다른 길(직진·반대쪽)은 반투명 흰 도로로 깔아 교차로 모양을 보여 주고
+   * - 진행할 길은 일정한 굵기 몸통이 둥글게 꺾여 각진 넓은 화살촉으로 이어짐(몸통·화살촉 이음매 없음)
+   * - 위→아래 흰색 그라데이션 + 짙은 얇은 테두리 + 아래쪽 그림자 → 녹색·주황 배경 모두 또렷
    */
   function turnArrowSvg(delta) {
     var f = function (n) { return n.toFixed(1); };
-    var SH = 'rgba(0,0,0,0.28)'; // 그림자
-    var CTX = 'rgba(255,255,255,0.28)'; // 교차로의 다른 길
-    function layer(d, w, color, dx, dy) {
-      return '<path d="' + d + '" transform="translate(' + (dx || 0) + ' ' + (dy || 0) + ')" fill="none" stroke="' + color +
+    var BODY = 13; // 몸통 굵기
+    var HEAD_LEN = 24, HEAD_HALF = 18; // 화살촉 길이·반폭
+    var CTX = 'rgba(255,255,255,0.26)';
+    var EDGE = 'rgba(0,0,0,0.30)'; // 테두리
+    var SHADOW = 'rgba(0,0,0,0.22)';
+    var FILL = 'url(#outdArrowFill)';
+    function stroke(d, w, color, dy) {
+      return '<path d="' + d + '"' + (dy ? ' transform="translate(0 ' + dy + ')"' : '') + ' fill="none" stroke="' + color +
         '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>';
     }
-    function head(tx, ty, ux, uy, color, dx, dy) {
-      // 화살촉: 진행 방향(ux,uy), 끝(tx,ty) — 꼭짓점이 둥근 넓은 삼각형
+    function headPts(tx, ty, ux, uy) {
       var px = -uy, py = ux;
-      var bx = tx - ux * 21, by = ty - uy * 21;
-      var pts = f(tx) + ',' + f(ty) + ' ' + f(bx + px * 17) + ',' + f(by + py * 17) + ' ' + f(bx - px * 17) + ',' + f(by - py * 17);
-      return '<polygon points="' + pts + '" transform="translate(' + (dx || 0) + ' ' + (dy || 0) + ')" fill="' + color +
-        '" stroke="' + color + '" stroke-width="5" stroke-linejoin="round"/>';
+      var bx = tx - ux * HEAD_LEN, by = ty - uy * HEAD_LEN;
+      return f(tx) + ',' + f(ty) + ' ' + f(bx + px * HEAD_HALF) + ',' + f(by + py * HEAD_HALF) + ' ' +
+        f(bx + ux * 3) + ',' + f(by + uy * 3) + ' ' + // 밑변 가운데를 살짝 안쪽으로(티맵식 날렵한 화살촉)
+        f(bx - px * HEAD_HALF) + ',' + f(by - py * HEAD_HALF);
     }
-    var svg = '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">';
+    function poly(pts, fill, strokeColor, sw, dy) {
+      return '<polygon points="' + pts + '"' + (dy ? ' transform="translate(0 ' + dy + ')"' : '') + ' fill="' + fill +
+        '" stroke="' + strokeColor + '" stroke-width="' + sw + '" stroke-linejoin="round"/>';
+    }
+    /** 그림자 → 테두리 → 흰 화살표 순서로 겹쳐 그림 */
+    function arrow(body, hp) {
+      return stroke(body, BODY + 4, SHADOW, 2.5) + poly(hp, SHADOW, SHADOW, 4, 2.5) +
+        stroke(body, BODY + 3, EDGE) + poly(hp, EDGE, EDGE, 3.5) +
+        stroke(body, BODY, FILL) + poly(hp, FILL, FILL, 1.2);
+    }
+    var svg = '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">' +
+      '<defs><linearGradient id="outdArrowFill" x1="0" y1="0" x2="0" y2="100" gradientUnits="userSpaceOnUse">' +
+      '<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e3eaf2"/></linearGradient></defs>';
     if (Math.abs(delta) >= 135) {
       // 유턴: 올라가서 반원으로 돌아 내려오는 U 화살표(좌유턴은 좌우 대칭)
       var right = delta > 0;
       var fx = function (x) { return right ? x : 100 - x; };
-      var u = 'M ' + fx(32) + ' 92 L ' + fx(32) + ' 44 A 21 21 0 0 ' + (right ? 1 : 0) + ' ' + fx(74) + ' 44 L ' + fx(74) + ' 58';
-      return svg + layer('M ' + fx(32) + ' 50 L ' + fx(32) + ' 8', 15, CTX) +
-        layer(u, 15, SH, 1.5, 2.5) + head(fx(74), 84, 0, 1, SH, 1.5, 2.5) +
-        layer(u, 14, '#ffffff') + head(fx(74), 84, 0, 1, '#ffffff') + '</svg>';
+      var u = 'M ' + fx(30) + ' 94 L ' + fx(30) + ' 42 A 22 22 0 0 ' + (right ? 1 : 0) + ' ' + fx(74) + ' 42 L ' + fx(74) + ' 62';
+      return svg + stroke('M ' + fx(30) + ' 50 L ' + fx(30) + ' 6', 12, CTX) +
+        arrow(u, headPts(fx(74), 86, 0, 1)) + '</svg>';
     }
     var a = Math.max(-170, Math.min(170, delta)) * Math.PI / 180;
     var ux = Math.sin(a), uy = -Math.cos(a);
-    var jx = 50, jy = 56; // 교차로 중심
-    var tx = jx + ux * 44, ty = jy + uy * 44; // 화살촉 끝
-    var ex = tx - ux * 20, ey = ty - uy * 20; // 몸통 끝(화살촉 밑변 안쪽)
-    // 몸통: 아래에서 교차로까지 곧게 → 부드럽게 꺾여 진행 방향으로
-    var body = 'M 50 96 L 50 ' + f(jy + 14) + ' Q 50 ' + f(jy) + ' ' + f(jx + ux * 14) + ' ' + f(jy + uy * 14) + ' L ' + f(ex) + ' ' + f(ey);
+    var jx = 50, jy = 58; // 교차로 중심
+    var reach = 42; // 교차로에서 화살촉 끝까지
+    var tx = jx + ux * reach, ty = jy + uy * reach;
+    var ex = tx - ux * (HEAD_LEN - 3), ey = ty - uy * (HEAD_LEN - 3); // 몸통 끝은 화살촉 안쪽까지(이음매 없음)
+    var R = 16; // 꺾이는 곳 둥글기
+    var body = 'M 50 96 L 50 ' + f(jy + R) + ' Q 50 ' + f(jy) + ' ' + f(jx + ux * R) + ' ' + f(jy + uy * R) + ' L ' + f(ex) + ' ' + f(ey);
     var ctx = '';
-    if (Math.abs(delta) >= 20) ctx += layer('M 50 ' + jy + ' L 50 8', 15, CTX); // 직진 길
-    if (Math.abs(delta) >= 50) ctx += layer('M 50 ' + jy + ' L ' + (delta > 0 ? 8 : 92) + ' ' + jy, 15, CTX); // 반대쪽 길
-    return svg + ctx +
-      layer(body, 15, SH, 1.5, 2.5) + head(tx, ty, ux, uy, SH, 1.5, 2.5) +
-      layer(body, 14, '#ffffff') + head(tx, ty, ux, uy, '#ffffff') + '</svg>';
+    if (Math.abs(delta) >= 20) ctx += stroke('M 50 ' + jy + ' L 50 6', 12, CTX); // 직진 길
+    if (Math.abs(delta) >= 50) ctx += stroke('M 50 ' + jy + ' L ' + (delta > 0 ? 6 : 94) + ' ' + jy, 12, CTX); // 반대쪽 길
+    return svg + ctx + arrow(body, headPts(tx, ty, ux, uy)) + '</svg>';
   }
 
   function turnBigEl() {
