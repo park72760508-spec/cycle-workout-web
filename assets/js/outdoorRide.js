@@ -140,8 +140,12 @@
       setTimeout(function () { try { synth.speak(u); } catch (e) {} }, 380);
     } catch (e) {}
   }
+  /** 안내 거리: 10m 단위(100m → 90m → 80m … → 10m), 최소 10m — 카드·안내줄·음성 공통 */
+  function navDistM(dm) {
+    return Math.max(10, Math.round(dm / 10) * 10);
+  }
   function voiceDist(dm) {
-    var m = dm >= 100 ? Math.round(dm / 10) * 10 : Math.max(10, Math.round(dm / 5) * 5);
+    var m = navDistM(dm);
     return m >= 1000 ? (m / 1000).toFixed(1) + '킬로미터' : m + '미터';
   }
   /** 상황별 소리 */
@@ -848,7 +852,7 @@
       el.querySelector('.outd-turn-big__word').textContent = turnWord(turn.delta);
       st.turnBuzz = {};
     }
-    var dist = dm >= 100 ? Math.round(dm / 10) * 10 + 'm' : Math.max(0, Math.round(dm / 5) * 5) + 'm';
+    var dist = navDistM(dm) + 'm';
     var distEl = el.querySelector('.outd-turn-big__dist');
     if (distEl.textContent !== dist) distEl.textContent = dist;
     el.classList.toggle('is-near', dm <= 40);
@@ -1009,7 +1013,7 @@
     }
     if (next && next.at - here <= TURN_ANNOUNCE_M) {
       var dm = next.at - here;
-      var dist = dm >= 100 ? Math.round(dm / 10) * 10 + 'm' : Math.max(10, Math.round(dm / 5) * 5) + 'm';
+      var dist = navDistM(dm) + 'm';
       setText('outdNavText', dist + ' 후 ' + (next.text || turnWord(next.delta)));
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(Math.max(-150, Math.min(150, next.delta))) + 'deg)';
       if (dm <= TURN_BIG_M) showTurnBig(next, dm);
