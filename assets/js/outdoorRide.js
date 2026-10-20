@@ -1792,34 +1792,213 @@
     return thin(elev.map(function (v) { return [v]; }), 200).map(function (a) { return Math.round(a[0] * 10) / 10; });
   }
 
-  function saveRide() {
+  /* ---------- 종목 판별·러닝 지표(2026-10-21) ----------
+   * GPS 트랙(5m 간격 점 + 시각)으로 라이딩 / 러닝 / 걷기를 판별하고, 러닝·걷기는 1km 구간 기록(splits)·
+   * 구간 최고 속도(1k~42k, RUN 랭킹·대시보드 피크 페이스)를 계산해 RUN 기록(activities)에 저장한다. */
+  var MAX_GAP_SEC = 10; // 이보다 긴 점 사이 간격(일시정지·신호 끊김)은 이동 시간에 넣지 않음
+
+  /** 이동 시간축 기준 누적 거리(m)·시간(s) 배열 */
+  function trackSeries() {
+    var tr = st.track;
+    var dist = [0], time = [0];
+    for (var i = 1; i < tr.length; i++) {
+      var d = hav(tr[i - 1][0], tr[i - 1][1], tr[i][0], tr[i][1]);
+      var dt = (tr[i][3] - tr[i - 1][3]) / 1000;
+      if (!(dt > 0)) dt = 0;
+      if (dt > MAX_GAP_SEC) dt = Math.min(dt, Math.max(1, d / 2)); // 멈춘 시간 제외(2m/s 로 이동했다고 보고 보정)
+      dist.push(dist[i - 1] + d);
+      time.push(time[i - 1] + dt);
+    }
+    return { dist: dist, time: time };
+  }
+
+  /** 시간 창(windowSec) 이동 평균 속도(km/h) 목록 — 순간 GPS 튐을 걸러낸 "지속 속도" */
+  function windowSpeeds(s, windowSec) {
+    var out = [];
+    var j = 0;
+    for (var i = 1; i < s.time.length; i++) {
+      while (j < i && s.time[i] - s.time[j] > windowSec) j++;
+      var k = Math.max(0, j - 1);
+      var dt = s.time[i] - s.time[k];
+      if (dt >= windowSec * 0.8) out.push(((s.dist[i] - s.dist[k]) / dt) * 3.6);
+    }
+    return out;
+  }
+
+  function percentile(arr, p) {
+    if (!arr.length) return 0;
+    var a = arr.slice().sort(function (x, y) { return x - y; });
+    return a[Math.min(a.length - 1, Math.floor(a.length * p))];
+  }
+
+  /**
+   * 라이딩/러닝/걷기 판별.
+   * - 사람이 달려서 낼 수 없는 지속 속도(60초 평균 24km/h↑ 또는 30초 구간 상위 10% 22km/h↑) → 라이딩
+   * - 이동 평균 17km/h↑(1km 3분32초보다 빠른 페이스를 계속 유지) → 라이딩
+   * - 이동 평균 7km/h 미만이고 빠른 구간도 9km/h 미만 → 걷기
+   * - 그 밖 → 러닝
+   */
+  function classifyActivity() {
+    var s = trackSeries();
+    var movingSec = s.time[s.time.length - 1] || st.movingMs / 1000 || 0;
+    var totalM = s.dist[s.dist.length - 1] || st.distanceM;
+    var avg = movingSec > 0 ? (totalM / movingSec) * 3.6 : avgSpeedKmh();
+    var w30 = windowSpeeds(s, 30);
+    var w60 = windowSpeeds(s, 60);
+    var p90 = percentile(w30, 0.9);
+    var max60 = w60.length ? Math.max.apply(null, w60) : 0;
+    var r = { avgKmh: avg, p90Kmh: p90, max60Kmh: max60 };
+    if (st.track.length < 5 || totalM < 100) {
+      r.kind = travelMode === 'walk' ? 'walk' : 'ride';
+      r.reason = '기록이 짧아 ' + (travelMode === 'walk' ? '길찾기 이동 수단(걷기)' : '기본값(라이딩)') + '으로 판단';
+    } else if (max60 >= 24 || p90 >= 22) {
+      r.kind = 'ride';
+      r.reason = '달리기로 낼 수 없는 지속 속도(최고 1분 평균 ' + max60.toFixed(1) + 'km/h)';
+    } else if (avg >= 17) {
+      r.kind = 'ride';
+      r.reason = '이동 평균 ' + avg.toFixed(1) + 'km/h — 달리기 범위를 넘는 속도';
+    } else if (avg >= 12 && max60 >= 19) {
+      // 평균 4~5분/km 대에서 1분 이상 3분09초/km(19km/h)보다 빠른 구간 — 동호인 러닝으론 드문 패턴(내리막 자전거 등)
+      r.kind = 'ride';
+      r.reason = '이동 평균 ' + avg.toFixed(1) + 'km/h에 1분 이상 ' + max60.toFixed(1) + 'km/h 구간 — 자전거 패턴';
+    } else if (avg >= 10 && st.course && st.course.isRoute && (st.course.routeMode === 'bike' || st.course.routeMode === 'short')) {
+      // 애매한 속도대(10~17km/h)는 길찾기에서 고른 이동 수단(자전거)을 따른다
+      r.kind = 'ride';
+      r.reason = '이동 평균 ' + avg.toFixed(1) + 'km/h(달리기·자전거 겹치는 속도) — 자전거 길찾기로 이동';
+    } else if (avg < 7 && p90 < 9) {
+      r.kind = 'walk';
+      r.reason = '이동 평균 ' + avg.toFixed(1) + 'km/h — 걷기 속도';
+    } else {
+      r.kind = 'run';
+      r.reason = '이동 평균 ' + avg.toFixed(1) + 'km/h · 빠른 구간 ' + p90.toFixed(1) + 'km/h — 달리기 속도';
+    }
+    return r;
+  }
+
+  /** 누적 거리 target(m)을 지나는 시각(s) — 선형 보간 */
+  function timeAtDist(s, target) {
+    var d = s.dist, t = s.time;
+    if (target <= 0) return 0;
+    for (var i = 1; i < d.length; i++) {
+      if (d[i] >= target) {
+        var seg = d[i] - d[i - 1];
+        return seg > 0 ? t[i - 1] + (t[i] - t[i - 1]) * (target - d[i - 1]) / seg : t[i];
+      }
+    }
+    return null;
+  }
+
+  /** 1km 구간 기록(Strava splits_metric 경량 형식: distance m · elapsed_time s · average_speed m/s) */
+  function computeSplits(s) {
+    var total = s.dist[s.dist.length - 1];
+    var out = [];
+    var prevT = 0;
+    for (var k = 1000; k <= total + 1e-6; k += 1000) {
+      var tk = timeAtDist(s, k);
+      if (tk == null) break;
+      var el = Math.max(1, Math.round(tk - prevT));
+      out.push({ split: out.length + 1, distance: 1000, elapsed_time: el, average_speed: Math.round((1000 / el) * 1000) / 1000, average_heartrate: null, max_heartrate: null });
+      prevT = tk;
+    }
+    var rest = total - out.length * 1000;
+    if (rest >= 50) {
+      var el2 = Math.max(1, Math.round(s.time[s.time.length - 1] - prevT));
+      out.push({ split: out.length + 1, distance: Math.round(rest), elapsed_time: el2, average_speed: Math.round((rest / el2) * 1000) / 1000, average_heartrate: null, max_heartrate: null });
+    }
+    return out;
+  }
+
+  /** 거리별 최고 기록(가장 빠른 연속 구간) 속도 m/s — 서버 calculateAndSaveRunEfforts 와 같은 슬라이딩 윈도우 */
+  function computeEfforts(s) {
+    var targets = { '1k': 1000, '3k': 3000, '5k': 5000, '7k': 7000, '10k': 10000, '20k': 20000, '42k': 42000 };
+    var out = {};
+    var d = s.dist, t = s.time, n = d.length;
+    Object.keys(targets).forEach(function (label) {
+      var L = targets[label];
+      var best = null;
+      if (n >= 2 && d[n - 1] >= L) {
+        var j = 0;
+        for (var i = 0; i < n; i++) {
+          // 시작점 d[i] 에서 L 만큼 간 지점의 시각
+          while (j < n - 1 && d[j] < d[i] + L) j++;
+          if (d[j] < d[i] + L) break;
+          var seg = d[j] - d[j - 1];
+          var tEnd = seg > 0 ? t[j - 1] + (t[j] - t[j - 1]) * (d[i] + L - d[j - 1]) / seg : t[j];
+          var el = tEnd - t[i];
+          if (el > 0 && (best == null || el < best)) best = el;
+        }
+      }
+      out['speed_' + label] = best ? Math.round((L / best) * 10000) / 10000 : null;
+    });
+    return out;
+  }
+
+  function fmtPace(secPerKm) {
+    if (!(secPerKm > 0) || !isFinite(secPerKm)) return '--';
+    var m = Math.floor(secPerKm / 60), sec = Math.round(secPerKm % 60);
+    if (sec === 60) { m += 1; sec = 0; }
+    return m + "'" + String(sec).padStart(2, '0') + '"';
+  }
+
+  function loadDualWriteModule() {
+    return import('/assets/js/supabaseDualWrite.js');
+  }
+
+  /** @param {'ride'|'run'|'walk'} kind */
+  function saveRide(kind) {
     var uid = currentUid();
     if (!uid) return Promise.reject(new Error('로그인 후 저장할 수 있습니다.'));
-    if (typeof window.saveStravaActivityToFirebase !== 'function') return Promise.reject(new Error('저장 모듈을 불러오지 못했습니다.'));
+    kind = kind === 'run' || kind === 'walk' ? kind : 'ride';
     var el = elapsedNow();
     var d = new Date(st.startedAt || Date.now());
     var dateStr = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     var km = Math.round(st.distanceM / 10) / 100;
     var avg = Math.round(avgSpeedKmh() * 10) / 10;
     var weight = Number((window.currentUser && (window.currentUser.weight || window.currentUser.weightKg)) || 0);
-    return window.saveStravaActivityToFirebase({
+    var courseTitle = st.course && st.course.title ? st.course.title : '';
+    var titleBase = { ride: courseTitle ? '아웃도어 라이딩' : '자유 라이딩', run: '아웃도어 러닝', walk: '아웃도어 걷기' }[kind];
+    var payload = {
+      kind: kind,
       activity_id: 'outdoor_' + uid.slice(0, 8) + '_' + (st.startedAt || Date.now()),
-      user_id: uid,
-      source: 'stelvio_outdoor',
-      activity_type: 'Ride',
       date: dateStr,
-      title: st.course && st.course.title ? '아웃도어 라이딩 · ' + st.course.title : '자유 라이딩',
+      start_time: new Date(st.startedAt || Date.now()).toISOString(),
+      title: courseTitle ? titleBase + ' · ' + courseTitle : titleBase,
       distance_km: km,
       duration_sec: Math.round(el / 1000),
-      time: Math.round(el / 1000),
-      elevation_gain: Math.round(st.elevGainM),
-      avg_speed_kmh: avg,
-      tss: 0,
+      moving_time_sec: st.movingMs > 0 ? Math.round(st.movingMs / 1000) : null,
+      elevation_gain_m: Math.round(st.elevGainM),
+      avg_speed_kmh: avg > 0 ? avg : null,
+      max_speed_kmh: st.maxSpeedKmh > 0 ? Math.round(st.maxSpeedKmh * 10) / 10 : null,
       weight: weight > 0 ? weight : null,
       summary_polyline: st.track.length >= 2 ? encodePolyline(thin(st.track, 1500)) : null,
-      elevation_profile: elevationProfile(),
-      max_speed_kmh: st.maxSpeedKmh > 0 ? Math.round(st.maxSpeedKmh * 10) / 10 : null,
-      moving_time_sec: st.movingMs > 0 ? Math.round(st.movingMs / 1000) : null
+      elevation_profile: elevationProfile()
+    };
+    if (kind !== 'ride') {
+      var s = trackSeries();
+      var splits = computeSplits(s);
+      var movingSec = payload.moving_time_sec || payload.duration_sec;
+      payload.splits_metric = splits;
+      payload.performance_metrics = {
+        avg_pace_sec_per_km: km > 0 ? Math.round(movingSec / km) : null,
+        best_split_pace_sec_per_km: splits.filter(function (x) { return x.distance === 1000; })
+          .reduce(function (b, x) { return b == null || x.elapsed_time < b ? x.elapsed_time : b; }, null),
+        classification: st.lastClassify || null
+      };
+      if (kind === 'run') payload.efforts = computeEfforts(s);
+    }
+    return loadDualWriteModule().then(function (mod) {
+      if (!mod || typeof mod.callSupabaseRpcAsUser !== 'function') throw new Error('저장 모듈을 불러오지 못했습니다.');
+      return mod.callSupabaseRpcAsUser('fn_save_outdoor_activity', { p: payload });
+    }).then(function (res) {
+      if (kind === 'ride') {
+        // 주간 TSS·랭킹 등 실시간 보드 갱신 신호(실내 훈련 저장과 동일)
+        try {
+          if (typeof window.stelvioHandleRankingMetricsLiveUpdate === 'function') {
+            window.stelvioHandleRankingMetricsLiveUpdate({ source: 'ride_write' }).catch(function () {});
+          }
+        } catch (e) {}
+      }
+      return res;
     });
   }
 
@@ -1836,6 +2015,7 @@
     st.altEma = null;
     st.track = [];
     st.lastTrackPt = null;
+    st.lastClassify = null;
     if (st.trail) st.trail.setLatLngs([]);
     st.lastTrailPt = null;
     renderToggle();
@@ -1856,30 +2036,68 @@
     }
     var el = elapsedNow();
     var avg = avgSpeedKmh();
+    var cls = classifyActivity();
+    st.lastClassify = { kind: cls.kind, reason: cls.reason, avg_kmh: Math.round(cls.avgKmh * 10) / 10, p90_kmh: Math.round(cls.p90Kmh * 10) / 10, max60_kmh: Math.round(cls.max60Kmh * 10) / 10 };
+    var chosen = cls.kind;
+    var KIND_LABEL = { ride: '🚴 라이딩', run: '🏃 러닝', walk: '🚶 걷기' };
     var old = $('outdFinishModal');
     if (old) old.remove();
     var m = document.createElement('div');
     m.id = 'outdFinishModal';
     m.className = 'outd-finish';
-    m.innerHTML =
-      '<div class="outd-finish__card" role="dialog" aria-modal="true">' +
-      '<h3>라이딩 종료</h3>' +
-      '<dl class="outd-finish__stats">' +
-      '<div><dt>거리</dt><dd>' + (st.distanceM / 1000).toFixed(2) + ' km</dd></div>' +
-      '<div><dt>시간</dt><dd>' + fmtHms(el) + '</dd></div>' +
-      '<div><dt>평균 속도</dt><dd>' + (isFinite(avg) ? avg : 0).toFixed(1) + ' km/h</dd></div>' +
-      '<div><dt>누적 고도</dt><dd>' + Math.round(st.elevGainM) + ' m</dd></div>' +
-      '<div><dt>이동 시간</dt><dd>' + fmtHms(st.movingMs) + '</dd></div>' +
-      '<div><dt>최고 속도</dt><dd>' + st.maxSpeedKmh.toFixed(1) + ' km/h</dd></div>' +
-      '</dl>' +
-      '<div class="outd-finish__btns">' +
-      '<button type="button" class="outd-finish__btn outd-finish__btn--primary" data-act="save">훈련 일지에 저장하고 종료</button>' +
-      '<button type="button" class="outd-finish__btn" data-act="gpx">GPX 파일 받기</button>' +
-      '<button type="button" class="outd-finish__btn" data-act="discard">저장하지 않고 종료</button>' +
-      '<button type="button" class="outd-finish__btn outd-finish__btn--ghost" data-act="resume">계속 라이딩</button>' +
-      '</div></div>';
+    var movingSec = (st.movingMs || el) / 1000;
+    var km = st.distanceM / 1000;
+    var splits = computeSplits(trackSeries());
+    function statsHtml() {
+      var foot = chosen !== 'ride';
+      return '<div><dt>거리</dt><dd>' + km.toFixed(2) + ' km</dd></div>' +
+        '<div><dt>시간</dt><dd>' + fmtHms(el) + '</dd></div>' +
+        (foot
+          ? '<div><dt>평균 페이스</dt><dd>' + fmtPace(km > 0 ? movingSec / km : 0) + ' /km</dd></div>'
+          : '<div><dt>평균 속도</dt><dd>' + (isFinite(avg) ? avg : 0).toFixed(1) + ' km/h</dd></div>') +
+        '<div><dt>누적 고도</dt><dd>' + Math.round(st.elevGainM) + ' m</dd></div>' +
+        '<div><dt>이동 시간</dt><dd>' + fmtHms(st.movingMs) + '</dd></div>' +
+        (foot
+          ? '<div><dt>평균 속도</dt><dd>' + (isFinite(avg) ? avg : 0).toFixed(1) + ' km/h</dd></div>'
+          : '<div><dt>최고 속도</dt><dd>' + st.maxSpeedKmh.toFixed(1) + ' km/h</dd></div>');
+    }
+    function splitsHtml() {
+      if (chosen === 'ride' || !splits.length) return '';
+      return '<div class="outd-finish__splits"><div class="outd-finish__splits-h">구간 페이스</div>' +
+        splits.map(function (x) {
+          var pace = x.distance > 0 ? x.elapsed_time / (x.distance / 1000) : 0;
+          return '<div><span>' + (x.distance === 1000 ? x.split + ' km' : (x.distance / 1000).toFixed(2) + ' km') + '</span><b>' + fmtPace(pace) + '</b></div>';
+        }).join('') + '</div>';
+    }
+    function render() {
+      m.innerHTML =
+        '<div class="outd-finish__card" role="dialog" aria-modal="true">' +
+        '<h3>운동 종료</h3>' +
+        '<div class="outd-finish__kind" role="radiogroup" aria-label="운동 종류">' +
+        ['ride', 'run', 'walk'].map(function (k) {
+          return '<button type="button" data-kind="' + k + '" class="outd-finish__kindbtn' + (k === chosen ? ' is-on' : '') + '" aria-checked="' + (k === chosen) + '" role="radio">' + KIND_LABEL[k] + '</button>';
+        }).join('') +
+        '</div>' +
+        '<p class="outd-finish__why">자동 판별: ' + KIND_LABEL[cls.kind] + ' · ' + cls.reason + '</p>' +
+        '<dl class="outd-finish__stats">' + statsHtml() + '</dl>' +
+        splitsHtml() +
+        '<div class="outd-finish__btns">' +
+        '<button type="button" class="outd-finish__btn outd-finish__btn--primary" data-act="save">' +
+        (chosen === 'ride' ? '라이딩 훈련 일지에 저장하고 종료' : '러닝 기록에 저장하고 종료' + (chosen === 'walk' ? ' (걷기)' : '')) + '</button>' +
+        '<button type="button" class="outd-finish__btn" data-act="gpx">GPX 파일 받기</button>' +
+        '<button type="button" class="outd-finish__btn" data-act="discard">저장하지 않고 종료</button>' +
+        '<button type="button" class="outd-finish__btn outd-finish__btn--ghost" data-act="resume">계속하기</button>' +
+        '</div></div>';
+    }
+    render();
     document.body.appendChild(m);
     m.addEventListener('click', function (e) {
+      var kb = e.target.closest && e.target.closest('[data-kind]');
+      if (kb) {
+        chosen = kb.getAttribute('data-kind');
+        render();
+        return;
+      }
       var btn = e.target.closest && e.target.closest('[data-act]');
       if (!btn) return;
       var act = btn.getAttribute('data-act');
@@ -1894,15 +2112,17 @@
         resetRide();
         toast('라이딩을 종료했습니다.', 'info');
       } else if (act === 'save') {
+        var label = btn.textContent;
         btn.disabled = true;
         btn.textContent = '저장 중...';
-        saveRide().then(function () {
+        var savedKind = chosen;
+        saveRide(savedKind).then(function () {
           m.remove();
           resetRide();
-          toast('훈련 일지에 저장했습니다.', 'success');
+          toast(savedKind === 'ride' ? '라이딩 훈련 일지에 저장했습니다.' : (savedKind === 'run' ? '러닝' : '걷기') + ' 기록으로 저장했습니다.', 'success');
         }).catch(function (err) {
           btn.disabled = false;
-          btn.textContent = '훈련 일지에 저장하고 종료';
+          btn.textContent = label;
           toast('저장에 실패했습니다: ' + ((err && err.message) || err), 'error');
         });
       }

@@ -34471,6 +34471,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-finish__btn--primary { background: #00d4aa; border-color: #00d4aa; color: #062a22; }
 .outd-finish__btn--ghost { background: transparent; color: #aaa; }
 .outd-finish__btn:disabled { opacity: 0.6; }
+/* 2026-10-21: 운동 종류(라이딩·러닝·걷기) 선택 + 구간 페이스 */
+.outd-finish__card { max-height: calc(100dvh - 32px); overflow-y: auto; }
+.outd-finish__kind { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 0 0 6px; }
+.outd-finish__kindbtn { padding: 9px 0; border-radius: 10px; border: 1px solid #444; background: #2a2a2a; color: #ccc; font-size: 14px; font-weight: 700; cursor: pointer; }
+.outd-finish__kindbtn.is-on { background: rgba(0, 212, 170, 0.15); border-color: #00d4aa; color: #00d4aa; }
+.outd-finish__why { margin: 0 0 10px; font-size: 11.5px; color: #888; line-height: 1.4; text-align: center; }
+.outd-finish__splits { background: #121212; border-radius: 10px; padding: 8px 10px; margin: 0 0 14px; max-height: 150px; overflow-y: auto; }
+.outd-finish__splits-h { font-size: 11px; color: #888; margin: 0 0 4px; }
+.outd-finish__splits > div:not(.outd-finish__splits-h) { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; border-top: 1px solid #222; font-variant-numeric: tabular-nums; }
+.outd-finish__splits b { color: #00d4aa; }
 /* 아웃도어: 코스맵 · 속도계 영역 1/2씩(2026-10-19). 속도계는 축소하지 않고 절반 영역 안에서 들어갈 수 있는 최대 크기 */
 #outdoorRideScreen .outd-map-section { flex: 1 1 0 !important; min-height: 0; }
 #outdoorRideScreen .mobile-main-content { flex: 1 1 0 !important; min-height: 0 !important; height: auto !important; display: flex; }
