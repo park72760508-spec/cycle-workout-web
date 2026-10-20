@@ -1258,7 +1258,31 @@
    */
   function fetchBikeRoute(from, to, mode, opt) {
     if (mode === 'walk' || mode === 'walkShort') return fetchWalkRoute(from, to, mode, opt);
-    return fetchValhallaRoute(from, to, mode, opt);
+    return fetchValhallaRoute(from, to, mode, opt).then(function (base) {
+      return improveBikeRouteSidePath(base, mode);
+    });
+  }
+
+  /**
+   * 자전거 경로 보완(2026-10-21): 최단 거리(shortest)는 도로 종류를 보지 않아 바로 옆 자전거도로를 두고 차도 중앙선을 따라가고,
+   * 자전거도로 우선도 지도상 별도 자전거도로와 연결이 애매하면 차도로 그려진다.
+   * → 차도 중앙선이 100m 넘게 남으면 경로를 좌우 16m 옮겨 자전거로 지도 매칭(trace_route) — 나란한 자전거도로가 있으면 그 길로.
+   *   실측(최단): 잠실→석촌 중앙선 1.08→0.05km, 시청→광화문 0.66→0.09km, 송파→올림픽공원 1.06→0.11km (거리 +2~7%)
+   */
+  function improveBikeRouteSidePath(base, mode) {
+    return measureBigRoadKm(base, 'bicycle').then(function (k) {
+      base.bigRoadKm = k;
+      if (k == null || k <= 0.1) return base;
+      var limit = mode === 'short' ? 1.1 : 1.15;
+      return Promise.all([sideSnapRoute(base, 1, 'bicycle'), sideSnapRoute(base, -1, 'bicycle')]).then(function (sides) {
+        var best = base;
+        sides.forEach(function (s) {
+          if (!s || s.bigRoadKm == null || s.km > base.km * limit) return;
+          if (s.bigRoadKm < best.bigRoadKm - 0.05) best = s;
+        });
+        return best;
+      });
+    }, function () { return base; });
   }
 
   /* 걷기 경로 보완(2026-10-20): 국내 OSM 은 큰길 인도가 따로 그려지지 않은 곳이 많아 보행자 경로가 차도 중앙선 위에 그려진다.
@@ -1288,11 +1312,11 @@
   }
 
   /** 경로 중 큰길(간선·보조간선·집산도로) 차도 중앙선 길이(km). 보행자로 매칭 실패 시 null */
-  function measureBigRoadKm(rt) {
+  function measureBigRoadKm(rt, costing) {
     var body = {
       encoded_polyline: rt.shape,
       shape_match: 'edge_walk',
-      costing: 'pedestrian',
+      costing: costing || 'pedestrian',
       filters: { attributes: ['edge.use', 'edge.road_class', 'edge.length'], action: 'include' }
     };
     return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_attributes') + '?json=' + encodeURIComponent(JSON.stringify(body)))
@@ -1370,10 +1394,11 @@
   }
 
   /**
-   * 경로 모양을 진행 방향 오른쪽(side=1)/왼쪽(-1)으로 16m 옮긴 뒤 보행자 지도 매칭(trace_route).
+   * 경로 모양을 진행 방향 오른쪽(side=1)/왼쪽(-1)으로 16m 옮긴 뒤 지도 매칭(trace_route, costing: 걷기 pedestrian·자전거 bicycle).
    * 나란한 인도·자전거도로가 있으면 그 길로, 없으면 원래 도로로 붙는다. 실패·끊김이면 null.
    */
-  function sideSnapRoute(base, side) {
+  function sideSnapRoute(base, side, costing) {
+    costing = costing === 'bicycle' ? 'bicycle' : 'pedestrian';
     var src = base.latlngs || [];
     if (src.length < 2) return Promise.resolve(null);
     var total = 0, i;
@@ -1396,10 +1421,12 @@
     });
     var body = {
       encoded_polyline: encodePolyline6(off),
-      costing: 'pedestrian',
+      costing: costing,
       shape_match: 'map_snap',
       trace_options: { search_radius: 18, gps_accuracy: 6 },
-      costing_options: { pedestrian: { walkway_factor: 0.5, sidewalk_factor: 0.5 } },
+      costing_options: costing === 'bicycle'
+        ? { bicycle: { bicycle_type: 'Hybrid', use_roads: 0.2 } }
+        : { pedestrian: { walkway_factor: 0.5, sidewalk_factor: 0.5 } },
       language: 'ko-KR',
       units: 'kilometers'
     };
@@ -1417,7 +1444,7 @@
           shape: leg.shape,
           viaSidePath: true
         };
-        return measureBigRoadKm(rt).then(function (k) { rt.bigRoadKm = k; return rt; });
+        return measureBigRoadKm(rt, costing).then(function (k) { rt.bigRoadKm = k; return rt; });
       })
       .catch(function () { return null; });
   }
@@ -1700,7 +1727,7 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
-          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? ' · 길옆 보행로·자전거도로' : '') + '</span>';
+          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
           $('outdRouteSheet').style.display = 'none';
