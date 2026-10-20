@@ -1225,12 +1225,14 @@
     var locs = [start];
     if (opt.via) locs.push({ lat: opt.via.lat, lon: opt.via.lng, type: 'through' });
     locs.push({ lat: to.lat, lon: to.lng });
-    // 2026-10-20: 걷기(보행자) — 'walk' 인도·보행로 우선(walkway/sidewalk 가중치↓, 골목·진입로·계단·나루터 회피), 'walkShort' 최단
+    // 2026-10-20: 걷기(보행자) — 'walk' 인도·보행로 강하게 우선(별도 인도·보행로 0.25, 골목·진입로·주차장 통로 회피),
+    // 'walkShort' 걷기 최단: shortest(순수 거리)는 차도 중앙선만 따라가서(서울 구간 실측 97~100%) 쓰지 않고,
+    // 인도 가중치 0.5 로 거리 +0~10% 안에서 인도·보행로를 고른다.
     var walking = mode === 'walk' || mode === 'walkShort';
     var costingOptions = walking
       ? { pedestrian: mode === 'walkShort'
-          ? { shortest: true, use_ferry: 0 }
-          : { walkway_factor: 0.6, sidewalk_factor: 0.6, alley_factor: 2, driveway_factor: 5, step_penalty: 30, use_ferry: 0 } }
+          ? { walkway_factor: 0.5, sidewalk_factor: 0.5, step_penalty: 0, use_ferry: 0 }
+          : { walkway_factor: 0.25, sidewalk_factor: 0.25, alley_factor: 2, driveway_factor: 5, service_factor: 1.5, step_penalty: 10, use_living_streets: 0.6, use_ferry: 0 } }
       : { bicycle: mode === 'short'
           ? { bicycle_type: 'Hybrid', shortest: true }
           : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 } };
