@@ -813,30 +813,50 @@
   }
 
   /** 꺾이는 각도대로 그린 회전 화살표 SVG(위로 들어와서 delta 만큼 꺾여 나감) */
+  /**
+   * 회전 안내 카드 화살표(2026-10-21, 티맵·카카오내비 교차로 안내 방식)
+   * - 교차로의 다른 길(직진·반대쪽)은 흐린 회색 굵은 선으로 깔고
+   * - 진행할 길은 둥근 끝의 굵은 흰 선 + 넓은 둥근 화살촉, 아래에 은은한 그림자
+   */
   function turnArrowSvg(delta) {
+    var f = function (n) { return n.toFixed(1); };
+    var SH = 'rgba(0,0,0,0.28)'; // 그림자
+    var CTX = 'rgba(255,255,255,0.28)'; // 교차로의 다른 길
+    function layer(d, w, color, dx, dy) {
+      return '<path d="' + d + '" transform="translate(' + (dx || 0) + ' ' + (dy || 0) + ')" fill="none" stroke="' + color +
+        '" stroke-width="' + w + '" stroke-linecap="round" stroke-linejoin="round"/>';
+    }
+    function head(tx, ty, ux, uy, color, dx, dy) {
+      // 화살촉: 진행 방향(ux,uy), 끝(tx,ty) — 꼭짓점이 둥근 넓은 삼각형
+      var px = -uy, py = ux;
+      var bx = tx - ux * 21, by = ty - uy * 21;
+      var pts = f(tx) + ',' + f(ty) + ' ' + f(bx + px * 17) + ',' + f(by + py * 17) + ' ' + f(bx - px * 17) + ',' + f(by - py * 17);
+      return '<polygon points="' + pts + '" transform="translate(' + (dx || 0) + ' ' + (dy || 0) + ')" fill="' + color +
+        '" stroke="' + color + '" stroke-width="5" stroke-linejoin="round"/>';
+    }
+    var svg = '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">';
     if (Math.abs(delta) >= 135) {
-      // 유턴: 위로 올라가 반원을 그리며 옆으로 내려오는 U 화살표(좌유턴은 좌우 대칭)
+      // 유턴: 올라가서 반원으로 돌아 내려오는 U 화살표(좌유턴은 좌우 대칭)
       var right = delta > 0;
       var fx = function (x) { return right ? x : 100 - x; };
-      return '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">' +
-        '<path d="M ' + fx(34) + ' 94 L ' + fx(34) + ' 42 A 20 20 0 0 ' + (right ? 1 : 0) + ' ' + fx(74) + ' 42 L ' + fx(74) + ' 62" ' +
-        'fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>' +
-        '<polygon points="' + fx(74) + ',84 ' + fx(61) + ',62 ' + fx(87) + ',62" fill="#ffffff"/>' +
-        '</svg>';
+      var u = 'M ' + fx(32) + ' 92 L ' + fx(32) + ' 44 A 21 21 0 0 ' + (right ? 1 : 0) + ' ' + fx(74) + ' 44 L ' + fx(74) + ' 58';
+      return svg + layer('M ' + fx(32) + ' 50 L ' + fx(32) + ' 8', 15, CTX) +
+        layer(u, 15, SH, 1.5, 2.5) + head(fx(74), 84, 0, 1, SH, 1.5, 2.5) +
+        layer(u, 14, '#ffffff') + head(fx(74), 84, 0, 1, '#ffffff') + '</svg>';
     }
-    var d = Math.max(-170, Math.min(170, delta)) * Math.PI / 180;
-    var cx = 50, cy = 56, L = 34;
-    var ex = cx + L * Math.sin(d), ey = cy - L * Math.cos(d);
-    // 화살촉
-    var hx = Math.sin(d), hy = -Math.cos(d);
-    var px = -hy, py = hx;
-    var tipX = ex + hx * 12, tipY = ey + hy * 12;
-    var l1x = ex + px * 11, l1y = ey + py * 11, l2x = ex - px * 11, l2y = ey - py * 11;
-    return '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true">' +
-      '<path d="M 50 96 L 50 ' + cy + ' Q 50 ' + (cy - 6) + ' ' + (cx + 6 * Math.sin(d)).toFixed(1) + ' ' + (cy - 6 * Math.cos(d)).toFixed(1) + ' L ' + ex.toFixed(1) + ' ' + ey.toFixed(1) + '" ' +
-      'fill="none" stroke="#ffffff" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>' +
-      '<polygon points="' + tipX.toFixed(1) + ',' + tipY.toFixed(1) + ' ' + l1x.toFixed(1) + ',' + l1y.toFixed(1) + ' ' + l2x.toFixed(1) + ',' + l2y.toFixed(1) + '" fill="#ffffff"/>' +
-      '</svg>';
+    var a = Math.max(-170, Math.min(170, delta)) * Math.PI / 180;
+    var ux = Math.sin(a), uy = -Math.cos(a);
+    var jx = 50, jy = 56; // 교차로 중심
+    var tx = jx + ux * 44, ty = jy + uy * 44; // 화살촉 끝
+    var ex = tx - ux * 20, ey = ty - uy * 20; // 몸통 끝(화살촉 밑변 안쪽)
+    // 몸통: 아래에서 교차로까지 곧게 → 부드럽게 꺾여 진행 방향으로
+    var body = 'M 50 96 L 50 ' + f(jy + 14) + ' Q 50 ' + f(jy) + ' ' + f(jx + ux * 14) + ' ' + f(jy + uy * 14) + ' L ' + f(ex) + ' ' + f(ey);
+    var ctx = '';
+    if (Math.abs(delta) >= 20) ctx += layer('M 50 ' + jy + ' L 50 8', 15, CTX); // 직진 길
+    if (Math.abs(delta) >= 50) ctx += layer('M 50 ' + jy + ' L ' + (delta > 0 ? 8 : 92) + ' ' + jy, 15, CTX); // 반대쪽 길
+    return svg + ctx +
+      layer(body, 15, SH, 1.5, 2.5) + head(tx, ty, ux, uy, SH, 1.5, 2.5) +
+      layer(body, 14, '#ffffff') + head(tx, ty, ux, uy, '#ffffff') + '</svg>';
   }
 
   function turnBigEl() {
@@ -1283,26 +1303,110 @@
       walkCycleCandidate(from, to, opt)
     ]).then(function (r) {
       var p = r[0], c = r[1];
-      if (!c || p.bigRoadKm == null) return p;
+      if (p.bigRoadKm == null) return p;
       var ratio = WALK_CYCLE_MAX_RATIO[mode] || 1.2;
-      // 큰길 중앙선이 50m 이상 줄고 거리는 허용 범위 안일 때만 자전거도로 경로로.
+      var best = p;
+      // (1) 자전거도로 우선 경로: 큰길 중앙선이 50m 이상 줄고 거리는 허용 범위 안일 때.
       // 인도 우선은 늘어난 거리가 줄어든 중앙선 길이 이하면 1.5배까지 허용(예: 송파→올림픽공원 중앙선 1.3km → 0)
-      var saved = p.bigRoadKm - c.bigRoadKm;
-      var withinLen = c.km <= p.km * ratio ||
-        (mode === 'walk' && c.km <= p.km * 1.5 && c.km - p.km <= saved);
-      if (saved > 0.05 && withinLen) {
-        return {
-          mode: mode,
-          latlngs: c.latlngs,
-          maneuvers: c.maneuvers,
-          km: c.km,
-          min: Math.round(c.km / 5.1 * 60), // 자전거 시간 대신 걷기 시간(5.1km/h)
-          shape: c.shape,
-          viaCycleway: true
-        };
+      if (c) {
+        var saved = p.bigRoadKm - c.bigRoadKm;
+        var withinLen = c.km <= p.km * ratio ||
+          (mode === 'walk' && c.km <= p.km * 1.5 && c.km - p.km <= saved);
+        if (saved > 0.05 && withinLen) {
+          best = {
+            mode: mode,
+            latlngs: c.latlngs,
+            maneuvers: c.maneuvers,
+            km: c.km,
+            min: Math.round(c.km / 5.1 * 60), // 자전거 시간 대신 걷기 시간(5.1km/h)
+            shape: c.shape,
+            bigRoadKm: c.bigRoadKm,
+            viaCycleway: true
+          };
+        }
       }
-      return p;
+      // (2) 같은 경로를 옆 보행로·자전거도로로: 아직 차도 중앙선이 100m 넘게 남으면, 경로 모양을 오른쪽/왼쪽으로
+      //     16m 옮겨 지도 매칭 → 나란한 자전거도로·인도가 있으면 그쪽에 붙는다(강남→선릉 실측 중앙선 2.04→0.12km, 거리 +2%)
+      if (best.bigRoadKm == null || best.bigRoadKm <= 0.1) return best;
+      return Promise.all([sideSnapRoute(p, 1), sideSnapRoute(p, -1)]).then(function (sides) {
+        sides.forEach(function (s) {
+          if (!s || s.bigRoadKm == null) return;
+          if (s.km > p.km * (mode === 'walkShort' ? 1.1 : 1.2)) return;
+          if (s.bigRoadKm < best.bigRoadKm - 0.05) best = s;
+        });
+        return best;
+      });
     }, function () { return ped; });
+  }
+
+  /** Google polyline(정밀도 1e6, Valhalla 형식) 인코딩 */
+  function encodePolyline6(points) {
+    var out = '', pLat = 0, pLng = 0;
+    function enc(v) {
+      v = v < 0 ? ~(v * 2) : v * 2;
+      var s = '';
+      while (v >= 0x20) { s += String.fromCharCode((0x20 | (v % 32)) + 63); v = Math.floor(v / 32); }
+      return s + String.fromCharCode(v + 63);
+    }
+    points.forEach(function (pt) {
+      var la = Math.round(pt[0] * 1e6), lo = Math.round(pt[1] * 1e6);
+      out += enc(la - pLat) + enc(lo - pLng);
+      pLat = la; pLng = lo;
+    });
+    return out;
+  }
+
+  /**
+   * 경로 모양을 진행 방향 오른쪽(side=1)/왼쪽(-1)으로 16m 옮긴 뒤 보행자 지도 매칭(trace_route).
+   * 나란한 인도·자전거도로가 있으면 그 길로, 없으면 원래 도로로 붙는다. 실패·끊김이면 null.
+   */
+  function sideSnapRoute(base, side) {
+    var src = base.latlngs || [];
+    if (src.length < 2) return Promise.resolve(null);
+    var total = 0, i;
+    for (i = 1; i < src.length; i++) total += hav(src[i - 1][0], src[i - 1][1], src[i][0], src[i][1]);
+    var step = Math.max(10, total / 1200); // 점 개수 상한(요청 주소 길이)
+    var pts = [src[0]];
+    for (i = 1; i < src.length; i++) {
+      var a = src[i - 1], b = src[i];
+      var n = Math.max(1, Math.floor(hav(a[0], a[1], b[0], b[1]) / step));
+      for (var k = 1; k <= n; k++) pts.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
+    var OFF = 16;
+    var off = pts.map(function (pt, j) {
+      var p0 = pts[Math.max(0, j - 1)], p1 = pts[Math.min(pts.length - 1, j + 1)];
+      var cos = Math.cos(pt[0] * Math.PI / 180);
+      var dy = (p1[0] - p0[0]) * 111320, dx = (p1[1] - p0[1]) * 111320 * cos;
+      var L = Math.sqrt(dx * dx + dy * dy) || 1;
+      var nx = (dy / L) * side, ny = (-dx / L) * side; // 진행 방향 기준 오른쪽(+)/왼쪽(-) 법선
+      return [pt[0] + (ny * OFF) / 111320, pt[1] + (nx * OFF) / (111320 * cos)];
+    });
+    var body = {
+      encoded_polyline: encodePolyline6(off),
+      costing: 'pedestrian',
+      shape_match: 'map_snap',
+      trace_options: { search_radius: 18, gps_accuracy: 6 },
+      costing_options: { pedestrian: { walkway_factor: 0.5, sidewalk_factor: 0.5 } },
+      language: 'ko-KR',
+      units: 'kilometers'
+    };
+    return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_route') + '?json=' + encodeURIComponent(JSON.stringify(body)))
+      .then(function (d) {
+        var trip = d && d.trip;
+        if (!trip || !trip.legs || trip.legs.length !== 1) return null;
+        var leg = trip.legs[0];
+        var rt = {
+          mode: base.mode,
+          latlngs: decodePolyline6(leg.shape),
+          maneuvers: leg.maneuvers || [],
+          km: trip.summary.length,
+          min: Math.round(trip.summary.time / 60),
+          shape: leg.shape,
+          viaSidePath: true
+        };
+        return measureBigRoadKm(rt).then(function (k) { rt.bigRoadKm = k; return rt; });
+      })
+      .catch(function () { return null; });
   }
 
   function fetchValhallaRoute(from, to, mode, opt) {
@@ -1321,7 +1425,8 @@
     var walking = mode === 'walk' || mode === 'walkShort';
     var costingOptions = walking
       ? { pedestrian: mode === 'walkShort'
-          ? { walkway_factor: 0.5, sidewalk_factor: 0.5, step_penalty: 0, use_ferry: 0 }
+          // 2026-10-21: 걷기 최단은 순수 최단 거리로 찾고, 차도 중앙선 구간은 fetchWalkRoute 가 옆 보행로·자전거도로로 옮긴다
+          ? { shortest: true, use_ferry: 0 }
           : { walkway_factor: 0.25, sidewalk_factor: 0.25, alley_factor: 2, driveway_factor: 5, service_factor: 1.5, step_penalty: 10, use_living_streets: 0.6, use_ferry: 0 } }
       : { bicycle: mode === 'short'
           ? { bicycle_type: 'Hybrid', shortest: true }
@@ -1582,7 +1687,7 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
-          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : '') + '</span>';
+          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? ' · 길옆 보행로·자전거도로' : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
           $('outdRouteSheet').style.display = 'none';
