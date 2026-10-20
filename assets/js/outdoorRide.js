@@ -608,7 +608,35 @@
     toast(st.headingUp ? '진행 방향이 위로 오도록 지도를 회전합니다' : '북쪽이 위로 오도록 지도를 고정합니다', 'info');
   };
 
+  /**
+   * 코스 중심선에 붙여 표시(2026-10-20): 코스에서 ±4m 이내면 앞뒤 선분에 수직으로 내린 지점에 내 위치를 표시
+   * (화면 표시만 — 거리·경로 기록은 실제 GPS 값). 4m를 넘으면 null(실제 위치 표시).
+   */
+  var SNAP_M = 4;
+  function snapToCourse(lat, lng) {
+    var c = st.course;
+    if (!c || c.latlngs.length < 2) return null;
+    var r = nearestCourseIdx(lat, lng);
+    if (r.idx < 0 || r.dist > 40) return null;
+    var kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 110540; // 위경도 → m(근거리 평면 근사)
+    var best = null;
+    for (var i = Math.max(1, r.idx); i <= Math.min(c.latlngs.length - 1, r.idx + 1); i++) {
+      var a = c.latlngs[i - 1], b = c.latlngs[i];
+      var ax = (a[1] - lng) * kx, ay = (a[0] - lat) * ky;
+      var bx = (b[1] - lng) * kx, by = (b[0] - lat) * ky;
+      var dx = bx - ax, dy = by - ay;
+      var len2 = dx * dx + dy * dy;
+      var t = len2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
+      var px = ax + dx * t, py = ay + dy * t;
+      var d = Math.sqrt(px * px + py * py);
+      if (!best || d < best.d) best = { d: d, lat: lat + py / ky, lng: lng + px / kx };
+    }
+    return best && best.d <= SNAP_M ? [best.lat, best.lng] : null;
+  }
+
   function updateMeOnMap(lat, lng) {
+    var snapped = snapToCourse(lat, lng);
+    if (snapped) { lat = snapped[0]; lng = snapped[1]; }
     var map = ensureMap();
     if (!map) return;
     var L = window.L;
@@ -681,7 +709,7 @@
     var L = window.L;
     if (st.courseLayer) map.removeLayer(st.courseLayer);
     st.courseLayer = L.layerGroup().addTo(map);
-    L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 5, opacity: 0.85, smoothFactor: 1.5 }).addTo(st.courseLayer);
+    L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
     var first = st.course.latlngs[0], lastP = st.course.latlngs[st.course.latlngs.length - 1];
     L.circleMarker(first, { radius: 6, color: '#fff', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }).addTo(st.courseLayer);
     L.circleMarker(lastP, { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 }).addTo(st.courseLayer);
