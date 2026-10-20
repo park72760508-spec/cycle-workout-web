@@ -34629,3 +34629,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .phone-verify-overlay.hidden {
   display: none !important;
 }
+
+/* 사용자 등록 FTP 안내 문구('모르는 경우 몸무게의 2배값 입력')가 휴대폰 폭에서 잘리지 않게(2026-10-21) */
+#registerFTPInput::placeholder {
+  font-size: 13px;
+  letter-spacing: -0.03em;
+}
