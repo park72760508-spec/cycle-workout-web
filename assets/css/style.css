@@ -34505,13 +34505,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-turn-big__dist { font-size: 30px; font-weight: 900; color: #ffffff; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 #outdoorRideScreen .outd-turn-big__word { font-size: 16px; font-weight: 800; color: #ffffff; opacity: 0.95; margin-top: 2px; }
 /* 아웃도어: 내 위치 — 빨간 점 + 퍼지는 펄스(transform·opacity 만 애니메이션 → GPU 처리, 부담 적음) */
-.outd-me { position: relative; width: 18px; height: 18px; }
+.outd-me { position: relative; width: 27px; height: 27px; } /* 2026-10-20: 1.5배(18→27) */
 .outd-me__dot {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   background: #ef4444;
-  border: 3px solid #ffffff;
+  border: 4px solid #ffffff;
   box-sizing: border-box;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
@@ -34587,3 +34587,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-route__optinfo { font-size: 13px; color: #94a3b8; font-variant-numeric: tabular-nums; }
 #outdoorRideScreen .outd-route__credit { padding: 6px 14px 10px; font-size: 10px; color: #64748b; text-align: right; }
 .outd-dest-pin { font-size: 22px; line-height: 28px; text-align: center; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5)); }
+
+/* 내 위치 원 안 흰 진행 방향 삼각형(JS 가 .outd-me__dir 를 진행 방위각만큼 회전) */
+.outd-me__dir { position: absolute; inset: 0; transition: transform 0.4s ease-out; }
+.outd-me__dir i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-bottom: 9px solid #ffffff;
+  transform: translate(-50%, -60%);
+}

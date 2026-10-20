@@ -501,6 +501,7 @@
     if (rot) rot.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)';
     var needle = $('outdCompassNeedle');
     if (needle) needle.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)'; // 빨간 끝 = 북쪽
+    updateMeArrow();
     setText('outdCompassMode', st.headingUp ? '진행' : '북쪽');
     // 지도 끌기는 Leaflet 기본 대신 회전 보정 핸들러(bindRotatedDrag)가 맡는다
     if (st.map && st.map.dragging) st.map.dragging.disable();
@@ -515,7 +516,30 @@
     }
   }
 
+  /** 내 위치 원 안 흰 삼각형: 진행 방향(지도 위 방위각) — 지도가 회전해도 화면에서 실제 진행 방향을 가리킴 */
+  function updateMeArrow() {
+    if (!st.meMarker || !st.meMarker.getElement) return;
+    var el = st.meMarker.getElement();
+    var dir = el && el.querySelector('.outd-me__dir');
+    if (!dir) return;
+    var h = st.moveHeading != null ? st.moveHeading : (st.heading != null ? st.heading : 0);
+    // 지도 판이 -heading 만큼 돌아 있으므로 마커 안에서는 진행 방위각 그대로 돌리면 화면에서 올바른 방향
+    st.arrowDeg = st.arrowDeg == null ? h : st.arrowDeg + angleDiff(st.arrowDeg, h);
+    dir.style.transform = 'rotate(' + st.arrowDeg.toFixed(1) + 'deg)';
+  }
+
   function updateHeading(c, lat, lng) {
+    // 실제 진행 방향(삼각형 표시용) — 코스 따라가는 중에도 계속 계산
+    var mh = null;
+    var sk = c.speed != null && isFinite(c.speed) ? c.speed * 3.6 : 0;
+    if (c.heading != null && isFinite(c.heading) && sk >= 3) mh = c.heading;
+    var mp = st.lastMovePt;
+    if (mh == null && mp && hav(mp[0], mp[1], lat, lng) >= 8) mh = bearing(mp[0], mp[1], lat, lng);
+    if (!mp || mh != null) st.lastMovePt = [lat, lng];
+    if (mh != null) {
+      st.moveHeading = st.moveHeading == null ? mh : (st.moveHeading + angleDiff(st.moveHeading, mh) * 0.5 + 360) % 360;
+      updateMeArrow();
+    }
     // 코스·경로를 따라가는 중이면 지도 방향은 길 방향(route-up, updateNavigation)이 정한다
     if (st.course && st.onRoute) return;
     var h = null;
@@ -643,10 +667,11 @@
     var L = window.L;
     if (!st.meMarker) {
       st.meMarker = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: '<div class="outd-me"><span class="outd-me__pulse"></span><span class="outd-me__pulse outd-me__pulse--2"></span><span class="outd-me__dot"></span></div>', iconSize: [18, 18], iconAnchor: [9, 9] }),
+        icon: L.divIcon({ className: '', html: '<div class="outd-me"><span class="outd-me__pulse"></span><span class="outd-me__pulse outd-me__pulse--2"></span><span class="outd-me__dot"></span><span class="outd-me__dir"><i></i></span></div>', iconSize: [27, 27], iconAnchor: [13.5, 13.5] }),
         interactive: false,
         zIndexOffset: 1000
       }).addTo(map);
+      updateMeArrow();
       followUser(lat, lng, Math.max(map.getZoom(), 16), false);
     } else {
       st.meMarker.setLatLng([lat, lng]);
