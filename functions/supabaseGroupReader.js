@@ -785,6 +785,11 @@ function isRunningActivityType(type) {
   return t === "run" || t === "virtualrun" || t === "trailrun";
 }
 
+function isWalkActivityType(type) {
+  const t = String(type || "").trim().toLowerCase();
+  return t === "walk" || t === "hike";
+}
+
 function seoulTodayYmd() {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Seoul",
@@ -1046,8 +1051,10 @@ async function fetchUserRunActivitiesRecent(firebaseUid, limit = 400) {
     .limit(cap);
   if (error) throw error;
 
+  // 2026-10-21: RUN 일지에 아웃도어(GPS) 걷기도 표시 — 대시보드·주간 TSS·랭킹은 각자 러닝 종류만 다시 거른다
+  // (클라이언트 isRunTrainingLog, fetchUserRunWeeklyTss 의 isRunningActivityType)
   return (data || [])
-    .filter((row) => isRunningActivityType(row.activity_type))
+    .filter((row) => isRunningActivityType(row.activity_type) || isWalkActivityType(row.activity_type))
     .map(mapActivityRowToTrainingLog);
 }
 
