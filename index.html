@@ -4963,26 +4963,26 @@
               <label for="registerFTPInput" class="auth-label-left">FTP (W) *</label>
               <input 
                 type="number" 
-                id="registerFTPInput" 
-                placeholder="250" 
+                id="registerFTPInput"
+                placeholder="모르는 경우 몸무게의 2배값 입력"
                 min="50"
                 max="600"
                 required
               >
             </div>
             
-            <!-- 몸무게 입력 (입력 시 FTP 최소값=몸무게×1.8 자동 적용) -->
+            <!-- 몸무게 입력 — 2026-10-21: 체중 입력 중 FTP 자동 채움(×1.8)은 하지 않는다.
+                 FTP 를 비워 두면 가입 시 몸무게×2 로 자동 입력(handleRegister) -->
             <div class="auth-input-group">
               <label for="registerWeightInput" class="auth-label-left">체중 (kg) *</label>
-              <input 
-                type="number" 
-                id="registerWeightInput" 
-                placeholder="0" 
+              <input
+                type="number"
+                id="registerWeightInput"
+                placeholder="0"
                 min="0"
                 max="150"
                 step="0.1"
                 required
-                oninput="if(typeof syncFtpFromWeight==='function')syncFtpFromWeight('registerFTPInput','registerWeightInput');"
               >
             </div>
             
@@ -33077,7 +33077,11 @@
       var ftpToUse = needsFtpCategory ? ftp : 0;
       var ftpUsedMin = false;
       if (!_isRejoinMode && needsFtpCategory) {
-        if (ftp < minFtp) {
+        // 2026-10-21: CYCLE·CYCLE+RUN 에서 FTP 를 비워 두면 몸무게×2 로 자동 입력(입력란에도 표시)
+        if (!ftpInput.value.trim() || isNaN(ftp) || ftp <= 0) {
+          ftpToUse = Math.min(600, Math.max(50, Math.round(weight * 2)));
+          ftpInput.value = String(ftpToUse);
+        } else if (ftp < minFtp) {
           ftpToUse = minFtp;
           ftpUsedMin = true;
         }
