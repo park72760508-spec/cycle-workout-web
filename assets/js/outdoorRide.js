@@ -469,7 +469,8 @@
       attribution: '&copy; OpenStreetMap'
     }).addTo(st.map);
     st.map.setView([37.5665, 126.978], 13);
-    st.trail = L.polyline([], { color: '#00d4aa', weight: 4, opacity: 0.95 }).addTo(st.map);
+    // 2026-10-20: 녹색 이동 경로 선은 지도에 그리지 않음(저장용 track 은 그대로 기록)
+    st.trail = null;
     st.map.dragging.disable();
     bindRotatedDrag();
     return st.map;
@@ -710,6 +711,9 @@
     if (st.courseLayer) map.removeLayer(st.courseLayer);
     st.courseLayer = L.layerGroup().addTo(map);
     L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
+    // 지나간 구간(출발점 ~ 현재 위치)은 회색으로 덮음 — updatePassedLine 에서 갱신
+    st.passedLine = L.polyline([], { color: '#9ca3af', weight: 10, opacity: 0.95, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
+    st.passedAt = -1;
     var first = st.course.latlngs[0], lastP = st.course.latlngs[st.course.latlngs.length - 1];
     L.circleMarker(first, { radius: 6, color: '#fff', weight: 2, fillColor: '#22c55e', fillOpacity: 1 }).addTo(st.courseLayer);
     L.circleMarker(lastP, { radius: 6, color: '#fff', weight: 2, fillColor: '#ef4444', fillOpacity: 1 }).addTo(st.courseLayer);
@@ -889,6 +893,19 @@
     st.turnLayerIdx = null;
   }
 
+  /** 코스 위 진행 거리(here, m)까지를 회색으로 — 5m 이상 나아갔을 때만 다시 그림 */
+  function updatePassedLine(here, lat, lng) {
+    var c = st.course;
+    if (!c || !st.passedLine) return;
+    if (st.passedAt >= 0 && Math.abs(here - st.passedAt) < 5) return;
+    st.passedAt = here;
+    var pts = [];
+    for (var i = 0; i < c.cum.length && c.cum[i] <= here; i++) pts.push(c.latlngs[i]);
+    var tip = snapToCourse(lat, lng) || pointAtDist(here);
+    pts.push(tip);
+    st.passedLine.setLatLngs(pts.length >= 2 ? pts : []);
+  }
+
   function updateNavigation(lat, lng) {
     if (!st.course || !st.course.latlngs.length) return;
     var r = nearestCourseIdx(lat, lng);
@@ -920,6 +937,7 @@
     // 길 방향이 항상 화면 위쪽(route-up): 내 위치에서 약 40m 앞 경로 방향 — 멈춰 있어도·출발 전에도 맞춰짐
     st.onRoute = true;
     var hereD = c.cum[r.idx];
+    updatePassedLine(hereD, lat, lng);
     if (hereD < c.totalM - 5) {
       var pa = pointAtDist(hereD), pb = pointAtDist(Math.min(c.totalM, hereD + 40));
       if (hav(pa[0], pa[1], pb[0], pb[1]) > 3) setMapHeading(bearing(pa[0], pa[1], pb[0], pb[1]));
