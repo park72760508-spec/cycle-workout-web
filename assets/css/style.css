@@ -34510,7 +34510,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
-#outdoorRideScreen .outd-turn-big__arrow { width: 74px; height: 74px; flex-shrink: 0; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35)); }
+#outdoorRideScreen .outd-turn-big__arrow { width: 74px; height: 74px; flex-shrink: 0; } /* 그림자는 화살표 SVG 안에(2026-10-21) */
 #outdoorRideScreen .outd-turn-big__info { display: flex; flex-direction: column; line-height: 1.1; }
 #outdoorRideScreen .outd-turn-big__dist { font-size: 30px; font-weight: 900; color: #ffffff; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
 #outdoorRideScreen .outd-turn-big__word { font-size: 16px; font-weight: 800; color: #ffffff; opacity: 0.95; margin-top: 2px; }
