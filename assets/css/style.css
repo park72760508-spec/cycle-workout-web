@@ -34635,3 +34635,20 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-size: 13px;
   letter-spacing: -0.03em;
 }
+
+/* 아웃도어 속도계 시작 버튼 녹색 펄스(2026-10-21) — 내 위치 표시(outdMePulse)와 같은 퍼짐, 시작하면 숨김 */
+#outdStartPulseWrap .outd-start-pulse {
+  fill: rgba(34, 197, 94, 0.55);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(1);
+  opacity: 0;
+  animation: outdStartPulse 2s ease-out infinite;
+  will-change: transform, opacity;
+}
+#outdStartPulseWrap .outd-start-pulse--2 { animation-delay: 1s; }
+#outdStartPulseWrap.pulse-hidden { display: none; }
+@keyframes outdStartPulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.8); opacity: 0; }
+}

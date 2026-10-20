@@ -4000,7 +4000,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261021turnarrow" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261021startpulse" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35960,6 +35960,11 @@
             <circle cx="0" cy="0" r="6" fill="#fff"/>
           </g>
           <g>
+            <!-- 시작 전(·일시정지) 시작 버튼 녹색 펄스 — 내 위치 표시와 같은 퍼지는 원, 시작하면 숨김(renderToggle) -->
+            <g id="outdStartPulseWrap" class="pulse-active" pointer-events="none" aria-hidden="true">
+              <circle class="outd-start-pulse" cx="80" cy="221" r="9"/>
+              <circle class="outd-start-pulse outd-start-pulse--2" cx="80" cy="221" r="9"/>
+            </g>
             <g class="svg-btn-group" onclick="toggleOutdoorRide()">
               <circle class="svg-neon-circle" cx="80" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
               <image id="outdToggleImg" class="svg-btn-icon" x="72" y="213" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
