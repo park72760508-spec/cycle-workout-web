@@ -520,16 +520,17 @@
     }
   }
 
-  /** 내 위치 원 안 흰 삼각형: 진행 방향(지도 위 방위각) — 지도가 회전해도 화면에서 실제 진행 방향을 가리킴 */
+  /** 내 위치 화살표: 카카오내비처럼 항상 화면 위쪽(2026-10-20) — 지도 판이 돌아간 만큼 반대로 돌려 화면에서 똑바로 위.
+   *  지도가 진행(길) 방향을 위로 맞추므로 위쪽 = 진행 방향. */
   function updateMeArrow() {
     if (!st.meMarker || !st.meMarker.getElement) return;
     var el = st.meMarker.getElement();
     var dir = el && el.querySelector('.outd-me__dir');
     if (!dir) return;
-    var h = st.moveHeading != null ? st.moveHeading : (st.heading != null ? st.heading : 0);
-    // 지도 판이 -heading 만큼 돌아 있으므로 마커 안에서는 진행 방위각 그대로 돌리면 화면에서 올바른 방향
-    st.arrowDeg = st.arrowDeg == null ? h : st.arrowDeg + angleDiff(st.arrowDeg, h);
-    dir.style.transform = 'rotate(' + st.arrowDeg.toFixed(1) + 'deg)';
+    var deg = -(st.mapRotDeg || 0);
+    if (dir.__deg === deg) return;
+    dir.__deg = deg;
+    dir.style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
   }
 
   function updateHeading(c, lat, lng) {
