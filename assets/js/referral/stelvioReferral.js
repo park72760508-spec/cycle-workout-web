@@ -323,7 +323,10 @@ export async function shareInvite() {
   const text =
     'STELVIO에서 함께 훈련해요! 🚴🏃\n' + url + '\n위에 링크로 가입하고 사용자 등록 화면에 추천인 코드를 입력해 주세요.\n추천인 코드: ' + code;
 
-  const kakaoKey = window.STELVIO_KAKAO_JS_KEY || '';
+  // 카카오톡 공유 카드는 일반 브라우저에서만. STELVIO 앱(WebView) 안에서는 SDK 가 카카오톡을 여는 이동(kakaolink/intent)이
+  // 막히는 경우가 있어, 기기 공유 시트(카카오톡 선택 가능)를 쓴다(2026-10-20).
+  const inAppWebView = !!(window.ReactNativeWebView || window.StelvioAppChannel === 'webview-native' || window.StelvioInApp);
+  const kakaoKey = inAppWebView ? '' : window.STELVIO_KAKAO_JS_KEY || '';
   const Kakao = await loadKakaoSdk(kakaoKey);
   if (Kakao && Kakao.Share) {
     try {

@@ -1066,7 +1066,7 @@
   }
 
   /* ---------- 길찾기(2026-10-20): 목적지 검색 + 자전거 경로 안내 ----------
-   * 검색: Photon(OSM, 입력하는 대로, 현재 위치 우선) → 결과 없으면 Nominatim(OSM).
+   * 검색: 카카오(상호·주소, 현재 위치 우선) → 실패·결과 없으면 Photon(OSM) → Nominatim(OSM).
    * 경로: Valhalla(FOSSGIS 공개 서버) 자전거 모드 — 자전거 통행 금지 도로(자동차 전용·bicycle=no) 자동 제외,
    *   [자전거도로 우선] use_roads 0.2(자전거 도로·한적한 길 선호) / [최단 거리] shortest. 한국어 회전 안내문 사용.
    * 안내: 기존 코스 안내(회전 카드·지도 강조·진동) 재사용, 경로 이탈 10초 이상이면 현재 위치에서 다시 탐색(30초에 1회). */
@@ -1112,8 +1112,82 @@
       .finally(function () { clearTimeout(t); });
   }
 
+  /* 카카오 장소·주소 검색(2026-10-20): 카카오맵 JS SDK services(키워드=상호·POI, 주소=지번·도로명).
+   * 처음 검색할 때만 SDK 를 불러오고, 실패하거나 결과가 없으면 아래 OSM(Photon/Nominatim) 검색으로 넘어간다. */
+  var kakaoMapsPromise = null;
+  function loadKakaoMaps() {
+    if (window.kakao && window.kakao.maps && window.kakao.maps.services) return Promise.resolve(window.kakao);
+    var key = window.STELVIO_KAKAO_JS_KEY;
+    if (!key) return Promise.reject(new Error('no kakao key'));
+    if (kakaoMapsPromise) return kakaoMapsPromise;
+    kakaoMapsPromise = new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + encodeURIComponent(key) + '&libraries=services&autoload=false';
+      s.async = true;
+      var t = setTimeout(function () { reject(new Error('kakao timeout')); }, 10000);
+      s.onload = function () {
+        try {
+          window.kakao.maps.load(function () { clearTimeout(t); resolve(window.kakao); });
+        } catch (e) { clearTimeout(t); reject(e); }
+      };
+      s.onerror = function () { clearTimeout(t); reject(new Error('kakao sdk load failed')); };
+      document.head.appendChild(s);
+    }).catch(function (e) {
+      kakaoMapsPromise = null; // 다음 검색에서 다시 시도
+      throw e;
+    });
+    return kakaoMapsPromise;
+  }
+
+  function searchKakao(q) {
+    var here = st.lastFix;
+    return loadKakaoMaps().then(function (kakao) {
+      var svc = kakao.maps.services;
+      var OK = svc.Status.OK;
+      var places = new svc.Places();
+      var opt = here ? { location: new kakao.maps.LatLng(here.lat, here.lng), size: 15 } : { size: 15 };
+      function kw(page) {
+        return new Promise(function (resolve) {
+          places.keywordSearch(q, function (data, status) { resolve(status === OK ? data : []); }, Object.assign({ page: page }, opt));
+        });
+      }
+      var addr = new Promise(function (resolve) {
+        new svc.Geocoder().addressSearch(q, function (data, status) { resolve(status === OK ? data : []); });
+      });
+      return Promise.all([addr, kw(1), kw(2)]).then(function (r) {
+        var out = [];
+        var seen = {};
+        function push(item) {
+          var k = item.name + '|' + item.lat.toFixed(5) + '|' + item.lng.toFixed(5);
+          if (seen[k]) return;
+          seen[k] = 1;
+          out.push(item);
+        }
+        r[0].slice(0, 3).forEach(function (a) {
+          var road = a.road_address && a.road_address.address_name;
+          var bld = a.road_address && a.road_address.building_name;
+          push({ name: bld || road || a.address_name, sub: road && road !== a.address_name ? a.address_name : '주소', lat: Number(a.y), lng: Number(a.x) });
+        });
+        r[1].concat(r[2]).forEach(function (p) {
+          var cat = p.category_group_name || String(p.category_name || '').split('>').pop().trim();
+          var where = p.road_address_name || p.address_name || '';
+          push({ name: p.place_name, sub: [cat, where].filter(Boolean).join(' · '), lat: Number(p.y), lng: Number(p.x) });
+        });
+        return out.filter(function (x) { return isFinite(x.lat) && isFinite(x.lng); });
+      });
+    });
+  }
+
   /** @returns {Promise<{ name: string, sub: string, lat: number, lng: number }[]>} */
   function searchPlaces(q) {
+    return searchKakao(q).then(function (list) {
+      return list.length ? list : searchOsm(q);
+    }, function () {
+      return searchOsm(q);
+    });
+  }
+
+  function searchOsm(q) {
     var here = st.lastFix;
     // lang=default: 기기 언어(영문 등)와 무관하게 현지(한글) 이름
     var url = PHOTON_URL + '?limit=8&lang=default&q=' + encodeURIComponent(q) + (here ? '&lat=' + here.lat.toFixed(5) + '&lon=' + here.lng.toFixed(5) : '');
@@ -1306,7 +1380,7 @@
       '<button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
       '<div class="outd-route__search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
-      '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: Photon/Nominatim(OSM)</div>' +
+      '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
       '</div>';
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
