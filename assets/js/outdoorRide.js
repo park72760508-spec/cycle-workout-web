@@ -1984,7 +1984,11 @@
           .reduce(function (b, x) { return b == null || x.elapsed_time < b ? x.elapsed_time : b; }, null),
         classification: st.lastClassify || null
       };
-      if (kind === 'run') payload.efforts = computeEfforts(s);
+      if (kind === 'run') {
+        var eff = computeEfforts(s);
+        // 1km 미만 등 기록할 구간이 하나도 없으면 빈 행을 만들지 않음
+        if (Object.keys(eff).some(function (k) { return eff[k] != null; })) payload.efforts = eff;
+      }
     }
     return loadDualWriteModule().then(function (mod) {
       if (!mod || typeof mod.callSupabaseRpcAsUser !== 'function') throw new Error('저장 모듈을 불러오지 못했습니다.');
