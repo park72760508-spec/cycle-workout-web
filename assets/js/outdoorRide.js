@@ -460,11 +460,8 @@
         st.track.push(pt);
         st.lastTrackPt = pt;
         // 지나온 경로 선은 15m마다만 다시 그림(저장용 track 은 5m 간격 그대로)
-        var tl = st.lastTrailPt;
-        if (st.trail && (!tl || hav(tl[0], tl[1], lat, lng) >= 15)) {
-          st.trail.addLatLng([lat, lng]);
-          st.lastTrailPt = [lat, lng];
-        }
+        // 자유 라이딩(코스 없음): 지나온 길을 녹색 곡선으로(2026-10-21)
+        if (!st.course) trailAdd([lat, lng]);
       }
     }
     updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
@@ -518,8 +515,10 @@
     // 확대·축소 애니메이션 중에는 프레임 따라가기(followFrame)를 멈춤 — 서로 끊지 않게
     st.map.on('zoomstart', function () { st.mapZooming = true; });
     st.map.on('zoomend', function () { st.mapZooming = false; });
-    // 2026-10-20: 녹색 이동 경로 선은 지도에 그리지 않음(저장용 track 은 그대로 기록)
-    st.trail = null;
+    // 자유 라이딩 지나온 길(2026-10-21): 속도계 원호와 같은 녹색, 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
+    st.trail = L.polyline([], { color: '#22c55e', weight: 10, opacity: 0.9, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
+    st.trailRaw = [];
+    st.trailDone = [];
     st.map.dragging.disable();
     bindRotatedDrag();
     return st.map;
@@ -806,6 +805,39 @@
    * GPS 는 1초에 한 번이라 아이콘이 툭툭 끊겨 움직인다 → 직전 표시 위치에서 새 위치까지 GPS 간격 동안 이어서 이동.
    * 경로 위에 붙어 있으면 직선이 아니라 경로를 따라(진행 거리 보간) 곡선·교차로도 자연스럽게.
    * 터널·고가 아래 등 GPS 가 2~15초 끊기면 마지막 속도로 경로를 따라 계속 이동한 것으로 추정 표시(티맵 터널 모드). */
+  /* 자유 라이딩 지나온 길 곡선(2026-10-21): GPS 점(5m 간격)을 [1,4,6,4,1]/16 가중 평균해 부드럽게.
+     앞뒤 2점이 생긴 점부터 확정하고, 확정되지 않은 끝부분만 매번 다시 그림 → 긴 라이딩에서도 가볍게 */
+  var TRAIL_K = [1, 4, 6, 4, 1];
+  function trailSmoothAt(i) {
+    var r = st.trailRaw, n = r.length, la = 0, lo = 0, w = 0;
+    for (var k = -2; k <= 2; k++) {
+      var j = clampN(i + k, 0, n - 1);
+      la += r[j][0] * TRAIL_K[k + 2];
+      lo += r[j][1] * TRAIL_K[k + 2];
+      w += TRAIL_K[k + 2];
+    }
+    return [la / w, lo / w];
+  }
+  function trailAdd(p) {
+    if (!st.trail || !st.trailRaw) return;
+    var r = st.trailRaw;
+    var last = r[r.length - 1];
+    if (last && hav(last[0], last[1], p[0], p[1]) < 8) return; // 8m 간격(곡선은 충분히 매끄럽고 긴 라이딩도 가볍게)
+    r.push(p);
+    var done = st.trailDone;
+    while (done.length < r.length - 2) done.push(trailSmoothAt(done.length));
+    // 확정된 곡선 + 아직 확정 안 된 끝부분(임시 평균) + 현재 위치
+    var tail = [];
+    for (var i = done.length; i < r.length - 1; i++) tail.push(trailSmoothAt(i));
+    tail.push(r[r.length - 1]);
+    st.trail.setLatLngs(done.concat(tail));
+  }
+  function trailClear() {
+    st.trailRaw = [];
+    st.trailDone = [];
+    if (st.trail) st.trail.setLatLngs([]);
+  }
+
   function placeMe(lat, lng) {
     st.mePos = [lat, lng];
     if (st.meMarker) st.meMarker.setLatLng([lat, lng]);
@@ -946,6 +978,7 @@
     var L = window.L;
     if (st.courseLayer) map.removeLayer(st.courseLayer);
     st.courseLayer = L.layerGroup().addTo(map);
+    trailClear(); // 코스·길찾기 안내 중에는 녹색 지나온 길 대신 회색 지나간 구간 표시
     L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
     // 지나간 구간(출발점 ~ 현재 위치)은 회색으로 덮음 — updatePassedLine 에서 갱신
     st.passedLine = L.polyline([], { color: '#9ca3af', weight: 10, opacity: 0.95, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
@@ -2429,7 +2462,7 @@
     st.track = [];
     st.lastTrackPt = null;
     st.lastClassify = null;
-    if (st.trail) st.trail.setLatLngs([]);
+    trailClear();
     st.lastTrailPt = null;
     renderToggle();
     renderStats();
