@@ -438,7 +438,15 @@
     if (accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
     var d = prev ? hav(prev.lat, prev.lng, lat, lng) : 0;
     var dt = prev ? (t - prev.t) / 1000 : 0;
-    if (spd == null && accOk && prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
+    // 기기가 속도를 주지 않으면 1초 사이 두 점이 아니라 4초 이상 전 위치와의 거리로(GPS 흔들림에 덜 예민, 2026-10-21)
+    var sh = st.spdHist || (st.spdHist = []);
+    if (accOk) { sh.push([t, lat, lng]); while (sh.length && t - sh[0][0] > 8000) sh.shift(); }
+    if (spd == null && accOk && sh.length >= 2) {
+      var sb = null;
+      for (var si = sh.length - 1; si >= 0; si--) { if (t - sh[si][0] >= 4000) { sb = sh[si]; break; } }
+      if (sb) spd = (hav(sb[1], sb[2], lat, lng) / ((t - sb[0]) / 1000)) * 3.6;
+      else if (prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
+    }
     if (!accOk) spd = 0;
     if (spd != null && isFinite(spd)) st.speedKmh = spd < 1.5 ? 0 : Math.min(spd, 120);
     kickLoop();
