@@ -373,6 +373,43 @@
    * 지도 크게 보기(2026-10-21): 속도계를 숨기고 지도를 하단 정보(평균 속도·남은 거리·누적 고도) 위 테두리까지 확장.
    * 시작·정지는 지도 위 떠 있는 버튼, 내 위치는 화면 아래쪽(따라가기 기준점 65% → 80%). 다시 누르면 원래 화면.
    */
+  /* 경로 재탐색 버튼(2026-10-22): 현재 위치에서 설정된 목적지까지, 고른 이동 수단·경로 방식(자전거도로 우선/최단, 걷기 인도 우선/최단) 그대로 새로 찾음 */
+  function updateRerouteBtn() {
+    var b = $('outdRerouteBtn');
+    if (b) b.style.display = st.course && st.course.isRoute && st.course.dest ? 'flex' : 'none';
+  }
+  window.rerouteOutdoorNow = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var c = st.course;
+    if (!c || !c.isRoute || !c.dest) { toast('길찾기로 설정된 목적지가 없습니다.', 'info'); return; }
+    if (!st.lastFix) { toast('현재 위치(GPS)를 찾는 중입니다. 잠시 후 다시 눌러 주세요.', 'info'); return; }
+    if (st.rerouting) return;
+    unlockAudio();
+    st.rerouting = true;
+    var b = $('outdRerouteBtn');
+    if (b) b.classList.add('is-busy');
+    var mode = c.routeMode || 'bike';
+    var walk = mode === 'walk' || mode === 'walkShort';
+    outdBusy(true, '현재 위치에서 경로를 다시 찾는 중...');
+    var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
+    var heading = st.heading != null && st.speedKmh >= (walk ? 3 : 5) ? st.heading : null; // 지금 가는 방향으로 출발
+    var dest = c.dest;
+    fetchBikeRoute(from, dest, mode, { heading: heading }).then(function (rt) {
+      useRouteAsCourse(rt, dest);
+      st.offRouteSince = 0;
+      st.offCued = false;
+      st.rerouteCount = 0;
+      cue('reroute', '경로를 다시 안내합니다');
+      toast('경로를 다시 찾았습니다 · ' + rt.km.toFixed(1) + ' km (' + ({ bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'success');
+    }).catch(function () {
+      toast('경로를 다시 찾지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
+    }).then(function () {
+      st.rerouting = false;
+      outdBusy(false);
+      if (b) b.classList.remove('is-busy');
+    });
+  };
+
   /* 상단 경로 안내 문구(2026-10-22): 기본 숨기기, 오른쪽 아래 버튼으로 표시/숨기기 — 선택은 기기에 기억 */
   var NAVTEXT_LS = 'stelvioOutdoorNavText';
   function applyNavTextPref() {
@@ -1295,6 +1332,7 @@
     setText('outdNavText', st.course.title ? st.course.title : '코스를 따라 이동하세요');
     setText('outdNavRemain', (st.course.totalM / 1000).toFixed(1) + ' km');
     setText('outd-ui-remain', (st.course.totalM / 1000).toFixed(st.course.totalM < 10000 ? 2 : 1));
+    updateRerouteBtn();
   }
 
   /** (호환) 최근 맵매칭 결과를 { idx, dist } 로 — idx 는 선분 끝 꼭짓점 */
@@ -2497,6 +2535,7 @@
     st.courseIdx = 0;
     resetMatch();
     st.onRoute = false;
+    updateRerouteBtn();
     if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
     var nav = $('outdNav');
     if (nav) nav.style.display = 'none';

@@ -34782,3 +34782,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-navtext-btn[aria-pressed="true"] .outd-navtext-btn__slash { display: none; }
 #outdoorRideScreen.outd-navtext-off .outd-nav { display: none !important; }
 #outdoorRideScreen.outd-navtext-off.outd-expanded .outd-exp-stats { top: 8px !important; }
+/* 경로 재탐색 버튼(2026-10-22): 오른쪽 버튼 줄 맨 위(안내 문구 버튼 위), 길찾기 안내 중에만 */
+#outdoorRideScreen .outd-reroute-btn {
+  position: absolute; right: 8px; bottom: 206px; z-index: 600;
+  width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
+  background: rgba(17, 24, 39, 0.85); align-items: center; justify-content: center; cursor: pointer;
+}
+#outdoorRideScreen .outd-reroute-btn.is-busy svg { animation: outdRerouteSpin 0.9s linear infinite; }
+@keyframes outdRerouteSpin { to { transform: rotate(360deg); } }
