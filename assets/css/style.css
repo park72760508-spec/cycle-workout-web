@@ -34727,3 +34727,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-map-rot { transition: none !important; }
 .outd-me__dir { transition: none !important; }
 #outdoorRideScreen .outd-compass__needle { transition: none !important; }
+/* 지도 크게 보기: 갈림길 안내판 — 위쪽 1/3 높이, 왼쪽(2026-10-21) */
+#outdoorRideScreen.outd-expanded .outd-turn-big { left: 8px; right: auto; margin: 0; transform-origin: left top; }

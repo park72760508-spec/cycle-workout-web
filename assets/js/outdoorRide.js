@@ -463,8 +463,7 @@
         st.track.push(pt);
         st.lastTrackPt = pt;
         // 지나온 경로 선은 15m마다만 다시 그림(저장용 track 은 5m 간격 그대로)
-        // 자유 라이딩(코스 없음): 지나온 길을 녹색 곡선으로(2026-10-21)
-        if (!st.course) trailAdd([lat, lng]);
+        // 자유 라이딩 지나온 길은 화면 표시 위치(아바타와 같은 위치)로 updateMeOnMap 에서 그림
       }
     }
     updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
@@ -520,6 +519,7 @@
     st.map.on('zoomend', function () { st.mapZooming = false; });
     // 자유 라이딩 지나온 길(2026-10-21): 진한 녹색(속도계 원호 녹색 계열의 가장 진한 색), 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
     st.trail = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
+    st.trailTip = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(st.map);
     st.trailRaw = [];
     st.trailDone = [];
     st.map.dragging.disable();
@@ -597,10 +597,26 @@
     st.rotAnimId = requestAnimationFrame(frame);
   }
 
+  /**
+   * 흔들림 없는 지도 방향(2026-10-21, 길안내·자유 라이딩 공통):
+   * 목표 방향을 k 비율로 천천히 따라가고(지수 평활), 2.5° 미만 변화는 무시,
+   * 직전과 반대 방향으로 8° 미만 되돌아가는 변화도 무시(좌우 번갈아 흔들림 방지). 실제 회전(큰 변화)은 바로 따라감.
+   */
+  function steadyHeading(target, k) {
+    st.steadyHd = st.steadyHd == null ? target : (st.steadyHd + angleDiff(st.steadyHd, target) * k + 360) % 360;
+    if (st.heading == null) { st.lastTurnSign = 0; setMapHeading(st.steadyHd); return; }
+    var d = angleDiff(st.heading, st.steadyHd);
+    if (Math.abs(d) < 2.5) return;
+    var sg = d > 0 ? 1 : -1;
+    if (st.lastTurnSign && sg !== st.lastTurnSign && Math.abs(d) < 8) return;
+    st.lastTurnSign = sg;
+    setMapHeading(st.steadyHd);
+  }
+
   /** 지도 방향 적용(3° 이상 바뀔 때만 회전) */
   function setMapHeading(h) {
     st.heading = h;
-    if (st.appliedHeading == null || Math.abs(angleDiff(st.appliedHeading, h)) >= 3) {
+    if (st.appliedHeading == null || Math.abs(angleDiff(st.appliedHeading, h)) >= 1) {
       st.appliedHeading = h;
       applyRotation();
     }
@@ -878,21 +894,29 @@
     r.push(p);
     var done = st.trailDone;
     while (done.length < r.length - 2) done.push(trailSmoothAt(done.length));
-    // 확정된 곡선 + 아직 확정 안 된 끝부분(임시 평균) + 현재 위치
+    // 확정된 곡선 + 아직 확정 안 된 끝부분(임시 평균). 마지막 점~아바타는 trailTip(프레임마다 아바타를 따라감)
     var tail = [];
-    for (var i = done.length; i < r.length - 1; i++) tail.push(trailSmoothAt(i));
-    tail.push(r[r.length - 1]);
+    for (var i = done.length; i < r.length; i++) tail.push(trailSmoothAt(i));
     st.trail.setLatLngs(done.concat(tail));
+    st.trailEnd = tail.length ? tail[tail.length - 1] : done[done.length - 1];
+    trailTipTo(st.mePos);
+  }
+  function trailTipTo(p) {
+    if (!st.trailTip || !st.trailEnd || !p || st.course) return;
+    st.trailTip.setLatLngs([st.trailEnd, p]);
   }
   function trailClear() {
     st.trailRaw = [];
     st.trailDone = [];
+    st.trailEnd = null;
     if (st.trail) st.trail.setLatLngs([]);
+    if (st.trailTip) st.trailTip.setLatLngs([]);
   }
 
   function placeMe(lat, lng) {
     st.mePos = [lat, lng];
     if (st.meMarker) st.meMarker.setLatLng([lat, lng]);
+    if (!st.course && st.status === 'running') trailTipTo(st.mePos); // 녹색 선 끝이 아바타에 붙어 따라감
   }
   function animateMe(toLat, toLng, toAlong, durMs) {
     var from = st.mePos;
@@ -964,6 +988,30 @@
     f.t = t;
     return [f.lat0 + f.y / ky, f.lng0 + f.x / kx];
   }
+  /**
+   * 앞으로만 움직이는 표시(2026-10-21, 자유 이동): 필터 위치의 변화를 진행 방향 성분(앞)과 옆 성분으로 나눠
+   * 앞은 그대로, 옆은 조금씩(12%)만 반영(6m 넘게 벗어나면 50%) → 좌우로 흔들리지 않고 앞으로 미끄러지듯 이동.
+   * 실제로 길을 꺾으면 진행 방향(steadyHd)이 함께 돌아가 옆 성분이 앞 성분이 되므로 커브도 자연스럽게 따라감.
+   */
+  function forwardOnly(F) {
+    var D = st.ffDisp;
+    var hd = st.steadyHd != null ? st.steadyHd : st.freeHd;
+    if (!D || hd == null) { st.ffDisp = F; return F; }
+    var kx = Math.cos(D[0] * Math.PI / 180) * 111320, ky = 110540;
+    var dx = (F[1] - D[1]) * kx, dy = (F[0] - D[0]) * ky;
+    if (Math.sqrt(dx * dx + dy * dy) > 60) { st.ffDisp = F; return F; }
+    var r = hd * Math.PI / 180, ux = Math.sin(r), uy = Math.cos(r);
+    var fwd = dx * ux + dy * uy;
+    var lat = dx * uy - dy * ux; // 오른쪽(+) 옆 성분
+    if (st.speedKmh >= 3.6 && fwd < 0) fwd = 0; // 움직이는 중엔 뒤로 가지 않음
+    var kl = Math.abs(lat) > 6 ? 0.5 : 0.12;
+    var nx = dx === 0 && dy === 0 ? 0 : 1;
+    var ex = ux * fwd + uy * lat * kl * nx, ey = uy * fwd - ux * lat * kl * nx;
+    var out = [D[0] + ey / ky, D[1] + ex / kx];
+    st.ffDisp = out;
+    return out;
+  }
+
   /** 자유 이동 지도 방향: 필터 속도 방향을 천천히(0.25) 따라가고 4° 미만 변화는 무시 */
   function freeHeading() {
     var f = st.ff;
@@ -971,8 +1019,7 @@
     var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
     if (sp < 1.5) return;
     var h = (Math.atan2(f.vx, f.vy) * 180 / Math.PI + 360) % 360;
-    st.freeHd = st.freeHd == null ? h : (st.freeHd + angleDiff(st.freeHd, h) * 0.25 + 360) % 360;
-    if (st.heading == null || Math.abs(angleDiff(st.heading, st.freeHd)) >= 4) setMapHeading(st.freeHd);
+    steadyHeading(h, 0.25);
   }
 
   function updateMeOnMap(lat, lng) {
@@ -981,10 +1028,13 @@
     if (snapped) {
       lat = snapped[0]; lng = snapped[1]; along = st.navAlong;
       st.ff = null; // 경로 위: 필터는 쉬고(경로 고정이 대신함), 벗어나면 그 자리에서 새로 시작
+      st.ffDisp = null;
     } else {
       var fp = freeFilter(lat, lng, Date.now(), (st.lastFix && st.lastFix.acc) || 10);
-      lat = fp[0]; lng = fp[1];
       if (!(st.course && st.onRoute)) freeHeading();
+      fp = forwardOnly(fp);
+      lat = fp[0]; lng = fp[1];
+      if (!st.course && st.status === 'running') trailAdd([lat, lng]); // 아바타와 같은 위치로 지나온 길
     }
     st.drSpeed = st.speedKmh / 3.6;
     var map = ensureMap();
@@ -1417,8 +1467,9 @@
     st.onRoute = true;
     updatePassedLine(here, lat, lng);
     if (here < c.totalM - 5) {
-      var pa = pointAtDist(here), pb = pointAtDist(Math.min(c.totalM, here + 40));
-      if (hav(pa[0], pa[1], pb[0], pb[1]) > 3) setMapHeading(bearing(pa[0], pa[1], pb[0], pb[1]));
+      // 길 방향: 50m 앞을 보고(작은 지그재그 무시) 천천히 따라가며, 좌우 번갈아 흔들리는 작은 변화는 무시(steadyHeading)
+      var pa = pointAtDist(here), pb = pointAtDist(Math.min(c.totalM, here + 50));
+      if (hav(pa[0], pa[1], pb[0], pb[1]) > 3) steadyHeading(bearing(pa[0], pa[1], pb[0], pb[1]), 0.35);
     }
     // 도착: 남은 거리 또는 목적지까지 직선거리(걷기 15m·자전거 25m)
     var arriveM = P.walk ? 15 : 25;
