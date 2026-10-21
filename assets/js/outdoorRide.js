@@ -357,7 +357,39 @@
       pulse.classList.toggle('pulse-active', st.status !== 'running');
       pulse.classList.toggle('pulse-hidden', st.status === 'running');
     }
+    // 지도 크게 보기의 떠 있는 시작 버튼도 같은 상태(아이콘·녹색 펄스)
+    var fimg = $('outdFloatToggleImg');
+    if (fimg) fimg.setAttribute('src', st.status === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png');
+    var fctrl = $('outdFloatCtrl');
+    if (fctrl) fctrl.classList.toggle('is-running', st.status === 'running');
   }
+
+  /**
+   * 지도 크게 보기(2026-10-21): 속도계를 숨기고 지도를 하단 정보(평균 속도·남은 거리·누적 고도) 위 테두리까지 확장.
+   * 시작·정지는 지도 위 떠 있는 버튼, 내 위치는 화면 아래쪽(따라가기 기준점 65% → 80%). 다시 누르면 원래 화면.
+   */
+  window.toggleOutdoorExpand = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    st.expanded = !st.expanded;
+    var screen = $(SCREEN_ID);
+    if (screen) screen.classList.toggle('outd-expanded', st.expanded);
+    var btn = $('outdExpand');
+    if (btn) {
+      btn.setAttribute('aria-pressed', st.expanded ? 'true' : 'false');
+      btn.setAttribute('aria-label', st.expanded ? '지도 원래 크기로' : '지도 크게 보기');
+    }
+    renderToggle();
+    // 지도 크기가 바뀌었으니 다시 계산하고 내 위치 기준으로 다시 맞춤
+    [40, 320].forEach(function (ms) {
+      setTimeout(function () {
+        fixMapSize();
+        if (st.follow && st.map && (st.mePos || st.lastFix)) {
+          var p = st.mePos || [st.lastFix.lat, st.lastFix.lng];
+          followUser(p[0], p[1], null, false);
+        }
+      }, ms);
+    });
+  };
 
   function renderGps(acc) {
     var q = 0;
@@ -585,7 +617,8 @@
     var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
     var hPx = wrap ? wrap.clientHeight : 300;
     var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
-    return destPoint(lat, lng, st.heading, hPx * 0.15 * mpp);
+    // 내 위치 높이: 기본 화면 아래 65%, 지도 크게 보기는 아래 80%(떠 있는 시작·정지 버튼 위)
+    return destPoint(lat, lng, st.heading, hPx * (st.expanded ? 0.30 : 0.15) * mpp);
   }
   function followUser(lat, lng, zoom, animate) {
     var map = st.map;

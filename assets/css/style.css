@@ -34652,3 +34652,64 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   0% { transform: scale(1); opacity: 0.8; }
   100% { transform: scale(2.8); opacity: 0; }
 }
+
+/* 아웃도어 지도 크게 보기(2026-10-21): 나침반 위 확대 버튼 → 속도계 자리까지 지도 확장(하단 평균속도·남은거리·누적고도 위 테두리까지),
+   시작·정지는 지도 위 떠 있는 버튼, 내 위치는 화면 아래쪽, 오른쪽 버튼·회전 카드는 지도 아래쪽 기준이라 함께 내려감 */
+#outdoorRideScreen .outd-expand {
+  position: absolute;
+  right: 8px;
+  bottom: 104px; /* 나침반(bottom 50 + 높이 46) 위 */
+  z-index: 600;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+}
+#outdoorRideScreen .outd-expand__out { display: none; }
+#outdoorRideScreen.outd-expanded .outd-expand__in { display: none; }
+#outdoorRideScreen.outd-expanded .outd-expand__out { display: block; }
+#outdoorRideScreen.outd-expanded .mobile-main-content { display: none !important; }
+#outdoorRideScreen .outd-float-ctrl {
+  display: none;
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  z-index: 650;
+  gap: 28px;
+}
+#outdoorRideScreen.outd-expanded .outd-float-ctrl { display: flex; }
+#outdoorRideScreen .outd-float-btn {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+#outdoorRideScreen .outd-float-btn img { position: relative; z-index: 1; width: 26px; height: 26px; }
+#outdoorRideScreen .outd-float-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.5);
+  animation: outdMePulse 2s ease-out infinite;
+  will-change: transform, opacity;
+}
+#outdoorRideScreen .outd-float-pulse--2 { animation-delay: 1s; }
+#outdoorRideScreen .outd-float-ctrl.is-running .outd-float-pulse { display: none; }
+/* 확대 모드: 회전 카드·안내 문구가 떠 있는 버튼과 겹치지 않게 위로 */
+#outdoorRideScreen.outd-expanded .outd-turn-big { bottom: 86px; }
+#outdoorRideScreen.outd-expanded .outd-map-empty { bottom: 86px; }
