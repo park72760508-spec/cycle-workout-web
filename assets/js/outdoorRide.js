@@ -1316,7 +1316,13 @@
     if (st.courseLayer) map.removeLayer(st.courseLayer);
     st.courseLayer = L.layerGroup().addTo(map);
     trailClear(); // 코스·길찾기 안내 중에는 녹색 지나온 길 대신 회색 지나간 구간 표시
-    L.polyline(st.course.latlngs, { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
+    var cl = st.course.latlngs;
+    var lead = st.course.leadConnector || 0, tail = st.course.tailConnector || 0;
+    L.polyline(cl.slice(lead, cl.length - tail), { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
+    // 내 위치 → 경로 시작, 경로 끝 → 목적지: 점선 연결선
+    var dash = { color: '#7c3aed', weight: 6, opacity: 0.9, dashArray: '2 12', lineCap: 'round', interactive: false };
+    if (lead) L.polyline(cl.slice(0, lead + 1), dash).addTo(st.courseLayer);
+    if (tail) L.polyline(cl.slice(cl.length - tail - 1), dash).addTo(st.courseLayer);
     // 지나간 구간(출발점 ~ 현재 위치)은 회색으로 덮음 — updatePassedLine 에서 갱신
     st.passedLine = L.polyline([], { color: '#9ca3af', weight: 10, opacity: 0.95, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
     st.passedAt = -1;
@@ -2038,13 +2044,18 @@
       for (var k = 1; k <= n; k++) pts.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
     }
     var OFF = 16;
+    // 출발·도착 30m 안은 옮기지 않음(출발점이 내 위치에서 옆으로 밀리지 않게), 그 사이는 서서히
+    var cumP = [0];
+    for (i = 1; i < pts.length; i++) cumP.push(cumP[i - 1] + hav(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]));
+    var totP = cumP[cumP.length - 1];
     var off = pts.map(function (pt, j) {
       var p0 = pts[Math.max(0, j - 1)], p1 = pts[Math.min(pts.length - 1, j + 1)];
       var cos = Math.cos(pt[0] * Math.PI / 180);
       var dy = (p1[0] - p0[0]) * 111320, dx = (p1[1] - p0[1]) * 111320 * cos;
       var L = Math.sqrt(dx * dx + dy * dy) || 1;
       var nx = (dy / L) * side, ny = (-dx / L) * side; // 진행 방향 기준 오른쪽(+)/왼쪽(-) 법선
-      return [pt[0] + (ny * OFF) / 111320, pt[1] + (nx * OFF) / (111320 * cos)];
+      var taper = Math.max(0, Math.min(1, (cumP[j] - 30) / 30, (totP - cumP[j] - 30) / 30));
+      return [pt[0] + (ny * OFF * taper) / 111320, pt[1] + (nx * OFF * taper) / (111320 * cos)];
     });
     var body = {
       encoded_polyline: encodePolyline6(off),
@@ -2126,11 +2137,29 @@
   /** 경로를 코스로 등록(회전 안내는 Valhalla 안내문 기준) */
   function useRouteAsCourse(route, dest) {
     hideTurnBig();
-    var course = prepareCourse(dest.name, route.latlngs);
+    /*
+     * 출발점 = 지금 내 위치(2026-10-22): 경로 엔진은 출발점을 가장 가까운 길 위로 옮겨 경로를 시작하므로
+     * (공원·건물 앞·길에서 떨어진 곳이면) 경로가 내 위치에서 떨어진 곳부터 그려졌다.
+     * → 내 위치 → 경로 시작점, 경로 끝 → 목적지를 점선 연결선으로 이어 출발·도착이 정확히 내 위치·목적지가 되게(티맵·카카오 방식)
+     */
+    var ll = route.latlngs.slice();
+    var lead = 0, tail = 0;
+    if (st.lastFix && ll.length) {
+      var gs = hav(st.lastFix.lat, st.lastFix.lng, ll[0][0], ll[0][1]);
+      if (gs > 3 && gs < 400) { ll.unshift([st.lastFix.lat, st.lastFix.lng]); lead = 1; }
+    }
+    if (dest && ll.length) {
+      var lp = ll[ll.length - 1];
+      var ge = hav(lp[0], lp[1], dest.lat, dest.lng);
+      if (ge > 3 && ge < 400) { ll.push([dest.lat, dest.lng]); tail = 1; }
+    }
+    var course = prepareCourse(dest.name, ll);
+    course.leadConnector = lead;
+    course.tailConnector = tail;
     var turns = [];
     route.maneuvers.forEach(function (m) {
       var delta = maneuverDelta(m.type);
-      var i = m.begin_shape_index;
+      var i = m.begin_shape_index != null ? m.begin_shape_index + lead : null;
       if (delta == null || i == null || i <= 0 || i >= course.cum.length) return;
       var text = String(m.instruction || '').replace(/\.$/, '');
       turns.push({ at: course.cum[i], delta: delta, idx: i, text: text });
