@@ -371,6 +371,11 @@
    * 지도 크게 보기(2026-10-21): 속도계를 숨기고 지도를 하단 정보(평균 속도·남은 거리·누적 고도) 위 테두리까지 확장.
    * 시작·정지는 지도 위 떠 있는 버튼, 내 위치는 화면 아래쪽(따라가기 기준점 65% → 80%). 다시 누르면 원래 화면.
    */
+  /** 진단용(읽기 전용): 화면 표시 진행 거리·속도 — 시뮬레이션 검증(뒤로 감 여부 등)에 사용 */
+  window.stelvioOutdoorDebug = function () {
+    return { along: st.mo ? st.mo.along : null, v: st.mo ? st.mo.v : null, pos: st.mePos ? st.mePos.slice() : null, locked: !!st.navLocked };
+  };
+
   window.toggleOutdoorExpand = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     st.expanded = !st.expanded;
@@ -516,7 +521,7 @@
     st.map.setView([37.5665, 126.978], 13);
     // 확대·축소 애니메이션 중에는 프레임 따라가기(followFrame)를 멈춤 — 서로 끊지 않게
     st.map.on('zoomstart', function () { st.mapZooming = true; });
-    st.map.on('zoomend', function () { st.mapZooming = false; });
+    st.map.on('zoomend', function () { st.mapZooming = false; cameraFrame(); });
     // 자유 라이딩 지나온 길(2026-10-21): 진한 녹색(속도계 원호 녹색 계열의 가장 진한 색), 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
     st.trail = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
     st.trailTip = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(st.map);
@@ -537,7 +542,8 @@
     if (!rot || !wrap) return;
     var w = wrap.clientWidth, h = wrap.clientHeight;
     if (!w || !h) return;
-    var D = Math.ceil(Math.sqrt(w * w + h * h)) + 2;
+    // 카메라 이동(translate)·회전 때도 화면 모서리가 비지 않게 대각선 + 여유(아바타 기준점 이동량 + 재정렬 여유)
+    var D = Math.ceil(Math.sqrt(w * w + h * h)) + 2 * (Math.ceil(h * 0.3) + 160);
     rot.style.width = D + 'px';
     rot.style.height = D + 'px';
     rot.style.left = Math.round((w - D) / 2) + 'px';
@@ -564,8 +570,7 @@
   /** 지금 화면에 보이는 회전 각도를 지도·나침반·내 위치 화살표에 적용 */
   function paintRotation() {
     var d = (st.dispRot || 0).toFixed(2);
-    var rot = $('outdMapRot');
-    if (rot) rot.style.transform = 'rotate(' + d + 'deg)';
+    cameraFrame(); // 지도 판: 이동(translate) + 회전을 한 번에
     var needle = $('outdCompassNeedle');
     if (needle) needle.style.transform = 'rotate(' + d + 'deg)'; // 빨간 끝 = 북쪽
     updateMeArrow();
@@ -589,9 +594,7 @@
         return;
       }
       st.dispRot += diff * (1 - Math.exp(-dt / 220)); // 약 0.5초에 걸쳐 부드럽게
-      paintRotation();
-      // 같은 프레임에서 지도 위치도 지금 각도 기준으로(아바타 고정)
-      if (st.mePos) followFrame(st.mePos[0], st.mePos[1], true);
+      paintRotation(); // 같은 프레임에서 카메라도 지금 각도 기준(아바타 고정)
       st.rotAnimId = requestAnimationFrame(frame);
     }
     st.rotAnimId = requestAnimationFrame(frame);
@@ -660,22 +663,51 @@
   }
 
   /** 따라가기: 헤딩업이면 내 위치가 화면 아래쪽(65%)에 오도록 진행 방향 앞쪽을 지도 중심으로 */
-  function followCenter(lat, lng, z) {
-    var hd = dispHeading();
-    if (!(st.headingUp && hd != null)) return [lat, lng];
+  /** 내 위치 아바타가 놓일 화면 높이: 화면 가운데에서 아래로 몇 px(기본 65% 지점, 크게 보기는 80%보다 아바타 5개 높이 위) */
+  function anchorShiftPx() {
+    if (!st.headingUp) return 0;
     var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
     var hPx = wrap ? wrap.clientHeight : 300;
-    var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
-    // 내 위치 높이: 기본 화면 아래 65%, 지도 크게 보기는 아래 80%(떠 있는 시작·정지 버튼 위)
-    // 크게 보기: 80% 지점보다 아바타 높이(27px)의 5배 위(2026-10-21)
-    var shiftPx = st.expanded ? Math.max(0, hPx * 0.30 - 27 * 5) : hPx * 0.15;
-    return destPoint(lat, lng, hd, shiftPx * mpp);
+    return st.expanded ? Math.max(0, hPx * 0.30 - 27 * 5) : hPx * 0.15;
   }
-  function followUser(lat, lng, zoom, animate) {
+  /** (호환) 따라가기 지도 중심 = 내 위치 — 화면 기준점 맞춤은 카메라(cameraFrame)가 함 */
+  function followCenter(lat, lng) { return [lat, lng]; }
+  function followUser(lat, lng, zoom) {
     var map = st.map;
     if (!map) return;
     var z = zoom != null ? zoom : map.getZoom();
-    map.setView(followCenter(lat, lng, z), z, { animate: animate !== false, duration: 0.8 });
+    map.setView([lat, lng], z, { animate: false });
+    cameraFrame();
+  }
+
+  /*
+   * 카메라(2026-10-21, 티맵식 흔들림 없는 이동):
+   * 예전에는 매 프레임 Leaflet setView 로 지도를 다시 맞췄는데, Leaflet 이 픽셀 위치를 정수로 반올림해
+   * 매 프레임 ±0.5px 씩 지도가 떨렸다(회전된 화면에서는 좌우 미세 흔들림). 프레임마다 지도를 다시 그려 배터리도 소모.
+   * → 지도는 가만히 두고, 지도 판 전체를 GPU 변환(translate 소수점 + rotate)으로 움직여 아바타를 화면의 기준점에 정확히 둔다.
+   *   아바타가 판 가운데에서 120px 넘게 멀어질 때만 지도 중심을 다시 맞추고, 같은 프레임에서 변환을 다시 계산해 이음매 없음.
+   */
+  function cameraFrame() {
+    var rot = $('outdMapRot');
+    var map = st.map;
+    if (!rot) return;
+    var th = st.dispRot || 0;
+    if (map && st.follow && st.mePos && !st.mapZooming && rot.offsetWidth) {
+      var wrap = rot.parentNode;
+      var D = rot.offsetWidth, C = D / 2;
+      var P = map.latLngToContainerPoint(st.mePos);
+      if (Math.abs(P.x - C) > 120 || Math.abs(P.y - C) > 120) {
+        map.setView(st.mePos, map.getZoom(), { animate: false });
+        P = map.latLngToContainerPoint(st.mePos);
+      }
+      var ax = wrap.clientWidth / 2, ay = wrap.clientHeight / 2 + anchorShiftPx(); // 화면 기준점
+      var r = th * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+      var vx = P.x - C, vy = P.y - C;
+      var rx = vx * cs - vy * sn, ry = vx * sn + vy * cs; // CSS rotate(θ) (화면 y 아래 방향)
+      st.camT = [ax - rot.offsetLeft - C - rx, ay - rot.offsetTop - C - ry];
+    }
+    var T = st.camT || [0, 0];
+    rot.style.transform = 'translate(' + T[0].toFixed(2) + 'px,' + T[1].toFixed(2) + 'px) rotate(' + th.toFixed(2) + 'deg)';
   }
   /**
    * 확대·축소(회전 지점 확대·복귀, 속도 자동 확대) — 화면 가운데가 아니라 내 위치 아바타를 고정점으로(setZoomAround).
@@ -693,11 +725,8 @@
   }
 
   /** 아이콘 이동 프레임마다 지도도 함께(헤딩업 따라가기) — 지도·아이콘이 따로 움직여 출렁이지 않게. 확대·축소 중엔 건너뜀 */
-  function followFrame(lat, lng) {
-    var map = st.map;
-    if (!map || !st.follow || !st.headingUp || st.mapZooming) return;
-    st.lastFollowFrame = performance.now();
-    map.setView(followCenter(lat, lng, map.getZoom()), map.getZoom(), { animate: false });
+  function followFrame() {
+    cameraFrame();
   }
 
   /* 회전된 지도 끌기(2026-10-20): Leaflet 기본 끌기는 회전된 지도에서 손가락과 다른 방향으로 움직여서,
@@ -918,27 +947,75 @@
     if (st.meMarker) st.meMarker.setLatLng([lat, lng]);
     if (!st.course && st.status === 'running') trailTipTo(st.mePos); // 녹색 선 끝이 아바타에 붙어 따라감
   }
-  function animateMe(toLat, toLng, toAlong, durMs) {
-    var from = st.mePos;
-    if (!from || !st.meMarker || document.hidden) { placeMe(toLat, toLng); st.meAlong = toAlong; return; }
-    var fromAlong = st.meAlong;
-    var alongOk = toAlong != null && fromAlong != null && st.course && toAlong >= fromAlong - 5 && toAlong - fromAlong < 120;
-    var t0 = performance.now();
-    var dur = clampN(durMs || 900, 250, 1100);
-    if (st.meAnimId) cancelAnimationFrame(st.meAnimId);
-    function step(now) {
-      var k = clampN((now - t0) / dur, 0, 1);
-      if (alongOk) {
-        var p = pointAtDist(fromAlong + (toAlong - fromAlong) * k);
-        placeMe(p[0], p[1]);
+  /*
+   * 연속 이동(2026-10-21, 티맵식): GPS(1초)마다 구간별로 끊어 움직이면 멈췄다 가는 출렁임·뒤로 당겨짐이 생긴다.
+   * → 아바타는 매 프레임 "예측 속도"로 앞으로 계속 이동하고, GPS 와의 차이는 속도로만 약 2초에 걸쳐 메움
+   *   (앞서면 살짝 느리게·뒤처지면 살짝 빠르게, 뒤로는 절대 가지 않음). 옆(좌우) 차이는 약 2.5초에 걸쳐 아주 천천히.
+   *   = 업데이트를 덜 예민하게 반영하면서도 지연 없이 실제 위치를 따라감. 멈추면 루프도 멈춰 배터리 절약.
+   * 경로 위(경로 고정)에서는 경로 진행 거리(along)로 움직여 항상 코스선 중심 위.
+   */
+  var CATCHUP_S = 2.0, LATERAL_S = 2.5;
+  function setMotionTarget(lat, lng, along) {
+    var acc = (st.lastFix && st.lastFix.acc) || 10;
+    var now = performance.now();
+    var v = Math.max(0, st.speedKmh / 3.6);
+    if (!st.mo) st.mo = { pos: [lat, lng], along: along, v: v };
+    // 정확도 나쁜 값(25m 초과)은 위치 보정에 쓰지 않고 예측을 이어감
+    if (acc > 25 && st.mt) { st.mt.v = v; kickMotion(); return; }
+    st.mt = { lat: lat, lng: lng, along: along, t: now, v: v };
+    kickMotion();
+  }
+  function kickMotion() {
+    if (st.moId || document.hidden || !isActive()) return;
+    st.moLast = performance.now();
+    st.moId = requestAnimationFrame(motionStep);
+  }
+  function motionStep(now) {
+    st.moId = null;
+    var T = st.mt, M = st.mo;
+    if (!T || !M) return;
+    var dt = clampN((now - (st.moLast || now)) / 1000, 0, 0.1);
+    st.moLast = now;
+    var age = Math.min(15, (now - T.t) / 1000); // GPS 끊김(터널 등)도 15초까지 예측 이동
+    var c = st.course, errAbs = 0, want;
+    if (T.along != null && c && st.navLocked) {
+      if (M.along == null) M.along = T.along;
+      var tgt = Math.min(c.totalM, T.along + T.v * age);
+      var e = tgt - M.along;
+      if (Math.abs(e) > 60) { M.along = tgt; e = 0; }
+      want = e < -15 ? 0 : Math.max(0, T.v + e / CATCHUP_S);
+      M.v = Math.max(0, M.v + (want - M.v) * Math.min(1, dt * 3));
+      M.along = Math.min(c.totalM, M.along + M.v * dt);
+      M.pos = pointAtDist(M.along);
+      errAbs = Math.abs(e);
+    } else {
+      M.along = null;
+      var kx = Math.cos(M.pos[0] * Math.PI / 180) * 111320, ky = 110540;
+      var hd = st.steadyHd != null ? st.steadyHd : st.freeHd;
+      var ux = 0, uy = 0;
+      if (hd != null) { var hr = hd * Math.PI / 180; ux = Math.sin(hr); uy = Math.cos(hr); }
+      // 예측 목표 = 마지막 표시 목표 + 진행 방향 × 속도 × 경과
+      var tx = (T.lng - M.pos[1]) * kx + ux * T.v * age, ty = (T.lat - M.pos[0]) * ky + uy * T.v * age;
+      var dist = Math.sqrt(tx * tx + ty * ty);
+      if (dist > 60 || hd == null) {
+        var k = dist > 60 ? 1 : Math.min(1, dt / 1.0);
+        M.pos = [M.pos[0] + (ty * k) / ky, M.pos[1] + (tx * k) / kx];
+        M.v = T.v;
       } else {
-        placeMe(from[0] + (toLat - from[0]) * k, from[1] + (toLng - from[1]) * k);
+        var fwdErr = tx * ux + ty * uy;
+        var latErr = tx * uy - ty * ux; // 오른쪽(+)
+        want = fwdErr < -15 ? 0 : Math.max(0, T.v + fwdErr / CATCHUP_S);
+        M.v = Math.max(0, M.v + (want - M.v) * Math.min(1, dt * 3));
+        var lk = Math.min(1, dt / LATERAL_S);
+        var mx = ux * M.v * dt + uy * latErr * lk, my = uy * M.v * dt - ux * latErr * lk;
+        M.pos = [M.pos[0] + my / ky, M.pos[1] + mx / kx];
       }
-      if (now - (st.lastFollowFrame || 0) >= 33) { st.lastFollowFrame = now; followFrame(st.mePos[0], st.mePos[1]); }
-      st.meAnimId = k < 1 && isActive() && !document.hidden ? requestAnimationFrame(step) : null;
+      errAbs = dist;
+      if (!c && st.status === 'running') trailAdd(M.pos); // 지나온 길 = 아바타가 지나간 자리
     }
-    st.meAlong = toAlong;
-    st.meAnimId = requestAnimationFrame(step);
+    placeMe(M.pos[0], M.pos[1]);
+    cameraFrame();
+    if (isActive() && !document.hidden && (M.v > 0.05 || errAbs > 0.3)) st.moId = requestAnimationFrame(motionStep);
   }
   /** GPS 끊김 추정 이동 — renderStats(1초)에서 호출 */
   function deadReckon() {
@@ -947,9 +1024,8 @@
     var gap = Date.now() - st.lastFixAt;
     var v = st.drSpeed || 0; // m/s, 마지막 GPS 속도
     if (gap < 2000 || gap > 15000 || v < (navIsWalk() ? 0.8 : 2)) return;
-    var along = Math.min(c.totalM, st.navAlong + Math.min(200, v * gap / 1000));
-    var p = pointAtDist(along);
-    animateMe(p[0], p[1], along, 1000);
+    var along = Math.min(c.totalM, st.navAlong + Math.min(200, v * gap / 1000)); // 아바타는 연속 이동(motionStep)이 예측해 움직임
+    kickMotion();
     setText('outdNavRemain', '남은 ' + (Math.max(0, c.totalM - along) / 1000).toFixed(1) + ' km · GPS 약함');
   }
 
@@ -1041,9 +1117,7 @@
     } else {
       var fp = freeFilter(lat, lng, Date.now(), (st.lastFix && st.lastFix.acc) || 10);
       if (!(st.course && st.onRoute)) freeHeading(fp);
-      fp = forwardOnly(fp);
-      lat = fp[0]; lng = fp[1];
-      if (!st.course && st.status === 'running') trailAdd([lat, lng]); // 아바타와 같은 위치로 지나온 길
+      lat = fp[0]; lng = fp[1]; // 앞으로만·옆은 천천히 = 연속 이동(motionStep)이 처리, 지나온 길도 거기서
     }
     st.drSpeed = st.speedKmh / 3.6;
     var map = ensureMap();
@@ -1056,24 +1130,15 @@
         zIndexOffset: 1000
       }).addTo(map);
       st.mePos = [lat, lng];
-      st.meAlong = along;
+      st.mo = { pos: [lat, lng], along: along, v: 0 };
       updateMeArrow();
-      followUser(lat, lng, Math.max(map.getZoom(), 16), false);
-    } else {
-      var gapMs = st.prevMeFixAt ? Date.now() - st.prevMeFixAt : 1000;
-      animateMe(lat, lng, along, gapMs);
-      if (st.follow && st.headingUp) {
-        // 헤딩업: 아이콘 이동 프레임(animateMe → followFrame)이 지도도 함께 옮김. 화면이 가려져 애니메이션이 없을 때만 직접
-        if (document.hidden || !st.meAnimId) followUser(lat, lng);
-      } else if (st.follow) {
-        // 북쪽 위: 매초 지도를 옮기지 않고 내 위치가 가운데 영역(가로·세로 40%)을 벗어날 때만 이동
-        var sz = map.getSize();
-        var cp = map.latLngToContainerPoint([lat, lng]);
-        if (Math.abs(cp.x - sz.x / 2) > sz.x * 0.2 || Math.abs(cp.y - sz.y / 2) > sz.y * 0.2) {
-          map.panTo([lat, lng], { animate: true, duration: 0.6 });
-        }
-      }
+      followUser(lat, lng, Math.max(map.getZoom(), 16));
+    } else if (document.hidden) {
+      placeMe(lat, lng);
+      if (st.mo) { st.mo.pos = [lat, lng]; st.mo.along = along; }
     }
+    // 아바타·지도는 연속 이동 루프가 매 프레임 함께 움직임(카메라)
+    setMotionTarget(lat, lng, along);
     st.prevMeFixAt = Date.now();
     if (st.follow && !st.turnZoomed && st.course) autoZoomBySpeed(map);
   }
@@ -2112,15 +2177,38 @@
   }
 
   var searchSeq = 0;
+  /** 길찾기 검색·경로 계산 중 화면 앞 녹색 원 스피너(2026-10-21, 로그인 로딩과 같은 원) */
+  function outdBusy(show, msg) {
+    var el = $('outdBusyOverlay');
+    if (!el && show) {
+      el = document.createElement('div');
+      el.id = 'outdBusyOverlay';
+      el.className = 'phone-verify-overlay outd-busy hidden';
+      el.setAttribute('aria-live', 'polite');
+      el.innerHTML = '<div class="auth-transition-overlay__inner"><div class="auth-transition-spinner-stage" role="status">' +
+        '<div class="auth-transition-spinner-glow" aria-hidden="true"></div>' +
+        '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--track" aria-hidden="true"></div>' +
+        '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin" aria-hidden="true"></div>' +
+        '</div><p class="auth-transition-message"></p></div>';
+      document.body.appendChild(el);
+    }
+    if (!el) return;
+    if (show) el.querySelector('.auth-transition-message').textContent = msg || '검색 중...';
+    el.classList.toggle('hidden', !show);
+  }
+
   function runSearch(q) {
     var seq = ++searchSeq;
     $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색 중...</div>';
+    outdBusy(true, '장소를 검색하는 중...');
     searchPlaces(q).then(function (list) {
       if (seq !== searchSeq) return;
       renderRouteList(list);
     }).catch(function () {
       if (seq !== searchSeq) return;
       $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
+    }).then(function () {
+      if (seq === searchSeq) outdBusy(false);
     });
   }
 
@@ -2158,9 +2246,11 @@
     var hd = { heading: st.speedKmh >= 5 ? st.heading : null };
     var modes = walk ? ['walk', 'walkShort'] : ['bike', 'short'];
     var reqMode = travelMode;
+    outdBusy(true, walk ? '도보 경로를 찾는 중...' : '자전거 경로를 찾는 중...');
     Promise.all(modes.map(function (m) {
       return fetchBikeRoute(from, dest, m, hd).catch(function () { return null; });
     })).then(function (routes) {
+      outdBusy(false);
       if (reqMode !== travelMode) return; // 그사이 이동 수단을 바꿨으면 무시
       routes = routes.filter(Boolean);
       if (!routes.length) {
@@ -2746,6 +2836,7 @@
     if (!isActive()) return;
     sizeRotLayer();
     if (st.map) st.map.invalidateSize();
+    cameraFrame();
   }
   (function watchScreen() {
     var el = $(SCREEN_ID);
