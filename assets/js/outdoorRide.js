@@ -446,6 +446,7 @@
       for (var si = sh.length - 1; si >= 0; si--) { if (t - sh[si][0] >= 4000) { sb = sh[si]; break; } }
       if (sb) spd = (hav(sb[1], sb[2], lat, lng) / ((t - sb[0]) / 1000)) * 3.6;
       else if (prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
+      if (spd != null && st.speedKmh > 0) spd = st.speedKmh * 0.5 + spd * 0.5; // 위치로 계산한 속도는 살짝 평활
     }
     if (!accOk) spd = 0;
     if (spd != null && isFinite(spd)) st.speedKmh = spd < 1.5 ? 0 : Math.min(spd, 120);
@@ -479,7 +480,8 @@
         } else {
           var da = hav(an[1], an[2], lat, lng);
           if (!st.isMoving) {
-            if (t - an[0] >= 10000) st.distAnchor = [t, lat, lng]; // 멈춰 있을 때 흔들림은 거리에 넣지 않음
+            // 멈춰 있을 때 흔들림은 거리에 넣지 않음(10초 넘게 8m 안에 머무르면 기준점 갱신). 출발 직후 움직임은 버리지 않음
+            if (t - an[0] >= 10000 && da < 8) st.distAnchor = [t, lat, lng];
           } else if ((t - an[0] >= 10000 || da >= 20) && da / Math.max(1, (t - an[0]) / 1000) < 30) {
             st.distanceM += da;
             st.distAnchor = [t, lat, lng];
@@ -2833,12 +2835,23 @@
   }
 
   /** 종료: 요약 + [저장하고 종료] [GPX 받기] [계속 라이딩] */
+  /** 종료 시 마지막 구간(기준점 → 마지막 위치) 거리도 더함 */
+  function flushDistance() {
+    var an = st.distAnchor, f = st.lastFix;
+    if (!an || !f || !st.isMoving) return;
+    var da = hav(an[1], an[2], f.lat, f.lng);
+    if (da >= 3 && da / Math.max(1, (f.t - an[0]) / 1000) < 30) {
+      st.distanceM += da;
+      st.distAnchor = [f.t, f.lat, f.lng];
+    }
+  }
   window.finishOutdoorRide = function () {
     if (st.status === 'idle' && !hasRideData()) {
       toast('라이딩을 시작하지 않았습니다.', 'info');
       return;
     }
     if (st.status === 'running') {
+      flushDistance();
       st.elapsedMs += Date.now() - st.runSince;
       st.runSince = 0;
       st.status = 'paused';
