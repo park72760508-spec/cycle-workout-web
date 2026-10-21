@@ -160,6 +160,7 @@
   function cue(kind, text) {
     switch (kind) {
       case 'turnFar': playTones([[880, 140, 0], [1175, 200, 160]]); break; // 분기점 접근: 띵-띵
+      case 'turnPre': playTones([[880, 160, 0]], 0.25); break; // 미리 알림(약 30초 전): 짧은 한 번
       case 'turnNear': playTones([[1319, 110, 0], [1319, 110, 150], [1568, 220, 300]], 0.4); break; // 바로 앞: 빠른 세 번
       case 'off': playTones([[440, 260, 0], [330, 360, 300]], 0.4); break; // 이탈: 낮은 경고음
       case 'reroute': playTones([[784, 120, 0], [988, 120, 140], [1319, 220, 280]]); break; // 재탐색 완료
@@ -301,6 +302,7 @@
       st.speedKmh = 0;
       kickLoop();
     }
+    deadReckon(); // GPS 끊김(터널 등) 추정 이동
   }
 
   /* 배터리·발열 최적화(2026-10-19): 바늘 애니메이션은 초당 최대 30번, 목표 속도에 도달하면 멈추고
@@ -433,7 +435,7 @@
         }
       }
     }
-    updateNavigation(lat, lng); // 길 방향(route-up) 먼저 정하고
+    updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
     updateMeOnMap(lat, lng); // 그 방향 기준으로 지도 중심·내 위치 표시
   }
 
@@ -646,35 +648,163 @@
     toast(st.headingUp ? '진행 방향이 위로 오도록 지도를 회전합니다' : '북쪽이 위로 오도록 지도를 고정합니다', 'info');
   };
 
-  /**
-   * 코스 중심선에 붙여 표시(2026-10-20): 코스에서 ±4m 이내면 앞뒤 선분에 수직으로 내린 지점에 내 위치를 표시
-   * (화면 표시만 — 거리·경로 기록은 실제 GPS 값). 4m를 넘으면 null(실제 위치 표시).
+  /* ---------- 경로 맵매칭(2026-10-21) — 상용 내비(티맵·카카오) + 가민 코스 내비 방식을 자전거·걷기에 맞춤 ----------
+   * 1) 투영: GPS 점에서 경로 선분에 수선을 내려 가장 가까운 "선분 위 점"과 진행 거리(along, m)를 연속 값으로 계산
+   *    (꼭짓점 단위가 아니라서 긴 직선 구간에서도 남은 거리·회전까지 거리가 매끄럽게 줄어듦)
+   * 2) 후보 점수(간이 HMM): (거리/GPS오차)² + 진행 방향 불일치 + 뒤로 가기·순간 점프 벌점
+   *    → 왕복·순환 코스, 겹치는 구간, 나란한 길에서 반대편 경로로 튀지 않음(앞으로 나아가는 쪽 우선)
+   * 3) 이동 수단별 기준(걷기는 더 좁게): 경로에 붙여 표시하는 범위, 이탈 판정 거리·지속 시간을 GPS 정확도에 맞춰 조정
+   * 4) 경로를 잃으면(재탐색 직후·GPS 점프) 전체 경로에서 다시 찾음(3초에 한 번)
    */
-  var SNAP_M = 4;
-  function snapToCourse(lat, lng) {
+  function clampN(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+  function navIsWalk() {
+    var m = st.course && st.course.routeMode;
+    if (m) return m === 'walk' || m === 'walkShort';
+    return travelMode === 'walk';
+  }
+  function navParams() {
+    var walk = navIsWalk();
+    var acc = clampN((st.lastFix && st.lastFix.acc) || 10, 3, 60);
+    return {
+      walk: walk,
+      sigma: clampN(acc, 5, 25), // 위치 오차 기준(m)
+      snapM: walk ? clampN(acc, 8, 15) : clampN(acc * 1.2, 10, 20), // 이 안이면 경로 위에 붙여 표시
+      offM: (walk ? 25 : 35) + Math.min(20, acc * 0.5), // 이보다 멀면 이탈 후보
+      offHoldMs: walk ? 5000 : 3000 // 이탈 후보가 이만큼 이어지면 이탈 확정
+    };
+  }
+  /** 경로 선분 i(i-1 → i)에 수선을 내린 결과 */
+  function projectOnSeg(c, i, lat, lng, kx, ky) {
+    var a = c.latlngs[i - 1], b = c.latlngs[i];
+    var ax = (a[1] - lng) * kx, ay = (a[0] - lat) * ky;
+    var bx = (b[1] - lng) * kx, by = (b[0] - lat) * ky;
+    var dx = bx - ax, dy = by - ay;
+    var len2 = dx * dx + dy * dy;
+    var t = len2 > 0 ? clampN(-(ax * dx + ay * dy) / len2, 0, 1) : 0;
+    var px = ax + dx * t, py = ay + dy * t;
+    return {
+      seg: i,
+      d: Math.sqrt(px * px + py * py),
+      along: c.cum[i - 1] + (c.cum[i] - c.cum[i - 1]) * t,
+      lat: lat + py / ky,
+      lng: lng + px / kx,
+      brg: (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360
+    };
+  }
+  /** 진행 거리 D 가 들어 있는 선분 번호 */
+  function segAt(D) {
+    var cum = st.course.cum, lo = 1, hi = cum.length - 1;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (cum[mid] < D) lo = mid + 1; else hi = mid; }
+    return lo;
+  }
+  function resetMatch() {
+    st.matchAlong = null;
+    st.match = null;
+    st.offSince = 0;
+    st.lastOnRouteAlong = null;
+    st.dispAlong = null;
+  }
+  /** @returns {{seg,d,along,lat,lng,brg}|null} */
+  function matchCourse(lat, lng, t) {
     var c = st.course;
     if (!c || c.latlngs.length < 2) return null;
-    var r = nearestCourseIdx(lat, lng);
-    if (r.idx < 0 || r.dist > 40) return null;
-    var kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 110540; // 위경도 → m(근거리 평면 근사)
-    var best = null;
-    for (var i = Math.max(1, r.idx); i <= Math.min(c.latlngs.length - 1, r.idx + 1); i++) {
-      var a = c.latlngs[i - 1], b = c.latlngs[i];
-      var ax = (a[1] - lng) * kx, ay = (a[0] - lat) * ky;
-      var bx = (b[1] - lng) * kx, by = (b[0] - lat) * ky;
-      var dx = bx - ax, dy = by - ay;
-      var len2 = dx * dx + dy * dy;
-      var t = len2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len2)) : 0;
-      var px = ax + dx * t, py = ay + dy * t;
-      var d = Math.sqrt(px * px + py * py);
-      if (!best || d < best.d) best = { d: d, lat: lat + py / ky, lng: lng + px / kx };
+    var P = navParams();
+    var kx = Math.cos(lat * Math.PI / 180) * 111320, ky = 110540;
+    var v = Math.max(0, st.speedKmh / 3.6);
+    var hd = v >= 1.5 && st.moveHeading != null ? st.moveHeading : null;
+    var last = st.matchAlong;
+    var dtSec = st.matchAt ? clampN((t - st.matchAt) / 1000, 0, 30) : 1;
+    function score(p, useProgress) {
+      var s = (p.d / P.sigma) * (p.d / P.sigma);
+      if (hd != null) s += 3 * (1 - Math.cos(angleDiff(hd, p.brg) * Math.PI / 180)); // 반대 방향이면 +6
+      if (useProgress && last != null) {
+        var back = last - p.along;
+        if (back > 8) s += (back / 15) * (back / 15); // 뒤로 가기
+        var fwd = p.along - (last + v * dtSec * 1.5 + 40);
+        if (fwd > 0) s += (fwd / 60) * (fwd / 60); // 갈 수 없는 거리만큼 앞으로 점프
+      }
+      return s;
     }
-    return best && best.d <= SNAP_M ? [best.lat, best.lng] : null;
+    var best = null, bestS = Infinity, i, p, s;
+    if (last != null) {
+      var i0 = segAt(Math.max(0, last - 60));
+      var i1 = segAt(Math.min(c.totalM, last + Math.max(250, v * 20 + 100)));
+      for (i = Math.max(1, i0); i <= Math.min(c.latlngs.length - 1, i1); i++) {
+        p = projectOnSeg(c, i, lat, lng, kx, ky);
+        s = score(p, true);
+        if (s < bestS) { bestS = s; best = p; }
+      }
+    }
+    // 처음·경로를 잃었을 때: 전체에서 다시 찾기(3초에 한 번)
+    if ((!best || best.d > P.offM * 2) && (last == null || Date.now() - (st.lastFullScanAt || 0) > 3000)) {
+      st.lastFullScanAt = Date.now();
+      var gBest = null, gS = Infinity;
+      for (i = 1; i < c.latlngs.length; i++) {
+        p = projectOnSeg(c, i, lat, lng, kx, ky);
+        s = score(p, false);
+        if (s < gS) { gS = s; gBest = p; }
+      }
+      if (gBest && (!best || gBest.d < best.d - 5)) best = gBest;
+    }
+    st.matchAt = t;
+    if (best && best.d <= P.offM * 1.5) st.matchAlong = best.along;
+    return best;
+  }
+
+  /** 화면 표시용: 경로 가까이면 경로 위 점(맵매칭 결과), 아니면 실제 GPS 위치 */
+  function snapToCourse(lat, lng) {
+    var m = st.match;
+    if (!m || !st.course) return null;
+    return m.d <= navParams().snapM ? [m.lat, m.lng] : null;
+  }
+
+  /* ---------- 내 위치 아이콘 부드러운 이동(2026-10-21) ----------
+   * GPS 는 1초에 한 번이라 아이콘이 툭툭 끊겨 움직인다 → 직전 표시 위치에서 새 위치까지 GPS 간격 동안 이어서 이동.
+   * 경로 위에 붙어 있으면 직선이 아니라 경로를 따라(진행 거리 보간) 곡선·교차로도 자연스럽게.
+   * 터널·고가 아래 등 GPS 가 2~15초 끊기면 마지막 속도로 경로를 따라 계속 이동한 것으로 추정 표시(티맵 터널 모드). */
+  function placeMe(lat, lng) {
+    st.mePos = [lat, lng];
+    if (st.meMarker) st.meMarker.setLatLng([lat, lng]);
+  }
+  function animateMe(toLat, toLng, toAlong, durMs) {
+    var from = st.mePos;
+    if (!from || !st.meMarker || document.hidden) { placeMe(toLat, toLng); st.meAlong = toAlong; return; }
+    var fromAlong = st.meAlong;
+    var alongOk = toAlong != null && fromAlong != null && st.course && toAlong >= fromAlong - 5 && toAlong - fromAlong < 120;
+    var t0 = performance.now();
+    var dur = clampN(durMs || 900, 250, 1100);
+    if (st.meAnimId) cancelAnimationFrame(st.meAnimId);
+    function step(now) {
+      var k = clampN((now - t0) / dur, 0, 1);
+      if (alongOk) {
+        var p = pointAtDist(fromAlong + (toAlong - fromAlong) * k);
+        placeMe(p[0], p[1]);
+      } else {
+        placeMe(from[0] + (toLat - from[0]) * k, from[1] + (toLng - from[1]) * k);
+      }
+      st.meAnimId = k < 1 && isActive() && !document.hidden ? requestAnimationFrame(step) : null;
+    }
+    st.meAlong = toAlong;
+    st.meAnimId = requestAnimationFrame(step);
+  }
+  /** GPS 끊김 추정 이동 — renderStats(1초)에서 호출 */
+  function deadReckon() {
+    var c = st.course, m = st.match;
+    if (!c || !m || !st.onRoute || !st.meMarker || st.matchAlong == null) return;
+    var gap = Date.now() - st.lastFixAt;
+    var v = st.drSpeed || 0; // m/s, 마지막 GPS 속도
+    if (gap < 2000 || gap > 15000 || v < (navIsWalk() ? 0.8 : 2)) return;
+    var along = Math.min(c.totalM, st.matchAlong + Math.min(200, v * gap / 1000));
+    var p = pointAtDist(along);
+    animateMe(p[0], p[1], along, 1000);
+    setText('outdNavRemain', '남은 ' + (Math.max(0, c.totalM - along) / 1000).toFixed(1) + ' km · GPS 약함');
   }
 
   function updateMeOnMap(lat, lng) {
     var snapped = snapToCourse(lat, lng);
-    if (snapped) { lat = snapped[0]; lng = snapped[1]; }
+    var along = null;
+    if (snapped) { lat = snapped[0]; lng = snapped[1]; along = st.match.along; }
+    st.drSpeed = st.speedKmh / 3.6;
     var map = ensureMap();
     if (!map) return;
     var L = window.L;
@@ -684,10 +814,13 @@
         interactive: false,
         zIndexOffset: 1000
       }).addTo(map);
+      st.mePos = [lat, lng];
+      st.meAlong = along;
       updateMeArrow();
       followUser(lat, lng, Math.max(map.getZoom(), 16), false);
     } else {
-      st.meMarker.setLatLng([lat, lng]);
+      var gapMs = st.prevMeFixAt ? Date.now() - st.prevMeFixAt : 1000;
+      animateMe(lat, lng, along, gapMs);
       if (st.follow && st.headingUp) {
         // 헤딩업: 회전 중심이 지도 가운데라 매 위치마다 진행 방향 앞쪽으로 중심을 맞춘다(부드럽게 이동)
         followUser(lat, lng);
@@ -700,6 +833,25 @@
         }
       }
     }
+    st.prevMeFixAt = Date.now();
+    if (st.follow && !st.turnZoomed && st.course) autoZoomBySpeed(map);
+  }
+
+  /**
+   * 속도에 맞춘 자동 확대(가민·티맵 방식, 2026-10-21): 걷기 18 · 자전거 17 · 28km/h 이상 16.
+   * 같은 단계가 4초 이어질 때만 바꿔 출렁임 없음. 사용자가 직접 확대·축소하면 '내 위치' 버튼을 누를 때까지 멈춤.
+   */
+  function autoZoomBySpeed(map) {
+    var want = navIsWalk() ? 18 : st.speedKmh >= 28 ? 16 : 17;
+    var cur = map.getZoom();
+    if (st.autoZoomSet != null && cur !== st.autoZoomSet) return; // 사용자가 직접 바꿈
+    if (want === cur) { st.autoZoomSet = cur; st.zoomWant = null; return; }
+    if (st.zoomWant !== want) { st.zoomWant = want; st.zoomWantSince = Date.now(); return; }
+    if (Date.now() - st.zoomWantSince < 4000) return;
+    st.autoZoomSet = want;
+    st.zoomWant = null;
+    if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, want);
+    else map.setZoom(want, { animate: true });
   }
 
   document.addEventListener('visibilitychange', function () {
@@ -709,6 +861,7 @@
   window.recenterOutdoorMap = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     st.follow = true;
+    st.autoZoomSet = null; // 속도 자동 확대 다시 켬
     st.headingUp = true;
     applyRotation();
     if (st.map && st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map.getZoom(), 16));
@@ -766,24 +919,25 @@
     setText('outd-ui-remain', (st.course.totalM / 1000).toFixed(st.course.totalM < 10000 ? 2 : 1));
   }
 
-  /** 현재 위치에서 코스상 가장 가까운 지점(직전 위치 주변을 먼저 찾고, 멀면 전체 검색) */
-  function nearestCourseIdx(lat, lng) {
-    var c = st.course;
-    var n = c.latlngs.length;
-    var best = -1, bestD = Infinity;
-    function scan(a, b) {
-      for (var i = Math.max(0, a); i < Math.min(n, b); i++) {
-        var d = hav(lat, lng, c.latlngs[i][0], c.latlngs[i][1]);
-        if (d < bestD) { bestD = d; best = i; }
-      }
-    }
-    scan(st.courseIdx - 30, st.courseIdx + 200);
-    // 코스 전체 검색은 5초에 한 번만(이탈 상태에서 매초 최대 3만 점 계산 방지)
-    if (bestD > OFF_COURSE_M * 2 && Date.now() - (st.lastFullScanAt || 0) > 5000) {
-      st.lastFullScanAt = Date.now();
-      scan(0, n);
-    }
-    return { idx: best, dist: bestD };
+  /** (호환) 최근 맵매칭 결과를 { idx, dist } 로 — idx 는 선분 끝 꼭짓점 */
+  function nearestCourseIdx() {
+    var m = st.match;
+    return m ? { idx: m.seg, dist: m.d } : { idx: -1, dist: Infinity };
+  }
+
+  /**
+   * 회전 안내 거리(2026-10-21) — 고정 거리 대신 "회전까지 남은 시간" 기준(가민·티맵 방식), 걷기는 짧게
+   *  pre: 미리 알림(음성만), card: 큰 회전 카드·지도 확대 + 알림, near: "곧 ○회전"
+   */
+  function turnDistances() {
+    var v = Math.max(st.speedKmh / 3.6, navIsWalk() ? 1.3 : 4);
+    if (navIsWalk()) return { show: 200, pre: 0, card: 60, near: 15 };
+    return {
+      show: 400,
+      pre: clampN(v * 30, 200, 400), // 약 30초 전
+      card: clampN(v * 15, 100, 250), // 약 15초 전
+      near: clampN(v * 5, 25, 60) // 약 5초 전
+    };
   }
 
   function turnWord(delta) {
@@ -885,7 +1039,8 @@
     return el;
   }
 
-  function showTurnBig(turn, dm) {
+  function showTurnBig(turn, dm, TD) {
+    var nearM = TD && TD.near ? TD.near : 40;
     var el = turnBigEl();
     if (!el) return;
     if (st.turnBigIdx !== turn.idx) {
@@ -897,16 +1052,16 @@
     var dist = navDistM(dm) + 'm';
     var distEl = el.querySelector('.outd-turn-big__dist');
     if (distEl.textContent !== dist) distEl.textContent = dist;
-    el.classList.toggle('is-near', dm <= 40);
+    el.classList.toggle('is-near', dm <= nearM);
     el.style.display = 'flex';
-    // 150m 진입 1회·40m 진입 1회: 진동 + 알림음 + 음성
+    // 카드 진입 1회·바로 앞(속도 기준 약 5초 전, 걷기 15m) 1회: 진동 + 알림음 + 음성
     var word = turn.text || turnWord(turn.delta);
     if (!st.turnBuzz.far) {
       st.turnBuzz.far = true;
       try { if (navigator.vibrate) navigator.vibrate(150); } catch (e) {}
       cue('turnFar', voiceDist(dm) + ' 후 ' + word);
     }
-    if (dm <= 40 && !st.turnBuzz.near) {
+    if (dm <= nearM && !st.turnBuzz.near) {
       st.turnBuzz.near = true;
       try { if (navigator.vibrate) navigator.vibrate([120, 80, 120]); } catch (e) {}
       cue('turnNear', '곧 ' + turnWord(turn.delta));
@@ -1004,43 +1159,59 @@
     st.passedLine.setLatLngs(pts.length >= 2 ? pts : []);
   }
 
-  function updateNavigation(lat, lng) {
+  function updateNavigation(lat, lng, t) {
     if (!st.course || !st.course.latlngs.length) return;
-    var r = nearestCourseIdx(lat, lng);
-    if (r.idx < 0) return;
-    st.courseIdx = r.idx;
     var c = st.course;
+    var m = matchCourse(lat, lng, t || Date.now());
+    st.match = m;
+    if (!m) return;
+    var P = navParams();
+    var now = Date.now();
     var nav = $('outdNav');
     var arrow = $('outdNavArrow');
-    var remainM = Math.max(0, c.totalM - c.cum[r.idx]);
+    // 이탈 판정: 기준 거리 밖이 일정 시간(자전거 3초·걷기 5초) 이어질 때만(순간 GPS 튐·교차로 회전은 이탈 아님).
+    // 아주 멀면(기준 2배) 바로 이탈. GPS 정확도가 나쁘면(>50m) 판정 보류.
+    var badFix = st.lastFix && st.lastFix.acc > 50;
+    if (m.d > P.offM && !badFix) {
+      if (!st.offSince) st.offSince = now;
+    } else if (m.d <= P.offM) {
+      st.offSince = 0;
+    }
+    var offCourse = !!st.offSince && (now - st.offSince >= P.offHoldMs || m.d > P.offM * 2);
+    var here = offCourse ? (st.lastOnRouteAlong != null ? st.lastOnRouteAlong : m.along) : m.along;
+    var remainM = Math.max(0, c.totalM - here);
     setText('outdNavRemain', '남은 ' + (remainM / 1000).toFixed(1) + ' km');
     setText('outd-ui-remain', (remainM / 1000).toFixed(remainM < 10000 ? 2 : 1));
-    var offCourse = r.dist > OFF_COURSE_M + Math.min(30, (st.lastFix && st.lastFix.acc) || 0);
     if (nav) nav.classList.toggle('is-off', offCourse);
     if (offCourse) {
       st.onRoute = false; // 이탈 중에는 진행 방향(GPS) 기준으로 지도 회전
-      // 코스로 돌아가는 방향
-      var p = c.latlngs[r.idx];
-      var toCourse = bearing(lat, lng, p[0], p[1]);
       hideTurnBig();
-      setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + Math.round(r.dist) + 'm');
-      if (!st.offCued && st.speedKmh >= 3) { st.offCued = true; cue('off', c.isRoute ? '경로를 벗어났습니다' : '코스를 벗어났습니다'); }
+      // 코스로 돌아가는 방향·거리(가민 Off Course 안내)
+      var toCourse = bearing(lat, lng, m.lat, m.lng);
+      setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + navDistM(m.d) + 'm');
+      if (!st.offCued && st.speedKmh >= (P.walk ? 1.5 : 3)) { st.offCued = true; cue('off', c.isRoute ? '경로를 벗어났습니다' : '코스를 벗어났습니다'); }
       maybeReroute();
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(toCourse) + 'deg)';
       return;
     }
+    if (st.offCued) {
+      st.offCued = false;
+      cue('reroute', c.isRoute ? '경로로 돌아왔습니다' : '코스로 돌아왔습니다');
+    }
     st.offRouteSince = 0;
-    st.offCued = false;
-    st.lastOnRouteIdx = r.idx;
+    st.lastOnRouteAlong = here;
+    st.lastOnRouteIdx = m.seg;
     // 길 방향이 항상 화면 위쪽(route-up): 내 위치에서 약 40m 앞 경로 방향 — 멈춰 있어도·출발 전에도 맞춰짐
     st.onRoute = true;
-    var hereD = c.cum[r.idx];
-    updatePassedLine(hereD, lat, lng);
-    if (hereD < c.totalM - 5) {
-      var pa = pointAtDist(hereD), pb = pointAtDist(Math.min(c.totalM, hereD + 40));
+    updatePassedLine(here, lat, lng);
+    if (here < c.totalM - 5) {
+      var pa = pointAtDist(here), pb = pointAtDist(Math.min(c.totalM, here + 40));
       if (hav(pa[0], pa[1], pb[0], pb[1]) > 3) setMapHeading(bearing(pa[0], pa[1], pb[0], pb[1]));
     }
-    if (remainM < 30) {
+    // 도착: 남은 거리 또는 목적지까지 직선거리(걷기 15m·자전거 25m)
+    var arriveM = P.walk ? 15 : 25;
+    var destPt = c.dest ? [c.dest.lat, c.dest.lng] : c.latlngs[c.latlngs.length - 1];
+    if (remainM < arriveM || (remainM < 80 && hav(lat, lng, destPt[0], destPt[1]) < arriveM)) {
       hideTurnBig();
       setText('outdNavText', c.isRoute ? '목적지에 도착했습니다' : '도착 지점입니다');
       if (!c.arrivedCue) { c.arrivedCue = true; cue('arrive', c.isRoute ? '목적지에 도착했습니다' : '코스 도착 지점입니다'); }
@@ -1048,17 +1219,23 @@
       return;
     }
     if (arrow && arrow.textContent !== '↑') arrow.textContent = '↑';
-    var here = c.cum[r.idx];
+    // 다음 회전: 회전 지점을 6m 지날 때까지 유지(지나기 전에 카드가 사라지지 않게)
     var next = null;
     for (var i = 0; i < c.turns.length; i++) {
-      if (c.turns[i].at > here + 8) { next = c.turns[i]; break; }
+      if (c.turns[i].at > here - 6) { next = c.turns[i]; break; }
     }
-    if (next && next.at - here <= TURN_ANNOUNCE_M) {
-      var dm = next.at - here;
-      var dist = navDistM(dm) + 'm';
-      setText('outdNavText', dist + ' 후 ' + (next.text || turnWord(next.delta)));
+    var TD = turnDistances();
+    if (next && next.at - here <= TD.show) {
+      var dm = Math.max(0, next.at - here);
+      var word = next.text || turnWord(next.delta);
+      setText('outdNavText', dm < 10 ? '지금 ' + turnWord(next.delta) : navDistM(dm) + 'm 후 ' + word);
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(Math.max(-150, Math.min(150, next.delta))) + 'deg)';
-      if (dm <= TURN_BIG_M) showTurnBig(next, dm);
+      // 미리 알림(자전거, 약 30초 전 · 음성만 1회)
+      if (TD.pre && dm <= TD.pre && dm > TD.card && st.preCuedTurn !== next.idx) {
+        st.preCuedTurn = next.idx;
+        cue('turnPre', voiceDist(dm) + ' 앞 ' + word);
+      }
+      if (dm <= TD.card) showTurnBig(next, dm, TD);
       else hideTurnBig();
     } else {
       hideTurnBig();
@@ -1098,6 +1275,7 @@
         hideTurnBig();
         st.course = prepareCourse(title || '', latlngs);
         st.courseIdx = 0;
+    resetMatch();
         drawCourse();
         if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
       })
@@ -1514,6 +1692,7 @@
     course.routeMode = route.mode;
     st.course = course;
     st.courseIdx = 0;
+    resetMatch();
     st.offRouteSince = 0;
     st.lastOnRouteIdx = null;
     drawCourse();
@@ -1552,7 +1731,7 @@
     var r = nearestCourseIdx(fix.lat, fix.lng);
     var destDist = hav(fix.lat, fix.lng, c.dest.lat, c.dest.lng);
     if (destDist < 150) return;
-    if (st.speedKmh < 3) { st.offRouteSince = 0; return; } // 멈춰 있으면(휴식 등) 재탐색 안 함
+    if (st.speedKmh < (navIsWalk() ? 1.5 : 3)) { st.offRouteSince = 0; return; } // 멈춰 있으면(휴식 등) 재탐색 안 함
     if (!st.offRouteSince) {
       st.offRouteSince = now;
       st.offRouteStartDist = r.dist;
@@ -1573,8 +1752,8 @@
     var from = { lat: fix.lat, lng: fix.lng };
     var heading = st.heading != null && st.speedKmh >= 5 ? st.heading : null;
     // 합류 지점: 마지막으로 경로 위에 있던 곳에서 약 200m 앞(남은 경로가 짧으면 목적지)
-    var baseIdx = st.lastOnRouteIdx != null ? st.lastOnRouteIdx : r.idx;
-    var rejoinAt = c.cum[baseIdx] + 200;
+    var baseAlong = st.lastOnRouteAlong != null ? st.lastOnRouteAlong : (r.idx > 0 ? c.cum[r.idx] : 0);
+    var rejoinAt = baseAlong + (navIsWalk() ? 100 : 200);
     var via = rejoinAt < c.totalM - 150 ? (function () { var p = pointAtDist(rejoinAt); return { lat: p[0], lng: p[1] }; })() : null;
 
     var fresh = fetchBikeRoute(from, c.dest, mode, { heading: heading }).catch(function () { return null; });
@@ -1823,6 +2002,7 @@
     hideTurnBig();
     st.course = null;
     st.courseIdx = 0;
+    resetMatch();
     st.onRoute = false;
     if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
     var nav = $('outdNav');
