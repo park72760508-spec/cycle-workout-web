@@ -518,8 +518,8 @@
     // 확대·축소 애니메이션 중에는 프레임 따라가기(followFrame)를 멈춤 — 서로 끊지 않게
     st.map.on('zoomstart', function () { st.mapZooming = true; });
     st.map.on('zoomend', function () { st.mapZooming = false; });
-    // 자유 라이딩 지나온 길(2026-10-21): 속도계 원호와 같은 녹색, 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
-    st.trail = L.polyline([], { color: '#22c55e', weight: 10, opacity: 0.9, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
+    // 자유 라이딩 지나온 길(2026-10-21): 진한 녹색(속도계 원호 녹색 계열의 가장 진한 색), 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
+    st.trail = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
     st.trailRaw = [];
     st.trailDone = [];
     st.map.dragging.disable();
@@ -592,16 +592,7 @@
       st.moveHeading = st.moveHeading == null ? mh : (st.moveHeading + angleDiff(st.moveHeading, mh) * 0.5 + 360) % 360;
       updateMeArrow();
     }
-    // 코스·경로를 따라가는 중이면 지도 방향은 길 방향(route-up, updateNavigation)이 정한다
-    if (st.course && st.onRoute) return;
-    var h = null;
-    var spdKmh = c.speed != null && isFinite(c.speed) ? c.speed * 3.6 : 0;
-    if (c.heading != null && isFinite(c.heading) && spdKmh >= 3) h = c.heading;
-    var hp = st.lastHeadPt;
-    if (h == null && hp && hav(hp[0], hp[1], lat, lng) >= 8) h = bearing(hp[0], hp[1], lat, lng);
-    if (!hp || h != null) st.lastHeadPt = [lat, lng];
-    if (h == null) return;
-    setMapHeading(st.heading == null ? h : (st.heading + angleDiff(st.heading, h) * 0.5 + 360) % 360);
+    // 지도 방향: 코스·경로 위면 길 방향(route-up, updateNavigation), 자유 이동·이탈 중이면 위치 필터의 진행 방향(updateMeOnMap → freeHeading)
   }
 
   /** 위도·경도에서 방위각 brg 로 dist(m) 떨어진 지점 */
@@ -620,7 +611,9 @@
     var hPx = wrap ? wrap.clientHeight : 300;
     var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
     // 내 위치 높이: 기본 화면 아래 65%, 지도 크게 보기는 아래 80%(떠 있는 시작·정지 버튼 위)
-    return destPoint(lat, lng, st.heading, hPx * (st.expanded ? 0.30 : 0.15) * mpp);
+    // 크게 보기: 80% 지점보다 아바타 높이(27px)의 5배 위(2026-10-21)
+    var shiftPx = st.expanded ? Math.max(0, hPx * 0.30 - 27 * 5) : hPx * 0.15;
+    return destPoint(lat, lng, st.heading, shiftPx * mpp);
   }
   function followUser(lat, lng, zoom, animate) {
     var map = st.map;
@@ -880,10 +873,63 @@
     setText('outdNavRemain', '남은 ' + (Math.max(0, c.totalM - along) / 1000).toFixed(1) + ' km · GPS 약함');
   }
 
+  /**
+   * 자유 이동 위치 필터(2026-10-21, 알파-베타 필터 — 위치·속도 예측 후 GPS 와 차이만큼만 보정):
+   * 경로가 없을 때(자유 라이딩·이탈) GPS 흔들림으로 아이콘·지도가 출렁이지 않게. 멈춰 있을 때 오차 안의 흔들림은 무시(제자리 고정).
+   * 40m 넘게 튀거나 5초 넘게 끊기면 측정값으로 다시 시작. 거리·기록은 원래 GPS 값 그대로.
+   */
+  function freeFilter(lat, lng, t, acc) {
+    var f = st.ff;
+    if (!f || t - f.t > 5000) {
+      st.ff = { lat0: lat, lng0: lng, x: 0, y: 0, vx: 0, vy: 0, t: t };
+      return [lat, lng];
+    }
+    var kx = Math.cos(f.lat0 * Math.PI / 180) * 111320, ky = 110540;
+    var dt = clampN((t - f.t) / 1000, 0.2, 5);
+    var mx = (lng - f.lng0) * kx, my = (lat - f.lat0) * ky;
+    var px = f.x + f.vx * dt, py = f.y + f.vy * dt;
+    var rx = mx - px, ry = my - py, rr = Math.sqrt(rx * rx + ry * ry);
+    var v = st.speedKmh / 3.6;
+    if (rr > 40) {
+      f.x = mx; f.y = my; f.vx = 0; f.vy = 0;
+    } else if (v < 0.6 && rr < Math.max(6, acc)) {
+      f.vx *= 0.3; f.vy *= 0.3; // 정지: 제자리 유지
+    } else {
+      var a = acc > 20 ? 0.2 : 0.3, b = 0.08;
+      f.x = px + a * rx; f.y = py + a * ry;
+      f.vx += (b * rx) / dt; f.vy += (b * ry) / dt;
+      // GPS 가 주는 속도·방향으로 속도를 살짝 맞춤(출발 직후 반응 빠르게)
+      if (v >= 2 && st.moveHeading != null) {
+        var hr = st.moveHeading * Math.PI / 180;
+        f.vx = f.vx * 0.7 + Math.sin(hr) * v * 0.3;
+        f.vy = f.vy * 0.7 + Math.cos(hr) * v * 0.3;
+      }
+    }
+    f.t = t;
+    return [f.lat0 + f.y / ky, f.lng0 + f.x / kx];
+  }
+  /** 자유 이동 지도 방향: 필터 속도 방향을 천천히(0.25) 따라가고 4° 미만 변화는 무시 */
+  function freeHeading() {
+    var f = st.ff;
+    if (!f) return;
+    var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+    if (sp < 1.5) return;
+    var h = (Math.atan2(f.vx, f.vy) * 180 / Math.PI + 360) % 360;
+    st.freeHd = st.freeHd == null ? h : (st.freeHd + angleDiff(st.freeHd, h) * 0.25 + 360) % 360;
+    if (st.heading == null || Math.abs(angleDiff(st.heading, st.freeHd)) >= 4) setMapHeading(st.freeHd);
+  }
+
   function updateMeOnMap(lat, lng) {
     var snapped = snapToCourse(lat, lng);
     var along = null;
-    if (snapped) { lat = snapped[0]; lng = snapped[1]; along = st.navAlong; }
+    if (snapped) {
+      lat = snapped[0]; lng = snapped[1]; along = st.navAlong;
+      st.ff = null; // 경로 위: 필터는 쉬고(경로 고정이 대신함), 벗어나면 그 자리에서 새로 시작
+    } else {
+      var fp = freeFilter(lat, lng, Date.now(), (st.lastFix && st.lastFix.acc) || 10);
+      lat = fp[0]; lng = fp[1];
+      if (!(st.course && st.onRoute)) freeHeading();
+    }
     st.drSpeed = st.speedKmh / 3.6;
     var map = ensureMap();
     if (!map) return;
