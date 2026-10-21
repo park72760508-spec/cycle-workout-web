@@ -34815,3 +34815,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen.outd-expanded .outd-turn-big { top: auto; bottom: 188px; left: 8px; right: auto; margin: 0; transform-origin: left bottom; }
 /* 지도 크게 보기 방향 전환 표시판: 표시판 높이(94px)의 1/2(47px) 아래로 — 바닥에서 188 → 141px(2026-10-22) */
 #outdoorRideScreen.outd-expanded .outd-turn-big { bottom: 141px; }
+/* 아웃도어 메뉴 버튼(2026-10-22): '연결' 문구 대신 ≡ 아이콘 + GPS 연결 점 */
+#outdoorRideScreen .outd-menu-btn { gap: 6px; }
+#outdoorRideScreen .outd-menu-btn__icon { display: block; flex-shrink: 0; }
