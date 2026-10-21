@@ -1617,19 +1617,21 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         return res.text();
       })
-      .then(function (txt) {
-        var latlngs = parseCourseGpx(txt);
-        if (latlngs.length < 2) throw new Error('코스 포인트가 없습니다.');
-        hideTurnBig();
-        st.course = prepareCourse(title || '', latlngs);
-        st.courseIdx = 0;
-    resetMatch();
-        drawCourse();
-        if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
-      })
+      .then(function (txt) { useCourseGpxText(txt, title); })
       .catch(function (e) {
         toast('코스맵을 불러오지 못했습니다: ' + ((e && e.message) || e), 'error');
       });
+  }
+  /** GPX 글자 → 코스로 등록(즐겨찾기 코스·기기 파일 공통) */
+  function useCourseGpxText(txt, title) {
+    var latlngs = parseCourseGpx(txt);
+    if (latlngs.length < 2) throw new Error('코스 포인트가 없습니다.');
+    hideTurnBig();
+    st.course = prepareCourse(title || '', latlngs);
+    st.courseIdx = 0;
+    resetMatch();
+    drawCourse();
+    if (st.lastFix) updateNavigation(st.lastFix.lat, st.lastFix.lng);
   }
 
   /* ---------- 길찾기(2026-10-20): 목적지 검색 + 자전거 경로 안내 ----------
@@ -2332,9 +2334,58 @@
     return (window.currentUser && window.currentUser.id) || '';
   }
 
+  /*
+   * 코스맵 선택(2026-10-21): 라이딩 생성 화면의 "GPX 파일(선택) > 파일 선택"과 같은 방식
+   *  GPX 파일 선택 팝업 → [📁 코스 폴더에서 선택] 기기의 GPX 파일 / [⭐ 즐겨찾기 코스에서 선택] 내가 만든 모임의 코스
+   */
   window.openOutdoorCoursePicker = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     closeMenu();
+    var old = $('outdGpxSource');
+    if (old) old.remove();
+    var m = document.createElement('div');
+    m.id = 'outdGpxSource';
+    m.className = 'outd-gpx-src';
+    m.innerHTML =
+      '<div class="outd-gpx-src__card" role="dialog" aria-modal="true" aria-label="GPX 파일 선택">' +
+      '<p class="outd-gpx-src__title">GPX 파일 선택</p>' +
+      '<button type="button" class="outd-gpx-src__btn" data-src="folder"><span class="outd-gpx-src__ico">📁</span>' +
+      '<span><b>코스 폴더에서 선택</b><small>내 기기에서 GPX 파일을 직접 선택합니다</small></span></button>' +
+      '<button type="button" class="outd-gpx-src__btn" data-src="fav"><span class="outd-gpx-src__ico">⭐</span>' +
+      '<span><b>즐겨찾기 코스에서 선택</b><small>내가 만든 모임의 코스 GPX를 다시 사용합니다</small></span></button>' +
+      '<button type="button" class="outd-gpx-src__cancel" data-src="cancel">취소</button>' +
+      '<input type="file" accept=".gpx,application/gpx+xml" class="outd-gpx-src__file" hidden>' +
+      '</div>';
+    document.body.appendChild(m);
+    var fileIn = m.querySelector('.outd-gpx-src__file');
+    fileIn.addEventListener('change', function () {
+      var f = fileIn.files && fileIn.files[0];
+      if (!f) return;
+      if (!/\.gpx$/i.test(f.name || '')) { toast('GPX 파일(.gpx)을 선택해 주세요.', 'error'); return; }
+      var rd = new FileReader();
+      rd.onload = function () {
+        try {
+          useCourseGpxText(String(rd.result || ''), String(f.name || '').replace(/\.gpx$/i, ''));
+          m.remove();
+          toast('코스를 불러왔습니다 · ' + (st.course.totalM / 1000).toFixed(1) + ' km', 'success');
+        } catch (err) {
+          toast('GPX 파일을 읽지 못했습니다: ' + ((err && err.message) || err), 'error');
+        }
+      };
+      rd.onerror = function () { toast('GPX 파일을 읽지 못했습니다.', 'error'); };
+      rd.readAsText(f);
+    });
+    m.addEventListener('click', function (ev) {
+      var b = ev.target.closest && ev.target.closest('[data-src]');
+      if (ev.target === m || (b && b.getAttribute('data-src') === 'cancel')) { m.remove(); return; }
+      if (!b) return;
+      if (b.getAttribute('data-src') === 'folder') { fileIn.value = ''; fileIn.click(); return; }
+      m.remove();
+      openFavoriteCourses();
+    });
+  };
+  /** 즐겨찾기 코스(내가 만든 모임의 GPX) 목록 */
+  function openFavoriteCourses() {
     var picker = $('outdCoursePicker');
     var list = $('outdCoursePickerList');
     if (!picker || !list) return;
@@ -2369,7 +2420,7 @@
     }).catch(function () {
       list.innerHTML = '<div class="coachm-picker__empty">코스맵 목록을 불러오지 못했습니다.</div>';
     });
-  };
+  }
   /** 자유 라이딩: 코스맵 없이 현재 위치 기준으로 기록(코스 안내·회전 안내 끄기) */
   window.startOutdoorFreeRide = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();

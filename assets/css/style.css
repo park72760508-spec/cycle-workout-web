@@ -34729,3 +34729,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-compass__needle { transition: none !important; }
 /* 지도 크게 보기: 갈림길 안내판 — 위쪽 1/3 높이, 왼쪽(2026-10-21) */
 #outdoorRideScreen.outd-expanded .outd-turn-big { left: 8px; right: auto; margin: 0; transform-origin: left top; }
+
+/* 아웃도어 코스맵 선택 → GPX 파일 선택 팝업(2026-10-21, 라이딩 생성 화면 "GPX 파일(선택)"과 같은 디자인) */
+.outd-gpx-src { position: fixed; inset: 0; z-index: 100600; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.4); }
+.outd-gpx-src__card { width: calc(100% - 32px); max-width: 384px; background: #ffffff; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; }
+.outd-gpx-src__title { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: #1e293b; }
+.outd-gpx-src__btn { width: 100%; display: flex; align-items: center; gap: 12px; border: 1px solid #e2e8f0; border-radius: 12px; padding: 12px 16px; background: #ffffff; text-align: left; cursor: pointer; }
+.outd-gpx-src__btn:active { background: #f8fafc; }
+.outd-gpx-src__ico { font-size: 24px; line-height: 1; }
+.outd-gpx-src__btn b { display: block; font-size: 14px; font-weight: 500; color: #1e293b; }
+.outd-gpx-src__btn small { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
+.outd-gpx-src__cancel { width: 100%; padding: 8px 0; border: 0; background: transparent; font-size: 14px; color: #64748b; cursor: pointer; }
