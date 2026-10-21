@@ -34790,3 +34790,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-reroute-btn.is-busy svg { animation: outdRerouteSpin 0.9s linear infinite; }
 @keyframes outdRerouteSpin { to { transform: rotate(360deg); } }
+
+/* 카테고리 화면 내비(ROUTE) 버튼(2026-10-22): 중고랜드 버튼과 같은 크기·바로 위, 바탕은 CYCLE/RUN 타일 하늘색, 글자·아이콘은 CYCLE 글자색 */
+#sportCategoryScreen .market-entry-btn { min-width: 150px; }
+#sportCategoryScreen .navi-entry-btn {
+  margin-top: 8px;
+  background: #dbf0f9;
+  border: 2px solid rgba(135, 206, 235, 0.6);
+  box-shadow: 0 2px 8px rgba(70, 130, 180, 0.25);
+  color: #4682b4;
+  padding: 5px 16px; /* 테두리 2px 만큼 줄여 중고랜드 버튼과 같은 높이 */
+}
+#sportCategoryScreen .navi-entry-btn:active { box-shadow: 0 1px 4px rgba(70, 130, 180, 0.25); }
+#sportCategoryScreen .navi-entry-btn__icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  background-color: #4682b4;
+  -webkit-mask: url('../img/route.svg') center / contain no-repeat;
+  mask: url('../img/route.svg') center / contain no-repeat;
+}
+#sportCategoryScreen .navi-entry-btn + .market-entry-btn { margin-top: 8px; }
