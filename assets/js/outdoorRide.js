@@ -661,6 +661,21 @@
     var z = zoom != null ? zoom : map.getZoom();
     map.setView(followCenter(lat, lng, z), z, { animate: animate !== false, duration: 0.8 });
   }
+  /**
+   * 확대·축소(회전 지점 확대·복귀, 속도 자동 확대) — 화면 가운데가 아니라 내 위치 아바타를 고정점으로(setZoomAround).
+   * 가운데 기준이면 확대되는 0.2초 동안 아래쪽 아바타가 옆으로 밀렸다 돌아옴(실측 최대 35px) → 고정점 확대로 제거.
+   * 따라가기 기준점(followCenter)은 화면 픽셀 거리라 확대 후에도 같은 자리.
+   */
+  function zoomKeepMe(z) {
+    var map = st.map;
+    if (!map) return;
+    var p = st.mePos || (st.lastFix ? [st.lastFix.lat, st.lastFix.lng] : null);
+    if (!p) { map.setZoom(z, { animate: true }); return; }
+    if (map.getZoom() === z) return;
+    if (st.follow) map.setZoomAround(window.L.latLng(p[0], p[1]), z, { animate: true });
+    else map.setZoom(z, { animate: true });
+  }
+
   /** 아이콘 이동 프레임마다 지도도 함께(헤딩업 따라가기) — 지도·아이콘이 따로 움직여 출렁이지 않게. 확대·축소 중엔 건너뜀 */
   function followFrame(lat, lng) {
     var map = st.map;
@@ -1017,8 +1032,7 @@
     if (Date.now() - st.zoomWantSince < 4000) return;
     st.autoZoomSet = want;
     st.zoomWant = null;
-    if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, want);
-    else map.setZoom(want, { animate: true });
+    zoomKeepMe(want);
   }
 
   document.addEventListener('visibilitychange', function () {
@@ -1238,7 +1252,7 @@
     if (st.follow && st.map && st.lastFix && st.map.getZoom() < TURN_ZOOM && !st.turnZoomed) {
       st.turnZoomed = true;
       st.zoomBeforeTurn = st.map.getZoom();
-      followUser(st.lastFix.lat, st.lastFix.lng, TURN_ZOOM);
+      zoomKeepMe(TURN_ZOOM);
     }
   }
 
@@ -1248,8 +1262,7 @@
     st.turnBigIdx = null;
     clearTurnOnMap();
     if (st.turnZoomed && st.map && st.follow) {
-      if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, st.zoomBeforeTurn || 16);
-      else st.map.setZoom(st.zoomBeforeTurn || 16, { animate: true });
+      zoomKeepMe(st.zoomBeforeTurn || 16);
     }
     st.turnZoomed = false;
   }
