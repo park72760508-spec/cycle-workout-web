@@ -373,6 +373,29 @@
    * 지도 크게 보기(2026-10-21): 속도계를 숨기고 지도를 하단 정보(평균 속도·남은 거리·누적 고도) 위 테두리까지 확장.
    * 시작·정지는 지도 위 떠 있는 버튼, 내 위치는 화면 아래쪽(따라가기 기준점 65% → 80%). 다시 누르면 원래 화면.
    */
+  /* 상단 경로 안내 문구(2026-10-22): 기본 숨기기, 오른쪽 아래 버튼으로 표시/숨기기 — 선택은 기기에 기억 */
+  var NAVTEXT_LS = 'stelvioOutdoorNavText';
+  function applyNavTextPref() {
+    var on = false;
+    try { on = localStorage.getItem(NAVTEXT_LS) === '1'; } catch (e) {}
+    st.navTextOn = on;
+    var screen = $(SCREEN_ID);
+    if (screen) screen.classList.toggle('outd-navtext-off', !on);
+    var b = $('outdNavTextBtn');
+    if (b) {
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      b.setAttribute('aria-label', on ? '경로 안내 문구 숨기기' : '경로 안내 문구 표시');
+    }
+  }
+  window.toggleOutdoorNavText = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    try { localStorage.setItem(NAVTEXT_LS, st.navTextOn ? '0' : '1'); } catch (err) {}
+    applyNavTextPref();
+    toast(st.navTextOn ? '경로 안내 문구를 표시합니다' : '경로 안내 문구를 숨깁니다', 'info');
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyNavTextPref);
+  else applyNavTextPref();
+
   /** 진단용(읽기 전용): 화면 표시 진행 거리·속도 — 시뮬레이션 검증(뒤로 감 여부 등)에 사용 */
   window.stelvioOutdoorDebug = function () {
     return { along: st.mo ? st.mo.along : null, v: st.mo ? st.mo.v : null, pos: st.mePos ? st.mePos.slice() : null, locked: !!st.navLocked, follow: !!st.follow, zooming: !!st.mapZooming, zoom: st.map ? st.map.getZoom() : null, turnZoomed: !!st.turnZoomed };
@@ -2984,6 +3007,7 @@
    * @param {{ gpxUrl?: string, title?: string, rideId?: string }} [opts]
    */
   window.openOutdoorRide = function (opts) {
+    applyNavTextPref(); // 경로 안내 문구 표시 설정(기본 숨기기)
     opts = opts || {};
     st.prevScreen = activeScreenId() || st.prevScreen;
     if (typeof window.showScreen === 'function') window.showScreen(SCREEN_ID);
