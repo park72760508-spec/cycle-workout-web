@@ -1320,7 +1320,7 @@
     var lead = st.course.leadConnector || 0, tail = st.course.tailConnector || 0;
     L.polyline(cl.slice(lead, cl.length - tail), { color: '#7c3aed', weight: 10, opacity: 0.85, smoothFactor: 1.5, lineCap: 'round', lineJoin: 'round' }).addTo(st.courseLayer);
     // 내 위치 → 경로 시작, 경로 끝 → 목적지: 점선 연결선
-    var dash = { color: '#7c3aed', weight: 6, opacity: 0.9, dashArray: '2 12', lineCap: 'round', interactive: false };
+    var dash = { color: '#7c3aed', weight: 9, opacity: 1, dashArray: '1 14', lineCap: 'round', interactive: false }; // 둥근 점선(잘 보이게)
     if (lead) L.polyline(cl.slice(0, lead + 1), dash).addTo(st.courseLayer);
     if (tail) L.polyline(cl.slice(cl.length - tail - 1), dash).addTo(st.courseLayer);
     // 지나간 구간(출발점 ~ 현재 위치)은 회색으로 덮음 — updatePassedLine 에서 갱신
