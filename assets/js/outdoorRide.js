@@ -364,6 +364,9 @@
     if (fimg) fimg.setAttribute('src', st.status === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png');
     var fctrl = $('outdFloatCtrl');
     if (fctrl) fctrl.classList.toggle('is-running', st.status === 'running');
+    // 기록 중이면 시작 버튼의 흰 바탕을 녹색으로(구동 중 표시), 멈추면 다시 흰색(2026-10-22)
+    var tc = $('outdToggleCircle');
+    if (tc) tc.setAttribute('fill', st.status === 'running' ? '#22c55e' : '#ffffff');
     // 자유 라이딩 안내("시작 버튼을 누르면 기록이 시작됩니다")는 기록을 시작하면 숨김
     var empty = $('outdMapEmpty');
     if (empty && !st.course && st.status === 'running') empty.style.display = 'none';

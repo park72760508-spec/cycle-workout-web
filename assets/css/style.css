@@ -34821,3 +34821,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 아웃도어 상단 왼쪽 홈 버튼(2026-10-22): 하단 내비게이션바 홈 아이콘(흰 선), 바탕 없음 */
 #outdoorRideScreen .outd-home-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 36px; margin-left: 6px; border-radius: 10px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #outdoorRideScreen .outd-home-btn:active { background: rgba(255, 255, 255, 0.12); }
+/* 지도 크게 보기 떠 있는 시작 버튼도 기록 중이면 녹색 바탕(2026-10-22) */
+#outdoorRideScreen .outd-float-ctrl.is-running .outd-float-btn--start { background: #22c55e; }
