@@ -2391,13 +2391,19 @@
     if (!picker || !list) return;
     picker.style.display = 'flex';
     list.innerHTML = '<div class="coachm-picker__empty">코스맵을 불러오는 중...</div>';
-    var client = window.openRidingReadClient;
     var uid = currentUid();
-    if (!client || typeof client.fetchMyGpxCoursesRouted !== 'function' || !uid) {
-      list.innerHTML = '<div class="coachm-picker__empty">코스맵 목록을 불러올 수 없습니다.</div>';
+    if (!uid) {
+      list.innerHTML = '<div class="coachm-picker__empty">로그인 후 이용할 수 있습니다.</div>';
       return;
     }
-    client.fetchMyGpxCoursesRouted(uid, 'CYCLE').then(function (courses) {
+    // 오픈라이딩 화면을 거치지 않고 바로 들어오면 읽기 모듈이 아직 없음 → 같은 주소(버전)로 불러온 뒤 사용
+    var ready = window.openRidingReadClient && typeof window.openRidingReadClient.fetchMyGpxCoursesRouted === 'function'
+      ? Promise.resolve(window.openRidingReadClient)
+      : import('/assets/js/openRiding/openRidingReadClient.js?v=routing-ls-20260928').then(function () { return window.openRidingReadClient; });
+    ready.then(function (client) {
+      if (!client || typeof client.fetchMyGpxCoursesRouted !== 'function') throw new Error('no client');
+      return client.fetchMyGpxCoursesRouted(uid, 'CYCLE');
+    }).then(function (courses) {
       courses = Array.isArray(courses) ? courses.filter(function (c) { return c && c.gpxUrl; }) : [];
       if (!courses.length) {
         list.innerHTML = '<div class="coachm-picker__empty">저장된 코스맵이 없습니다.<br>라이딩 모임에서 GPX 코스를 등록하면 여기에 표시됩니다.</div>';
