@@ -544,18 +544,57 @@
     rot.style.top = Math.round((h - D) / 2) + 'px';
   }
 
+  /*
+   * 지도 회전(2026-10-21 개선): CSS 0.6초 회전 애니메이션은 화면 가운데를 축으로 도는 동안 지도 위치는 목표 방향 기준으로
+   * 바로 맞춰져, 가운데보다 아래에 있는 내 위치 아바타가 방향이 바뀔 때마다 옆으로 휘었다 돌아왔다(좌우 흔들림).
+   * → 회전 각도를 프레임마다 직접 부드럽게 바꾸고(st.dispRot), 같은 프레임에서 지도 위치도 "지금 보이는 각도"로 맞춤
+   *   → 회전 중에도 아바타는 화면의 한 점에 고정되고 앞으로만 움직임.
+   */
   function applyRotation() {
     var target = st.headingUp && st.heading != null ? -st.heading : 0;
     // 누적 각도로 회전(359°→1° 에서 한 바퀴 반대로 도는 것 방지)
     st.mapRotDeg = st.mapRotDeg == null ? target : st.mapRotDeg + angleDiff(st.mapRotDeg, target);
-    var rot = $('outdMapRot');
-    if (rot) rot.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)';
-    var needle = $('outdCompassNeedle');
-    if (needle) needle.style.transform = 'rotate(' + st.mapRotDeg.toFixed(1) + 'deg)'; // 빨간 끝 = 북쪽
-    updateMeArrow();
+    if (st.dispRot == null || document.hidden) { st.dispRot = st.mapRotDeg; paintRotation(); }
+    else kickRotation();
     setText('outdCompassMode', st.headingUp ? '진행' : '북쪽');
     // 지도 끌기는 Leaflet 기본 대신 회전 보정 핸들러(bindRotatedDrag)가 맡는다
     if (st.map && st.map.dragging) st.map.dragging.disable();
+  }
+
+  /** 지금 화면에 보이는 회전 각도를 지도·나침반·내 위치 화살표에 적용 */
+  function paintRotation() {
+    var d = (st.dispRot || 0).toFixed(2);
+    var rot = $('outdMapRot');
+    if (rot) rot.style.transform = 'rotate(' + d + 'deg)';
+    var needle = $('outdCompassNeedle');
+    if (needle) needle.style.transform = 'rotate(' + d + 'deg)'; // 빨간 끝 = 북쪽
+    updateMeArrow();
+  }
+  /** 화면에 보이는 진행 방향(°) — 지도 위치 맞춤(followCenter)에 사용 */
+  function dispHeading() {
+    if (st.dispRot == null) return st.heading;
+    return ((-st.dispRot % 360) + 360) % 360;
+  }
+  function kickRotation() {
+    if (st.rotAnimId) return;
+    var last = performance.now();
+    function frame(now) {
+      var dt = Math.min(100, now - last);
+      last = now;
+      var diff = st.mapRotDeg - st.dispRot;
+      if (Math.abs(diff) < 0.05 || !isActive() || document.hidden) {
+        st.dispRot = st.mapRotDeg;
+        paintRotation();
+        st.rotAnimId = null;
+        return;
+      }
+      st.dispRot += diff * (1 - Math.exp(-dt / 220)); // 약 0.5초에 걸쳐 부드럽게
+      paintRotation();
+      // 같은 프레임에서 지도 위치도 지금 각도 기준으로(아바타 고정)
+      if (st.mePos) followFrame(st.mePos[0], st.mePos[1], true);
+      st.rotAnimId = requestAnimationFrame(frame);
+    }
+    st.rotAnimId = requestAnimationFrame(frame);
   }
 
   /** 지도 방향 적용(3° 이상 바뀔 때만 회전) */
@@ -574,7 +613,7 @@
     var el = st.meMarker.getElement();
     var dir = el && el.querySelector('.outd-me__dir');
     if (!dir) return;
-    var deg = -(st.mapRotDeg || 0);
+    var deg = -(st.dispRot != null ? st.dispRot : st.mapRotDeg || 0);
     if (dir.__deg === deg) return;
     dir.__deg = deg;
     dir.style.transform = 'rotate(' + deg.toFixed(1) + 'deg)';
@@ -606,14 +645,15 @@
 
   /** 따라가기: 헤딩업이면 내 위치가 화면 아래쪽(65%)에 오도록 진행 방향 앞쪽을 지도 중심으로 */
   function followCenter(lat, lng, z) {
-    if (!(st.headingUp && st.heading != null)) return [lat, lng];
+    var hd = dispHeading();
+    if (!(st.headingUp && hd != null)) return [lat, lng];
     var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
     var hPx = wrap ? wrap.clientHeight : 300;
     var mpp = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z);
     // 내 위치 높이: 기본 화면 아래 65%, 지도 크게 보기는 아래 80%(떠 있는 시작·정지 버튼 위)
     // 크게 보기: 80% 지점보다 아바타 높이(27px)의 5배 위(2026-10-21)
     var shiftPx = st.expanded ? Math.max(0, hPx * 0.30 - 27 * 5) : hPx * 0.15;
-    return destPoint(lat, lng, st.heading, shiftPx * mpp);
+    return destPoint(lat, lng, hd, shiftPx * mpp);
   }
   function followUser(lat, lng, zoom, animate) {
     var map = st.map;
@@ -625,6 +665,7 @@
   function followFrame(lat, lng) {
     var map = st.map;
     if (!map || !st.follow || !st.headingUp || st.mapZooming) return;
+    st.lastFollowFrame = performance.now();
     map.setView(followCenter(lat, lng, map.getZoom()), map.getZoom(), { animate: false });
   }
 
@@ -654,7 +695,7 @@
       if (!sx && !sy) return;
       last.x = e.clientX;
       last.y = e.clientY;
-      var th = ((st.mapRotDeg || 0) * Math.PI) / 180;
+      var th = ((st.dispRot != null ? st.dispRot : st.mapRotDeg || 0) * Math.PI) / 180;
       var mx = sx * Math.cos(th) + sy * Math.sin(th);
       var my = -sx * Math.sin(th) + sy * Math.cos(th);
       if (st.follow) st.follow = false;
