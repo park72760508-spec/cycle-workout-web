@@ -292,6 +292,7 @@
     var el = elapsedNow();
     setText('outd-main-timer', fmtHms(el));
     setSplitNumber('outd-ui-distance', 'outd-ui-distance-dec', st.distanceM / 1000, 2);
+    setText('outdExpDist', (st.distanceM / 1000).toFixed(2)); // 지도 크게 보기 위쪽 이동 거리
     var avg = avgSpeedKmh();
     setText('outd-ui-avg', (isFinite(avg) ? avg : 0).toFixed(1));
     setText('outd-ui-elev', Math.round(st.elevGainM));
@@ -346,6 +347,7 @@
       }
     }
     setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', st.speedKmh, 1);
+    if (st.expanded) setText('outdExpSpeed', (st.speedKmh || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
     if (!settled) st.rafId = requestAnimationFrame(loop);
   }
 
@@ -387,6 +389,8 @@
       btn.setAttribute('aria-label', st.expanded ? '지도 원래 크기로' : '지도 크게 보기');
     }
     renderToggle();
+    setText('outdExpSpeed', (st.speedKmh || 0).toFixed(1));
+    setText('outdExpDist', (st.distanceM / 1000).toFixed(2));
     // 지도 크기가 바뀌었으니 다시 계산하고 내 위치 기준으로 다시 맞춤
     [40, 320].forEach(function (ms) {
       setTimeout(function () {
@@ -440,17 +444,41 @@
     kickLoop();
 
     if (st.status === 'running') {
-      // 이동 시간(멈춘 시간 제외)·최고 속도 — 정확도 좋은 값만(위치 튐으로 인한 순간 고속 제외)
-      if (accOk && prev && dt > 0 && dt < 10 && st.speedKmh >= 3) {
-        // 시작(재개) 이전 구간은 빼고, 경과 시간을 넘지 않게
-        var fromMs = Math.max(prev.t, st.runSince || 0);
-        if (t > fromMs) st.movingMs = Math.min(st.movingMs + (t - fromMs), elapsedNow());
+      /*
+       * 이동 시간·거리(2026-10-21 수정 — 휴대폰 걷기 실측에서 이동 시간이 짧게·평균 속도가 5→7km/h 로 나오던 오류):
+       *  예전: 기기 순간 속도 3km/h 이상일 때만 이동 시간에 넣어(걷기는 순간 속도가 3 밑으로 자주 떨어짐) 시간이 빠졌고,
+       *        GPS 점마다 거리를 더해 좌우로 3~5m 씩 흔들리는 지그재그가 거리에 쌓였다 → 평균 = 거리÷시간이 크게 부풀음.
+       *  지금: 움직임 = 최근 약 10초 동안 실제로 옮겨 간 거리(초속 0.6m=2.2km/h 이상) 또는 기기 속도 2.5km/h 이상,
+       *        거리 = 마지막 기준점에서 10초가 지나거나 20m 이상 멀어졌을 때 그 직선 거리만 더함(GPS 흔들림이 쌓이지 않음).
+       *  시뮬레이션: 5km/h 걷기 30분 — 평균 5.02~5.04km/h(실제 5.00), 자전거 커브 길 거리 오차 -1.7%
+       */
+      if (accOk) {
+        var hist = st.mvHist || (st.mvHist = []);
+        hist.push([t, lat, lng]);
+        while (hist.length && t - hist[0][0] > 12000) hist.shift();
+        var base = null;
+        for (var hi = 0; hi < hist.length; hi++) { if (t - hist[hi][0] >= 8000) base = hist[hi]; }
+        var winS = base ? (t - base[0]) / 1000 : 0;
+        st.isMoving = (base && hav(base[1], base[2], lat, lng) / winS >= 0.6) || st.speedKmh >= 2.5;
+        if (prev && dt > 0 && dt <= 30 && st.isMoving) {
+          // 시작(재개) 이전 구간은 빼고, 경과 시간을 넘지 않게
+          var fromMs = Math.max(prev.t, st.runSince || 0);
+          if (t > fromMs) st.movingMs = Math.min(st.movingMs + (t - fromMs), elapsedNow());
+        }
+        var an = st.distAnchor;
+        if (!an) {
+          st.distAnchor = [t, lat, lng];
+        } else {
+          var da = hav(an[1], an[2], lat, lng);
+          if (!st.isMoving) {
+            if (t - an[0] >= 10000) st.distAnchor = [t, lat, lng]; // 멈춰 있을 때 흔들림은 거리에 넣지 않음
+          } else if ((t - an[0] >= 10000 || da >= 20) && da / Math.max(1, (t - an[0]) / 1000) < 30) {
+            st.distanceM += da;
+            st.distAnchor = [t, lat, lng];
+          }
+        }
       }
       if (accOk && st.speedKmh > st.maxSpeedKmh && st.speedKmh < 100) st.maxSpeedKmh = st.speedKmh;
-      // 거리 누적: 정확도가 괜찮고(≤35m), 순간 이동(>30m/s)이 아니며, 실제로 움직였을 때만
-      if (prev && acc <= 35 && dt > 0 && d / dt < 30 && (st.speedKmh >= 1.5 || d > Math.max(3, acc * 0.5))) {
-        st.distanceM += d;
-      }
       // 누적 고도: 고도값을 부드럽게(EMA) 한 뒤 기준점보다 3m 이상 오르면 더한다(GPS 고도 흔들림 제거)
       if (c.altitude != null && isFinite(c.altitude) && acc <= 35) {
         st.altEma = st.altEma == null ? c.altitude : st.altEma + (c.altitude - st.altEma) * 0.25;
@@ -2474,6 +2502,9 @@
       st.status = 'running';
       // 일시정지 동안 이동한 거리는 넣지 않도록 기준 위치를 지금으로
       st.lastTrackPt = st.lastFix ? [st.lastFix.lat, st.lastFix.lng, null, Date.now()] : st.lastTrackPt;
+      // 일시정지 중 이동은 이동 시간·거리에 넣지 않음
+      st.mvHist = [];
+      st.distAnchor = st.lastFix ? [Date.now(), st.lastFix.lat, st.lastFix.lng] : null;
     }
     renderToggle();
     renderStats();
@@ -2780,6 +2811,8 @@
     st.elevGainM = 0;
     st.maxSpeedKmh = 0;
     st.movingMs = 0;
+    st.mvHist = [];
+    st.distAnchor = null;
     st.altBase = null;
     st.altEma = null;
     st.track = [];

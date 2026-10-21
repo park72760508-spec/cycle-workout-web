@@ -34740,3 +34740,30 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-gpx-src__btn b { display: block; font-size: 14px; font-weight: 500; color: #1e293b; }
 .outd-gpx-src__btn small { display: block; font-size: 12px; color: #64748b; margin-top: 2px; }
 .outd-gpx-src__cancel { width: 100%; padding: 8px 0; border: 0; background: transparent; font-size: 14px; color: #64748b; cursor: pointer; }
+
+/* 지도 크게 보기: 위쪽 속도·이동 거리(반투명 검정 바탕·흰 글씨, 2026-10-21) — 길안내 바가 보이면 그 아래 */
+#outdoorRideScreen .outd-exp-stats { display: none; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats {
+  display: flex;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 590;
+  justify-content: space-around;
+  align-items: baseline;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+  pointer-events: none;
+}
+#outdoorRideScreen.outd-expanded #outdNav[style*="flex"] ~ .outd-exp-stats { top: 66px; }
+#outdoorRideScreen .outd-exp-stats__item { display: flex; align-items: baseline; gap: 4px; }
+#outdoorRideScreen .outd-exp-stats__label { font-size: 12px; color: rgba(255, 255, 255, 0.75); margin-right: 4px; }
+#outdoorRideScreen .outd-exp-stats__item b { font-size: 26px; font-weight: 800; color: #ffffff; font-variant-numeric: tabular-nums; line-height: 1.1; }
+#outdoorRideScreen .outd-exp-stats__item small { font-size: 12px; color: rgba(255, 255, 255, 0.8); }
+/* 오른쪽 아래 버튼 3개(확대·방향·현위치) 같은 폭 40px·같은 세로축 가운데 정렬·간격 8px */
+#outdoorRideScreen .outd-recenter { right: 8px; bottom: 8px; width: 40px; height: 40px; line-height: 40px; border-radius: 12px; }
+#outdoorRideScreen .outd-compass { right: 8px; bottom: 56px; width: 40px; }
+#outdoorRideScreen .outd-expand { right: 8px; bottom: 110px; width: 40px; }
