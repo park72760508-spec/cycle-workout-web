@@ -520,7 +520,12 @@
     }).addTo(st.map);
     st.map.setView([37.5665, 126.978], 13);
     // 확대·축소 애니메이션 중에는 프레임 따라가기(followFrame)를 멈춤 — 서로 끊지 않게
-    st.map.on('zoomstart', function () { st.mapZooming = true; });
+    st.map.on('zoomstart', function () {
+      st.mapZooming = true;
+      // 확대 애니메이션이 중간에 끊겨 zoomend 가 안 오면 카메라가 멈춘 채로 남지 않게 1초 뒤 자동 해제
+      clearTimeout(st.zoomGuard);
+      st.zoomGuard = setTimeout(function () { if (st.mapZooming) { st.mapZooming = false; cameraFrame(); } }, 1000);
+    });
     st.map.on('zoomend', function () { st.mapZooming = false; cameraFrame(); });
     // 자유 라이딩 지나온 길(2026-10-21): 진한 녹색(속도계 원호 녹색 계열의 가장 진한 색), 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
     st.trail = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
