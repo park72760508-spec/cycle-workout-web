@@ -1521,7 +1521,7 @@
     else if (m.d <= LOCK_ACQUIRE_M) st.navLocked = true;
     var here;
     if (offCourse) {
-      here = st.lastOnRouteAlong != null ? st.lastOnRouteAlong : m.along;
+      here = st.lastOnRouteAlong != null ? st.lastOnRouteAlong : 0; // 아직 코스에 올라탄 적 없으면 출발점 기준(왕복 코스에서 도착점으로 오인 방지)
       st.navAlong = null;
     } else {
       here = filterAlong(m.along, t || now);
