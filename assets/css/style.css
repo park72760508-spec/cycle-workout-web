@@ -34614,6 +34614,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-route__mode.is-on { color: #ffffff; background: #2a2a2a; }
 #outdoorRideScreen .outd-route__mode svg { width: 22px; height: 22px; }
+#outdoorRideScreen .outd-route__mode--emoji span { font-size: 19px; line-height: 1; filter: grayscale(1); opacity: .7; }
+#outdoorRideScreen .outd-route__mode--emoji.is-on span { filter: none; opacity: 1; }
 
 /* 사용자 등록: 인증번호 확인 중 오버레이(2026-10-21) — 로그인 로딩 녹색 원 스피너 재사용, 등록 화면 위 반투명 */
 .phone-verify-overlay {

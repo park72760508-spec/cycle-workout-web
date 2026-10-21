@@ -403,7 +403,7 @@
       st.offCued = false;
       st.rerouteCount = 0;
       cue('reroute', '경로를 다시 안내합니다');
-      toast('경로를 다시 찾았습니다 · ' + rt.km.toFixed(1) + ' km (' + ({ bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'success');
+      toast('경로를 다시 찾았습니다 · ' + rt.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'success');
     }).catch(function () {
       toast('경로를 다시 찾지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
     }).then(function () {
@@ -1748,7 +1748,7 @@
    *   [자전거도로 우선] use_roads 0.2(자전거 도로·한적한 길 선호) / [최단 거리] shortest. 한국어 회전 안내문 사용.
    * 안내: 기존 코스 안내(회전 카드·지도 강조·진동) 재사용, 경로 이탈 10초 이상이면 현재 위치에서 다시 탐색(30초에 1회). */
   var VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
-  /** 길찾기 이동 수단: 'bike'(기본) | 'walk' */
+  /** 길찾기 이동 수단: 'bike'(기본) | 'walk' | 'moto'(2026-10-22 오토바이) */
   var travelMode = 'bike';
   var lastDest = null;
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
@@ -1894,8 +1894,26 @@
    */
   function fetchBikeRoute(from, to, mode, opt) {
     if (mode === 'walk' || mode === 'walkShort') return fetchWalkRoute(from, to, mode, opt);
+    if (mode === 'moto' || mode === 'motoBack') return fetchMotoRoute(from, to, mode, opt);
     return fetchValhallaRoute(from, to, mode, opt).then(function (base) {
       return improveBikeRouteSidePath(base, mode);
+    });
+  }
+
+  /** 오토바이 경로: 고속도로(motorway)가 조금이라도 포함되면 쓰지 않음(한국 오토바이 통행 금지) */
+  function fetchMotoRoute(from, to, mode, opt) {
+    return fetchValhallaRoute(from, to, mode, opt).then(function (rt) {
+      var body = {
+        encoded_polyline: rt.shape, shape_match: 'edge_walk', costing: mode === 'moto' ? 'motorcycle' : 'motor_scooter',
+        filters: { attributes: ['edge.road_class', 'edge.length'], action: 'include' }
+      };
+      return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_attributes') + '?json=' + encodeURIComponent(JSON.stringify(body)))
+        .then(function (d) {
+          var hw = 0;
+          (d && d.edges || []).forEach(function (e) { if (e.road_class === 'motorway') hw += e.length || 0; });
+          if (hw > 0.05) throw new Error('고속도로 포함 경로');
+          return rt;
+        }, function () { return rt; });
     });
   }
 
@@ -2104,7 +2122,18 @@
     // 'walkShort' 걷기 최단: shortest(순수 거리)는 차도 중앙선만 따라가서(서울 구간 실측 97~100%) 쓰지 않고,
     // 인도 가중치 0.5 로 거리 +0~10% 안에서 인도·보행로를 고른다.
     var walking = mode === 'walk' || mode === 'walkShort';
-    var costingOptions = walking
+    /*
+     * 2026-10-22 오토바이: 한국은 고속도로·자동차전용도로(올림픽대로 등) 오토바이 통행 금지 →
+     *  'moto' 도로 추천 = motorcycle + use_highways 0(고속도로·자동차전용 간선 회피, 실측 잠실→여의도 올림픽대로 0km),
+     *  'motoBack' 이면도로 우선 = motor_scooter + 큰길 회피(use_primary 0.2) — 2차로·이면도로 위주
+     */
+    var moto = mode === 'moto' || mode === 'motoBack';
+    var costingName = walking ? 'pedestrian' : moto ? (mode === 'moto' ? 'motorcycle' : 'motor_scooter') : 'bicycle';
+    var costingOptions = moto
+      ? (mode === 'moto'
+          ? { motorcycle: { use_highways: 0, use_tolls: 0, use_ferry: 0 } }
+          : { motor_scooter: { use_primary: 0.2, use_hills: 0.5, use_ferry: 0 } })
+      : walking
       ? { pedestrian: mode === 'walkShort'
           // 2026-10-21: 걷기 최단은 순수 최단 거리로 찾고, 차도 중앙선 구간은 fetchWalkRoute 가 옆 보행로·자전거도로로 옮긴다
           ? { shortest: true, use_ferry: 0 }
@@ -2117,7 +2146,7 @@
             : { bicycle_type: 'Hybrid', use_roads: 0.2, use_hills: 0.4, avoid_bad_surfaces: 0.3 } };
     var body = {
       locations: locs,
-      costing: walking ? 'pedestrian' : 'bicycle',
+      costing: costingName,
       costing_options: costingOptions,
       language: 'ko-KR',
       units: 'kilometers'
@@ -2255,7 +2284,7 @@
       st.offRouteSince = 0;
       try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
       st.offCued = false;
-      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + ({ bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'info');
+      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'info');
     }).catch(function () {
       setText('outdNavText', '경로를 다시 찾지 못했습니다 · 잠시 후 다시 시도합니다');
     }).then(function () {
@@ -2275,6 +2304,7 @@
       '<div class="coachm-picker__sheet outd-route__sheet">' +
       '<div class="coachm-picker__head"><span class="outd-route__title">길찾기' +
       '<span class="outd-route__modes" role="radiogroup" aria-label="이동 수단">' +
+      '<button type="button" class="outd-route__mode outd-route__mode--emoji" data-travel="moto" role="radio" aria-label="오토바이"><span aria-hidden="true">🏍️</span></button>' +
       '<button type="button" class="outd-route__mode" data-travel="bike" role="radio" aria-label="자전거">' + ICON_BIKE + '</button>' +
       '<button type="button" class="outd-route__mode" data-travel="walk" role="radio" aria-label="걷기">' + ICON_WALK + '</button>' +
       '</span></span>' +
@@ -2387,12 +2417,14 @@
     }
     lastDest = dest;
     var walk = travelMode === 'walk';
-    box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '도보 경로를 찾는 중...' : '자전거 경로를 찾는 중...') + '</div>';
+    var moto = travelMode === 'moto';
+    var finding = walk ? '도보 경로를 찾는 중...' : moto ? '오토바이 경로를 찾는 중...' : '자전거 경로를 찾는 중...';
+    box.innerHTML = '<div class="coachm-picker__empty">' + finding + '</div>';
     var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
     var hd = { heading: st.speedKmh >= 5 ? st.heading : null };
-    var modes = walk ? ['walk', 'walkShort'] : ['bike', 'short'];
+    var modes = walk ? ['walk', 'walkShort'] : moto ? ['moto', 'motoBack'] : ['bike', 'short'];
     var reqMode = travelMode;
-    outdBusy(true, walk ? '도보 경로를 찾는 중...' : '자전거 경로를 찾는 중...');
+    outdBusy(true, finding);
     Promise.all(modes.map(function (m) {
       return fetchBikeRoute(from, dest, m, hd).catch(function () { return null; });
     })).then(function (routes) {
@@ -2400,15 +2432,17 @@
       if (reqMode !== travelMode) return; // 그사이 이동 수단을 바꿨으면 무시
       routes = routes.filter(Boolean);
       if (!routes.length) {
-        box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '걸어서 갈 수 있는 경로를 찾지 못했습니다.' : '자전거로 갈 수 있는 경로를 찾지 못했습니다.') + '</div>';
+        box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '걸어서 갈 수 있는 경로를 찾지 못했습니다.' : moto ? '오토바이로 갈 수 있는(고속도로 제외) 경로를 찾지 못했습니다.' : '자전거로 갈 수 있는 경로를 찾지 못했습니다.') + '</div>';
         return;
       }
       box.innerHTML = '<div class="outd-route__dest">🏁 ' + escHtml(dest.name) + '</div>';
       routes.forEach(function (rt) {
         var item = document.createElement('div');
-        var reco = rt.mode === 'bike' || rt.mode === 'walk';
+        var reco = rt.mode === 'bike' || rt.mode === 'walk' || rt.mode === 'moto';
         var optName = rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>'
           : rt.mode === 'walk' ? '🚶 인도 우선 <em>추천</em>'
+          : rt.mode === 'moto' ? '🏍️ 도로 추천 <em>추천</em>'
+          : rt.mode === 'motoBack' ? '🛵 이면도로 우선'
           : '📏 최단 거리';
         item.className = 'coachm-picker__item outd-route__opt' + (reco ? ' is-reco' : '');
         item.innerHTML =
@@ -2957,6 +2991,7 @@
     st.lastClassify = { kind: cls.kind, reason: cls.reason, avg_kmh: Math.round(cls.avgKmh * 10) / 10, p90_kmh: Math.round(cls.p90Kmh * 10) / 10, max60_kmh: Math.round(cls.max60Kmh * 10) / 10 };
     var chosen = cls.kind;
     var KIND_LABEL = { ride: '🚴 라이딩', run: '🏃 러닝', walk: '🚶 걷기' };
+    var isMotoTrip = !!(st.course && st.course.isRoute && /^moto/.test(st.course.routeMode || ''));
     var old = $('outdFinishModal');
     if (old) old.remove();
     var m = document.createElement('div');
@@ -2997,6 +3032,7 @@
         '</div>' +
         '<p class="outd-finish__why">자동 판별: ' + KIND_LABEL[cls.kind] + ' · ' + cls.reason + '</p>' +
         '<dl class="outd-finish__stats">' + statsHtml() + '</dl>' +
+        (isMotoTrip ? '<p class="outd-finish__why" style="color:#ef4444">🏍️ 오토바이 길찾기로 이동한 기록입니다 — 운동 기록(훈련 일지·랭킹)에 저장하지 않는 것을 권장합니다.</p>' : '') +
         splitsHtml() +
         '<div class="outd-finish__btns">' +
         '<button type="button" class="outd-finish__btn outd-finish__btn--primary" data-act="save">' +
