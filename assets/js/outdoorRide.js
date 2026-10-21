@@ -1013,13 +1013,21 @@
   }
 
   /** 자유 이동 지도 방향: 필터 속도 방향을 천천히(0.25) 따라가고 4° 미만 변화는 무시 */
-  function freeHeading() {
-    var f = st.ff;
-    if (!f) return;
-    var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
-    if (sp < 1.5) return;
-    var h = (Math.atan2(f.vx, f.vy) * 180 / Math.PI + 360) % 360;
-    steadyHeading(h, 0.25);
+  function freeHeading(fp) {
+    // 진행 방향 = 25m 이상 뒤의 지점 → 지금 위치(1초 속도 방향보다 GPS 흔들림 영향이 훨씬 적음, 길안내의 50m 앞 방향과 같은 방식)
+    var hist = st.hdHist || (st.hdHist = []);
+    if (fp) {
+      var lastH = hist[hist.length - 1];
+      if (!lastH || hav(lastH[0], lastH[1], fp[0], fp[1]) >= 3) hist.push(fp);
+      if (hist.length > 40) hist.shift();
+    }
+    if (st.speedKmh < 5 || !fp) return;
+    var base = null;
+    for (var i = hist.length - 1; i >= 0; i--) {
+      if (hav(hist[i][0], hist[i][1], fp[0], fp[1]) >= 25) { base = hist[i]; break; }
+    }
+    if (!base) return;
+    steadyHeading(bearing(base[0], base[1], fp[0], fp[1]), 0.2);
   }
 
   function updateMeOnMap(lat, lng) {
@@ -1029,9 +1037,10 @@
       lat = snapped[0]; lng = snapped[1]; along = st.navAlong;
       st.ff = null; // 경로 위: 필터는 쉬고(경로 고정이 대신함), 벗어나면 그 자리에서 새로 시작
       st.ffDisp = null;
+      st.hdHist = [];
     } else {
       var fp = freeFilter(lat, lng, Date.now(), (st.lastFix && st.lastFix.acc) || 10);
-      if (!(st.course && st.onRoute)) freeHeading();
+      if (!(st.course && st.onRoute)) freeHeading(fp);
       fp = forwardOnly(fp);
       lat = fp[0]; lng = fp[1];
       if (!st.course && st.status === 'running') trailAdd([lat, lng]); // 아바타와 같은 위치로 지나온 길
