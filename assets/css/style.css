@@ -34614,7 +34614,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-route__mode.is-on { color: #ffffff; background: #2a2a2a; }
 #outdoorRideScreen .outd-route__mode svg { width: 22px; height: 22px; }
-#outdoorRideScreen .outd-route__ico { vertical-align: -3px; margin-right: 2px; }
+#outdoorRideScreen .outd-route__moto-ico {
+  width: 28px; height: 28px; display: block; background-color: currentColor;
+  -webkit-mask: url("../img/motorcycle.svg?v=20261022") center / contain no-repeat;
+  mask: url("../img/motorcycle.svg?v=20261022") center / contain no-repeat;
+}
 
 /* 사용자 등록: 인증번호 확인 중 오버레이(2026-10-21) — 로그인 로딩 녹색 원 스피너 재사용, 등록 화면 위 반투명 */
 .phone-verify-overlay {

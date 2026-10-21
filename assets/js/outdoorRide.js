@@ -1775,8 +1775,8 @@
   var travelMode = 'bike';
   var lastDest = null;
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
-  /* 오토바이(2026-10-22): 이모지 🏍 가 작은 화면에서 알아보기 어려워 자전거·걷기와 같은 선 아이콘(Tabler motorbike, MIT) */
-  var ICON_MOTO = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="16" r="3"/><circle cx="19" cy="16" r="3"/><path d="M7.5 14h5l4-4H6m1.5 4l4-4"/><path d="M13 6h2l1.5 3 2 4"/></svg>';
+    // 2026-10-22: 사용자 제공 이미지(assets/img/motorcycle.svg, 검정 선 PNG)를 CSS mask 로 글자색(흰 선/회색 선)으로 칠한다
+  var ICON_MOTO = '<span class="outd-route__moto-ico" aria-hidden="true"></span>';
   var ICON_WALK = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="1.8"/><path d="M10.5 21l2-6.5 2.5 2.5V21"/><path d="M8 11.5l2.5-3.5h3l2.5 3.5 2 1"/><path d="M12.5 14.5l-1-6.5"/><path d="M9 21l1.5-4.5"/></svg>';
   var PHOTON_URL = 'https://photon.komoot.io/api/';
   var NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
