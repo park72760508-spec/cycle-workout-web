@@ -965,6 +965,12 @@
     st.mt = { lat: lat, lng: lng, along: along, t: now, v: v };
     kickMotion();
   }
+  /** 표시 속도는 부드럽게: 목표로 1초 시정수로 다가가되 초당 최대 4m/s 변화(급가속·급감속처럼 보이지 않게) */
+  function smoothSpeed(v, want, dt) {
+    var dv = (want - v) * Math.min(1, dt * 1.5);
+    dv = clampN(dv, -4 * dt, 4 * dt);
+    return Math.max(0, v + dv);
+  }
   function kickMotion() {
     if (st.moId || document.hidden || !isActive()) return;
     st.moLast = performance.now();
@@ -983,8 +989,8 @@
       var tgt = Math.min(c.totalM, T.along + T.v * age);
       var e = tgt - M.along;
       if (Math.abs(e) > 60) { M.along = tgt; e = 0; }
-      want = e < -15 ? 0 : Math.max(0, T.v + e / CATCHUP_S);
-      M.v = Math.max(0, M.v + (want - M.v) * Math.min(1, dt * 3));
+      want = e < -15 ? 0 : Math.max(0, T.v + clampN(e / CATCHUP_S, -3, 3));
+      M.v = smoothSpeed(M.v, want, dt);
       M.along = Math.min(c.totalM, M.along + M.v * dt);
       M.pos = pointAtDist(M.along);
       errAbs = Math.abs(e);
@@ -1004,8 +1010,8 @@
       } else {
         var fwdErr = tx * ux + ty * uy;
         var latErr = tx * uy - ty * ux; // 오른쪽(+)
-        want = fwdErr < -15 ? 0 : Math.max(0, T.v + fwdErr / CATCHUP_S);
-        M.v = Math.max(0, M.v + (want - M.v) * Math.min(1, dt * 3));
+        want = fwdErr < -15 ? 0 : Math.max(0, T.v + clampN(fwdErr / CATCHUP_S, -3, 3));
+        M.v = smoothSpeed(M.v, want, dt);
         var lk = Math.min(1, dt / LATERAL_S);
         var mx = ux * M.v * dt + uy * latErr * lk, my = uy * M.v * dt - ux * latErr * lk;
         M.pos = [M.pos[0] + my / ky, M.pos[1] + mx / kx];
@@ -2201,6 +2207,7 @@
     var seq = ++searchSeq;
     $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색 중...</div>';
     outdBusy(true, '장소를 검색하는 중...');
+    var busyAt = Date.now();
     searchPlaces(q).then(function (list) {
       if (seq !== searchSeq) return;
       renderRouteList(list);
@@ -2208,7 +2215,8 @@
       if (seq !== searchSeq) return;
       $('outdRouteList').innerHTML = '<div class="coachm-picker__empty">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
     }).then(function () {
-      if (seq === searchSeq) outdBusy(false);
+      // 너무 빨리 끝나도 0.5초는 보여 줌(깜빡임처럼 보이지 않게)
+      setTimeout(function () { if (seq === searchSeq) outdBusy(false); }, Math.max(0, 500 - (Date.now() - busyAt)));
     });
   }
 
