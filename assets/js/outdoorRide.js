@@ -1228,7 +1228,7 @@
     if (next && next.at - here <= TD.show) {
       var dm = Math.max(0, next.at - here);
       var word = next.text || turnWord(next.delta);
-      setText('outdNavText', dm < 10 ? '지금 ' + turnWord(next.delta) : navDistM(dm) + 'm 후 ' + word);
+      setText('outdNavText', dm < 10 ? '지금 ' + word : navDistM(dm) + 'm 후 ' + word);
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(Math.max(-150, Math.min(150, next.delta))) + 'deg)';
       // 미리 알림(자전거, 약 30초 전 · 음성만 1회)
       if (TD.pre && dm <= TD.pre && dm > TD.card && st.preCuedTurn !== next.idx) {
