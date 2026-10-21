@@ -76,12 +76,31 @@
   var SOUND_LS = 'stelvioOutdoorSound';
   var soundMode = (function () { try { return localStorage.getItem(SOUND_LS) || 'voice'; } catch (e) { return 'voice'; } })();
   var audioCtx = null;
+  /*
+   * 2026-10-22: 안내음·음성이 나올 때 휴대폰에서 듣던 음악이 멈추지 않게.
+   *  iPhone(Safari·앱 WebView)은 웹 소리가 나면 오디오를 '단독 재생'으로 잡아 다른 앱 음악을 끊는다 →
+   *  Audio Session API(iOS 16.4+)로 'ambient'(다른 앱 소리와 섞어서 재생)로 둔다.
+   *  알림음이 끝나면 AudioContext 를 suspend 해 오디오를 계속 붙잡고 있지 않게 한다(Android WebView 포함).
+   */
+  function mixWithOtherAudio() {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== 'ambient') navigator.audioSession.type = 'ambient';
+    } catch (e) {}
+  }
+  function releaseAudioSoon(ms) {
+    clearTimeout(releaseAudioSoon.t);
+    releaseAudioSoon.t = setTimeout(function () {
+      try { if (audioCtx && audioCtx.state === 'running') audioCtx.suspend(); } catch (e) {}
+    }, ms);
+  }
   function unlockAudio() {
+    mixWithOtherAudio();
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       if (!audioCtx) audioCtx = new AC();
       if (audioCtx.state === 'suspended') audioCtx.resume();
+      releaseAudioSoon(1500);
     } catch (e) {}
     // 음성 엔진도 첫 터치 때 빈 문장으로 깨움(iOS)
     try {
@@ -97,12 +116,15 @@
   function playTones(seq, vol) {
     if (soundMode === 'off' || !audioCtx) return;
     try {
+      mixWithOtherAudio();
+      clearTimeout(releaseAudioSoon.t);
       if (audioCtx.state === 'suspended') audioCtx.resume();
       // 앞 소리가 끝난 뒤 이어서(겹치지 않게)
       var t0 = Math.max(audioCtx.currentTime + 0.02, playTones.busyUntil || 0);
       var endMs = 0;
       seq.forEach(function (n) { endMs = Math.max(endMs, (n[2] || 0) + n[1]); });
       playTones.busyUntil = t0 + endMs / 1000 + 0.12;
+      releaseAudioSoon(Math.max(0, playTones.busyUntil - audioCtx.currentTime) * 1000 + 600);
       seq.forEach(function (n) {
         var osc = audioCtx.createOscillator();
         var g = audioCtx.createGain();
@@ -123,6 +145,7 @@
   /** priority: 재탐색·이탈·도착 안내 — 바로 뒤 회전 안내가 이 말을 끊지 않고 이어서 말한다 */
   function speak(text, priority) {
     if (soundMode !== 'voice' || !text) return;
+    mixWithOtherAudio();
     try {
       var synth = window.speechSynthesis;
       var now = Date.now();
@@ -403,7 +426,7 @@
       st.offCued = false;
       st.rerouteCount = 0;
       cue('reroute', '경로를 다시 안내합니다');
-      toast('경로를 다시 찾았습니다 · ' + rt.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'success');
+      toast('경로를 다시 찾았습니다 · ' + rt.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoShort: '오토바이 · 최단 거리', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'success');
     }).catch(function () {
       toast('경로를 다시 찾지 못했습니다. 잠시 후 다시 시도해 주세요.', 'error');
     }).then(function () {
@@ -1752,6 +1775,9 @@
   var travelMode = 'bike';
   var lastDest = null;
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
+  /* 오토바이(2026-10-22): 이모지 🏍 가 작은 화면에서 알아보기 어려워 자전거·걷기와 같은 선 아이콘(Tabler motorbike, MIT) */
+  var ICON_MOTO = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="16" r="3"/><circle cx="19" cy="16" r="3"/><path d="M7.5 14h5l4-4H6m1.5 4l4-4"/><path d="M13 6h2l1.5 3 2 4"/></svg>';
+  var ICON_MOTO_SM = ICON_MOTO.replace('width="24" height="24"', 'width="16" height="16" class="outd-route__ico"');
   var ICON_WALK = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="1.8"/><path d="M10.5 21l2-6.5 2.5 2.5V21"/><path d="M8 11.5l2.5-3.5h3l2.5 3.5 2 1"/><path d="M12.5 14.5l-1-6.5"/><path d="M9 21l1.5-4.5"/></svg>';
   var PHOTON_URL = 'https://photon.komoot.io/api/';
   var NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
@@ -1894,7 +1920,7 @@
    */
   function fetchBikeRoute(from, to, mode, opt) {
     if (mode === 'walk' || mode === 'walkShort') return fetchWalkRoute(from, to, mode, opt);
-    if (mode === 'moto' || mode === 'motoBack') return fetchMotoRoute(from, to, mode, opt);
+    if (/^moto/.test(mode)) return fetchMotoRoute(from, to, mode, opt);
     return fetchValhallaRoute(from, to, mode, opt).then(function (base) {
       return improveBikeRouteSidePath(base, mode);
     });
@@ -1904,7 +1930,7 @@
   function fetchMotoRoute(from, to, mode, opt) {
     return fetchValhallaRoute(from, to, mode, opt).then(function (rt) {
       var body = {
-        encoded_polyline: rt.shape, shape_match: 'edge_walk', costing: mode === 'moto' ? 'motorcycle' : 'motor_scooter',
+        encoded_polyline: rt.shape, shape_match: 'edge_walk', costing: mode === 'motoBack' ? 'motor_scooter' : 'motorcycle',
         filters: { attributes: ['edge.road_class', 'edge.length'], action: 'include' }
       };
       return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_attributes') + '?json=' + encodeURIComponent(JSON.stringify(body)))
@@ -2125,13 +2151,16 @@
     /*
      * 2026-10-22 오토바이: 한국은 고속도로·자동차전용도로(올림픽대로 등) 오토바이 통행 금지 →
      *  'moto' 도로 추천 = motorcycle + use_highways 0(고속도로·자동차전용 간선 회피, 실측 잠실→여의도 올림픽대로 0km),
+     *  'motoShort' 최단 거리 = motorcycle + shortest(고속도로 회피 유지),
      *  'motoBack' 이면도로 우선 = motor_scooter + 큰길 회피(use_primary 0.2) — 2차로·이면도로 위주
      */
-    var moto = mode === 'moto' || mode === 'motoBack';
-    var costingName = walking ? 'pedestrian' : moto ? (mode === 'moto' ? 'motorcycle' : 'motor_scooter') : 'bicycle';
+    var moto = /^moto/.test(mode);
+    var costingName = walking ? 'pedestrian' : moto ? (mode === 'motoBack' ? 'motor_scooter' : 'motorcycle') : 'bicycle';
     var costingOptions = moto
       ? (mode === 'moto'
           ? { motorcycle: { use_highways: 0, use_tolls: 0, use_ferry: 0 } }
+          : mode === 'motoShort'
+          ? { motorcycle: { use_highways: 0, use_tolls: 0, use_ferry: 0, shortest: true } }
           : { motor_scooter: { use_primary: 0.2, use_hills: 0.5, use_ferry: 0 } })
       : walking
       ? { pedestrian: mode === 'walkShort'
@@ -2284,7 +2313,7 @@
       st.offRouteSince = 0;
       try { if (navigator.vibrate) navigator.vibrate([80, 60, 80]); } catch (e) {}
       st.offCued = false;
-      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'info');
+      toast('경로를 다시 안내합니다 · ' + how + ' · ' + pick.km.toFixed(1) + ' km (' + ({ moto: '오토바이 · 도로 추천', motoShort: '오토바이 · 최단 거리', motoBack: '오토바이 · 이면도로 우선', bike: '자전거도로 우선', short: '최단 거리', walk: '도보 · 인도 우선', walkShort: '도보 · 최단 거리' }[mode] || '') + ')', 'info');
     }).catch(function () {
       setText('outdNavText', '경로를 다시 찾지 못했습니다 · 잠시 후 다시 시도합니다');
     }).then(function () {
@@ -2304,7 +2333,7 @@
       '<div class="coachm-picker__sheet outd-route__sheet">' +
       '<div class="coachm-picker__head"><span class="outd-route__title">길찾기' +
       '<span class="outd-route__modes" role="radiogroup" aria-label="이동 수단">' +
-      '<button type="button" class="outd-route__mode outd-route__mode--emoji" data-travel="moto" role="radio" aria-label="오토바이"><span aria-hidden="true">🏍️</span></button>' +
+      '<button type="button" class="outd-route__mode" data-travel="moto" role="radio" aria-label="오토바이">' + ICON_MOTO + '</button>' +
       '<button type="button" class="outd-route__mode" data-travel="bike" role="radio" aria-label="자전거">' + ICON_BIKE + '</button>' +
       '<button type="button" class="outd-route__mode" data-travel="walk" role="radio" aria-label="걷기">' + ICON_WALK + '</button>' +
       '</span></span>' +
@@ -2422,7 +2451,7 @@
     box.innerHTML = '<div class="coachm-picker__empty">' + finding + '</div>';
     var from = { lat: st.lastFix.lat, lng: st.lastFix.lng };
     var hd = { heading: st.speedKmh >= 5 ? st.heading : null };
-    var modes = walk ? ['walk', 'walkShort'] : moto ? ['moto', 'motoBack'] : ['bike', 'short'];
+    var modes = walk ? ['walk', 'walkShort'] : moto ? ['moto', 'motoShort', 'motoBack'] : ['bike', 'short'];
     var reqMode = travelMode;
     outdBusy(true, finding);
     Promise.all(modes.map(function (m) {
@@ -2441,8 +2470,9 @@
         var reco = rt.mode === 'bike' || rt.mode === 'walk' || rt.mode === 'moto';
         var optName = rt.mode === 'bike' ? '🚲 자전거도로 우선 <em>추천</em>'
           : rt.mode === 'walk' ? '🚶 인도 우선 <em>추천</em>'
-          : rt.mode === 'moto' ? '🏍️ 도로 추천 <em>추천</em>'
-          : rt.mode === 'motoBack' ? '🛵 이면도로 우선'
+          : rt.mode === 'moto' ? ICON_MOTO_SM + ' 도로 추천 <em>추천</em>'
+          : rt.mode === 'motoShort' ? ICON_MOTO_SM + ' 최단 거리'
+          : rt.mode === 'motoBack' ? ICON_MOTO_SM + ' 이면도로 우선'
           : '📏 최단 거리';
         item.className = 'coachm-picker__item outd-route__opt' + (reco ? ' is-reco' : '');
         item.innerHTML =
@@ -3032,7 +3062,7 @@
         '</div>' +
         '<p class="outd-finish__why">자동 판별: ' + KIND_LABEL[cls.kind] + ' · ' + cls.reason + '</p>' +
         '<dl class="outd-finish__stats">' + statsHtml() + '</dl>' +
-        (isMotoTrip ? '<p class="outd-finish__why" style="color:#ef4444">🏍️ 오토바이 길찾기로 이동한 기록입니다 — 운동 기록(훈련 일지·랭킹)에 저장하지 않는 것을 권장합니다.</p>' : '') +
+        (isMotoTrip ? '<p class="outd-finish__why" style="color:#ef4444">오토바이 길찾기로 이동한 기록입니다 — 운동 기록(훈련 일지·랭킹)에 저장하지 않는 것을 권장합니다.</p>' : '') +
         splitsHtml() +
         '<div class="outd-finish__btns">' +
         '<button type="button" class="outd-finish__btn outd-finish__btn--primary" data-act="save">' +
