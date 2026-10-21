@@ -373,7 +373,7 @@
    */
   /** 진단용(읽기 전용): 화면 표시 진행 거리·속도 — 시뮬레이션 검증(뒤로 감 여부 등)에 사용 */
   window.stelvioOutdoorDebug = function () {
-    return { along: st.mo ? st.mo.along : null, v: st.mo ? st.mo.v : null, pos: st.mePos ? st.mePos.slice() : null, locked: !!st.navLocked };
+    return { along: st.mo ? st.mo.along : null, v: st.mo ? st.mo.v : null, pos: st.mePos ? st.mePos.slice() : null, locked: !!st.navLocked, follow: !!st.follow, zooming: !!st.mapZooming, zoom: st.map ? st.map.getZoom() : null, turnZoomed: !!st.turnZoomed };
   };
 
   window.toggleOutdoorExpand = function (e) {
