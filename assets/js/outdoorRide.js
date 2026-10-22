@@ -473,10 +473,16 @@
 
   /* 상단 경로 안내 문구(2026-10-22): 기본 숨기기, 오른쪽 아래 버튼으로 표시/숨기기 — 선택은 기기에 기억 */
   var NAVTEXT_LS = 'stelvioOutdoorNavText';
-  function applyNavTextPref() {
-    var on = false;
-    try { on = localStorage.getItem(NAVTEXT_LS) === '1'; } catch (e) {}
-    st.navTextOn = on;
+  /*
+   * 2026-10-22 수정: 예전에는 누를 때 localStorage 에 쓰고 다시 읽어 상태를 정했다 →
+   *  휴대폰에서 저장이 실패하면(저장 공간 가득·개인정보 보호 모드·일부 WebView) 항상 '숨기기'로 고정됐다.
+   *  이제 상태는 메모리(st.navTextOn)로 바로 바꾸고, 저장은 기억용으로만 시도한다.
+   */
+  function readNavTextPref() {
+    try { return localStorage.getItem(NAVTEXT_LS) === '1'; } catch (e) { return false; }
+  }
+  function renderNavText(on) {
+    st.navTextOn = !!on;
     var screen = $(SCREEN_ID);
     if (screen) screen.classList.toggle('outd-navtext-off', !on);
     var b = $('outdNavTextBtn');
@@ -485,11 +491,19 @@
       b.setAttribute('aria-label', on ? '경로 안내 문구 숨기기' : '경로 안내 문구 표시');
     }
   }
+  function applyNavTextPref() {
+    renderNavText(readNavTextPref());
+  }
   window.toggleOutdoorNavText = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    try { localStorage.setItem(NAVTEXT_LS, st.navTextOn ? '0' : '1'); } catch (err) {}
-    applyNavTextPref();
-    toast(st.navTextOn ? '경로 안내 문구를 표시합니다' : '경로 안내 문구를 숨깁니다', 'info');
+    // 휴대폰에서 한 번 탭이 클릭 두 번으로 들어오면 켰다가 바로 꺼져 '안 바뀌는' 것처럼 보임 → 0.4초 안 중복은 무시
+    var now = Date.now();
+    if (window.toggleOutdoorNavText.at && now - window.toggleOutdoorNavText.at < 400) return;
+    window.toggleOutdoorNavText.at = now;
+    var on = !st.navTextOn;
+    renderNavText(on);
+    try { localStorage.setItem(NAVTEXT_LS, on ? '1' : '0'); } catch (err) {}
+    toast(on ? '경로 안내 문구를 표시합니다' : '경로 안내 문구를 숨깁니다', 'info');
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', applyNavTextPref);
   else applyNavTextPref();
@@ -3177,7 +3191,7 @@
    * @param {{ gpxUrl?: string, title?: string, rideId?: string }} [opts]
    */
   window.openOutdoorRide = function (opts) {
-    applyNavTextPref(); // 경로 안내 문구 표시 설정(기본 숨기기)
+    renderNavText(st.navTextOn); // 경로 안내 문구 표시 설정(기본 숨기기, 이번 사용 중 바꾼 값 유지)
     opts = opts || {};
     st.prevScreen = activeScreenId() || st.prevScreen;
     if (typeof window.showScreen === 'function') window.showScreen(SCREEN_ID);
