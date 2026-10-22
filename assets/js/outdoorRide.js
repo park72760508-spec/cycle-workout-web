@@ -2192,6 +2192,7 @@
    *    지도에 그려진 횡단보도·자전거 횡단도(자전거도로·보행로 연결)나 신호 교차로로 건너는 건 그대로 둔다.
    */
   var CROSS_BIG = ['motorway', 'trunk', 'primary', 'secondary'];
+  var CROSS_MINOR = ['residential', 'service_other', 'unclassified'];
   var CROSS_ROADLIKE = ['road', 'living_street', 'service_road', 'alley', 'driveway', 'parking_aisle', 'turn_channel', 'track'];
   function findUnsafeCrossings(rt, costing) {
     var body = {
@@ -2212,7 +2213,9 @@
         for (var i = 0; i < E.length - 1; i++) {
           var e = E[i], n = E[i + 1], nd = e.end_node || {};
           if (nd.traffic_signal) continue;
-          if (CROSS_BIG.indexOf(e.road_class) >= 0 || CROSS_BIG.indexOf(n.road_class) >= 0) continue; // 큰길을 직접 타거나 큰길로 꺾는 건 정상
+          // 골목(주거·이면·소로) → 큰길 가로질러 → 골목만 본다. 집산도로 이상끼리 만나는 곳은 거의 신호 교차로인데
+          // 국내 OSM 은 신호등을 교차점이 아닌 정지선 쪽에 그리는 경우가 많아 '신호 없음'으로 잘못 잡히므로 제외(광화문·가락로 실측)
+          if (CROSS_MINOR.indexOf(e.road_class) < 0 || CROSS_MINOR.indexOf(n.road_class) < 0) continue;
           if (CROSS_ROADLIKE.indexOf(e.use) < 0 || CROSS_ROADLIKE.indexOf(n.use) < 0) continue; // 횡단보도·자전거도로로 건너는 건 정상
           var bigs = (nd.intersecting_edges || []).filter(function (x) {
             return CROSS_BIG.indexOf(x.road_class) >= 0 && (!x.use || x.use === 'road' || x.use === 'turn_channel');
