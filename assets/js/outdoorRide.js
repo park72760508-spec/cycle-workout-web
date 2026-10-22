@@ -1238,11 +1238,17 @@
       var a = acc > 20 ? 0.2 : 0.3, b = 0.08;
       f.x = px + a * rx; f.y = py + a * ry;
       f.vx += (b * rx) / dt; f.vy += (b * ry) / dt;
-      // GPS 가 주는 속도·방향으로 속도를 살짝 맞춤(출발 직후 반응 빠르게)
-      if (v >= 2 && st.moveHeading != null) {
+      // GPS 가 주는 속도·방향으로 속도를 맞춤(출발·회전 직후 반응 빠르게) — 2026-10-23: 걷기 속도(0.7m/s~)부터, 회전이면 더 많이
+      if (v >= 0.7 && st.moveHeading != null) {
         var hr = st.moveHeading * Math.PI / 180;
-        f.vx = f.vx * 0.7 + Math.sin(hr) * v * 0.3;
-        f.vy = f.vy * 0.7 + Math.cos(hr) * v * 0.3;
+        var sp = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
+        var turnMix = 0.3;
+        if (sp > 0.3) {
+          var vh = Math.atan2(f.vx, f.vy) * 180 / Math.PI;
+          if (Math.abs(angleDiff(vh, st.moveHeading)) > 30) turnMix = 0.6;
+        }
+        f.vx = f.vx * (1 - turnMix) + Math.sin(hr) * v * turnMix;
+        f.vy = f.vy * (1 - turnMix) + Math.cos(hr) * v * turnMix;
       }
     }
     f.t = t;
@@ -1272,22 +1278,59 @@
     return out;
   }
 
-  /** 자유 이동 지도 방향: 필터 속도 방향을 천천히(0.25) 따라가고 4° 미만 변화는 무시 */
+  /**
+   * 자유 이동 지도 방향(2026-10-23 고도화 — 코스 없이 걷다가 좌회전하면 약 100m 지나서야 지도가 돌던 문제):
+   *  예전: 5km/h 미만(걷기)이면 방향 갱신 안 함 + 25m 전 지점 기준 방향을 20%씩만 따라감 → 회전 반영이 수십~100m 늦고,
+   *        그동안 '앞으로만' 표시가 옆 성분을 12%씩만 반영해 아바타가 옆으로 미끄러져 보였다.
+   *  지금: 걷기 1.5km/h부터 갱신, 기준 거리 걷기 12m·자전거 20m,
+   *        회전 감지 — 최근 짧은 구간(걷기 6m·자전거 10m) 방향과 GPS 진행 방향이 함께 지금 지도 방향과 30° 넘게 다르면
+   *        두 번 연속 확인 후 빠르게(70%) 돌리고, 예전 방향 기록은 버린다(긴 기준선이 옛 방향으로 끌지 않게).
+   */
   function freeHeading(fp) {
-    // 진행 방향 = 25m 이상 뒤의 지점 → 지금 위치(1초 속도 방향보다 GPS 흔들림 영향이 훨씬 적음, 길안내의 50m 앞 방향과 같은 방식)
+    // 방향은 필터 전 GPS 위치로(필터는 직전 방향을 유지하려 해 회전이 늦게 꺾임)
+    if (fp && st.lastFix) fp = [st.lastFix.lat, st.lastFix.lng];
+    if (st.lastFix && st.lastFix.acc > 30) return; // 위치가 부정확할 땐 방향을 바꾸지 않음
     var hist = st.hdHist || (st.hdHist = []);
     if (fp) {
       var lastH = hist[hist.length - 1];
-      if (!lastH || hav(lastH[0], lastH[1], fp[0], fp[1]) >= 3) hist.push(fp);
-      if (hist.length > 40) hist.shift();
+      if (!lastH || hav(lastH[0], lastH[1], fp[0], fp[1]) >= 2) hist.push(fp);
+      if (hist.length > 60) hist.shift();
     }
-    if (st.speedKmh < 5 || !fp) return;
-    var base = null;
+    var walkish = st.speedKmh < 9;
+    if (!fp || st.speedKmh < (walkish ? 1.5 : 4)) { st.turnVotes = 0; return; }
+    var longM = walkish ? 12 : 20, shortM = walkish ? 6 : 10;
+    var base = null, near = null;
     for (var i = hist.length - 1; i >= 0; i--) {
-      if (hav(hist[i][0], hist[i][1], fp[0], fp[1]) >= 25) { base = hist[i]; break; }
+      var dd = hav(hist[i][0], hist[i][1], fp[0], fp[1]);
+      if (!near && dd >= shortM) near = hist[i];
+      if (dd >= longM) { base = hist[i]; break; }
     }
-    if (!base) return;
-    steadyHeading(bearing(base[0], base[1], fp[0], fp[1]), 0.2);
+    var shortHd = near ? bearing(near[0], near[1], fp[0], fp[1]) : null;
+    var gpsHd = st.speedKmh >= 2.5 ? st.moveHeading : null;
+    var cur = st.heading;
+    // 회전 감지
+    if (cur != null && shortHd != null && Math.abs(angleDiff(cur, shortHd)) > 30 &&
+      (gpsHd == null || Math.abs(angleDiff(cur, gpsHd)) > 25) &&
+      (gpsHd == null || Math.abs(angleDiff(shortHd, gpsHd)) < 40)) {
+      st.turnVotes = (st.turnVotes || 0) + 1;
+      if (st.turnVotes >= 2) {
+        var tgt = gpsHd != null ? (shortHd + angleDiff(shortHd, gpsHd) * 0.5 + 360) % 360 : shortHd;
+        st.lastTurnSign = 0; // 큰 회전은 되돌림 방지 규칙에 막히지 않게
+        steadyHeading(tgt, 0.7);
+        st.hdHist = hist.slice(hist.length - 2); // 옛 방향 기록 버림
+        return;
+      }
+    } else {
+      st.turnVotes = 0;
+    }
+    if (!base) {
+      if (cur == null && shortHd != null) steadyHeading(shortHd, 1);
+      return;
+    }
+    var longHd = bearing(base[0], base[1], fp[0], fp[1]);
+    // 평소: 긴 기준선 방향(흔들림 적음)에 GPS 방향을 조금 섞어 30%씩 따라감
+    var target = gpsHd != null && Math.abs(angleDiff(longHd, gpsHd)) < 45 ? (longHd + angleDiff(longHd, gpsHd) * 0.3 + 360) % 360 : longHd;
+    steadyHeading(target, 0.3);
   }
 
   function updateMeOnMap(lat, lng) {
