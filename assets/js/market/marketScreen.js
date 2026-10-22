@@ -6,7 +6,7 @@
 (function () {
   'use strict';
 
-  var MARKET_SERVICE_URL = './marketService.js?v=20261010trackerEnv3';
+  var MARKET_SERVICE_URL = './marketService.js?v=20261023thumb';
   var svc = null;
 
   function loadMarketService() {
@@ -1178,8 +1178,20 @@
   // 아래쪽 수백 장에서만 의미가 크므로 상위 몇 장을 제외해도 체감 차이는 없다.
   var MARKET_CARD_EAGER_COUNT = 12;
 
+  var MARKET_THUMB_SINCE_MS = 1792711740000; // 썸네일 저장 시작 시각(2026-10-23 배포)
+  /** 목록 카드용 썸네일 주소(올릴 때 함께 저장한 '_t.jpg', marketService.marketThumbUrl 과 같은 규칙) — 없으면 onerror 로 원본 */
+  function marketThumbUrl(url) {
+    var u = String(url || '');
+    if (u.indexOf('/market-images/') < 0 || /_t\.jpg$/i.test(u)) return u;
+    // 썸네일은 이 기능 배포 이후 올린 사진에만 있다(파일 이름의 업로드 시각으로 판단) — 예전 사진은 원본 그대로
+    var m = /_(\d{13})\.jpg$/i.exec(u);
+    if (!m || Number(m[1]) < MARKET_THUMB_SINCE_MS) return u;
+    return u.replace(/\.jpg$/i, '_t.jpg');
+  }
+
   function marketItemCardHtml(item, activeOrderIds, eager) {
-    var img = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
+    var full = (item.images && item.images[0]) || 'assets/img/profile-placeholder.svg';
+    var img = marketThumbUrl(full);
     var isFav = homeState.favoriteIds.has(item.id);
     var soldClass = item.status === 'SOLD' ? ' market-card--sold' : '';
     var eagerClass = eager ? ' market-card--eager' : '';
@@ -1190,7 +1202,9 @@
     return (
       '<div class="market-card' + soldClass + eagerClass + '" data-item-id="' + item.id + '">' +
         '<div class="market-card__img-wrap">' +
-          '<img class="market-card__img" src="' + escapeHtml(img) + '" alt="" loading="lazy" decoding="async" />' +
+          '<img class="market-card__img" src="' + escapeHtml(img) + '"' +
+            (img !== full ? ' data-full="' + escapeHtml(full) + '" onerror="this.onerror=null;this.src=this.getAttribute(\'data-full\')"' : '') +
+            ' alt="" loading="lazy" decoding="async" />' +
           statusBadgeHtml(item.status) +
           (isFraudReported ? '<span class="market-badge market-badge--fraud">사기 피해 접수</span>' : '') +
           (hasActiveRequest ? '<span class="market-card__request-dot" aria-label="거래 요청 있음" title="거래 요청이 있습니다"></span>' : '') +

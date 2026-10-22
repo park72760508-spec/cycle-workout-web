@@ -8,6 +8,15 @@ import { getMintedSupabaseSession } from '../supabaseDualWrite.js';
 const MARKET_IMAGE_MAX_WIDTH = 800;
 const MARKET_IMAGE_QUALITY = 0.7;
 const MARKET_IMAGE_BUCKET = 'market-images';
+/*
+ * 목록용 썸네일(2026-10-23, 전송량 절감): 목록 카드는 130px 정사각형인데 원본(가로 800px, 평균 113KB)을 받았다.
+ * 올릴 때 짧은 변 360px(휴대폰 3배 화면 기준) 썸네일을 같은 경로에 '_t.jpg' 로 함께 저장 — DB 구조 변경 없음.
+ * Supabase 이미지 자동 변환(유료)은 쓰지 않는다. 경로에 시각이 들어가 내용이 바뀌지 않으므로 캐시 1년.
+ */
+const MARKET_THUMB_SHORT_SIDE = 360;
+const MARKET_THUMB_SINCE_MS = 1792711740000; // 썸네일 저장 시작 시각(2026-10-23 배포)
+const MARKET_THUMB_QUALITY = 0.72;
+const MARKET_IMAGE_CACHE_SECONDS = '31536000';
 const MARKET_BUMP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const SUPABASE_JS_URL = 'https://esm.sh/@supabase/supabase-js@2.49.1';
 
@@ -195,12 +204,32 @@ async function withMarketAuthRetry(fn) {
  * @returns {Promise<Blob>}
  */
 export function resizeAndCompressImage(file) {
+  return resizeImageFile(file, { maxWidth: MARKET_IMAGE_MAX_WIDTH, quality: MARKET_IMAGE_QUALITY });
+}
+
+/** 목록용 썸네일 — 짧은 변을 360px 로(작으면 그대로) */
+export function makeMarketThumbnail(file) {
+  return resizeImageFile(file, { shortSide: MARKET_THUMB_SHORT_SIDE, quality: MARKET_THUMB_QUALITY });
+}
+
+/** 원본 사진 주소 → 썸네일 주소(같은 경로 '_t.jpg'). 썸네일이 없는 예전 사진은 화면에서 원본으로 대체 */
+export function marketThumbUrl(url) {
+  const u = String(url || '');
+  if (u.indexOf('/' + MARKET_IMAGE_BUCKET + '/') < 0 || /_t\.jpg$/i.test(u)) return u;
+  const m = /_(\d{13})\.jpg$/i.exec(u);
+  if (!m || Number(m[1]) < MARKET_THUMB_SINCE_MS) return u; // 썸네일 기능 이전 사진
+  return u.replace(/\.jpg$/i, '_t.jpg');
+}
+
+function resizeImageFile(file, opt) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     const objectUrl = URL.createObjectURL(file);
     img.onload = () => {
       try {
-        const scale = Math.min(1, MARKET_IMAGE_MAX_WIDTH / img.naturalWidth);
+        const scale = opt.shortSide
+          ? Math.min(1, opt.shortSide / Math.min(img.naturalWidth, img.naturalHeight))
+          : Math.min(1, opt.maxWidth / img.naturalWidth);
         const w = Math.max(1, Math.round(img.naturalWidth * scale));
         const h = Math.max(1, Math.round(img.naturalHeight * scale));
         const canvas = document.createElement('canvas');
@@ -218,7 +247,7 @@ export function resizeAndCompressImage(file) {
             resolve(blob);
           },
           'image/jpeg',
-          MARKET_IMAGE_QUALITY
+          opt.quality
         );
       } catch (e) {
         URL.revokeObjectURL(objectUrl);
@@ -279,8 +308,17 @@ export async function processAndUploadMarketImage(file, userId, itemDraftId, ind
     const path = userId + '/' + itemDraftId + '/img' + index + '_' + Date.now() + '.jpg';
     const { error: upErr } = await supabase.storage
       .from(MARKET_IMAGE_BUCKET)
-      .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
+      .upload(path, blob, { contentType: 'image/jpeg', upsert: true, cacheControl: MARKET_IMAGE_CACHE_SECONDS });
     if (upErr) throw upErr;
+    // 썸네일은 실패해도 등록은 계속(목록은 원본으로 대체 표시)
+    try {
+      const thumb = await makeMarketThumbnail(file);
+      await supabase.storage
+        .from(MARKET_IMAGE_BUCKET)
+        .upload(path.replace(/\.jpg$/, '_t.jpg'), thumb, { contentType: 'image/jpeg', upsert: true, cacheControl: MARKET_IMAGE_CACHE_SECONDS });
+    } catch (e) {
+      console.warn('[market] 썸네일 업로드 실패(원본으로 표시):', e && e.message);
+    }
     const { data: pub } = supabase.storage.from(MARKET_IMAGE_BUCKET).getPublicUrl(path);
     return { url: pub.publicUrl, hash };
   });
