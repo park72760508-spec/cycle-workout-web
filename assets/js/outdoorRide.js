@@ -2182,7 +2182,85 @@
       .catch(function () { return null; });
   }
 
+  /*
+   * 신호 없는 큰길 직진 횡단 피하기(2026-10-22, 백만킬로사이클아카데미 → 천호역 자전거 경로에서 발견)
+   *  원인: OSM 에 올림픽로(왕복 7차로, 실제 중앙분리대 있음)가 한 줄 양방향 도로로만 그려져 있고,
+   *  양쪽 골목(올림픽로71길 ↔ 맞은편 이면도로)이 올림픽로 위 같은 점에서 만나 '사거리'로 연결돼 있다.
+   *  경로 엔진은 분리대를 모르니 골목 → 큰길 가로질러 → 맞은편 골목을 지름길로 안내했다.
+   *  → 경로가 지나는 교차점 중 [신호등 없음 · 큰길(간선·보조간선) 교차 · 차도 골목에서 차도 골목으로 큰길 반대편으로 건넘]을 찾아
+   *    맞은편 골목 진입부를 제외(exclude_locations)하고 다시 찾는다(최대 2번, 거리 +40% 안).
+   *    지도에 그려진 횡단보도·자전거 횡단도(자전거도로·보행로 연결)나 신호 교차로로 건너는 건 그대로 둔다.
+   */
+  var CROSS_BIG = ['motorway', 'trunk', 'primary', 'secondary'];
+  var CROSS_ROADLIKE = ['road', 'living_street', 'service_road', 'alley', 'driveway', 'parking_aisle', 'turn_channel', 'track'];
+  function findUnsafeCrossings(rt, costing) {
+    var body = {
+      encoded_polyline: rt.shape,
+      shape_match: 'edge_walk',
+      costing: costing,
+      filters: {
+        attributes: ['edge.use', 'edge.road_class', 'edge.begin_heading', 'edge.end_heading', 'edge.begin_shape_index',
+          'node.traffic_signal', 'node.intersecting_edge.road_class', 'node.intersecting_edge.begin_heading', 'node.intersecting_edge.use'],
+        action: 'include'
+      }
+    };
+    return fetchJson(VALHALLA_URL.replace(/\/route$/, '/trace_attributes') + '?json=' + encodeURIComponent(JSON.stringify(body)))
+      .then(function (d) {
+        var E = (d && d.edges) || [];
+        var pts = rt.latlngs || [];
+        var out = [];
+        for (var i = 0; i < E.length - 1; i++) {
+          var e = E[i], n = E[i + 1], nd = e.end_node || {};
+          if (nd.traffic_signal) continue;
+          if (CROSS_BIG.indexOf(e.road_class) >= 0 || CROSS_BIG.indexOf(n.road_class) >= 0) continue; // 큰길을 직접 타거나 큰길로 꺾는 건 정상
+          if (CROSS_ROADLIKE.indexOf(e.use) < 0 || CROSS_ROADLIKE.indexOf(n.use) < 0) continue; // 횡단보도·자전거도로로 건너는 건 정상
+          var bigs = (nd.intersecting_edges || []).filter(function (x) {
+            return CROSS_BIG.indexOf(x.road_class) >= 0 && (!x.use || x.use === 'road' || x.use === 'turn_channel');
+          });
+          if (!bigs.length || e.end_heading == null || n.begin_heading == null) continue;
+          var hb = bigs[0].begin_heading;
+          var side = function (a) { return Math.sin((a - hb) * Math.PI / 180); };
+          var sb = side(e.end_heading + 180), so = side(n.begin_heading);
+          if (!(sb * so < 0 && Math.abs(sb) > 0.26 && Math.abs(so) > 0.26)) continue; // 큰길 반대편으로 건너갈 때만
+          // 제외 지점: 맞은편 골목으로 8m 들어간 곳(그 골목 구간만 빠지게)
+          var k = n.begin_shape_index, node = pts[k];
+          if (!node) continue;
+          var p = null;
+          for (var j = k + 1; j < pts.length; j++) {
+            var dj = hav(node[0], node[1], pts[j][0], pts[j][1]);
+            if (dj >= 8) { var f = 8 / dj; p = [node[0] + (pts[j][0] - node[0]) * f, node[1] + (pts[j][1] - node[1]) * f]; break; }
+            p = pts[j];
+          }
+          if (p) out.push({ node: node, avoid: p });
+        }
+        return out;
+      }, function () { return []; });
+  }
+
   function fetchValhallaRoute(from, to, mode, opt) {
+    if (/^moto/.test(mode)) return fetchValhallaRouteRaw(from, to, mode, opt);
+    var costing = mode === 'walk' || mode === 'walkShort' ? 'pedestrian' : 'bicycle';
+    var exclude = ((opt && opt.exclude) || []).slice();
+    function attempt(rt, tries) {
+      return findUnsafeCrossings(rt, costing).then(function (cx) {
+        rt.unsafeCrossings = cx.length;
+        if (!cx.length || tries >= 2) return rt;
+        cx.forEach(function (c) { exclude.push(c.avoid); });
+        var o2 = {};
+        for (var key in (opt || {})) o2[key] = opt[key];
+        o2.exclude = exclude;
+        return fetchValhallaRouteRaw(from, to, mode, o2).then(function (rt2) {
+          if (rt2.km > rt.km * 1.4 + 0.3) return rt; // 너무 돌아가면 원래 경로
+          return attempt(rt2, tries + 1).then(function (r3) {
+            return r3.unsafeCrossings <= rt.unsafeCrossings ? r3 : rt;
+          });
+        }, function () { return rt; });
+      });
+    }
+    return fetchValhallaRouteRaw(from, to, mode, opt).then(function (rt) { return attempt(rt, 0); });
+  }
+
+  function fetchValhallaRouteRaw(from, to, mode, opt) {
     opt = opt || {};
     var start = { lat: from.lat, lon: from.lng };
     if (opt.heading != null && isFinite(opt.heading)) {
@@ -2228,6 +2306,9 @@
       language: 'ko-KR',
       units: 'kilometers'
     };
+    if (opt.exclude && opt.exclude.length) {
+      body.exclude_locations = opt.exclude.map(function (p) { return { lat: p[0], lon: p[1] }; });
+    }
     return fetchJson(VALHALLA_URL + '?json=' + encodeURIComponent(JSON.stringify(body))).then(function (d) {
       var trip = d && d.trip;
       if (!trip || trip.status !== 0 || !trip.legs || !trip.legs.length) throw new Error('경로를 찾지 못했습니다.');
