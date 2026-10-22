@@ -34578,9 +34578,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-menu-svg { width: 24px; height: 24px; flex-shrink: 0; }
 /* 아웃도어: 길찾기 */
 #outdoorRideScreen .outd-route__sheet { max-height: 82vh; }
-#outdoorRideScreen .outd-route__search { padding: 8px 14px 4px; }
+#outdoorRideScreen .outd-route__search { padding: 8px 14px 4px; display: flex; gap: 8px; align-items: stretch; margin: 0; }
+#outdoorRideScreen .outd-route__go {
+  flex: 0 0 auto; padding: 0 16px; border: 0; border-radius: 10px; background: #00d4aa; color: #062a22;
+  font-size: 15px; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+#outdoorRideScreen .outd-route__go:active { filter: brightness(0.9); }
 #outdoorRideScreen .outd-route__search input {
-  width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 10px;
+  flex: 1 1 auto; min-width: 0; width: auto; box-sizing: border-box; padding: 11px 12px; border-radius: 10px;
   border: 1px solid #3a3a3a; background: #121212; color: #fff; font-size: 15px; outline: none;
 }
 #outdoorRideScreen .outd-route__search input:focus { border-color: #00d4aa; }
@@ -34795,6 +34800,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-reroute-btn.is-busy svg { animation: outdRerouteSpin 0.9s linear infinite; }
 @keyframes outdRerouteSpin { to { transform: rotate(360deg); } }
+/* 길찾기 초기화 버튼(2026-10-22): 재탐색 버튼 위 */
+#outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
 
 /* 카테고리 화면 내비(ROUTE) 버튼(2026-10-22): 중고랜드 버튼과 같은 크기·바로 위, 바탕은 CYCLE/RUN 타일 하늘색, 글자·아이콘은 CYCLE 글자색 */
 #sportCategoryScreen .market-entry-btn { min-width: 150px; }

@@ -402,8 +402,43 @@
   /* 경로 재탐색 버튼(2026-10-22): 현재 위치에서 설정된 목적지까지, 고른 이동 수단·경로 방식(자전거도로 우선/최단, 걷기 인도 우선/최단) 그대로 새로 찾음 */
   function updateRerouteBtn() {
     var b = $('outdRerouteBtn');
-    if (b) b.style.display = st.course && st.course.isRoute && st.course.dest ? 'flex' : 'none';
+    var on = !!(st.course && st.course.isRoute && st.course.dest);
+    if (b) b.style.display = on ? 'flex' : 'none';
+    var r = $('outdRouteResetBtn');
+    if (r) r.style.display = on ? 'flex' : 'none';
   }
+  /* 길찾기 초기화(2026-10-22): 입력한 검색어·결과·목적지와 지도 위 경로 안내 코스를 지운다(기록은 그대로) */
+  window.resetOutdoorRoute = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (!(st.course && st.course.isRoute)) return;
+    if (st.status === 'running' && !window.confirm('길찾기 경로 안내를 지울까요?\n(지금까지의 기록은 그대로 이어집니다)')) return;
+    hideTurnBig();
+    st.course = null;
+    st.courseIdx = 0;
+    resetMatch();
+    st.onRoute = false;
+    st.offRouteSince = 0;
+    st.offCued = false;
+    if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
+    var nav = $('outdNav');
+    if (nav) nav.style.display = 'none';
+    lastDest = null;
+    searchSeq++;
+    var input = $('outdRouteInput');
+    if (input) input.value = '';
+    var list = $('outdRouteList');
+    if (list) list.innerHTML = '';
+    var empty = $('outdMapEmpty');
+    if (empty) {
+      empty.innerHTML = '코스맵을 선택하면 경로를 안내합니다<br><small>메뉴 &gt; 코스맵 선택 · 길찾기</small>';
+      empty.style.display = st.status === 'running' ? 'none' : '';
+    }
+    updateRerouteBtn();
+    renderStats();
+    st.follow = true;
+    if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, st.map ? st.map.getZoom() : 16);
+    toast('길찾기를 초기화했습니다', 'info');
+  };
   window.rerouteOutdoorNow = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     var c = st.course;
@@ -2337,7 +2372,8 @@
       '<button type="button" class="outd-route__mode" data-travel="walk" role="radio" aria-label="걷기">' + ICON_WALK + '</button>' +
       '</span></span>' +
       '<button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
-      '<div class="outd-route__search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search"></div>' +
+      '<form class="outd-route__search" id="outdRouteForm" action="#" role="search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search">' +
+      '<button type="submit" class="outd-route__go">검색</button></form>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
       '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
       '</div>';
@@ -2354,16 +2390,14 @@
         if (lastDest && $('outdRouteList').querySelector('.outd-route__opt')) chooseDestination(lastDest);
       }
     });
+    // 2026-10-22: 입력 도중 자동 검색 없음 — [검색] 버튼 또는 키보드 검색(엔터)으로만 검색
     var input = el.querySelector('#outdRouteInput');
-    var timer = null;
-    input.addEventListener('input', function () {
-      clearTimeout(timer);
+    el.querySelector('#outdRouteForm').addEventListener('submit', function (e) {
+      e.preventDefault();
       var q = input.value.trim();
-      if (q.length < 2) { renderRouteList([]); return; }
-      timer = setTimeout(function () { runSearch(q); }, 450);
-    });
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') { clearTimeout(timer); var q = input.value.trim(); if (q) runSearch(q); }
+      if (!q) { try { input.focus(); } catch (err) {} return; }
+      try { input.blur(); } catch (err) {} // 휴대폰 키보드를 내려 결과가 보이게
+      runSearch(q);
     });
     return el;
   }
