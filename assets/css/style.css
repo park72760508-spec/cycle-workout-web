@@ -34986,3 +34986,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-stv-logo { display: inline-block; width: 16px; height: 16px; vertical-align: -3px; object-fit: contain; }
 #outdoorRideScreen .outd-favpin__badge { width: 20px; height: 20px; right: -9px; top: -9px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
 #outdoorRideScreen .outd-favpin__badge .outd-stv-logo { width: 15px; height: 15px; vertical-align: 0; }
+/* 2026-10-23: 지도 핀 공개 배지 — 빨간 원 + 흰 STELVIO 로고(stelvio_w.png) */
+#outdoorRideScreen .outd-favpin__badge { background: #dc2626; border: 1.5px solid #ffffff; box-sizing: border-box; }
+#outdoorRideScreen .outd-favpin__badge .outd-stv-logo { width: 13px; height: 13px; }

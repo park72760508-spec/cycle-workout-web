@@ -2886,7 +2886,7 @@
       var kind = it.is_mine ? 'mine' : 'pub';
       var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
-        (it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""></i>' : '') + '</div>' +
+        (it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
