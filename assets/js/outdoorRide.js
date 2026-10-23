@@ -3680,17 +3680,23 @@
     if (st.map) st.map.invalidateSize();
     cameraFrame();
   }
-  (function watchScreen() {
+  /* 2026-10-23: 이 스크립트가 화면 HTML(#outdoorRideScreen)보다 먼저 실행돼 예전엔 요소를 못 찾고 감시 등록을 건너뛰었다
+   * (화면 회전·창 크기 변경 때 지도 회전판 크기가 처음 크기로 남아 가장자리가 비었음) → 크기 변경 감지는 바로, 화면 감시는 문서 준비 후. */
+  window.addEventListener('resize', function () { setTimeout(fixMapSize, 100); setTimeout(fixMapSize, 500); });
+  window.addEventListener('orientationchange', function () { setTimeout(fixMapSize, 300); setTimeout(fixMapSize, 800); });
+  function watchScreen() {
     var el = $(SCREEN_ID);
-    if (!el || typeof MutationObserver !== 'function') return;
+    if (!el || typeof MutationObserver !== 'function' || el.__outdWatch) return;
+    el.__outdWatch = true;
     new MutationObserver(function () {
       if (isActive()) {
         setTimeout(fixMapSize, 50);
         setTimeout(fixMapSize, 400);
       }
     }).observe(el, { attributes: true, attributeFilter: ['class'] });
-    window.addEventListener('resize', function () { setTimeout(fixMapSize, 100); });
-  })();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchScreen);
+  else watchScreen();
 
   /* ---------- 진입 · 나가기 ---------- */
   function activeScreenId() {
