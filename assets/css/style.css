@@ -35111,3 +35111,22 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 /* 즐겨찾기 핀 바로 세우기: CSS 변수 대신 JS 가 핀에 직접 회전 지정(지도 전체 스타일 재계산 없음) */
 #outdoorRideScreen .outd-favpin__in { transform: none; }
+/* ===== 2026-10-24: 즐겨찾기 카테고리 원형 탭(중고랜드 형식) · 목록 제휴 배지 · 메모 ===== */
+#outdoorRideScreen .outd-fav__cats { display: flex; gap: 10px; padding: 2px 14px 10px; overflow-x: auto; scrollbar-width: none; }
+#outdoorRideScreen .outd-fav__cats::-webkit-scrollbar { display: none; }
+#outdoorRideScreen .outd-fav__cat-tab {
+  flex: 0 0 auto; width: 44px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 0; border: 0; background: transparent; color: #e2e8f0; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__cat-ico {
+  width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid #3a3a3a; background: #1a1a1a;
+  display: flex; align-items: center; justify-content: center; font-size: 19px; line-height: 1; color: #e2e8f0;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+}
+#outdoorRideScreen .outd-fav__cat-tab:active .outd-fav__cat-ico { transform: scale(0.93); }
+#outdoorRideScreen .outd-fav__cat-ico svg { display: block; }
+#outdoorRideScreen .outd-fav__cat-label { font-size: 10.5px; font-weight: 700; color: #94a3b8; white-space: nowrap; }
+#outdoorRideScreen .outd-fav__cat-tab.is-on .outd-fav__cat-ico { background: rgba(250, 204, 21, 0.18); border-color: transparent; color: #facc15; }
+#outdoorRideScreen .outd-fav__cat-tab.is-on .outd-fav__cat-label { color: #facc15; }
+#outdoorRideScreen .outd-fav__namerow { display: flex; align-items: center; gap: 6px; min-width: 0; }
+#outdoorRideScreen .outd-fav__namerow .outd-route__name { min-width: 0; }

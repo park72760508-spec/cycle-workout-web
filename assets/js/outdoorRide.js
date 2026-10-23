@@ -1915,6 +1915,7 @@
   var travelMode = 'bike';
   var lastDest = null;
   var ICON_STAR_SM = '<svg class="outd-star-ico" viewBox="0 0 24 24" width="16" height="16" fill="#facc15" stroke="#facc15" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.62.96-5.57L3.9 9.5l5.6-.8z"/></svg>';
+  var ICON_ALL_CAT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>';
   var ICON_EDIT_SM = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
   var ICON_TRASH_SM = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>';
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
@@ -2785,7 +2786,7 @@
     for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
     return FAV_CATS[FAV_CATS.length - 1]; // 모르는 값(예: 예전 '회사')은 기타로 표시
   }
-  var fav = { filter: { sido: '', sigungu: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
+  var fav = { filter: { sido: '', sigungu: '', cat: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
   /** 관리자(grade 1) — 즐겨찾기에 제휴사 지정 가능(서버도 fn_is_admin 으로 재확인) */
   function favIsAdmin() {
@@ -2851,6 +2852,13 @@
       '<span class="outd-fav__filters"><select data-fav-sido aria-label="시도"><option value="">시도 전체</option></select>' +
       '<select data-fav-sigungu aria-label="구군" disabled><option value="">구군 전체</option></select></span>' +
       '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
+      // 2026-10-24: 카테고리 원형 탭(중고랜드와 같은 형식) — 전체·맛집·카페·명소·기타·집
+      '<div class="outd-fav__cats" role="tablist" aria-label="카테고리">' +
+      [['', ICON_ALL_CAT, '전체'], ['food'], ['cafe'], ['spot'], ['etc'], ['home']].map(function (x) {
+        var c = x[0] ? favCat(x[0]) : null;
+        return '<button type="button" class="outd-fav__cat-tab" data-fav-cat="' + x[0] + '" role="tab">' +
+          '<span class="outd-fav__cat-ico">' + (c ? c.e : x[1]) + '</span><span class="outd-fav__cat-label">' + (c ? c.l : x[2]) + '</span></button>';
+      }).join('') + '</div>' +
       '<div class="outd-fav__tabs" role="tablist">' +
       '<button type="button" class="outd-fav__tab" data-fav-tab="public" role="tab">공개 장소</button>' +
       '<button type="button" class="outd-fav__tab" data-fav-tab="mine" role="tab">내 즐겨찾기</button>' +
@@ -2871,6 +2879,8 @@
     el.addEventListener('click', function (e) {
       var t = e.target;
       if (t === el || t.closest('[data-fav-close]')) { el.style.display = 'none'; return; }
+      var catTab = t.closest('[data-fav-cat]');
+      if (catTab) { fav.filter.cat = catTab.getAttribute('data-fav-cat'); renderFavList(); return; }
       var tab = t.closest('[data-fav-tab]');
       if (tab) { fav.tab = tab.getAttribute('data-fav-tab'); renderFavTabs(); loadFavList(false); return; }
       if (t.closest('[data-fav-add]')) { el.style.display = 'none'; startFavPick(); return; }
@@ -2944,6 +2954,7 @@
     sel2.disabled = !fav.filter.sido;
   }
   function favMatchesFilter(it) {
+    if (fav.filter.cat && (it.category || 'etc') !== fav.filter.cat) return false;
     if (fav.filter.sido && it.sido !== fav.filter.sido) return false;
     if (fav.filter.sigungu && it.sigungu !== fav.filter.sigungu) return false;
     return true;
@@ -2951,11 +2962,16 @@
   function renderFavList() {
     var box = $('outdFavList');
     renderFavFilterOptions();
+    Array.prototype.forEach.call(document.querySelectorAll('#outdFavSheet [data-fav-cat]'), function (b) {
+      var on = b.getAttribute('data-fav-cat') === (fav.filter.cat || '');
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
     var full = fav.items[fav.tab] || [];
     var list = full.filter(favMatchesFilter);
     if (full.length && !list.length) {
-      box.innerHTML = '<div class="coachm-picker__empty">선택한 지역(' + escHtml([fav.filter.sido, fav.filter.sigungu].filter(Boolean).join(' ')) + ')에 ' +
-        (fav.tab === 'mine' ? '내 즐겨찾기가' : '공개 장소가') + ' 없습니다.<br><small>시도·구군을 \'전체\'로 바꾸면 모든 목록이 보입니다.</small></div>';
+      box.innerHTML = '<div class="coachm-picker__empty">선택한 조건(' + escHtml([fav.filter.sido, fav.filter.sigungu, fav.filter.cat ? favCat(fav.filter.cat).l : ''].filter(Boolean).join(' · ')) + ')에 ' +
+        (fav.tab === 'mine' ? '내 즐겨찾기가' : '공개 장소가') + ' 없습니다.<br><small>지역·카테고리를 \'전체\'로 바꾸면 모든 목록이 보입니다.</small></div>';
       return;
     }
     if (!list.length) {
@@ -2979,7 +2995,10 @@
       }
       return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
         '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>' +
-        '<span class="outd-fav__txt"><span class="outd-route__name">' + escHtml(it.name) + '</span><span class="outd-route__sub">' + escHtml(sub) + '</span></span>' +
+        '<span class="outd-fav__txt"><span class="outd-fav__namerow"><span class="outd-route__name">' + escHtml(it.name) + '</span>' +
+        (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 24) : '') + '</span>' +
+        '<span class="outd-route__sub">' + escHtml(sub) + '</span>' +
+        (it.memo ? '<span class="outd-route__sub outd-fav__memo">' + escHtml(it.memo) + '</span>' : '') + '</span>' +
         '<span class="outd-fav__right">' + right + '</span></div>';
     }).join('');
   }
@@ -3102,6 +3121,7 @@
     if (!it.is_mine && it.owner_name) rows.push(['등록', it.owner_name]);
     var dist = favDistText(it);
     if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
+    if (it.memo) rows.push(['메모', it.memo]);
     var likeHtml = it.is_public
       ? (it.is_mine
         ? '<span class="outd-favpop__likes">♥ ' + (it.like_count || 0) + '</span>'
@@ -3376,6 +3396,7 @@
           return '<button type="button" data-v="' + c.k + '">' + c.e + ' ' + c.l + '</button>';
         }).join('') + '</div>' +
         '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
+        '<label class="outd-fav__label">메모<input name="memo" type="text" maxlength="20" placeholder="20자 이내 (선택)" enterkeyhint="done"></label>' +
         '<div class="outd-fav__label">공개 여부</div>' +
         '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개</button></div>' +
         '<p class="outd-fav__hint" data-pub-hint></p>' +
@@ -3404,6 +3425,7 @@
         renderFavForm();
       });
       f.querySelector('[name=name]').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
+      f.querySelector('[name=memo]').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
     }
     if (!fav.form) fav.form = { category: 'food', pub: '0', aff: null };
     if (prefill) {
@@ -3411,6 +3433,7 @@
       fav.form = { category: prefill.category, pub: prefill.is_public ? '1' : '0',
         aff: prefill.affiliate_id ? { id: prefill.affiliate_id, name: prefill.affiliate_name || '', discount: prefill.affiliate_discount || null } : null };
       f.querySelector('[name=name]').value = prefill.name || '';
+      f.querySelector('[name=memo]').value = prefill.memo || '';
       f.querySelector('[name=sido]').value = prefill.sido || '';
       f.querySelector('[name=sigungu]').value = prefill.sigungu || '';
       f.querySelector('.outd-fav__addr').textContent = prefill.address || '';
@@ -3418,6 +3441,7 @@
       if (f.style.display !== 'flex' && !fav.editId) {
         fav.form = { category: 'food', pub: '0', aff: null };
         f.querySelector('[name=name]').value = '';
+        f.querySelector('[name=memo]').value = '';
       }
       f.querySelector('[name=sido]').value = '';
       f.querySelector('[name=sigungu]').value = '';
@@ -3531,7 +3555,8 @@
       address: (fav.region && fav.region.address) || '',
       lat: Math.round(fav.pickLL.lat * 1e7) / 1e7,
       lng: Math.round(fav.pickLL.lng * 1e7) / 1e7,
-      is_public: fav.form.pub === '1'
+      is_public: fav.form.pub === '1',
+      memo: f.querySelector('[name=memo]').value.trim().slice(0, 20)
     };
     var editing = !!fav.editId;
     if (editing) payload.id = fav.editId;
