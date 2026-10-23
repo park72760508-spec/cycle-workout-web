@@ -35046,3 +35046,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #settingsModal .settings-noshow-row { display: flex; justify-content: flex-start; padding: 6px 20px 2px; }
 #settingsModal .settings-noshow-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; cursor: pointer; user-select: none; }
 #settingsModal .settings-noshow-label input { width: 16px; height: 16px; margin: 0; accent-color: #667eea; cursor: pointer; }
+/* 2026-10-23: 공개/비공개 토글 — 환경설정 카드는 이름 바로 오른쪽, 프로필 선택 화면은 기존 둘째 줄 그대로 */
+#profileScreen .user-card .user-privacy-toggle-inline { display: none !important; }
+#settingsModal .profile-user-card-scope .user-card .user-name.user-name-with-indicators { justify-content: flex-start; gap: 8px; }
+#settingsModal .profile-user-card-scope .user-card .user-name-with-indicators .user-name-badges { margin-left: auto; }
+#settingsModal .profile-user-card-scope .user-card .user-privacy-toggle-inline { display: inline-flex; align-items: center; flex-shrink: 0; }
+#settingsModal .profile-user-card-scope .user-card .user-privacy-toggle-inline .privacy-toggle-label { gap: 5px; font-size: 12px; }
+#settingsModal .profile-user-card-scope .stelvio-user-points-with-avatar > .avatar-row-privacy { display: none; }

@@ -4321,6 +4321,16 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
               </label>
             </span>`
       : '<span class="avatar-row-privacy"></span>';
+    /* 2026-10-23: 환경설정 카드에서는 공개/비공개 토글을 이름 바로 오른쪽에(CSS 로 환경설정에서만 표시, 둘째 줄 토글은 숨김) */
+    const privacyInlineHtml = canTogglePrivacy
+      ? `<span class="user-privacy-toggle-inline" onclick="event.stopPropagation();">
+              <label class="privacy-toggle-label">
+                <input type="checkbox" class="privacy-toggle-input" ${isPrivate ? 'checked' : ''} onchange="toggleUserPrivacy('${user.id}', this.checked)">
+                <span class="privacy-toggle-slider"></span>
+                <span class="privacy-toggle-text">${isPrivate ? '비공개' : '공개'}</span>
+              </label>
+            </span>`
+      : '';
     const avatarBlock = canEditAvatar
       ? `<button type="button" class="stelvio-profile-card-avatar-btn" onclick="event.stopPropagation();typeof stelvioOpenProfilePhotoPicker==='function'&&stelvioOpenProfilePhotoPicker('${user.id}')" aria-label="프로필 사진 변경">
               <span class="stelvio-profile-card-avatar-ring">
@@ -4344,7 +4354,7 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
           <div class="user-row1">
             <div class="user-name-wrapper">
               <div class="user-name user-name-with-indicators">
-                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon" width="32" height="32" loading="lazy" decoding="async"> ${displayName}${withdrawnBadgeHtml}</span>
+                <span class="user-name-text"><img src="assets/img/${challengeImage}" alt="" class="user-name-icon" width="32" height="32" loading="lazy" decoding="async"> ${displayName}${withdrawnBadgeHtml}</span>${privacyInlineHtml}
                 <span class="user-name-badges" title="AI 페어링 / Strava 연결">
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${aiDot}" title="AI 페어링" aria-label="AI 페어링"></span>
                   <span class="profile-indicator-dot" style="width:8px;height:8px;border-radius:50%;${stravaDot}" title="Strava 연결" aria-label="Strava 연결"></span>
