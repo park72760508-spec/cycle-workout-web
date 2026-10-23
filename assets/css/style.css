@@ -34903,3 +34903,28 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-home-btn:active { background: rgba(255, 255, 255, 0.12); }
 /* 지도 크게 보기 떠 있는 시작 버튼도 기록 중이면 녹색 바탕(2026-10-22) */
 #outdoorRideScreen .outd-float-ctrl.is-running .outd-float-btn--start { background: #ef4444; } /* 기록 중 빨간색 */
+
+/* ===== 2026-10-23: ROUTE(아웃도어) 가로 화면 — 좌우 1:1 분할 =====
+   예전에는 가로 화면이면 '세로 모드로 기기를 회전해주세요' 안내로 덮었다(휴대폰·태블릿·PC 창 모두).
+   왼쪽: 상단(홈·경과 시간·메뉴) / 속도계(남는 높이·폭에 맞춰 최대 크기) / 하단(평균 속도·남은 거리·누적 고도)
+   오른쪽: 지도 전체. '지도 크게 보기'는 가로 화면에선 쓰지 않음(버튼 숨김, 켜져 있으면 JS 가 해제). */
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen.active::before { content: none !important; display: none !important; }
+  #outdoorRideScreen.active > * { opacity: 1 !important; pointer-events: auto !important; }
+  #outdoorRideScreen.active {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "head map" "gauge map" "stats map";
+    align-items: stretch !important;
+    justify-items: stretch !important;
+    align-content: stretch !important;
+    justify-content: stretch !important;
+  }
+  #outdoorRideScreen.active > .mobile-dashboard-header { grid-area: head; width: 100% !important; box-sizing: border-box; }
+  #outdoorRideScreen.active > .outd-map-section { grid-area: map; height: 100% !important; min-height: 0 !important; width: 100% !important; border-left: 1px solid #2a2a2a; }
+  #outdoorRideScreen.active > .mobile-main-content { grid-area: gauge; height: 100% !important; min-height: 0 !important; width: 100% !important; }
+  #outdoorRideScreen.active > .mobile-stats-footer { grid-area: stats; width: 100% !important; }
+  #outdoorRideScreen .mobile-gauge-segment-wrap { padding: 4px 8px; box-sizing: border-box; }
+  #outdoorRideScreen .outd-expand { display: none !important; }
+}

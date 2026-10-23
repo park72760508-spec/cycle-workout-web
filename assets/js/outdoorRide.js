@@ -344,8 +344,21 @@
     }
     st.lastFrameTs = ts;
     var diff = st.speedKmh - st.displaySpeed;
-    var settled = Math.abs(diff) <= 0.05;
-    st.displaySpeed = settled ? st.speedKmh : st.displaySpeed + diff * 0.25;
+    var needleSettled = Math.abs(diff) <= 0.05;
+    st.displaySpeed = needleSettled ? st.speedKmh : st.displaySpeed + diff * 0.25;
+    /*
+     * 속도 숫자(2026-10-23): 45 → 41 처럼 바뀔 때 45, 44, 43, 42, 41 이 빠짐없이 보이게 숫자만 따로 센다.
+     * 한 프레임(약 1/30초)에 최대 1km/h 만 움직여 정수가 건너뛰지 않고, 변화가 작으면(7.5km/h 이하) 0.5씩 더 천천히.
+     */
+    if (st.numSpeed == null) st.numSpeed = st.speedKmh;
+    var nd = st.speedKmh - st.numSpeed;
+    var numSettled = Math.abs(nd) <= 0.05;
+    if (numSettled) st.numSpeed = st.speedKmh;
+    else {
+      var step = Math.min(1, Math.max(0.5, Math.abs(nd) / 15));
+      st.numSpeed += Math.abs(nd) <= step ? nd : (nd > 0 ? step : -step);
+    }
+    var settled = needleSettled && numSettled;
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
@@ -369,8 +382,8 @@
         else { glow.setAttribute('d', sweep.getAttribute('d')); if (glow.style.display === 'none') glow.style.display = ''; }
       }
     }
-    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', st.speedKmh, 1);
-    if (st.expanded) setText('outdExpSpeed', (st.speedKmh || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1);
+    if (st.expanded) setText('outdExpSpeed', Math.max(0, st.numSpeed || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
     if (!settled) st.rafId = requestAnimationFrame(loop);
   }
 
@@ -524,7 +537,7 @@
       btn.setAttribute('aria-label', st.expanded ? '지도 원래 크기로' : '지도 크게 보기');
     }
     renderToggle();
-    setText('outdExpSpeed', (st.speedKmh || 0).toFixed(1));
+    setText('outdExpSpeed', Math.max(0, st.numSpeed != null ? st.numSpeed : st.speedKmh || 0).toFixed(1));
     setText('outdExpDist', (st.distanceM / 1000).toFixed(2));
     // 지도 크기가 바뀌었으니 다시 계산하고 내 위치 기준으로 다시 맞춤
     [40, 320].forEach(function (ms) {
@@ -3659,6 +3672,10 @@
   /* 지도는 화면이 실제로 보인 뒤 크기를 다시 계산해야 타일이 전체에 그려진다 — 화면 활성화·회전·크기 변경 때 재계산 */
   function fixMapSize() {
     if (!isActive()) return;
+    // 가로 화면(좌우 분할)에서는 '지도 크게 보기'를 쓰지 않음 — 켜진 채로 돌리면 해제
+    if (st.expanded && window.matchMedia && window.matchMedia('(orientation: landscape)').matches) {
+      try { window.toggleOutdoorExpand(); } catch (e) {}
+    }
     sizeRotLayer();
     if (st.map) st.map.invalidateSize();
     cameraFrame();

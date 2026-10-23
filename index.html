@@ -4000,7 +4000,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261023fav2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261023land" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -5106,9 +5106,9 @@
                   <span id="categoryAuthBarWelcomeLine1" class="basecamp-auth-bar-welcome-line">환영합니다.</span>
                   <span id="categoryAuthBarWelcomeLine2" class="basecamp-auth-bar-welcome-line">사용자명님</span>
                   <!-- 2026-10-22: 내비(ROUTE) — 아웃도어 라이딩(GPS 내비) 화면으로. 중고랜드 버튼과 같은 크기, 바로 위 -->
-                  <button type="button" id="btnGoToNaviFromCategory" class="market-entry-btn navi-entry-btn" style="display:none;" onclick="if(typeof window.openOutdoorRide==='function')window.openOutdoorRide({});" aria-label="내비(ROUTE)로 이동하기">
+                  <button type="button" id="btnGoToNaviFromCategory" class="market-entry-btn navi-entry-btn" style="display:none;" onclick="if(typeof window.openOutdoorRide==='function')window.openOutdoorRide({});" aria-label="루트맵으로 이동하기">
                     <span class="navi-entry-btn__icon" aria-hidden="true"></span>
-                    <span>ROUTE</span>
+                    <span>루트맵</span>
                   </button>
                   <button type="button" id="btnGoToMarketFromCategory" class="market-entry-btn" style="display:none;" onclick="if(typeof navigateToMarketLand==='function')navigateToMarketLand();else if(typeof showScreen==='function')showScreen('marketHomeScreen');" aria-label="중고랜드로 이동하기">
                     <svg class="market-entry-btn__icon" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"></path></svg>
@@ -29908,7 +29908,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261023fav"></script>
+  <script src="assets/js/outdoorRide.js?v=20261023land"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
