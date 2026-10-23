@@ -34991,3 +34991,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpin__badge .outd-stv-logo { width: 13px; height: 13px; }
 /* 2026-10-23: 맛집 아이콘(빨간 원 + 흰 포크·나이프) — 공통 svg{display:block} 를 글자처럼 */
 #outdoorRideScreen .outd-food-ico { display: inline-block; vertical-align: -0.22em; }
+/* 2026-10-23: 공개 즐겨찾기 좋아요 수(♥ n) — 지도 핀 오른쪽 아래 · 내 즐겨찾기 목록 */
+#outdoorRideScreen .outd-favpin__likes {
+  position: absolute; left: 10px; top: -20px; white-space: nowrap; padding: 1px 6px; border-radius: 999px;
+  background: #ffffff; color: #e11d48; border: 1.5px solid #e11d48; font-size: 11px; font-weight: 800; line-height: 1.3;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+#outdoorRideScreen .outd-favpin__likes.is-on { background: #e11d48; color: #ffffff; border-color: #ffffff; }
+#outdoorRideScreen .outd-fav__likecnt { font-size: 12px; font-weight: 800; color: #f43f5e; white-space: nowrap; }

@@ -2815,7 +2815,8 @@
         right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>';
       } else {
-        right = '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개' : '🔒 비공개') + '</button>' +
+        right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + (it.like_count || 0) + '</span>' : '') +
+          '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개' : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-del="' + it.id + '" aria-label="삭제">' + ICON_TRASH_SM + '</button>';
       }
       return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
@@ -2888,6 +2889,7 @@
       var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
         (it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
+        (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + (it.like_count || 0) + '</span>' : '') +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
@@ -2973,6 +2975,7 @@
       it.liked = !!res.liked;
       it.like_count = res.like_count;
       if ($('outdFavList')) renderFavList();
+      renderFavMarkers(); // 지도 핀의 ♥ 숫자도 갱신
       if (done) done();
     }).catch(function (err) {
       toast(err && err.message ? err.message : '좋아요를 처리하지 못했습니다.', 'error');
