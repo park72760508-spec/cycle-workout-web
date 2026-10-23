@@ -3033,12 +3033,90 @@
       b = document.createElement('div');
       b.id = 'outdFavPickBar';
       b.className = 'outd-fav__pickbar';
-      b.innerHTML = '<span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" data-fav-pick-cancel>취소</button>';
+      /* 2026-10-23: 지도에서 누르기 + 목적지 검색(장소·주소)으로도 위치 선택 */
+      b.innerHTML =
+        '<div class="outd-fav__pickrow"><span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" data-fav-pick-cancel>취소</button></div>' +
+        '<form class="outd-fav__picksearch" action="#" role="search"><input type="search" placeholder="또는 장소·주소 검색" autocomplete="off" enterkeyhint="search">' +
+        '<button type="submit">검색</button></form>' +
+        '<div class="outd-fav__pickresults" style="display:none"></div>';
       b.querySelector('[data-fav-pick-cancel]').addEventListener('click', function (e) { e.stopPropagation(); cancelFavPick(); });
+      var form = b.querySelector('form');
+      var input = form.querySelector('input');
+      var box = b.querySelector('.outd-fav__pickresults');
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var q = input.value.trim();
+        if (!q) { try { input.focus(); } catch (err) {} return; }
+        try { input.blur(); } catch (err) {}
+        var seq = (fav.pickSeq = (fav.pickSeq || 0) + 1);
+        box.style.display = 'block';
+        box.innerHTML = '<div class="outd-fav__pickempty">검색 중...</div>';
+        searchPlaces(q).then(function (list) {
+          if (seq !== fav.pickSeq) return;
+          if (!list || !list.length) { box.innerHTML = '<div class="outd-fav__pickempty">검색 결과가 없습니다.</div>'; return; }
+          box.innerHTML = '';
+          list.slice(0, 15).forEach(function (pl) {
+            var it = document.createElement('button');
+            it.type = 'button';
+            it.className = 'outd-fav__pickitem';
+            var d = st.lastFix ? hav(st.lastFix.lat, st.lastFix.lng, pl.lat, pl.lng) / 1000 : null;
+            it.innerHTML = '<b></b><span></span><em></em>';
+            it.children[0].textContent = pl.name;
+            it.children[1].textContent = pl.sub || '';
+            it.children[2].textContent = d != null ? (d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km') : '';
+            it.addEventListener('click', function (ev) {
+              ev.stopPropagation();
+              box.style.display = 'none';
+              favPickPlace(pl);
+            });
+            box.appendChild(it);
+          });
+        }).catch(function () {
+          if (seq === fav.pickSeq) box.innerHTML = '<div class="outd-fav__pickempty">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
+        });
+      });
+      // 바 안의 터치가 지도(끌기·깃발 꽂기)로 전달되지 않게
+      ['pointerdown', 'pointerup', 'click', 'wheel'].forEach(function (ev) { b.addEventListener(ev, function (e) { e.stopPropagation(); }); });
       var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
       (wrap || $(SCREEN_ID)).appendChild(b);
     }
-    if (b) b.style.display = show ? 'flex' : 'none';
+    if (b) {
+      b.style.display = show ? 'flex' : 'none';
+      if (show) {
+        var inp = b.querySelector('input');
+        if (inp) inp.value = '';
+        var rbox = b.querySelector('.outd-fav__pickresults');
+        if (rbox) { rbox.style.display = 'none'; rbox.innerHTML = ''; }
+      }
+    }
+  }
+  /** 화면(지도 칸) 가운데로 이 위치를 옮김 — 회전된 지도에서도 정확히(회전을 되돌려 이동량 계산) */
+  function panLatLngToMapCenter(lat, lng) {
+    var map = st.map, el = $('outdMap'), wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+    if (!map || !el || !wrap) return;
+    var P = map.latLngToContainerPoint([lat, lng]);
+    var r = el.getBoundingClientRect(), wr = wrap.getBoundingClientRect();
+    var th = ((st.dispRot != null ? st.dispRot : st.mapRotDeg || 0) * Math.PI) / 180;
+    var vx = P.x - el.offsetWidth / 2, vy = P.y - el.offsetHeight / 2;
+    var sx = r.left + r.width / 2 + vx * Math.cos(th) - vy * Math.sin(th);
+    var sy = r.top + r.height / 2 + vx * Math.sin(th) + vy * Math.cos(th);
+    var dx = (wr.left + wr.width / 2) - sx, dy = (wr.top + wr.height * 0.4) - sy; // 아래 등록 창에 가리지 않게 조금 위쪽
+    var mx = dx * Math.cos(th) + dy * Math.sin(th);
+    var my = -dx * Math.sin(th) + dy * Math.cos(th);
+    map.panBy([-mx, -my], { animate: false });
+  }
+  /** 검색 결과로 위치 선택 → 지도 이동 + 깃발 + 등록 창(장소명 미리 채움) */
+  function favPickPlace(pl) {
+    var map = st.map;
+    if (!map) return;
+    st.follow = false;
+    st.userPanAt = Date.now() + 3600 * 1000;
+    map.setView([pl.lat, pl.lng], Math.max(map.getZoom(), 17), { animate: false });
+    panLatLngToMapCenter(pl.lat, pl.lng);
+    placeFavFlag(pl.lat, pl.lng);
+    var f = $('outdFavForm');
+    var nm = f && f.querySelector('[name=name]');
+    if (nm && !nm.value) nm.value = String(pl.name || '').slice(0, 40);
   }
   function startFavPick() {
     var map = ensureMap();

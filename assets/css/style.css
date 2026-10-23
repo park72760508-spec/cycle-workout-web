@@ -35007,3 +35007,25 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpop__cat--pub { background: linear-gradient(135deg, #e9d5ff, #a78bfa); }
 #outdoorRideScreen .outd-favpin__likes,
 #outdoorRideScreen .outd-favpin__likes.is-on { background: #ffffff; color: #dc2626; border: 1.5px solid #dc2626; }
+/* 2026-10-23: 즐겨찾기 위치 선택 바 — 안내 + 장소·주소 검색 + 결과 목록 */
+#outdoorRideScreen .outd-fav__pickbar { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 8px; }
+#outdoorRideScreen .outd-fav__pickrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#outdoorRideScreen .outd-fav__picksearch { display: flex; gap: 6px; margin: 0; }
+#outdoorRideScreen .outd-fav__picksearch input {
+  flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: 9px 11px; border-radius: 9px;
+  border: 1px solid #3a3a3a; background: #121212; color: #fff; font-size: 15px; outline: none;
+}
+#outdoorRideScreen .outd-fav__picksearch input:focus { border-color: #00d4aa; }
+#outdoorRideScreen .outd-fav__picksearch button {
+  flex: 0 0 auto; padding: 0 14px; border: 0 !important; border-radius: 9px !important; background: #00d4aa !important;
+  color: #062a22 !important; font-size: 14px !important; font-weight: 800; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__pickresults { max-height: 46vh; overflow-y: auto; margin: 0 -4px; }
+#outdoorRideScreen .outd-fav__pickitem {
+  display: grid; grid-template-columns: 1fr auto; column-gap: 8px; width: 100%; text-align: left; padding: 9px 6px;
+  border: 0 !important; border-top: 1px solid #2f2f2f !important; border-radius: 0 !important; background: transparent !important; color: #fff; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__pickitem b { grid-column: 1; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-fav__pickitem span { grid-column: 1; font-size: 11px; color: #94a3b8; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-fav__pickitem em { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-style: normal; font-size: 12px; color: #94a3b8; font-weight: 400; }
+#outdoorRideScreen .outd-fav__pickempty { padding: 10px 6px; font-size: 13px; color: #94a3b8; font-weight: 400; }
