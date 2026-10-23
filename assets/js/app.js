@@ -15916,6 +15916,10 @@ function openSettingsModal() {
   const modal = document.getElementById('settingsModal');
   if (modal) {
     modal.style.display = 'flex';
+    try {
+      var noShowCb = document.getElementById('settingsNoAutoShow');
+      if (noShowCb) noShowCb.checked = typeof window.stelvioSettingsAutoShowOff === 'function' && window.stelvioSettingsAutoShowOff(window.currentUser);
+    } catch (eNs) {}
     // 저장된 API 키 로드
     loadGeminiApiKeyToSettings();
   }
@@ -16118,6 +16122,13 @@ function closeSettingsModal() {
   if (modal) {
     modal.style.display = 'none';
   }
+  /* '다시 보이지 않기' 체크 상태를 닫을 때 저장 — 아래 TOP10·재표시 판단보다 먼저 */
+  try {
+    var noShowCb2 = document.getElementById('settingsNoAutoShow');
+    if (noShowCb2 && typeof window.stelvioSetSettingsAutoShowOff === 'function') {
+      window.stelvioSetSettingsAutoShowOff(!!noShowCb2.checked, window.currentUser);
+    }
+  } catch (eNs2) {}
   try {
     window.__hubNavModalTab = null;
     if (typeof window.syncGlobalHubGlassNavForActiveScreen === 'function') {

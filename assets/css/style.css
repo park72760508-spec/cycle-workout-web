@@ -35042,3 +35042,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__filters select:disabled { opacity: 0.45; }
 /* 2026-10-23: 지도 즐겨찾기 이름표 바탕 — 흰색 → 연한 노랑(내 것·다른 사용자 공개 장소 모두) */
 #outdoorRideScreen .outd-favpin__name { background: #fef9c3; border: 1px solid #fde047; }
+/* 2026-10-23: 환경설정 제목 아래 왼쪽 '다시 보이지 않기' */
+#settingsModal .settings-noshow-row { display: flex; justify-content: flex-start; padding: 6px 20px 2px; }
+#settingsModal .settings-noshow-label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; cursor: pointer; user-select: none; }
+#settingsModal .settings-noshow-label input { width: 16px; height: 16px; margin: 0; accent-color: #667eea; cursor: pointer; }

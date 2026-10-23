@@ -4000,7 +4000,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261023label" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261023noshow" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -9216,6 +9216,10 @@
         <h2>환경설정</h2>
         <button class="modal-close" onclick="closeSettingsModal()">&times;</button>
       </div>
+      <!-- 2026-10-23: 체크하고 닫으면 미연결(Strava·Gemini)이어도 환경설정을 자동으로 띄우지 않음 -->
+      <div class="settings-noshow-row">
+        <label class="settings-noshow-label"><input type="checkbox" id="settingsNoAutoShow"> 다시 보이지 않기</label>
+      </div>
       <div class="modal-body settings-modal-body">
         <!-- RUN: 환경설정 상단 본인 프로필 (카드 없이 바로 표시) -->
         <div id="settingsProfileSection" class="settings-profile-section" style="display: none;">
@@ -9410,7 +9414,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20261021regcat"></script>
+  <script src="assets/js/userManager.js?v=20261023noshow"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -34936,7 +34940,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261019scan"></script>
-  <script src="assets/js/app.js?v=20261021greenArc"></script>
+  <script src="assets/js/app.js?v=20261023noshow"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   

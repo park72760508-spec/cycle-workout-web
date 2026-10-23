@@ -4052,8 +4052,30 @@ window.userHasStravaConnected = userHasStravaConnected;
 /**
  * 베이스캠프 인증 후 강제 환경설정 게이트: Strava 토큰 없음 또는 Gemini/API_sts 미등록
  */
+/*
+ * 환경설정 '다시 보이지 않기'(2026-10-23): 체크하고 닫으면 이 사용자(기기)에서는 미연결(Strava·Gemini)이어도
+ * 환경설정을 자동으로 띄우지 않는다. 메뉴로 직접 여는 건 그대로, 체크를 풀고 닫으면 다시 자동 표시.
+ */
+function stelvioSettingsAutoShowKey(u) {
+  var uid = '';
+  try { uid = String((u && (u.id || u.uid)) || (window.currentUser && (window.currentUser.id || window.currentUser.uid)) || ''); } catch (_e) {}
+  return 'stelvio_settings_autoshow_off' + (uid ? ':' + uid : '');
+}
+function stelvioSettingsAutoShowOff(u) {
+  try { return localStorage.getItem(stelvioSettingsAutoShowKey(u)) === '1'; } catch (_e) { return false; }
+}
+function stelvioSetSettingsAutoShowOff(off, u) {
+  try {
+    if (off) localStorage.setItem(stelvioSettingsAutoShowKey(u), '1');
+    else localStorage.removeItem(stelvioSettingsAutoShowKey(u));
+  } catch (_e) {}
+}
+window.stelvioSettingsAutoShowOff = stelvioSettingsAutoShowOff;
+window.stelvioSetSettingsAutoShowOff = stelvioSetSettingsAutoShowOff;
+
 function userNeedsMandatoryIntegratedSetup(u) {
   if (!u || typeof u !== 'object') return false;
+  if (stelvioSettingsAutoShowOff(u)) return false; // '다시 보이지 않기' — 자동 표시 안 함
   var merged = u;
   try {
     var uid = String(u.id || u.uid || '');
