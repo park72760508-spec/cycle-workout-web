@@ -35053,3 +35053,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #settingsModal .profile-user-card-scope .user-card .user-privacy-toggle-inline { display: inline-flex; align-items: center; flex-shrink: 0; }
 #settingsModal .profile-user-card-scope .user-card .user-privacy-toggle-inline .privacy-toggle-label { gap: 5px; font-size: 12px; }
 #settingsModal .profile-user-card-scope .stelvio-user-points-with-avatar > .avatar-row-privacy { display: none; }
+#settingsModal .profile-user-card-scope .user-card .user-name-with-indicators .user-name-text { white-space: nowrap; flex-shrink: 0; }
