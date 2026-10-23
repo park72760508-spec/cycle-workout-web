@@ -35040,3 +35040,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-fav__filters select:focus { border-color: #facc15; }
 #outdoorRideScreen .outd-fav__filters select:disabled { opacity: 0.45; }
+/* 2026-10-23: 지도 즐겨찾기 이름표 바탕 — 흰색 → 연한 노랑(내 것·다른 사용자 공개 장소 모두) */
+#outdoorRideScreen .outd-favpin__name { background: #fef9c3; border: 1px solid #fde047; }
