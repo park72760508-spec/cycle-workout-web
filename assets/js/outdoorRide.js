@@ -2714,7 +2714,7 @@
     for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
     return FAV_CATS[4];
   }
-  var fav = { tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
+  var fav = { filter: { sido: '', sigungu: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
   function favRpc(name, args) {
     return loadDualWriteModule().then(function (mod) {
@@ -2733,6 +2733,9 @@
     el.innerHTML =
       '<div class="coachm-picker__sheet outd-route__sheet">' +
       '<div class="coachm-picker__head"><span class="outd-route__title">' + ICON_STAR_SM + ' 즐겨찾기</span>' +
+      // 2026-10-23: 지역(시도·구군) 선택 — 기본은 전체
+      '<span class="outd-fav__filters"><select data-fav-sido aria-label="시도"><option value="">시도 전체</option></select>' +
+      '<select data-fav-sigungu aria-label="구군" disabled><option value="">구군 전체</option></select></span>' +
       '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
       '<div class="outd-fav__tabs" role="tablist">' +
       '<button type="button" class="outd-fav__tab" data-fav-tab="public" role="tab">공개 장소</button>' +
@@ -2742,6 +2745,15 @@
       '<div class="outd-fav__foot"><button type="button" class="outd-fav__add" data-fav-add>＋ 등록하기</button></div>' +
       '</div>';
     $(SCREEN_ID).appendChild(el);
+    el.querySelector('[data-fav-sido]').addEventListener('change', function () {
+      fav.filter.sido = this.value;
+      fav.filter.sigungu = '';
+      renderFavList();
+    });
+    el.querySelector('[data-fav-sigungu]').addEventListener('change', function () {
+      fav.filter.sigungu = this.value;
+      renderFavList();
+    });
     el.addEventListener('click', function (e) {
       var t = e.target;
       if (t === el || t.closest('[data-fav-close]')) { el.style.display = 'none'; return; }
@@ -2797,9 +2809,39 @@
       if (!fav.items[scope]) box.innerHTML = '<div class="coachm-picker__empty">목록을 불러오지 못했습니다.<br><small>' + escHtml(err && err.message ? err.message : '') + '</small></div>';
     });
   }
+  /** 시도·구군 선택 상자 — 등록된 즐겨찾기(내 것+공개 장소)에 있는 지역만, 구군은 고른 시도 안에서 */
+  function renderFavFilterOptions() {
+    var sel1 = document.querySelector('#outdFavSheet [data-fav-sido]');
+    var sel2 = document.querySelector('#outdFavSheet [data-fav-sigungu]');
+    if (!sel1 || !sel2) return;
+    var all = favAllItems();
+    var sidos = {}, sggs = {};
+    all.forEach(function (it) {
+      if (it.sido) sidos[it.sido] = 1;
+      if (it.sido && it.sido === fav.filter.sido && it.sigungu) sggs[it.sigungu] = 1;
+    });
+    if (fav.filter.sido) sidos[fav.filter.sido] = 1;
+    if (fav.filter.sigungu) sggs[fav.filter.sigungu] = 1;
+    var opt = function (v, label, cur) { return '<option value="' + escHtml(v) + '"' + (v === cur ? ' selected' : '') + '>' + escHtml(label) + '</option>'; };
+    sel1.innerHTML = opt('', '시도 전체', fav.filter.sido) + Object.keys(sidos).sort().map(function (v) { return opt(v, v, fav.filter.sido); }).join('');
+    sel2.innerHTML = opt('', '구군 전체', fav.filter.sigungu) + Object.keys(sggs).sort().map(function (v) { return opt(v, v, fav.filter.sigungu); }).join('');
+    sel2.disabled = !fav.filter.sido;
+  }
+  function favMatchesFilter(it) {
+    if (fav.filter.sido && it.sido !== fav.filter.sido) return false;
+    if (fav.filter.sigungu && it.sigungu !== fav.filter.sigungu) return false;
+    return true;
+  }
   function renderFavList() {
     var box = $('outdFavList');
-    var list = fav.items[fav.tab] || [];
+    renderFavFilterOptions();
+    var full = fav.items[fav.tab] || [];
+    var list = full.filter(favMatchesFilter);
+    if (full.length && !list.length) {
+      box.innerHTML = '<div class="coachm-picker__empty">선택한 지역(' + escHtml([fav.filter.sido, fav.filter.sigungu].filter(Boolean).join(' ')) + ')에 ' +
+        (fav.tab === 'mine' ? '내 즐겨찾기가' : '공개 장소가') + ' 없습니다.<br><small>시도·구군을 \'전체\'로 바꾸면 모든 목록이 보입니다.</small></div>';
+      return;
+    }
     if (!list.length) {
       box.innerHTML = fav.tab === 'mine'
         ? '<div class="coachm-picker__empty">아직 등록한 즐겨찾기가 없습니다.<br><small>아래 [＋ 등록하기]를 눌러 지도에서 위치를 선택하세요.</small></div>'

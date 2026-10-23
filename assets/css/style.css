@@ -35029,3 +35029,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__pickitem span { grid-column: 1; font-size: 11px; color: #94a3b8; font-weight: 400; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #outdoorRideScreen .outd-fav__pickitem em { grid-column: 2; grid-row: 1 / span 2; align-self: center; font-style: normal; font-size: 12px; color: #94a3b8; font-weight: 400; }
 #outdoorRideScreen .outd-fav__pickempty { padding: 10px 6px; font-size: 13px; color: #94a3b8; font-weight: 400; }
+/* 2026-10-23: 즐겨찾기 제목줄 지역 선택(시도·구군) */
+#outdoorRideScreen .outd-fav .coachm-picker__head { gap: 6px; }
+#outdoorRideScreen .outd-fav .outd-route__title { flex: 0 0 auto; white-space: nowrap; }
+#outdoorRideScreen .outd-fav__filters { margin-left: auto; display: flex; gap: 6px; min-width: 0; }
+#outdoorRideScreen .outd-fav__filters select {
+  max-width: 106px; min-width: 0; padding: 6px 22px 6px 8px; border-radius: 8px; border: 1px solid #3a3a3a;
+  background: #121212 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2394a3b8' stroke-width='1.6'/%3E%3C/svg%3E") no-repeat right 8px center;
+  color: #fff; font-size: 13px; font-weight: 700; -webkit-appearance: none; appearance: none; text-overflow: ellipsis; outline: none;
+}
+#outdoorRideScreen .outd-fav__filters select:focus { border-color: #facc15; }
+#outdoorRideScreen .outd-fav__filters select:disabled { opacity: 0.45; }
