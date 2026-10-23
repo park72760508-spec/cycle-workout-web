@@ -3453,12 +3453,12 @@
     if (nav) nav.style.display = 'none';
     var empty = $('outdMapEmpty');
     if (empty) {
-      empty.innerHTML = '자유 라이딩 · 현재 위치 기준으로 기록합니다<br><small>시작 버튼을 누르면 기록이 시작됩니다</small>';
+      empty.innerHTML = '라이딩 기록 · 현재 위치 기준으로 기록합니다<br><small>시작 버튼을 누르면 기록이 시작됩니다</small>';
       empty.style.display = '';
     }
     st.follow = true;
     if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map ? st.map.getZoom() : 16, 16));
-    toast('자유 라이딩 모드 · 코스 없이 현재 위치 기준으로 기록합니다', 'info');
+    toast('라이딩 기록 · 코스 없이 현재 위치 기준으로 기록합니다', 'info');
   };
 
   window.closeOutdoorCoursePicker = function () {
