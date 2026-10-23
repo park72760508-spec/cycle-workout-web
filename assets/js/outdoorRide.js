@@ -295,8 +295,14 @@
     if (intEl.textContent !== ip) { intEl.textContent = ip; changed = true; }
     if (decEl.textContent !== dp) { decEl.textContent = dp; changed = true; }
     if (changed || !decEl.__placed) {
-      var w = 0;
-      try { w = intEl.getComputedTextLength(); } catch (e) {}
+      /* 2026-10-24 발열: 글자 폭 재기(getComputedTextLength)는 값을 바꾼 직후라 매번 화면 강제 재계산을 일으켰다
+         (속도 숫자가 바뀌는 프레임마다) → 숫자 문자열별로 한 번만 재고 기억 */
+      var wc = intEl.__wCache || (intEl.__wCache = {});
+      var w = wc[ip] || 0;
+      if (!w) {
+        try { w = intEl.getComputedTextLength(); } catch (e) {}
+        if (w > 0) wc[ip] = w;
+      }
       if (w > 0) {
         decEl.setAttribute('x', (Number(intEl.getAttribute('x')) + w / 2 + 1).toFixed(1));
         decEl.__placed = true;
@@ -741,6 +747,8 @@
     rot.style.height = D + 'px';
     rot.style.left = Math.round((w - D) / 2) + 'px';
     rot.style.top = Math.round((h - D) / 2) + 'px';
+    // 2026-10-24 발열: 카메라(cameraFrame)가 매 프레임 크기를 다시 읽지 않도록 기록(크기가 바뀔 때만 갱신)
+    st.rotGeom = { D: D, left: Math.round((w - D) / 2), top: Math.round((h - D) / 2), ww: w, wh: h };
   }
 
   /*
@@ -874,8 +882,11 @@
   /** 내 위치 아바타가 놓일 화면 높이: 화면 가운데에서 아래로 몇 px(기본 65% 지점, 크게 보기는 80%보다 아바타 5개 높이 위) */
   function anchorShiftPx() {
     if (!st.headingUp) return 0;
-    var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
-    var hPx = wrap ? wrap.clientHeight : 300;
+    var hPx = st.rotGeom ? st.rotGeom.wh : 0;
+    if (!hPx) {
+      var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+      hPx = wrap ? wrap.clientHeight : 300;
+    }
     return st.expanded ? Math.max(0, hPx * 0.30 - 27 * 5) : hPx * 0.15;
   }
   /** (호환) 따라가기 지도 중심 = 내 위치 — 화면 기준점 맞춤은 카메라(cameraFrame)가 함 */
@@ -900,19 +911,20 @@
     var map = st.map;
     if (!rot) return;
     var th = st.dispRot || 0;
-    if (map && st.follow && st.mePos && !st.mapZooming && rot.offsetWidth) {
+    var G = st.rotGeom;
+    if (map && st.follow && st.mePos && !st.mapZooming && (G ? G.D : rot.offsetWidth)) {
       var wrap = rot.parentNode;
-      var D = rot.offsetWidth, C = D / 2;
+      var D = G ? G.D : rot.offsetWidth, C = D / 2;
       var P = map.latLngToContainerPoint(st.mePos);
       if (Math.abs(P.x - C) > 120 || Math.abs(P.y - C) > 120) {
         map.setView(st.mePos, map.getZoom(), { animate: false });
         P = map.latLngToContainerPoint(st.mePos);
       }
-      var ax = wrap.clientWidth / 2, ay = wrap.clientHeight / 2 + anchorShiftPx(); // 화면 기준점
+      var ax = (G ? G.ww : wrap.clientWidth) / 2, ay = (G ? G.wh : wrap.clientHeight) / 2 + anchorShiftPx(); // 화면 기준점
       var r = th * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
       var vx = P.x - C, vy = P.y - C;
       var rx = vx * cs - vy * sn, ry = vx * sn + vy * cs; // CSS rotate(θ) (화면 y 아래 방향)
-      st.camT = [ax - rot.offsetLeft - C - rx, ay - rot.offsetTop - C - ry];
+      st.camT = [ax - (G ? G.left : rot.offsetLeft) - C - rx, ay - (G ? G.top : rot.offsetTop) - C - ry];
     }
     var T = st.camT || [0, 0];
     rot.style.transform = 'translate(' + T[0].toFixed(2) + 'px,' + T[1].toFixed(2) + 'px) rotate(' + th.toFixed(2) + 'deg)';
