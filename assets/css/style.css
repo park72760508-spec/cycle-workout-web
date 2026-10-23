@@ -35138,3 +35138,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav .outd-fav__foot { flex-shrink: 0; }
 #outdoorRideScreen .outd-fav__cat-ico { flex-shrink: 0; }
 #outdoorRideScreen .outd-fav #outdFavList { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+/* 2026-10-24: 오른쪽 버튼 순서(위→아래) 즐겨찾기 · 화면 확대/축소 · 안내 문구 · 방향 · 나의 위치 — 확대/축소와 안내 문구 자리 바꿈 */
+#outdoorRideScreen .outd-expand { bottom: 158px; }
+#outdoorRideScreen .outd-navtext-btn { bottom: 110px; }
+/* 가로 화면: 확대/축소 버튼이 숨겨지므로 그 위 버튼을 한 칸씩 내려 빈자리 없게 */
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-fav-btn { bottom: 158px; }
+  #outdoorRideScreen .outd-reroute-btn { bottom: 206px; }
+  #outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
+}
