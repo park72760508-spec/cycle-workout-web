@@ -3011,6 +3011,9 @@
       $(SCREEN_ID).appendChild(el);
       el.addEventListener('click', function (e) {
         var t = e.target;
+        /* 2026-10-24: 휴대폰은 핀을 탭한 직후 같은 자리에 '클릭'을 한 번 더 보내는데, 그때 이미 떠 있는 팝업의
+           바깥(배경)·버튼이 눌린 것으로 처리돼 팝업이 바로 닫히거나 엉뚱하게 동작했다 → 뜬 직후 0.45초 클릭 무시 */
+        if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; }
         if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
         var go = t.closest('[data-pop-go]');
         if (go) { el.style.display = 'none'; goFav(go.getAttribute('data-pop-go')); return; }
@@ -3046,6 +3049,7 @@
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
       '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 안내</button></div>' +
       '</div>';
+    el.__openedAt = Date.now();
     el.style.display = 'flex';
   }
 
