@@ -3044,7 +3044,7 @@
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
       (likeHtml ? '<div class="outd-favpop__likerow">' + likeHtml + '</div>' : '') +
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
-      '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 설정</button></div>' +
+      '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 안내</button></div>' +
       '</div>';
     el.style.display = 'flex';
   }
@@ -3053,7 +3053,9 @@
   function goFav(id) {
     var it = findFav(id);
     if (!it) return;
-    $('outdFavSheet').style.display = 'none';
+    // 2026-10-24: 지도 핀 팝업에서 바로 누르면 즐겨찾기 목록 창이 아직 없을 수 있음 → 없으면 건너뜀(예전엔 여기서 오류로 멈춤)
+    var favSh = $('outdFavSheet');
+    if (favSh) favSh.style.display = 'none';
     unlockAudio();
     window.openOutdoorRouteSearch({ noFocus: true });
     chooseDestination({ name: it.name, lat: Number(it.lat), lng: Number(it.lng), sub: [it.sido, it.sigungu].filter(Boolean).join(' ') });
