@@ -590,13 +590,30 @@ function currentFirebaseUidAny() {
   return '';
 }
 
+/*
+ * 토큰의 실제 만료 시각(JWT exp, 초) — 2026-10-24: 예전엔 캐시에서 꺼낸 '이미 받은' 토큰도 '지금 + expires_in'으로
+ * 만료 시각을 다시 계산해 만료된 토큰을 1시간씩 계속 유효하다고 보고 써서 RPC 가 "JWT expired"(401)로 실패했다
+ * (루트맵 즐겨찾기 핀 0개 등). 토큰에 적힌 exp 를 그대로 쓴다.
+ */
+function jwtExpSec(token) {
+  try {
+    const part = String(token || '').split('.')[1];
+    if (!part) return 0;
+    const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+    return Number(json.exp) || 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
 function readMintedSessionCache(fbUid) {
   if (!fbUid) return null;
   let c = null;
   try { c = JSON.parse(localStorage.getItem(MINTED_SESSION_CACHE_KEY) || 'null'); } catch (e) { c = null; }
   const nowSec = Math.floor(Date.now() / 1000);
   if (c && c.fbUid === fbUid && c.session && c.session.access_token && Number(c.exp) > nowSec + 120) {
-    return c.session;
+    const realExp = jwtExpSec(c.session.access_token);
+    if (!realExp || realExp > nowSec + 120) return c.session;
   }
   return null;
 }
@@ -604,7 +621,7 @@ function readMintedSessionCache(fbUid) {
 function writeMintedSessionCache(fbUid, session) {
   if (!fbUid || !session) return;
   const nowSec = Math.floor(Date.now() / 1000);
-  const exp = nowSec + (Number(session.expires_in) || 3600);
+  const exp = jwtExpSec(session.access_token) || nowSec + (Number(session.expires_in) || 3600);
   try { localStorage.setItem(MINTED_SESSION_CACHE_KEY, JSON.stringify({ fbUid, exp, session })); } catch (e) {}
 }
 
@@ -772,7 +789,7 @@ async function getFreshRpcAccessToken() {
     return cached.token;
   }
   const minted = await getMintedSupabaseSession();
-  const entry = { fbUid, token: minted.access_token, exp: nowSec + (Number(minted.expires_in) || 3600) };
+  const entry = { fbUid, token: minted.access_token, exp: jwtExpSec(minted.access_token) || nowSec + (Number(minted.expires_in) || 3600) };
   try { localStorage.setItem(RPC_TOKEN_CACHE_KEY, JSON.stringify(entry)); } catch (e) {}
   return entry.token;
 }
@@ -797,10 +814,21 @@ function getRpcSupabaseClient() {
  * @param {string} fnName
  * @param {object} [args]
  */
+function clearRpcTokenCaches() {
+  try { localStorage.removeItem(RPC_TOKEN_CACHE_KEY); } catch (e) {}
+  try { localStorage.removeItem(MINTED_SESSION_CACHE_KEY); } catch (e) {}
+}
+
 export async function callSupabaseRpcAsUser(fnName, args) {
   await getFreshRpcAccessToken(); // 로그인·토큰 확보 실패를 먼저 드러냄
   const supabase = await getRpcSupabaseClient();
-  const { data, error } = await supabase.rpc(fnName, args || {});
+  let { data, error } = await supabase.rpc(fnName, args || {});
+  // 토큰 만료(401 "JWT expired")면 저장된 토큰을 버리고 새로 받아 한 번 더
+  if (error && /jwt expired|jwt|401/i.test(String(error.message || error.code || ''))) {
+    clearRpcTokenCaches();
+    await getFreshRpcAccessToken();
+    ({ data, error } = await supabase.rpc(fnName, args || {}));
+  }
   if (error) throw error;
   if (data && data.success === false) throw new Error(data.error || fnName + ' 실패');
   return data;
