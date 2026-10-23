@@ -2703,7 +2703,8 @@
    * 목록을 누르면 그 위치로 바로 길찾기(경로 선택). 저장은 Supabase RPC(fn_route_fav_*, 본인 확인) — 공개 장소는 좋아요 수 집계.
    */
   var FAV_CATS = [
-    { k: 'food', e: '🍽️', l: '맛집' },
+    // 2026-10-23: 맛집 = 빨간 원 + 흰 포크·나이프(지도 핀·목록·팝업·등록 창 공통)
+    { k: 'food', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#ef4444"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#b91c1c" stroke-width="0.8"/><path d="M7.6 5.2v3.6a1.6 1.6 0 0 0 3.2 0V5.2M9.2 5.2v3.4M9.2 10.4v8.4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.4 5.2c-1.7.9-2.4 3-2.4 5.6h2.4v8" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>', l: '맛집' },
     { k: 'spot', e: '📸', l: '명소' },
     { k: 'home', e: '🏠', l: '집' },
     { k: 'work', e: '🏢', l: '회사' },

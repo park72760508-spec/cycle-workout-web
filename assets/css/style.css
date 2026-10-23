@@ -34989,3 +34989,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-10-23: 지도 핀 공개 배지 — 빨간 원 + 흰 STELVIO 로고(stelvio_w.png) */
 #outdoorRideScreen .outd-favpin__badge { background: #dc2626; border: 1.5px solid #ffffff; box-sizing: border-box; }
 #outdoorRideScreen .outd-favpin__badge .outd-stv-logo { width: 13px; height: 13px; }
+/* 2026-10-23: 맛집 아이콘(빨간 원 + 흰 포크·나이프) — 공통 svg{display:block} 를 글자처럼 */
+#outdoorRideScreen .outd-food-ico { display: inline-block; vertical-align: -0.22em; }
