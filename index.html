@@ -31470,8 +31470,45 @@
       window._stelvioDelCookie('sl_' + key);
     };
 
+    /* ── 로그인 상태 유지 IndexedDB 백업(2026-10-23) ─────────────────────
+     * Android 앱은 '종료' 시 프로세스를 강제 종료(RNExitApp)하는데, WebView 의 localStorage·쿠키는
+     * 쓴 값을 모아 두었다가 나중에 디스크에 기록한다 → 그 전에 프로세스가 죽으면 저장한 전화번호·비밀번호가 사라져
+     * 다음 실행 때 '로그인 상태 유지'가 풀렸다. IndexedDB 는 트랜잭션이 끝나면 바로 기록되므로 같은 값을 함께 저장하고,
+     * 시작 시 localStorage 가 비어 있으면 여기서 복원한다. */
+    window.stelvioCredIdb = (function () {
+      var DB = 'stelvio_auth_keep', STORE = 'kv', KEY = 'saved_login';
+      function open() {
+        return new Promise(function (resolve, reject) {
+          try {
+            if (!window.indexedDB) { reject(new Error('no idb')); return; }
+            var req = indexedDB.open(DB, 1);
+            req.onupgradeneeded = function () { try { req.result.createObjectStore(STORE); } catch (e) {} };
+            req.onsuccess = function () { resolve(req.result); };
+            req.onerror = function () { reject(req.error); };
+          } catch (e) { reject(e); }
+        });
+      }
+      function tx(mode, fn) {
+        return open().then(function (db) {
+          return new Promise(function (resolve, reject) {
+            var t = db.transaction(STORE, mode);
+            var st = t.objectStore(STORE);
+            var out = fn(st);
+            t.oncomplete = function () { try { db.close(); } catch (e) {} resolve(out && out.result); };
+            t.onerror = function () { try { db.close(); } catch (e) {} reject(t.error); };
+          });
+        });
+      }
+      return {
+        set: function (id, pw) { return tx('readwrite', function (st) { return st.put({ id: id, pw: pw, at: Date.now() }, KEY); }).catch(function () {}); },
+        get: function () { return tx('readonly', function (st) { return st.get(KEY); }).catch(function () { return null; }); },
+        clear: function () { return tx('readwrite', function (st) { return st.delete(KEY); }).catch(function () {}); }
+      };
+    })();
+
     window.clearAuthRememberCredentials = function() {
       /* [SESSION-only] 저장 자격 증명 전부 제거 */
+      try { window.stelvioCredIdb.clear(); } catch (eIdbC) {}
       window._stelvioStorageDel(window.STELVIO_AUTH_REMEMBER_KEY);
       try {
         localStorage.removeItem(window.STELVIO_SAVED_LOGIN_ID_KEY);
@@ -31576,6 +31613,29 @@
       } catch (err) {
         console.warn('[AuthRemember] 복원 실패:', err && err.message);
       }
+      /* localStorage 가 비었으면(Android 앱 강제 종료로 미기록) IndexedDB 백업에서 복원 → 저장값 되살리고 자동 로그인 */
+      if (!window.__stelvioIdbRestoreTried) {
+        window.__stelvioIdbRestoreTried = true;
+        try {
+          window.stelvioCredIdb.get().then(function (rec) {
+            if (!rec || !rec.id || !rec.pw) return;
+            try { if (localStorage.getItem(idKey)) return; } catch (eG) {}
+            if ((window.authV9 && window.authV9.currentUser) || (window.auth && window.auth.currentUser)) return;
+            try {
+              localStorage.setItem(idKey, rec.id);
+              localStorage.setItem(pwKey, rec.pw);
+              window._stelvioStorageSet('stelvio_auth_persist_local', '1');
+            } catch (eS) {}
+            phoneInput.value = window.formatPhoneNumber ? window.formatPhoneNumber(rec.id) : rec.id;
+            passwordInput.value = rec.pw;
+            cb.checked = true;
+            console.log('[AuthRemember] IndexedDB 백업에서 복원 + 자동 로그인 예약');
+            if (typeof window.stelvioScheduleAutoLoginFromSavedCredentials === 'function') {
+              window.stelvioScheduleAutoLoginFromSavedCredentials();
+            }
+          });
+        } catch (eIdbR) {}
+      }
       var wantsPersist = false;
       try {
         var ls = localStorage.getItem('stelvio_auth_persist_local');
@@ -31625,6 +31685,8 @@
         } catch (eLs) {
           console.warn('[AuthRemember] stelvio_saved_* 저장 실패:', eLs && eLs.message);
         }
+        /* 앱 강제 종료에도 남도록 IndexedDB 에도 저장(바로 디스크 기록) */
+        try { window.stelvioCredIdb.set(phoneDisp, String(password || '')); } catch (eIdbS) {}
         window._stelvioStorageSet('stelvio_auth_persist_local', '1');
         try {
           var payload = JSON.stringify({ v: 1, phone: phoneDisp, password: String(password || '') });
