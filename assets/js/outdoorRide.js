@@ -1883,6 +1883,7 @@
   var travelMode = 'bike';
   var lastDest = null;
   var ICON_STAR_SM = '<svg class="outd-star-ico" viewBox="0 0 24 24" width="16" height="16" fill="#facc15" stroke="#facc15" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.62.96-5.57L3.9 9.5l5.6-.8z"/></svg>';
+  var ICON_EDIT_SM = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>';
   var ICON_TRASH_SM = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>';
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
     // 2026-10-22: 사용자 제공 이미지(assets/img/motorcycle.svg, 검정 선 PNG)를 CSS mask 로 글자색(흰 선/회색 선)으로 칠한다
@@ -2716,6 +2717,49 @@
   }
   var fav = { filter: { sido: '', sigungu: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
+  /** 관리자(grade 1) — 즐겨찾기에 제휴사 지정 가능(서버도 fn_is_admin 으로 재확인) */
+  function favIsAdmin() {
+    try {
+      var g = window.currentUser && window.currentUser.grade;
+      if (typeof window.isStelvioAdminGrade === 'function') return window.isStelvioAdminGrade(g);
+      return String(g).trim() === '1';
+    } catch (e) { return false; }
+  }
+  /** 제휴사 목록(Firestore affiliates) — 관리자 수정 화면에서만, 한 번만 읽음 */
+  function loadFavAffiliates() {
+    if (fav.affPromise) return fav.affPromise;
+    var fns = window._firebaseFirestoreFns, db = window.firestoreV9;
+    if (!fns || !db || typeof fns.getDocs !== 'function' || typeof fns.collection !== 'function') return Promise.resolve([]);
+    fav.affPromise = fns.getDocs(fns.collection(db, 'affiliates')).then(function (snap) {
+      var out = [];
+      snap.forEach(function (d) {
+        var x = d.data() || {};
+        var disc = parseInt(x.discount, 10);
+        out.push({ id: d.id, name: String(x.name || '').trim() || '(이름 없음)', discount: !isNaN(disc) && disc > 0 ? disc : null });
+      });
+      out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
+      return out;
+    }).catch(function () { fav.affPromise = null; return []; });
+    return fav.affPromise;
+  }
+  /** 제휴사 할인율 배지(빨간 톱니 인장 + N% / OFF) — 제휴 할인 화면 배지와 같은 모양 */
+  function favDiscountBadge(d, size) {
+    d = parseInt(d, 10);
+    if (isNaN(d) || d <= 0) return '';
+    if (!favDiscountBadge.path) {
+      var pts = [], n = 12;
+      for (var i = 0; i < n * 2; i++) {
+        var r = i % 2 === 0 ? 49 : 39, a = (Math.PI * i) / n - Math.PI / 2;
+        pts.push((50 + r * Math.cos(a)).toFixed(2) + ' ' + (50 + r * Math.sin(a)).toFixed(2));
+      }
+      favDiscountBadge.path = 'M' + pts.join(' L') + ' Z';
+    }
+    size = size || 30;
+    return '<span class="outd-aff-badge" style="width:' + size + 'px;height:' + size + 'px" aria-label="' + d + '% 할인">' +
+      '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="' + favDiscountBadge.path + '" fill="#dc2626"/></svg>' +
+      '<b style="font-size:' + Math.round(size * 0.29) + 'px">' + d + '%</b><i style="font-size:' + Math.round(size * 0.2) + 'px">OFF</i></span>';
+  }
+
   function favRpc(name, args) {
     return loadDualWriteModule().then(function (mod) {
       if (!mod || typeof mod.callSupabaseRpcAsUser !== 'function') throw new Error('저장 모듈을 불러오지 못했습니다.');
@@ -2764,6 +2808,8 @@
       if (like) { e.stopPropagation(); toggleFavLike(like.getAttribute('data-fav-like'), like); return; }
       var pubBtn = t.closest('[data-fav-pub]');
       if (pubBtn) { e.stopPropagation(); toggleFavPublic(pubBtn.getAttribute('data-fav-pub'), pubBtn); return; }
+      var ed = t.closest('[data-fav-edit]');
+      if (ed) { e.stopPropagation(); startFavEdit(ed.getAttribute('data-fav-edit')); return; }
       var del = t.closest('[data-fav-del]');
       if (del) { e.stopPropagation(); deleteFav(del.getAttribute('data-fav-del')); return; }
       var item = t.closest('[data-fav-id]');
@@ -2859,7 +2905,7 @@
       } else {
         right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + (it.like_count || 0) + '</span>' : '') +
           '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개' : '🔒 비공개') + '</button>' +
-          '<button type="button" class="outd-fav__del" data-fav-del="' + it.id + '" aria-label="삭제">' + ICON_TRASH_SM + '</button>';
+          '<button type="button" class="outd-fav__del" data-fav-edit="' + it.id + '" aria-label="수정">' + ICON_EDIT_SM + '</button>';
       }
       return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
         '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>' +
@@ -2930,7 +2976,9 @@
       var kind = it.is_mine ? 'mine' : 'pub';
       var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
-        (it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
+        (Number(it.affiliate_discount) > 0
+          ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 28) + '</i>'
+          : it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
         (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + (it.like_count || 0) + '</span>' : '') +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
@@ -2988,7 +3036,10 @@
     el.innerHTML =
       '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
       '<div class="outd-favpop__head"><span class="outd-favpop__cat outd-favpop__cat--' + (it.is_mine ? 'mine' : 'pub') + '">' + c.e + '</span>' +
-      '<div class="outd-favpop__title"><b>' + escHtml(it.name) + '</b><span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? '내 장소 · 공개' : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
+      '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(it.name) + '</b>' +
+      (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 36) : '') + '</div>' +
+      (it.affiliate_name ? '<span class="outd-favpop__aff">제휴 · ' + escHtml(it.affiliate_name) + '</span>' : '') +
+      '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? '내 장소 · 공개' : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
       (likeHtml ? '<div class="outd-favpop__likerow">' + likeHtml + '</div>' : '') +
@@ -3174,6 +3225,7 @@
   }
   function cancelFavPick() {
     fav.picking = false;
+    fav.editId = null;
     favPickBanner(false);
     var f = $('outdFavForm');
     if (f) f.style.display = 'none';
@@ -3230,14 +3282,14 @@
         .catch(function () { return { sido: '', sigungu: '', address: '' }; });
     });
   }
-  function openFavForm() {
+  function openFavForm(prefill) {
     var f = $('outdFavForm');
     if (!f) {
       f = document.createElement('div');
       f.id = 'outdFavForm';
       f.className = 'outd-fav__form';
       f.innerHTML =
-        '<div class="outd-fav__formhead"><b>' + ICON_STAR_SM + ' 즐겨찾기 등록</b><button type="button" class="coachm-picker__close" data-fav-form-close aria-label="닫기">✕</button></div>' +
+        '<div class="outd-fav__formhead"><b>' + ICON_STAR_SM + ' <span data-form-title>즐겨찾기 등록</span></b><button type="button" class="coachm-picker__close" data-fav-form-close aria-label="닫기">✕</button></div>' +
         '<p class="outd-fav__hint">다른 곳을 누르면 깃발 위치가 바뀝니다.</p>' +
         '<div class="outd-fav__row2"><label>시도<input name="sido" type="text" maxlength="30" placeholder="시도"></label>' +
         '<label>구군<input name="sigungu" type="text" maxlength="30" placeholder="구군"></label></div>' +
@@ -3250,7 +3302,11 @@
         '<div class="outd-fav__label">공개 여부</div>' +
         '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개</button></div>' +
         '<p class="outd-fav__hint" data-pub-hint></p>' +
-        '<div class="outd-fav__btns"><button type="button" class="outd-fav__cancel" data-fav-form-close>취소</button><button type="button" class="outd-fav__save" data-fav-save>저장</button></div>';
+        // 2026-10-24: 관리자 전용 — 제휴사를 고르면 지도 핀·팝업에 제휴사 할인율 배지
+        '<div class="outd-fav__affwrap" data-aff-wrap style="display:none"><div class="outd-fav__label">제휴사 선택 (관리자)</div>' +
+        '<div class="outd-fav__affrow"><select name="affiliate"><option value="">제휴사 없음</option></select><span data-aff-badge></span></div></div>' +
+        '<div class="outd-fav__btns"><button type="button" class="outd-fav__delbtn" data-fav-form-del style="display:none">삭제</button>' +
+        '<button type="button" class="outd-fav__cancel" data-fav-form-close>취소</button><button type="button" class="outd-fav__save" data-fav-save>저장</button></div>';
       $(SCREEN_ID).appendChild(f);
       f.addEventListener('click', function (e) {
         var t = e.target;
@@ -3263,17 +3319,56 @@
           return;
         }
         if (t.closest('[data-fav-save]')) saveFavForm();
+        if (t.closest('[data-fav-form-del]')) deleteFavFromForm();
+      });
+      f.querySelector('[name=affiliate]').addEventListener('change', function () {
+        var opt = this.options[this.selectedIndex];
+        fav.form.aff = this.value ? { id: this.value, name: opt.getAttribute('data-name') || '', discount: parseInt(opt.getAttribute('data-disc'), 10) || null } : null;
+        renderFavForm();
       });
       f.querySelector('[name=name]').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
     }
-    if (!fav.form) fav.form = { category: 'food', pub: '0' };
-    if (f.style.display !== 'flex') {
-      fav.form = { category: 'food', pub: '0' };
-      f.querySelector('[name=name]').value = '';
+    if (!fav.form) fav.form = { category: 'food', pub: '0', aff: null };
+    if (prefill) {
+      // 수정: 저장된 값으로 채움
+      fav.form = { category: prefill.category, pub: prefill.is_public ? '1' : '0',
+        aff: prefill.affiliate_id ? { id: prefill.affiliate_id, name: prefill.affiliate_name || '', discount: prefill.affiliate_discount || null } : null };
+      f.querySelector('[name=name]').value = prefill.name || '';
+      f.querySelector('[name=sido]').value = prefill.sido || '';
+      f.querySelector('[name=sigungu]').value = prefill.sigungu || '';
+      f.querySelector('.outd-fav__addr').textContent = prefill.address || '';
+    } else {
+      if (f.style.display !== 'flex' && !fav.editId) {
+        fav.form = { category: 'food', pub: '0', aff: null };
+        f.querySelector('[name=name]').value = '';
+      }
+      f.querySelector('[name=sido]').value = '';
+      f.querySelector('[name=sigungu]').value = '';
+      f.querySelector('.outd-fav__addr').textContent = '주소를 찾는 중...';
     }
-    f.querySelector('[name=sido]').value = '';
-    f.querySelector('[name=sigungu]').value = '';
-    f.querySelector('.outd-fav__addr').textContent = '주소를 찾는 중...';
+    f.querySelector('[data-form-title]').textContent = fav.editId ? '즐겨찾기 수정' : '즐겨찾기 등록';
+    f.querySelector('[data-fav-form-del]').style.display = fav.editId ? '' : 'none';
+    var affWrap = f.querySelector('[data-aff-wrap]');
+    if (favIsAdmin()) {
+      affWrap.style.display = '';
+      var sel = f.querySelector('[name=affiliate]');
+      loadFavAffiliates().then(function (list) {
+        var cur = fav.form && fav.form.aff;
+        var html = '<option value="">제휴사 없음</option>' + list.map(function (a) {
+          return '<option value="' + escHtml(a.id) + '" data-name="' + escHtml(a.name) + '" data-disc="' + (a.discount || '') + '">' +
+            escHtml(a.name) + (a.discount ? ' (' + a.discount + '%)' : '') + '</option>';
+        }).join('');
+        // 목록에 없는(삭제된) 제휴사가 연결돼 있으면 그대로 보여 줌
+        if (cur && cur.id && !list.some(function (a) { return a.id === cur.id; })) {
+          html += '<option value="' + escHtml(cur.id) + '" data-name="' + escHtml(cur.name) + '" data-disc="' + (cur.discount || '') + '">' + escHtml(cur.name || cur.id) + '</option>';
+        }
+        sel.innerHTML = html;
+        sel.value = cur && cur.id ? cur.id : '';
+        renderFavForm();
+      });
+    } else {
+      affWrap.style.display = 'none';
+    }
     renderFavForm();
     f.style.display = 'flex';
   }
@@ -3286,9 +3381,62 @@
         b.classList.toggle('is-on', b.getAttribute('data-v') === fav.form[key]);
       });
     });
+    var ab = f.querySelector('[data-aff-badge]');
+    if (ab) ab.innerHTML = fav.form.aff && fav.form.aff.discount ? favDiscountBadge(fav.form.aff.discount, 34) : '';
     f.querySelector('[data-pub-hint]').textContent = fav.form.pub === '1'
       ? '공개 장소 목록에 보이고, 다른 사용자가 좋아요를 누를 수 있습니다.'
       : '나의 즐겨찾기 목록에만 보입니다.';
+  }
+  /** 내 즐겨찾기 수정(2026-10-24) — 저장된 위치에 깃발, 값 채운 수정 창. 지도를 누르면 위치도 바꿀 수 있음 */
+  function startFavEdit(id) {
+    var it = null;
+    (fav.items.mine || []).forEach(function (x) { if (x.id === id) it = x; });
+    if (!it) return;
+    var map = ensureMap();
+    if (!map) return;
+    var sh = $('outdFavSheet');
+    if (sh) sh.style.display = 'none';
+    fav.editId = it.id;
+    fav.picking = true;
+    st.follow = false;
+    st.userPanAt = Date.now() + 3600 * 1000;
+    bindFavPickTap();
+    favPickBanner(false);
+    var lat = Number(it.lat), lng = Number(it.lng), L = window.L;
+    fav.pickLL = { lat: lat, lng: lng };
+    fav.region = { sido: it.sido || '', sigungu: it.sigungu || '', address: it.address || '' };
+    if (!fav.flag) {
+      fav.flag = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">🚩</div>', iconSize: [34, 34], iconAnchor: [8, 32] }),
+        interactive: false,
+        zIndexOffset: 1200
+      }).addTo(map);
+    } else {
+      fav.flag.setLatLng([lat, lng]);
+    }
+    map.setView([lat, lng], Math.max(map.getZoom(), 16), { animate: false });
+    panLatLngToMapCenter(lat, lng);
+    var f = $('outdFavForm');
+    if (f) f.style.display = 'none';
+    openFavForm(it);
+  }
+  function deleteFavFromForm() {
+    var id = fav.editId;
+    if (!id) return;
+    var it = null;
+    (fav.items.mine || []).forEach(function (x) { if (x.id === id) it = x; });
+    if (!window.confirm('"' + (it ? it.name : '') + '" 즐겨찾기를 삭제할까요?')) return;
+    favRpc('fn_route_fav_delete', { p_id: id }).then(function () {
+      toast('즐겨찾기를 삭제했습니다.', 'info');
+      cancelFavPick();
+      fav.items.mine = null;
+      fav.items.public = null;
+      fav.tab = 'mine';
+      window.openOutdoorFavorites();
+      refreshFavMarkers();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '삭제하지 못했습니다.', 'error');
+    });
   }
   function saveFavForm() {
     var f = $('outdFavForm');
@@ -3308,8 +3456,16 @@
       lng: Math.round(fav.pickLL.lng * 1e7) / 1e7,
       is_public: fav.form.pub === '1'
     };
+    var editing = !!fav.editId;
+    if (editing) payload.id = fav.editId;
+    if (favIsAdmin()) {
+      var aff = fav.form.aff;
+      payload.affiliate_id = aff && aff.id ? aff.id : '';
+      payload.affiliate_name = aff && aff.id ? aff.name : '';
+      payload.affiliate_discount = aff && aff.id && aff.discount ? aff.discount : '';
+    }
     favRpc('fn_route_fav_save', { p: payload }).then(function () {
-      toast('즐겨찾기에 저장했습니다 · ' + name, 'success');
+      toast((editing ? '즐겨찾기를 수정했습니다 · ' : '즐겨찾기에 저장했습니다 · ') + name, 'success');
       cancelFavPick();
       fav.items.mine = null;
       if (payload.is_public) fav.items.public = null;

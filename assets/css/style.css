@@ -35068,3 +35068,22 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #settingsModal .settings-profile-privacy-slot .privacy-toggle-input:checked + .privacy-toggle-slider { background: #ef4444; }
 #settingsModal .settings-profile-privacy-slot .privacy-toggle-input:checked + .privacy-toggle-slider::after { transform: translateX(18px); }
 #settingsModal .settings-profile-privacy-slot .privacy-toggle-text { font-weight: 600; color: #374151; }
+/* ===== 2026-10-24: 루트맵 즐겨찾기 — 수정 화면·관리자 제휴사 선택·제휴사 할인율 배지 ===== */
+#outdoorRideScreen .outd-aff-badge {
+  position: relative; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.35)); vertical-align: middle;
+}
+#outdoorRideScreen .outd-aff-badge svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#outdoorRideScreen .outd-aff-badge b, #outdoorRideScreen .outd-aff-badge i {
+  position: relative; color: #ffffff; font-weight: 900; font-style: normal; line-height: 1; letter-spacing: -0.02em; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+#outdoorRideScreen .outd-favpin__affbadge { position: absolute; right: -16px; top: -16px; transform: rotate(45deg); font-style: normal; line-height: 0; }
+#outdoorRideScreen .outd-favpop__namerow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#outdoorRideScreen .outd-favpop__namerow b { min-width: 0; }
+#outdoorRideScreen .outd-favpop__aff { font-size: 12px; color: #fca5a5; font-weight: 700; }
+#outdoorRideScreen .outd-fav__affrow { display: flex; align-items: center; gap: 10px; }
+#outdoorRideScreen .outd-fav__affrow select {
+  flex: 1 1 auto; min-width: 0; padding: 10px 12px; border-radius: 10px; border: 1px solid #3a3a3a; background: #121212; color: #fff; font-size: 15px; outline: none;
+}
+#outdoorRideScreen .outd-fav__affrow select:focus { border-color: #00d4aa; }
+#outdoorRideScreen .outd-fav__delbtn { border: 1px solid #ef4444; background: transparent; color: #f87171; }
