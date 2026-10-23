@@ -35088,3 +35088,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__affrow select:focus { border-color: #00d4aa; }
 #outdoorRideScreen .outd-fav__delbtn { border: 1px solid #ef4444; background: transparent; color: #f87171; }
 #outdoorRideScreen .outd-favpin__affbadge { right: -20px; top: -20px; z-index: 2; }
+/* 지도(Leaflet) 안에서 톱니 그림이 글자 위로 그려지던 문제 — 글자를 위로 */
+#outdoorRideScreen .outd-aff-badge svg { z-index: 0; }
+#outdoorRideScreen .outd-aff-badge b, #outdoorRideScreen .outd-aff-badge i { z-index: 1; }
