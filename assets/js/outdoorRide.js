@@ -2831,6 +2831,18 @@
       '<b style="font-size:' + Math.round(size * 0.29) + 'px">' + d + '%</b><i style="font-size:' + Math.round(size * 0.2) + 'px">OFF</i></span>';
   }
 
+  /**
+   * 좋아요 수 표시(2026-10-24): 1,000 미만은 그대로, 1,000 이상은 k(백 단위까지·버림) — 1020 → 1k, 1307 → 1.3k,
+   * 1,000,000 이상은 같은 방식으로 M.
+   */
+  function favLikeText(n) {
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    if (n < 1000) return String(n);
+    var unit = n >= 1000000 ? 1000000 : 1000;
+    var v = Math.floor(n / (unit / 10)) / 10; // 소수 첫째 자리까지 버림
+    return (v % 1 === 0 ? String(v) : v.toFixed(1)) + (unit === 1000000 ? 'M' : 'k');
+  }
+
   function favRpc(name, args) {
     return loadDualWriteModule().then(function (mod) {
       if (!mod || typeof mod.callSupabaseRpcAsUser !== 'function') throw new Error('저장 모듈을 불러오지 못했습니다.');
@@ -2987,9 +2999,9 @@
       var right;
       if (fav.tab === 'public') {
         right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
-          '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>';
+          '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>';
       } else {
-        right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + (it.like_count || 0) + '</span>' : '') +
+        right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
           '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개' : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-edit="' + it.id + '" aria-label="수정">' + ICON_EDIT_SM + '</button>';
       }
@@ -3068,7 +3080,7 @@
         (Number(it.affiliate_discount) > 0
           ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 36) + '</i>'
           : it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
-        (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + (it.like_count || 0) + '</span>' : '') +
+        (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
@@ -3124,8 +3136,8 @@
     if (it.memo) rows.push(['메모', it.memo]);
     var likeHtml = it.is_public
       ? (it.is_mine
-        ? '<span class="outd-favpop__likes">♥ ' + (it.like_count || 0) + '</span>'
-        : '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + '" data-pop-like="' + it.id + '"><span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>')
+        ? '<span class="outd-favpop__likes">♥ ' + favLikeText(it.like_count) + '</span>'
+        : '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + '" data-pop-like="' + it.id + '"><span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>')
       : '';
     el.innerHTML =
       '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
