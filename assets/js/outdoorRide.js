@@ -4137,8 +4137,25 @@
   };
 
   /* 지도는 화면이 실제로 보인 뒤 크기를 다시 계산해야 타일이 전체에 그려진다 — 화면 활성화·회전·크기 변경 때 재계산 */
+  /*
+   * 시작 버튼 녹색 펄스 위치(2026-10-24): 속도계 칸이 그림 비율(220:202)과 다르면(Z Flip3 세로처럼 길쭉한 화면)
+   * 그림이 칸 안에서 위아래 여백을 두고 가운데 정렬돼, 비율(%)로 놓은 펄스가 버튼보다 아래로 치우쳤다.
+   * → 버튼 원의 실제 화면 위치·크기를 재서 펄스를 그 중심에 맞춤(화면 크기가 바뀔 때만).
+   */
+  function placeStartPulse() {
+    var pulse = $('outdStartPulseHtml');
+    var circle = document.querySelector('#' + SCREEN_ID + ' .svg-btn-group .svg-neon-circle');
+    var box = pulse && pulse.parentNode;
+    if (!pulse || !circle || !box) return;
+    var c = circle.getBoundingClientRect(), b = box.getBoundingClientRect();
+    if (!c.width || !b.width) return;
+    pulse.style.left = (c.left + c.width / 2 - b.left) + 'px';
+    pulse.style.top = (c.top + c.height / 2 - b.top) + 'px';
+    pulse.style.width = c.width + 'px';
+  }
   function fixMapSize() {
     if (!isActive()) return;
+    placeStartPulse();
     // 가로 화면(좌우 분할)에서는 '지도 크게 보기'를 쓰지 않음 — 켜진 채로 돌리면 해제
     if (st.expanded && window.matchMedia && window.matchMedia('(orientation: landscape)').matches) {
       try { window.toggleOutdoorExpand(); } catch (e) {}
