@@ -2977,7 +2977,7 @@
       var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
         (Number(it.affiliate_discount) > 0
-          ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 28) + '</i>'
+          ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 36) + '</i>'
           : it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""></i>' : '') + '</div>' +
         (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + (it.like_count || 0) + '</span>' : '') +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';

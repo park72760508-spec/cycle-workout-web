@@ -35087,3 +35087,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-fav__affrow select:focus { border-color: #00d4aa; }
 #outdoorRideScreen .outd-fav__delbtn { border: 1px solid #ef4444; background: transparent; color: #f87171; }
+#outdoorRideScreen .outd-favpin__affbadge { right: -20px; top: -20px; z-index: 2; }
