@@ -35130,3 +35130,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__cat-tab.is-on .outd-fav__cat-label { color: #facc15; }
 #outdoorRideScreen .outd-fav__namerow { display: flex; align-items: center; gap: 6px; min-width: 0; }
 #outdoorRideScreen .outd-fav__namerow .outd-route__name { min-width: 0; }
+/* 2026-10-24: 목록이 길면(전체 탭) 창 높이에 맞추느라 카테고리 탭 줄이 눌려 원이 타원(42×22)이 되던 문제 —
+   머리줄·카테고리 탭·공개/내 탭·등록 버튼은 줄어들지 않고, 목록만 스크롤 */
+#outdoorRideScreen .outd-fav .coachm-picker__head,
+#outdoorRideScreen .outd-fav .outd-fav__cats,
+#outdoorRideScreen .outd-fav .outd-fav__tabs,
+#outdoorRideScreen .outd-fav .outd-fav__foot { flex-shrink: 0; }
+#outdoorRideScreen .outd-fav__cat-ico { flex-shrink: 0; }
+#outdoorRideScreen .outd-fav #outdFavList { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
