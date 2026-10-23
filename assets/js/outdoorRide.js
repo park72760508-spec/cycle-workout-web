@@ -765,6 +765,9 @@
     var needle = $('outdCompassNeedle');
     if (needle) needle.style.transform = 'rotate(' + d + 'deg)'; // 빨간 끝 = 북쪽
     updateMeArrow();
+    // 즐겨찾기 핀은 지도판 회전의 반대로 돌려 항상 똑바로
+    var rotEl = $('outdMapRot');
+    if (rotEl && rotEl.__unrot !== d) { rotEl.__unrot = d; rotEl.style.setProperty('--outd-unrot', 'rotate(' + (-Number(d)).toFixed(2) + 'deg)'); }
   }
   /** 화면에 보이는 진행 방향(°) — 지도 위치 맞춤(followCenter)에 사용 */
   function dispHeading() {
@@ -2710,7 +2713,7 @@
     for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
     return FAV_CATS[4];
   }
-  var fav = { tab: 'mine', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
+  var fav = { tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
   function favRpc(name, args) {
     return loadDualWriteModule().then(function (mod) {
@@ -2731,8 +2734,8 @@
       '<div class="coachm-picker__head"><span class="outd-route__title">' + ICON_STAR_SM + ' 즐겨찾기</span>' +
       '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
       '<div class="outd-fav__tabs" role="tablist">' +
-      '<button type="button" class="outd-fav__tab" data-fav-tab="mine" role="tab">내 즐겨찾기</button>' +
       '<button type="button" class="outd-fav__tab" data-fav-tab="public" role="tab">공개 장소</button>' +
+      '<button type="button" class="outd-fav__tab" data-fav-tab="mine" role="tab">내 즐겨찾기</button>' +
       '</div>' +
       '<div id="outdFavList" class="coachm-picker__list outd-route__list"></div>' +
       '<div class="outd-fav__foot"><button type="button" class="outd-fav__add" data-fav-add>＋ 등록하기</button></div>' +
@@ -2746,6 +2749,8 @@
       if (t.closest('[data-fav-add]')) { el.style.display = 'none'; startFavPick(); return; }
       var like = t.closest('[data-fav-like]');
       if (like) { e.stopPropagation(); toggleFavLike(like.getAttribute('data-fav-like'), like); return; }
+      var pubBtn = t.closest('[data-fav-pub]');
+      if (pubBtn) { e.stopPropagation(); toggleFavPublic(pubBtn.getAttribute('data-fav-pub'), pubBtn); return; }
       var del = t.closest('[data-fav-del]');
       if (del) { e.stopPropagation(); deleteFav(del.getAttribute('data-fav-del')); return; }
       var item = t.closest('[data-fav-id]');
@@ -2809,7 +2814,7 @@
         right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>';
       } else {
-        right = '<span class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '">' + (it.is_public ? '공개' : '비공개') + '</span>' +
+        right = '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '🌏 공개' : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-del="' + it.id + '" aria-label="삭제">' + ICON_TRASH_SM + '</button>';
       }
       return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
@@ -2819,10 +2824,135 @@
     }).join('');
   }
   function findFav(id) {
-    var all = (fav.items.mine || []).concat(fav.items.public || []);
+    var all = favAllItems();
     for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
     return null;
   }
+  /** 내 즐겨찾기 공개 ↔ 비공개 (라벨을 눌러 바로 전환) */
+  function toggleFavPublic(id, btn) {
+    var it = null;
+    (fav.items.mine || []).forEach(function (x) { if (x.id === id) it = x; });
+    if (!it || btn.__busy) return;
+    btn.__busy = true;
+    var next = !it.is_public;
+    favRpc('fn_route_fav_save', { p: {
+      id: it.id, category: it.category, name: it.name, sido: it.sido || '', sigungu: it.sigungu || '',
+      address: it.address || '', lat: Number(it.lat), lng: Number(it.lng), is_public: next
+    } }).then(function () {
+      it.is_public = next;
+      fav.items.public = null; // 공개 장소 목록은 다시 불러옴(두 탭에 함께 보이게)
+      renderFavList();
+      refreshFavMarkers();
+      toast(next ? '공개로 바꿨습니다 · 공개 장소 목록에도 보입니다' : '비공개로 바꿨습니다 · 내 즐겨찾기에만 보입니다', 'info');
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '바꾸지 못했습니다.', 'error');
+    }).then(function () { btn.__busy = false; });
+  }
+
+  /* --- 지도 위 즐겨찾기 핀(2026-10-23): 내 즐겨찾기(금색) + 다른 사용자 공개 장소(분홍) ---
+   * 지도판이 진행 방향으로 회전해도 핀은 똑바로 서 있게 --outd-unrot(회전 반대값)으로 되돌린다.
+   * 지도 끌기 핸들러가 포인터를 잡고 있어 핀 자체 클릭은 오지 않음 → 짧게 누른 위치의 핀을 찾아 팝업. */
+  function favAllItems() {
+    var map = {};
+    (fav.items.public || []).forEach(function (x) { map[x.id] = x; });
+    (fav.items.mine || []).forEach(function (x) { map[x.id] = x; }); // 내 항목(비공개 포함) 우선
+    return Object.keys(map).map(function (k) { return map[k]; });
+  }
+  function refreshFavMarkers() {
+    return Promise.all([
+      favRpc('fn_route_fav_list', { p_scope: 'mine' }).then(function (r) { fav.items.mine = (r && r.items) || []; }),
+      favRpc('fn_route_fav_list', { p_scope: 'public' }).then(function (r) { fav.items.public = (r && r.items) || []; })
+    ]).then(function () {
+      renderFavMarkers();
+      if ($('outdFavSheet') && $('outdFavSheet').style.display === 'flex') renderFavList();
+    }, function () {});
+  }
+  function renderFavMarkers() {
+    var map = st.map, L = window.L;
+    if (!map || !L) return;
+    if (!fav.layer) {
+      fav.layer = L.layerGroup().addTo(map);
+      var syncLabels = function () {
+        var el = $('outdMap');
+        if (el) el.classList.toggle('outd-favlabels', map.getZoom() >= 15);
+      };
+      map.on('zoomend', syncLabels);
+      syncLabels();
+      bindFavPickTap();
+    }
+    fav.layer.clearLayers();
+    favAllItems().forEach(function (it) {
+      var c = favCat(it.category);
+      var kind = it.is_mine ? 'mine' : 'pub';
+      var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
+        '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
+        (it.is_mine && it.is_public ? '<i class="outd-favpin__badge">🌏</i>' : '') + '</div>' +
+        '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
+      L.marker([Number(it.lat), Number(it.lng)], {
+        icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 500
+      }).addTo(fav.layer);
+    });
+  }
+  /** 지도에서 짧게 누른 곳의 즐겨찾기 핀(없으면 null) */
+  function favPinAt(x, y) {
+    var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+    for (var i = 0; i < els.length; i++) {
+      var pin = els[i].closest && els[i].closest('[data-fav-pin]');
+      if (pin) return pin.getAttribute('data-fav-pin');
+    }
+    return null;
+  }
+  function openFavPopup(id) {
+    var it = null;
+    favAllItems().forEach(function (x) { if (x.id === id) it = x; });
+    if (!it) return;
+    var c = favCat(it.category);
+    var el = $('outdFavPop');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdFavPop';
+      el.className = 'outd-favpop';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var go = t.closest('[data-pop-go]');
+        if (go) { el.style.display = 'none'; goFav(go.getAttribute('data-pop-go')); return; }
+        var lk = t.closest('[data-pop-like]');
+        if (lk) {
+          var fid = lk.getAttribute('data-pop-like');
+          toggleFavLike(fid, lk, function () { openFavPopup(fid); });
+        }
+      });
+    }
+    var region = [it.sido, it.sigungu].filter(Boolean).join(' ');
+    var rows = [];
+    if (region) rows.push(['지역', region]);
+    if (it.address) rows.push(['주소', it.address]);
+    if (!it.is_mine && it.owner_name) rows.push(['등록', it.owner_name]);
+    var dist = favDistText(it);
+    if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
+    var likeHtml = it.is_public
+      ? (it.is_mine
+        ? '<span class="outd-favpop__likes">♥ ' + (it.like_count || 0) + '</span>'
+        : '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + '" data-pop-like="' + it.id + '"><span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>')
+      : '';
+    el.innerHTML =
+      '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
+      '<div class="outd-favpop__head"><span class="outd-favpop__cat outd-favpop__cat--' + (it.is_mine ? 'mine' : 'pub') + '">' + c.e + '</span>' +
+      '<div class="outd-favpop__title"><b>' + escHtml(it.name) + '</b><span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? '내 장소 · 공개' : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
+      '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
+      '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
+      (likeHtml ? '<div class="outd-favpop__likerow">' + likeHtml + '</div>' : '') +
+      '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
+      '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 설정</button></div>' +
+      '</div>';
+    el.style.display = 'flex';
+  }
+
   /** 즐겨찾기 → 길찾기(경로 선택 화면으로) */
   function goFav(id) {
     var it = findFav(id);
@@ -2832,7 +2962,7 @@
     window.openOutdoorRouteSearch({ noFocus: true });
     chooseDestination({ name: it.name, lat: Number(it.lat), lng: Number(it.lng), sub: [it.sido, it.sigungu].filter(Boolean).join(' ') });
   }
-  function toggleFavLike(id, btn) {
+  function toggleFavLike(id, btn, done) {
     var it = findFav(id);
     if (!it) return;
     if (it.is_mine) { toast('내가 공개한 장소에는 좋아요를 누를 수 없습니다.', 'info'); return; }
@@ -2841,7 +2971,8 @@
     favRpc('fn_route_fav_toggle_like', { p_id: id }).then(function (res) {
       it.liked = !!res.liked;
       it.like_count = res.like_count;
-      renderFavList();
+      if ($('outdFavList')) renderFavList();
+      if (done) done();
     }).catch(function (err) {
       toast(err && err.message ? err.message : '좋아요를 처리하지 못했습니다.', 'error');
     }).then(function () { btn.__busy = false; });
@@ -2851,8 +2982,9 @@
     if (!it || !window.confirm('"' + it.name + '" 즐겨찾기를 삭제할까요?')) return;
     favRpc('fn_route_fav_delete', { p_id: id }).then(function () {
       fav.items.mine = (fav.items.mine || []).filter(function (x) { return x.id !== id; });
-      fav.items.public = null; // 공개 목록은 다시 불러옴
+      fav.items.public = (fav.items.public || []).filter(function (x) { return x.id !== id; });
       renderFavList();
+      renderFavMarkers();
       toast('즐겨찾기를 삭제했습니다.', 'info');
     }).catch(function (err) {
       toast(err && err.message ? err.message : '삭제하지 못했습니다.', 'error');
@@ -2879,9 +3011,14 @@
     var down = null;
     el.addEventListener('pointerdown', function (e) { down = { x: e.clientX, y: e.clientY, t: Date.now(), n: (down && Date.now() - down.t < 400) ? 2 : 1 }; });
     el.addEventListener('pointerup', function (e) {
-      if (!fav.picking || !down) return;
+      if (!down) return;
       var moved = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
       if (moved > 10 || Date.now() - down.t > 600) return; // 끌기·길게 누르기는 지도 이동
+      if (!fav.picking) {
+        var pid = favPinAt(e.clientX, e.clientY);
+        if (pid) openFavPopup(pid);
+        return;
+      }
       var ll = clientToLatLng(e.clientX, e.clientY);
       if (ll) placeFavFlag(ll.lat, ll.lng);
     });
@@ -3054,6 +3191,7 @@
       if (payload.is_public) fav.items.public = null;
       fav.tab = 'mine';
       window.openOutdoorFavorites();
+      refreshFavMarkers();
     }).catch(function (err) {
       toast(err && err.message ? err.message : '저장하지 못했습니다.', 'error');
     }).then(function () { btn.disabled = false; });
@@ -3724,6 +3862,7 @@
       fixMapSize();
       applyRotation();
       if (opts.gpxUrl) loadCourseFromUrl(opts.gpxUrl, opts.title || '');
+      refreshFavMarkers(); // 지도 위 즐겨찾기 핀
     }, 80);
     setTimeout(fixMapSize, 600);
     startGps();
