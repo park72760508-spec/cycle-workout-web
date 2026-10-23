@@ -34810,6 +34810,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   background: rgba(17, 24, 39, 0.85); display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
 #outdoorRideScreen .outd-star-ico { display: inline-block; vertical-align: -2px; }
+/* 길안내 중 초기화·재탐색 버튼이 지도 위쪽까지 올라오므로, 그때는 상단 경로 안내 문구 바 오른쪽을 버튼 줄만큼 비움 */
+#outdoorRideScreen:has(#outdRouteResetBtn[style*="flex"]) .outd-nav { right: 56px !important; }
 #outdoorRideScreen .outd-fav__tabs { display: flex; gap: 6px; padding: 4px 14px 8px; }
 #outdoorRideScreen .outd-fav__tab {
   flex: 1; padding: 9px 0; border-radius: 10px; border: 1px solid #333; background: #161616; color: #94a3b8;
