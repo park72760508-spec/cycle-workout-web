@@ -2230,9 +2230,19 @@
         var trip = d && d.trip;
         if (!trip || !trip.legs || trip.legs.length !== 1) return null;
         var leg = trip.legs[0];
+        var snapped = decodePolyline6(leg.shape);
+        /*
+         * 2026-10-24: 지도 맞춤(trace_route)이 중간에서 끊긴 경로를 '정상'으로 돌려주는 경우가 있다
+         * (가락쌍용 → 크림베이글 광장본점 최단: 7.8km 경로가 1.28km 에서 끊김) → 앱이 더 짧다고 그쪽을 골라
+         * 경로가 중간에 끝났다. 출발·도착점까지 이어지고 길이가 크게 줄지 않은 경우만 쓴다.
+         */
+        if (snapped.length < 2) return null;
+        var b0 = src[0], b1 = src[src.length - 1], s0 = snapped[0], s1 = snapped[snapped.length - 1];
+        if (hav(b0[0], b0[1], s0[0], s0[1]) > 80 || hav(b1[0], b1[1], s1[0], s1[1]) > 80) return null;
+        if (base.km && trip.summary.length < base.km * 0.85) return null;
         var rt = {
           mode: base.mode,
-          latlngs: decodePolyline6(leg.shape),
+          latlngs: snapped,
           maneuvers: leg.maneuvers || [],
           km: trip.summary.length,
           min: Math.round(trip.summary.time / 60),
