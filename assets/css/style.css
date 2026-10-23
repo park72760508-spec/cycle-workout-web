@@ -34982,3 +34982,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpop__likes { font-size: 13px; color: #f43f5e; font-weight: 700; }
 #outdoorRideScreen .outd-favpop__btns { display: flex; gap: 8px; }
 #outdoorRideScreen .outd-favpop__btns button { flex: 1; padding: 13px 0; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; }
+/* 2026-10-23: 공개 표시 = STELVIO 로고(지구 이모지 대신) — 목록 라벨·등록 창·지도 핀 배지 */
+#outdoorRideScreen .outd-stv-logo { display: inline-block; width: 16px; height: 16px; vertical-align: -3px; object-fit: contain; }
+#outdoorRideScreen .outd-favpin__badge { width: 20px; height: 20px; right: -9px; top: -9px; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+#outdoorRideScreen .outd-favpin__badge .outd-stv-logo { width: 15px; height: 15px; vertical-align: 0; }

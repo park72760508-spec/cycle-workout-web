@@ -2814,7 +2814,7 @@
         right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>';
       } else {
-        right = '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '🌏 공개' : '🔒 비공개') + '</button>' +
+        right = '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public ? '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개' : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-del="' + it.id + '" aria-label="삭제">' + ICON_TRASH_SM + '</button>';
       }
       return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
@@ -2886,7 +2886,7 @@
       var kind = it.is_mine ? 'mine' : 'pub';
       var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
-        (it.is_mine && it.is_public ? '<i class="outd-favpin__badge">🌏</i>' : '') + '</div>' +
+        (it.is_public ? '<i class="outd-favpin__badge"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""></i>' : '') + '</div>' +
         '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
@@ -3124,7 +3124,7 @@
         }).join('') + '</div>' +
         '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
         '<div class="outd-fav__label">공개 여부</div>' +
-        '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1">🌏 공개</button></div>' +
+        '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개</button></div>' +
         '<p class="outd-fav__hint" data-pub-hint></p>' +
         '<div class="outd-fav__btns"><button type="button" class="outd-fav__cancel" data-fav-form-close>취소</button><button type="button" class="outd-fav__save" data-fav-save>저장</button></div>';
       $(SCREEN_ID).appendChild(f);
