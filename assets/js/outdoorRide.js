@@ -2705,14 +2705,14 @@
   var FAV_CATS = [
     // 2026-10-23: 맛집 = 빨간 원 + 흰 포크·나이프(지도 핀·목록·팝업·등록 창 공통)
     { k: 'food', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#ef4444"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#b91c1c" stroke-width="0.8"/><path d="M7.6 5.2v3.6a1.6 1.6 0 0 0 3.2 0V5.2M9.2 5.2v3.4M9.2 10.4v8.4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.4 5.2c-1.7.9-2.4 3-2.4 5.6h2.4v8" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>', l: '맛집' },
+    { k: 'cafe', e: '☕', l: '카페' }, // 2026-10-23: 카페 추가(맛집 오른쪽), 회사 제거
     { k: 'spot', e: '📸', l: '명소' },
     { k: 'home', e: '🏠', l: '집' },
-    { k: 'work', e: '🏢', l: '회사' },
     { k: 'etc', e: '📍', l: '기타' }
   ];
   function favCat(k) {
     for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
-    return FAV_CATS[4];
+    return FAV_CATS[FAV_CATS.length - 1]; // 모르는 값(예: 예전 '회사')은 기타로 표시
   }
   var fav = { filter: { sido: '', sigungu: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
