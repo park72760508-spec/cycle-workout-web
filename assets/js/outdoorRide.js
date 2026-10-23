@@ -2102,6 +2102,7 @@
           if (!s || s.bigRoadKm == null || s.km > base.km * limit) return;
           if (s.bigRoadKm < best.bigRoadKm - 0.05) best = s;
         });
+        if (best !== base) best.rawBase = base; // 보정 전 원래 경로(최단 거리 비교용)
         return best;
       });
     }, function () { return base; });
@@ -2193,6 +2194,7 @@
           if (s.km > p.km * (mode === 'walkShort' ? 1.1 : 1.2)) return;
           if (s.bigRoadKm < best.bigRoadKm - 0.05) best = s;
         });
+        if (best !== p) best.rawBase = p; // 보정 전 원래 경로(최단 거리 비교용)
         return best;
       });
     }, function () { return ped; });
@@ -2695,6 +2697,31 @@
       outdBusy(false);
       if (reqMode !== travelMode) return; // 그사이 이동 수단을 바꿨으면 무시
       routes = routes.filter(Boolean);
+      /*
+       * '최단 거리'가 추천 경로보다 길게 나오지 않게(2026-10-24): 최단 경로도 큰길 구간을 옆 자전거도로·보행로로 옮기는 보정을
+       * 하는데 거리가 최대 10% 늘 수 있어, 추천(자전거도로 우선 8.1km)보다 최단(8.2km)이 더 길게 나왔다.
+       * → 최단이 추천보다 길면 보정 전 원래 최단 경로, 그것도 길면 추천 경로를 최단으로 함께 보여 준다.
+       */
+      (function keepShortestShortest() {
+        var shortKey = { bike: 'short', walk: 'walkShort', moto: 'motoShort' };
+        routes.forEach(function (reco, ri) {
+          var sk = shortKey[reco.mode];
+          if (!sk) return;
+          var si = -1;
+          routes.forEach(function (r, i) { if (r.mode === sk) si = i; });
+          if (si < 0) return;
+          var sh = routes[si];
+          if (sh.km <= reco.km + 0.005) return;
+          var pick = sh.rawBase && sh.rawBase.km < sh.km ? sh.rawBase : sh;
+          if (pick.km > reco.km + 0.005) {
+            pick = {};
+            for (var key in reco) pick[key] = reco[key];
+            pick.sameAsReco = true;
+          }
+          pick.mode = sk;
+          routes[si] = pick;
+        });
+      })();
       if (!routes.length) {
         box.innerHTML = '<div class="coachm-picker__empty">' + (walk ? '걸어서 갈 수 있는 경로를 찾지 못했습니다.' : moto ? '오토바이로 갈 수 있는(고속도로 제외) 경로를 찾지 못했습니다.' : '자전거로 갈 수 있는 경로를 찾지 못했습니다.') + '</div>';
         return;
@@ -2713,7 +2740,7 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
-          (rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
+          (rt.sameAsReco ? ' · 추천 경로와 같음' : rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
           $('outdRouteSheet').style.display = 'none';
