@@ -4526,20 +4526,7 @@ function OpenRidingBottomGlassNav(props) {
         </button>
       </OpenRidingGlassNavSlot>
       {renderGroupsButton(groupsActive)}
-      {/* 2026-10-20: 네비 — 아웃도어 라이딩 화면(GPS 속도계·코스맵·길찾기)으로 이동. 아이콘은 코스맵 선택과 같은 route.svg */}
-      <OpenRidingGlassNavSlot>
-        <button
-          type="button"
-          className={openRidingGlassNavBtnClass(false)}
-          onClick={function () {
-            if (typeof window !== 'undefined' && typeof window.openOutdoorRide === 'function') window.openOutdoorRide({});
-          }}
-          aria-label="네비 — 아웃도어 라이딩"
-        >
-          <img src="assets/img/route.svg" alt="" width={20} height={20} className="open-riding-bottom-glass-nav__friend-img block object-contain" decoding="async" />
-          <span className="open-riding-bottom-glass-nav__label">네비</span>
-        </button>
-      </OpenRidingGlassNavSlot>
+      {/* 2026-10-24: '네비'(아웃도어 라이딩) 메뉴 삭제 — 카테고리 화면 '루트맵' 버튼으로 진입 */}
       {renderFriendsButton(friendsActive)}
       <OpenRidingGlassNavSlot>
         <button type="button" className={openRidingGlassNavBtnClass(filterActive)} onClick={onFilter} aria-current={filterActive ? 'page' : undefined} aria-label="맞춤 필터">
