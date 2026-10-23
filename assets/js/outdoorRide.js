@@ -1866,6 +1866,8 @@
   /** 길찾기 이동 수단: 'bike'(기본) | 'walk' | 'moto'(2026-10-22 오토바이) */
   var travelMode = 'bike';
   var lastDest = null;
+  var ICON_STAR_SM = '<svg class="outd-star-ico" viewBox="0 0 24 24" width="16" height="16" fill="#facc15" stroke="#facc15" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.62.96-5.57L3.9 9.5l5.6-.8z"/></svg>';
+  var ICON_TRASH_SM = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13M10 11v6M14 11v6"/></svg>';
   var ICON_BIKE = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>';
     // 2026-10-22: 사용자 제공 이미지(assets/img/motorcycle.svg, 검정 선 PNG)를 CSS mask 로 글자색(흰 선/회색 선)으로 칠한다
   var ICON_MOTO = '<span class="outd-route__moto-ico" aria-hidden="true"></span>';
@@ -2676,8 +2678,373 @@
     el.style.display = 'flex';
     var input = $('outdRouteInput');
     renderRouteList([]);
-    setTimeout(function () { try { input.focus(); } catch (err) {} }, 50);
+    if (!(e && e.noFocus)) setTimeout(function () { try { input.focus(); } catch (err) {} }, 50);
   };
+
+  /* ---------- ROUTE 즐겨찾기(2026-10-23) ----------
+   * 오른쪽 아래 별 버튼 → 팝업(내 즐겨찾기 / 공개 장소 목록 + 등록하기).
+   * 등록하기 → 지도를 눌러 깃발 → 카카오 좌표→행정구역 변환으로 시도·구군을 채운 등록 창(카테고리·장소명·공개 여부).
+   * 목록을 누르면 그 위치로 바로 길찾기(경로 선택). 저장은 Supabase RPC(fn_route_fav_*, 본인 확인) — 공개 장소는 좋아요 수 집계.
+   */
+  var FAV_CATS = [
+    { k: 'food', e: '🍽️', l: '맛집' },
+    { k: 'spot', e: '📸', l: '명소' },
+    { k: 'home', e: '🏠', l: '집' },
+    { k: 'work', e: '🏢', l: '회사' },
+    { k: 'etc', e: '📍', l: '기타' }
+  ];
+  function favCat(k) {
+    for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
+    return FAV_CATS[4];
+  }
+  var fav = { tab: 'mine', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
+
+  function favRpc(name, args) {
+    return loadDualWriteModule().then(function (mod) {
+      if (!mod || typeof mod.callSupabaseRpcAsUser !== 'function') throw new Error('저장 모듈을 불러오지 못했습니다.');
+      return mod.callSupabaseRpcAsUser(name, args);
+    });
+  }
+
+  function favSheet() {
+    var el = $('outdFavSheet');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'outdFavSheet';
+    el.className = 'coachm-picker outd-route outd-fav';
+    el.style.display = 'none';
+    el.innerHTML =
+      '<div class="coachm-picker__sheet outd-route__sheet">' +
+      '<div class="coachm-picker__head"><span class="outd-route__title">' + ICON_STAR_SM + ' 즐겨찾기</span>' +
+      '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
+      '<div class="outd-fav__tabs" role="tablist">' +
+      '<button type="button" class="outd-fav__tab" data-fav-tab="mine" role="tab">내 즐겨찾기</button>' +
+      '<button type="button" class="outd-fav__tab" data-fav-tab="public" role="tab">공개 장소</button>' +
+      '</div>' +
+      '<div id="outdFavList" class="coachm-picker__list outd-route__list"></div>' +
+      '<div class="outd-fav__foot"><button type="button" class="outd-fav__add" data-fav-add>＋ 등록하기</button></div>' +
+      '</div>';
+    $(SCREEN_ID).appendChild(el);
+    el.addEventListener('click', function (e) {
+      var t = e.target;
+      if (t === el || t.closest('[data-fav-close]')) { el.style.display = 'none'; return; }
+      var tab = t.closest('[data-fav-tab]');
+      if (tab) { fav.tab = tab.getAttribute('data-fav-tab'); renderFavTabs(); loadFavList(false); return; }
+      if (t.closest('[data-fav-add]')) { el.style.display = 'none'; startFavPick(); return; }
+      var like = t.closest('[data-fav-like]');
+      if (like) { e.stopPropagation(); toggleFavLike(like.getAttribute('data-fav-like'), like); return; }
+      var del = t.closest('[data-fav-del]');
+      if (del) { e.stopPropagation(); deleteFav(del.getAttribute('data-fav-del')); return; }
+      var item = t.closest('[data-fav-id]');
+      if (item) goFav(item.getAttribute('data-fav-id'));
+    });
+    return el;
+  }
+  function renderFavTabs() {
+    Array.prototype.forEach.call(document.querySelectorAll('#outdFavSheet [data-fav-tab]'), function (b) {
+      var on = b.getAttribute('data-fav-tab') === fav.tab;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+  window.openOutdoorFavorites = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    if (fav.picking) cancelFavPick();
+    var el = favSheet();
+    renderFavTabs();
+    el.style.display = 'flex';
+    loadFavList(true);
+  };
+
+  function favDistText(it) {
+    if (!st.lastFix) return '';
+    var d = hav(st.lastFix.lat, st.lastFix.lng, it.lat, it.lng) / 1000;
+    return d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km';
+  }
+  function loadFavList(useCache) {
+    var box = $('outdFavList');
+    if (!box) return;
+    var scope = fav.tab;
+    if (useCache && fav.items[scope]) renderFavList();
+    else box.innerHTML = '<div class="coachm-picker__empty">불러오는 중...</div>';
+    var seq = ++fav.seq;
+    favRpc('fn_route_fav_list', { p_scope: scope }).then(function (res) {
+      if (seq !== fav.seq) return;
+      fav.items[scope] = (res && res.items) || [];
+      if (scope === fav.tab) renderFavList();
+    }).catch(function (err) {
+      if (seq !== fav.seq || scope !== fav.tab) return;
+      if (!fav.items[scope]) box.innerHTML = '<div class="coachm-picker__empty">목록을 불러오지 못했습니다.<br><small>' + escHtml(err && err.message ? err.message : '') + '</small></div>';
+    });
+  }
+  function renderFavList() {
+    var box = $('outdFavList');
+    var list = fav.items[fav.tab] || [];
+    if (!list.length) {
+      box.innerHTML = fav.tab === 'mine'
+        ? '<div class="coachm-picker__empty">아직 등록한 즐겨찾기가 없습니다.<br><small>아래 [＋ 등록하기]를 눌러 지도에서 위치를 선택하세요.</small></div>'
+        : '<div class="coachm-picker__empty">아직 공개된 장소가 없습니다.<br><small>즐겨찾기를 공개로 저장하면 여기에 보입니다.</small></div>';
+      return;
+    }
+    box.innerHTML = list.map(function (it) {
+      var c = favCat(it.category);
+      var region = [it.sido, it.sigungu].filter(Boolean).join(' ');
+      var sub = [c.l, region, fav.tab === 'public' && it.owner_name ? it.owner_name : '', favDistText(it)].filter(Boolean).join(' · ');
+      var right;
+      if (fav.tab === 'public') {
+        right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
+          '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + (it.like_count || 0) + '</b></button>';
+      } else {
+        right = '<span class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '">' + (it.is_public ? '공개' : '비공개') + '</span>' +
+          '<button type="button" class="outd-fav__del" data-fav-del="' + it.id + '" aria-label="삭제">' + ICON_TRASH_SM + '</button>';
+      }
+      return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
+        '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>' +
+        '<span class="outd-fav__txt"><span class="outd-route__name">' + escHtml(it.name) + '</span><span class="outd-route__sub">' + escHtml(sub) + '</span></span>' +
+        '<span class="outd-fav__right">' + right + '</span></div>';
+    }).join('');
+  }
+  function findFav(id) {
+    var all = (fav.items.mine || []).concat(fav.items.public || []);
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+  }
+  /** 즐겨찾기 → 길찾기(경로 선택 화면으로) */
+  function goFav(id) {
+    var it = findFav(id);
+    if (!it) return;
+    $('outdFavSheet').style.display = 'none';
+    unlockAudio();
+    window.openOutdoorRouteSearch({ noFocus: true });
+    chooseDestination({ name: it.name, lat: Number(it.lat), lng: Number(it.lng), sub: [it.sido, it.sigungu].filter(Boolean).join(' ') });
+  }
+  function toggleFavLike(id, btn) {
+    var it = findFav(id);
+    if (!it) return;
+    if (it.is_mine) { toast('내가 공개한 장소에는 좋아요를 누를 수 없습니다.', 'info'); return; }
+    if (btn.__busy) return;
+    btn.__busy = true;
+    favRpc('fn_route_fav_toggle_like', { p_id: id }).then(function (res) {
+      it.liked = !!res.liked;
+      it.like_count = res.like_count;
+      renderFavList();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '좋아요를 처리하지 못했습니다.', 'error');
+    }).then(function () { btn.__busy = false; });
+  }
+  function deleteFav(id) {
+    var it = findFav(id);
+    if (!it || !window.confirm('"' + it.name + '" 즐겨찾기를 삭제할까요?')) return;
+    favRpc('fn_route_fav_delete', { p_id: id }).then(function () {
+      fav.items.mine = (fav.items.mine || []).filter(function (x) { return x.id !== id; });
+      fav.items.public = null; // 공개 목록은 다시 불러옴
+      renderFavList();
+      toast('즐겨찾기를 삭제했습니다.', 'info');
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '삭제하지 못했습니다.', 'error');
+    });
+  }
+
+  /* --- 등록: 지도에서 위치 선택 --- */
+  /** 화면 좌표 → 지도 좌표(회전된 지도에서도 정확하게: 회전판 중심 기준으로 회전을 되돌림) */
+  function clientToLatLng(cx, cy) {
+    var el = $('outdMap');
+    if (!el || !st.map) return null;
+    var r = el.getBoundingClientRect();
+    var mx = r.left + r.width / 2, my = r.top + r.height / 2;
+    var th = -((st.dispRot != null ? st.dispRot : st.mapRotDeg || 0) * Math.PI) / 180;
+    var dx = cx - mx, dy = cy - my;
+    var ux = dx * Math.cos(th) - dy * Math.sin(th);
+    var uy = dx * Math.sin(th) + dy * Math.cos(th);
+    return st.map.containerPointToLatLng([el.offsetWidth / 2 + ux, el.offsetHeight / 2 + uy]);
+  }
+  function bindFavPickTap() {
+    var el = $('outdMap');
+    if (!el || el.__favTapBound) return;
+    el.__favTapBound = true;
+    var down = null;
+    el.addEventListener('pointerdown', function (e) { down = { x: e.clientX, y: e.clientY, t: Date.now(), n: (down && Date.now() - down.t < 400) ? 2 : 1 }; });
+    el.addEventListener('pointerup', function (e) {
+      if (!fav.picking || !down) return;
+      var moved = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
+      if (moved > 10 || Date.now() - down.t > 600) return; // 끌기·길게 누르기는 지도 이동
+      var ll = clientToLatLng(e.clientX, e.clientY);
+      if (ll) placeFavFlag(ll.lat, ll.lng);
+    });
+  }
+  function favPickBanner(show) {
+    var b = $('outdFavPickBar');
+    if (!b && show) {
+      b = document.createElement('div');
+      b.id = 'outdFavPickBar';
+      b.className = 'outd-fav__pickbar';
+      b.innerHTML = '<span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" data-fav-pick-cancel>취소</button>';
+      b.querySelector('[data-fav-pick-cancel]').addEventListener('click', function (e) { e.stopPropagation(); cancelFavPick(); });
+      var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+      (wrap || $(SCREEN_ID)).appendChild(b);
+    }
+    if (b) b.style.display = show ? 'flex' : 'none';
+  }
+  function startFavPick() {
+    var map = ensureMap();
+    if (!map) { toast('지도를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.', 'info'); return; }
+    fav.picking = true;
+    fav.pickLL = null;
+    fav.region = null;
+    st.follow = false; // 위치를 고르는 동안 지도가 내 위치로 끌려가지 않게
+    st.userPanAt = Date.now() + 3600 * 1000;
+    bindFavPickTap();
+    favPickBanner(true);
+    loadKakaoMaps().catch(function () {}); // 행정구역 변환 미리 준비
+  }
+  function cancelFavPick() {
+    fav.picking = false;
+    favPickBanner(false);
+    var f = $('outdFavForm');
+    if (f) f.style.display = 'none';
+    if (fav.flag && st.map) { st.map.removeLayer(fav.flag); fav.flag = null; }
+    st.userPanAt = Date.now();
+  }
+  function placeFavFlag(lat, lng) {
+    var L = window.L;
+    fav.pickLL = { lat: lat, lng: lng };
+    if (!fav.flag) {
+      fav.flag = L.marker([lat, lng], {
+        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">🚩</div>', iconSize: [34, 34], iconAnchor: [8, 32] }),
+        interactive: false,
+        zIndexOffset: 1200
+      }).addTo(st.map);
+    } else {
+      fav.flag.setLatLng([lat, lng]);
+    }
+    favPickBanner(false);
+    openFavForm();
+    reverseRegion(lat, lng).then(function (rg) {
+      if (!fav.pickLL || fav.pickLL.lat !== lat || fav.pickLL.lng !== lng) return; // 그사이 다른 곳을 눌렀으면 무시
+      fav.region = rg;
+      var f = $('outdFavForm');
+      if (!f) return;
+      f.querySelector('[name=sido]').value = rg.sido || '';
+      f.querySelector('[name=sigungu]').value = rg.sigungu || '';
+      f.querySelector('.outd-fav__addr').textContent = rg.address || '';
+    });
+  }
+  /** 좌표 → 시도·구군·주소(카카오 → 실패 시 OSM Nominatim) */
+  function reverseRegion(lat, lng) {
+    return loadKakaoMaps().then(function (kakao) {
+      return new Promise(function (resolve, reject) {
+        var gc = new kakao.maps.services.Geocoder();
+        gc.coord2RegionCode(lng, lat, function (res, status) {
+          if (status !== kakao.maps.services.Status.OK || !res || !res.length) { reject(new Error('no region')); return; }
+          var b = res.filter(function (r) { return r.region_type === 'B'; })[0] || res[0];
+          var out = { sido: b.region_1depth_name || '', sigungu: b.region_2depth_name || '', address: '' };
+          gc.coord2Address(lng, lat, function (ad, st2) {
+            if (st2 === kakao.maps.services.Status.OK && ad && ad[0]) {
+              out.address = (ad[0].road_address && ad[0].road_address.address_name) || (ad[0].address && ad[0].address.address_name) || '';
+            }
+            resolve(out);
+          });
+        });
+      });
+    }).catch(function () {
+      return fetchJson('https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=ko&zoom=16&lat=' + lat + '&lon=' + lng)
+        .then(function (d) {
+          var a = (d && d.address) || {};
+          return { sido: a.state || a.province || a.city || '', sigungu: a.borough || a.county || a.city_district || (a.state ? a.city : '') || a.town || '', address: d && d.display_name ? String(d.display_name).split(',').slice(0, 4).join(',') : '' };
+        })
+        .catch(function () { return { sido: '', sigungu: '', address: '' }; });
+    });
+  }
+  function openFavForm() {
+    var f = $('outdFavForm');
+    if (!f) {
+      f = document.createElement('div');
+      f.id = 'outdFavForm';
+      f.className = 'outd-fav__form';
+      f.innerHTML =
+        '<div class="outd-fav__formhead"><b>' + ICON_STAR_SM + ' 즐겨찾기 등록</b><button type="button" class="coachm-picker__close" data-fav-form-close aria-label="닫기">✕</button></div>' +
+        '<p class="outd-fav__hint">다른 곳을 누르면 깃발 위치가 바뀝니다.</p>' +
+        '<div class="outd-fav__row2"><label>시도<input name="sido" type="text" maxlength="30" placeholder="시도"></label>' +
+        '<label>구군<input name="sigungu" type="text" maxlength="30" placeholder="구군"></label></div>' +
+        '<div class="outd-fav__addr"></div>' +
+        '<div class="outd-fav__label">카테고리</div>' +
+        '<div class="outd-fav__chips" data-chips="category">' + FAV_CATS.map(function (c) {
+          return '<button type="button" data-v="' + c.k + '">' + c.e + ' ' + c.l + '</button>';
+        }).join('') + '</div>' +
+        '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
+        '<div class="outd-fav__label">공개 여부</div>' +
+        '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1">🌏 공개</button></div>' +
+        '<p class="outd-fav__hint" data-pub-hint></p>' +
+        '<div class="outd-fav__btns"><button type="button" class="outd-fav__cancel" data-fav-form-close>취소</button><button type="button" class="outd-fav__save" data-fav-save>저장</button></div>';
+      $(SCREEN_ID).appendChild(f);
+      f.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t.closest('[data-fav-form-close]')) { cancelFavPick(); return; }
+        var chip = t.closest('[data-chips] button');
+        if (chip) {
+          var g = chip.parentNode.getAttribute('data-chips');
+          fav.form[g] = chip.getAttribute('data-v');
+          renderFavForm();
+          return;
+        }
+        if (t.closest('[data-fav-save]')) saveFavForm();
+      });
+      f.querySelector('[name=name]').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); this.blur(); } });
+    }
+    if (!fav.form) fav.form = { category: 'food', pub: '0' };
+    if (f.style.display !== 'flex') {
+      fav.form = { category: 'food', pub: '0' };
+      f.querySelector('[name=name]').value = '';
+    }
+    f.querySelector('[name=sido]').value = '';
+    f.querySelector('[name=sigungu]').value = '';
+    f.querySelector('.outd-fav__addr').textContent = '주소를 찾는 중...';
+    renderFavForm();
+    f.style.display = 'flex';
+  }
+  function renderFavForm() {
+    var f = $('outdFavForm');
+    if (!f) return;
+    Array.prototype.forEach.call(f.querySelectorAll('[data-chips]'), function (g) {
+      var key = g.getAttribute('data-chips');
+      Array.prototype.forEach.call(g.querySelectorAll('button'), function (b) {
+        b.classList.toggle('is-on', b.getAttribute('data-v') === fav.form[key]);
+      });
+    });
+    f.querySelector('[data-pub-hint]').textContent = fav.form.pub === '1'
+      ? '공개 장소 목록에 보이고, 다른 사용자가 좋아요를 누를 수 있습니다.'
+      : '나의 즐겨찾기 목록에만 보입니다.';
+  }
+  function saveFavForm() {
+    var f = $('outdFavForm');
+    if (!fav.pickLL) { toast('지도를 눌러 위치를 먼저 선택해 주세요.', 'info'); return; }
+    var name = f.querySelector('[name=name]').value.trim();
+    if (!name) { toast('장소명을 입력해 주세요.', 'info'); f.querySelector('[name=name]').focus(); return; }
+    var btn = f.querySelector('[data-fav-save]');
+    if (btn.disabled) return;
+    btn.disabled = true;
+    var payload = {
+      category: fav.form.category,
+      name: name,
+      sido: f.querySelector('[name=sido]').value.trim(),
+      sigungu: f.querySelector('[name=sigungu]').value.trim(),
+      address: (fav.region && fav.region.address) || '',
+      lat: Math.round(fav.pickLL.lat * 1e7) / 1e7,
+      lng: Math.round(fav.pickLL.lng * 1e7) / 1e7,
+      is_public: fav.form.pub === '1'
+    };
+    favRpc('fn_route_fav_save', { p: payload }).then(function () {
+      toast('즐겨찾기에 저장했습니다 · ' + name, 'success');
+      cancelFavPick();
+      fav.items.mine = null;
+      if (payload.is_public) fav.items.public = null;
+      fav.tab = 'mine';
+      window.openOutdoorFavorites();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '저장하지 못했습니다.', 'error');
+    }).then(function () { btn.disabled = false; });
+  }
 
   /* ---------- 메뉴 · 코스 선택 ---------- */
   window.toggleOutdoorRideMenu = function (e) {

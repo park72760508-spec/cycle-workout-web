@@ -34800,8 +34800,74 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-reroute-btn.is-busy svg { animation: outdRerouteSpin 0.9s linear infinite; }
 @keyframes outdRerouteSpin { to { transform: rotate(360deg); } }
-/* 길찾기 초기화 버튼(2026-10-22): 재탐색 버튼 위 */
-#outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
+/* 길찾기 초기화 버튼(2026-10-22): 재탐색 버튼 위 — 2026-10-23 즐겨찾기 버튼이 들어와 재탐색·초기화는 한 칸씩 위로 */
+#outdoorRideScreen .outd-reroute-btn { bottom: 254px; }
+#outdoorRideScreen .outd-route-reset-btn { bottom: 302px; }
+/* ROUTE 즐겨찾기(2026-10-23) */
+#outdoorRideScreen .outd-fav-btn {
+  position: absolute; right: 8px; bottom: 206px; z-index: 600;
+  width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
+  background: rgba(17, 24, 39, 0.85); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#outdoorRideScreen .outd-star-ico { display: inline-block; vertical-align: -2px; }
+#outdoorRideScreen .outd-fav__tabs { display: flex; gap: 6px; padding: 4px 14px 8px; }
+#outdoorRideScreen .outd-fav__tab {
+  flex: 1; padding: 9px 0; border-radius: 10px; border: 1px solid #333; background: #161616; color: #94a3b8;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__tab.is-on { background: #2a2a2a; color: #fff; border-color: #facc15; }
+#outdoorRideScreen .outd-fav__item { display: flex; align-items: center; gap: 10px; }
+#outdoorRideScreen .outd-fav__cat {
+  flex: 0 0 36px; height: 36px; border-radius: 50%; background: #262626; display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+#outdoorRideScreen .outd-fav__txt { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#outdoorRideScreen .outd-fav__right { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+#outdoorRideScreen .outd-fav__pub { font-size: 11px; font-weight: 700; color: #94a3b8; border: 1px solid #3a3a3a; border-radius: 999px; padding: 2px 8px; }
+#outdoorRideScreen .outd-fav__pub.is-on { color: #00d4aa; border-color: #00d4aa; }
+#outdoorRideScreen .outd-fav__del { width: 34px; height: 34px; border: 0; border-radius: 10px; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+#outdoorRideScreen .outd-fav__like {
+  display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 999px; border: 1px solid #3a3a3a;
+  background: transparent; color: #e2e8f0; font-size: 13px; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__like .outd-fav__heart { font-size: 16px; line-height: 1; color: #94a3b8; }
+#outdoorRideScreen .outd-fav__like.is-on { border-color: #f43f5e; }
+#outdoorRideScreen .outd-fav__like.is-on .outd-fav__heart { color: #f43f5e; }
+#outdoorRideScreen .outd-fav__like.is-mine { opacity: 0.55; }
+#outdoorRideScreen .outd-fav__foot { padding: 10px 14px calc(12px + env(safe-area-inset-bottom)); }
+#outdoorRideScreen .outd-fav__add {
+  width: 100%; padding: 13px 0; border: 0; border-radius: 12px; background: #00d4aa; color: #062a22; font-size: 16px; font-weight: 800; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__pickbar {
+  position: absolute; left: 8px; right: 8px; top: 8px; z-index: 700; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 10px 12px; border-radius: 12px; background: rgba(17, 24, 39, 0.92); color: #fff; font-size: 14px; font-weight: 700;
+}
+#outdoorRideScreen .outd-fav__pickbar button { border: 1px solid #555; background: transparent; color: #fff; border-radius: 8px; padding: 5px 12px; font-size: 13px; cursor: pointer; }
+#outdoorRideScreen .outd-fav__flag { font-size: 30px; line-height: 1; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45)); }
+#outdoorRideScreen .outd-fav__form {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 100200; display: none; flex-direction: column; gap: 8px;
+  max-height: 62vh; overflow-y: auto; padding: 12px 16px calc(14px + env(safe-area-inset-bottom));
+  background: #1c1c1c; color: #fff; border-radius: 18px 18px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.45);
+}
+#outdoorRideScreen .outd-fav__formhead { display: flex; align-items: center; justify-content: space-between; font-size: 16px; }
+#outdoorRideScreen .outd-fav__hint { margin: 0; font-size: 12px; color: #94a3b8; }
+#outdoorRideScreen .outd-fav__row2 { display: flex; gap: 8px; }
+#outdoorRideScreen .outd-fav__row2 label, #outdoorRideScreen label.outd-fav__label { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #94a3b8; font-weight: 700; }
+#outdoorRideScreen .outd-fav__form input {
+  width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #3a3a3a; background: #121212; color: #fff; font-size: 15px; outline: none;
+}
+#outdoorRideScreen .outd-fav__form input:focus { border-color: #00d4aa; }
+#outdoorRideScreen .outd-fav__addr { font-size: 12px; color: #cbd5e1; min-height: 14px; }
+#outdoorRideScreen div.outd-fav__label { font-size: 12px; color: #94a3b8; font-weight: 700; margin-top: 2px; }
+#outdoorRideScreen .outd-fav__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+#outdoorRideScreen .outd-fav__chips button {
+  padding: 8px 12px; border-radius: 999px; border: 1px solid #3a3a3a; background: #161616; color: #e2e8f0; font-size: 14px; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__chips button.is-on { border-color: #00d4aa; background: rgba(0, 212, 170, 0.15); color: #fff; font-weight: 700; }
+#outdoorRideScreen .outd-fav__btns { display: flex; gap: 8px; margin-top: 4px; }
+#outdoorRideScreen .outd-fav__btns button { flex: 1; padding: 13px 0; border-radius: 12px; font-size: 16px; font-weight: 800; cursor: pointer; }
+#outdoorRideScreen .outd-fav__cancel { border: 1px solid #3a3a3a; background: transparent; color: #e2e8f0; }
+#outdoorRideScreen .outd-fav__save { border: 0; background: #00d4aa; color: #062a22; }
+#outdoorRideScreen .outd-fav__save:disabled { opacity: 0.6; }
 
 /* 카테고리 화면 내비(ROUTE) 버튼(2026-10-22): 중고랜드 버튼과 같은 크기·바로 위, 바탕은 CYCLE/RUN 타일 하늘색, 글자·아이콘은 CYCLE 글자색 */
 #sportCategoryScreen .market-entry-btn { min-width: 150px; }
