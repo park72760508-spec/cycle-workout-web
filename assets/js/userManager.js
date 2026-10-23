@@ -4400,6 +4400,15 @@ function renderProfileUserCards(usersToRender, viewerGrade, viewerId, targetIds,
   containers.forEach(function (container) {
     container.innerHTML = cardsHtml;
   });
+  /* 2026-10-23: 환경설정 — 본인 카드의 공개/비공개 토글을 '내 프로필' 제목줄 오른쪽 끝으로 옮김 */
+  try {
+    var privSlot = document.getElementById('settingsProfilePrivacySlot');
+    if (privSlot) {
+      var privToggle = document.querySelector('#settingsUserList .user-privacy-toggle-inline');
+      if (privToggle) { privSlot.innerHTML = ''; privSlot.appendChild(privToggle); }
+      else if (document.getElementById('settingsUserList') && document.getElementById('settingsUserList').innerHTML) privSlot.innerHTML = '';
+    }
+  } catch (ePrivSlot) {}
   if (viewerId && window.stelvioReferral && typeof window.stelvioReferral.hydrateProfileReferralRow === 'function') {
     window.stelvioReferral.hydrateProfileReferralRow(String(viewerId));
   }

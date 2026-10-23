@@ -35054,3 +35054,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #settingsModal .profile-user-card-scope .user-card .user-privacy-toggle-inline .privacy-toggle-label { gap: 5px; font-size: 12px; }
 #settingsModal .profile-user-card-scope .stelvio-user-points-with-avatar > .avatar-row-privacy { display: none; }
 #settingsModal .profile-user-card-scope .user-card .user-name-with-indicators .user-name-text { white-space: nowrap; flex-shrink: 0; }
+/* 2026-10-23: 환경설정 공개/비공개 토글 — '내 프로필' 제목줄 오른쪽 끝(이름 옆에서 이동) */
+#settingsModal .profile-user-card-scope .user-card .user-name.user-name-with-indicators { justify-content: space-between; }
+#settingsModal .settings-profile-privacy-slot { margin-left: auto; display: inline-flex; align-items: center; }
+#settingsModal .settings-profile-privacy-slot .user-privacy-toggle-inline { display: inline-flex; align-items: center; }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; user-select: none; }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-input { display: none; }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-slider { position: relative; width: 40px; height: 22px; background: #22c55e; border-radius: 11px; transition: background 0.2s; }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-slider::after {
+  content: ''; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; background: #fff; border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); transition: transform 0.2s;
+}
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-input:checked + .privacy-toggle-slider { background: #ef4444; }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-input:checked + .privacy-toggle-slider::after { transform: translateX(18px); }
+#settingsModal .settings-profile-privacy-slot .privacy-toggle-text { font-weight: 600; color: #374151; }
