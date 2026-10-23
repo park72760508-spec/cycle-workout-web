@@ -2737,6 +2737,7 @@
           : rt.mode === 'motoBack' ? '이면도로 우선'
           : '📏 최단 거리';
         item.className = 'coachm-picker__item outd-route__opt' + (reco ? ' is-reco' : '');
+        item.setAttribute('data-km', String(Math.round(rt.km * 1000) / 1000)); // 정확한 거리(확인용)
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
