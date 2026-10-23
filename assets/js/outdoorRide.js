@@ -395,6 +395,8 @@
       pulse.classList.toggle('pulse-active', st.status !== 'running');
       pulse.classList.toggle('pulse-hidden', st.status === 'running');
     }
+    var pulseHtml = $('outdStartPulseHtml');
+    if (pulseHtml) pulseHtml.classList.toggle('is-on', st.status !== 'running');
     // 지도 크게 보기의 떠 있는 시작 버튼도 같은 상태(아이콘·녹색 펄스)
     var fimg = $('outdFloatToggleImg');
     if (fimg) fimg.setAttribute('src', st.status === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png');
@@ -758,6 +760,18 @@
     if (st.map && st.map.dragging) st.map.dragging.disable();
   }
 
+  /*
+   * 즐겨찾기 핀을 지도판 회전의 반대로 돌려 똑바로(2026-10-24 발열): 예전엔 지도판에 CSS 변수(--outd-unrot)를 매 프레임 바꿔
+   * 지도 안 요소 전체(타일·마커)의 스타일을 다시 계산했다 → 핀 몇 개에만 직접 적용, 0.3° 이상 바뀔 때만.
+   */
+  function applyFavPinUnrotate(force) {
+    var d = st.dispRot || 0;
+    if (!force && st.__pinRot != null && Math.abs(d - st.__pinRot) < 0.3) return;
+    st.__pinRot = d;
+    var tr = 'rotate(' + (-d).toFixed(1) + 'deg)';
+    var els = document.querySelectorAll('#outdMap .outd-favpin__in');
+    for (var i = 0; i < els.length; i++) els[i].style.transform = tr;
+  }
   /** 지금 화면에 보이는 회전 각도를 지도·나침반·내 위치 화살표에 적용 */
   function paintRotation() {
     var d = (st.dispRot || 0).toFixed(2);
@@ -766,8 +780,7 @@
     if (needle) needle.style.transform = 'rotate(' + d + 'deg)'; // 빨간 끝 = 북쪽
     updateMeArrow();
     // 즐겨찾기 핀은 지도판 회전의 반대로 돌려 항상 똑바로
-    var rotEl = $('outdMapRot');
-    if (rotEl && rotEl.__unrot !== d) { rotEl.__unrot = d; rotEl.style.setProperty('--outd-unrot', 'rotate(' + (-Number(d)).toFixed(2) + 'deg)'); }
+    applyFavPinUnrotate(false);
   }
   /** 화면에 보이는 진행 방향(°) — 지도 위치 맞춤(followCenter)에 사용 */
   function dispHeading() {
@@ -778,6 +791,7 @@
     if (st.rotAnimId) return;
     var last = performance.now();
     function frame(now) {
+      if (now - last < 32 && isActive() && !document.hidden) { st.rotAnimId = requestAnimationFrame(frame); return; } // 초당 약 30번
       var dt = Math.min(100, now - last);
       last = now;
       var diff = st.mapRotDeg - st.dispRot;
@@ -1170,10 +1184,16 @@
     st.moLast = performance.now();
     st.moId = requestAnimationFrame(motionStep);
   }
+  var MOTION_FRAME_MS = 32; // 2026-10-24 발열: 지도·아바타 이동은 초당 약 30번(속도계 바늘과 같은 기준, 예전 60번)
   function motionStep(now) {
     st.moId = null;
     var T = st.mt, M = st.mo;
     if (!T || !M) return;
+    if (st.moPaintAt && now - st.moPaintAt < MOTION_FRAME_MS && isActive() && !document.hidden) {
+      st.moId = requestAnimationFrame(motionStep);
+      return;
+    }
+    st.moPaintAt = now;
     var dt = clampN((now - (st.moLast || now)) / 1000, 0, 0.1);
     st.moLast = now;
     var age = Math.min(15, (now - T.t) / 1000); // GPS 끊김(터널 등)도 15초까지 예측 이동
@@ -2998,6 +3018,7 @@
         zIndexOffset: 500
       }).addTo(fav.layer);
     });
+    applyFavPinUnrotate(true);
   }
   /** 지도에서 짧게 누른 곳의 즐겨찾기 핀(없으면 null) */
   function favPinAt(x, y) {

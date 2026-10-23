@@ -35091,3 +35091,23 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 지도(Leaflet) 안에서 톱니 그림이 글자 위로 그려지던 문제 — 글자를 위로 */
 #outdoorRideScreen .outd-aff-badge svg { z-index: 0; }
 #outdoorRideScreen .outd-aff-badge b, #outdoorRideScreen .outd-aff-badge i { z-index: 1; }
+/* ===== 2026-10-24: 루트맵 발열 경감 =====
+   시작 버튼 녹색 펄스: SVG 원 애니메이션(매 프레임 스타일·그리기 다시 계산) → HTML 원 2개(transform·opacity, GPU 합성만).
+   위치는 속도계 SVG(viewBox -13 34 220 202)의 시작 버튼 중심(80,221)·반지름 9 와 같은 비율 — 버튼 뒤에 깔림. */
+#outdoorRideScreen .mobile-gauge-container > svg { position: relative; z-index: 1; }
+#outdoorRideScreen .outd-start-pulse-html {
+  position: absolute; left: 42.27%; top: 92.57%; width: 8.18%; aspect-ratio: 1 / 1; transform: translate(-50%, -50%);
+  pointer-events: none; z-index: 0; display: none;
+}
+#outdoorRideScreen .outd-start-pulse-html.is-on { display: block; }
+#outdoorRideScreen .outd-start-pulse-html i {
+  position: absolute; inset: 0; border-radius: 50%; background: rgba(34, 197, 94, 0.55);
+  opacity: 0; animation: outdStartPulseHtml 2s ease-out infinite; will-change: transform, opacity;
+}
+#outdoorRideScreen .outd-start-pulse-html i + i { animation-delay: 1s; }
+@keyframes outdStartPulseHtml {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.8); opacity: 0; }
+}
+/* 즐겨찾기 핀 바로 세우기: CSS 변수 대신 JS 가 핀에 직접 회전 지정(지도 전체 스타일 재계산 없음) */
+#outdoorRideScreen .outd-favpin__in { transform: none; }
