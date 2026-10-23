@@ -34999,3 +34999,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-favpin__likes.is-on { background: #e11d48; color: #ffffff; border-color: #ffffff; }
 #outdoorRideScreen .outd-fav__likecnt { font-size: 12px; font-weight: 800; color: #f43f5e; white-space: nowrap; }
+/* 2026-10-23: 다른 사용자 공개 장소 핀 = 연한 보라 톤, 좋아요 표시 = 흰 바탕 + 빨간 테두리 + 빨간 하트·숫자(누른 곳도 같은 모양) */
+#outdoorRideScreen .outd-favpin--pub .outd-favpin__body {
+  background: linear-gradient(135deg, #e9d5ff, #a78bfa);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.4), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+#outdoorRideScreen .outd-favpop__cat--pub { background: linear-gradient(135deg, #e9d5ff, #a78bfa); }
+#outdoorRideScreen .outd-favpin__likes,
+#outdoorRideScreen .outd-favpin__likes.is-on { background: #ffffff; color: #dc2626; border: 1.5px solid #dc2626; }
