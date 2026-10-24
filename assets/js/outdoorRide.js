@@ -3309,13 +3309,28 @@
   }
   /** 검색 결과로 위치 선택 → 지도 이동 + 깃발 + 등록 창(장소명 미리 채움) */
   function favPickPlace(pl) {
-    var map = st.map;
-    if (!map) return;
+    var map = st.map || ensureMap();
+    var lat = Number(pl.lat), lng = Number(pl.lng);
     st.follow = false;
     st.userPanAt = Date.now() + 3600 * 1000;
-    map.setView([pl.lat, pl.lng], Math.max(map.getZoom(), 17), { animate: false });
-    panLatLngToMapCenter(pl.lat, pl.lng);
-    placeFavFlag(pl.lat, pl.lng);
+    /* 2026-10-24: PC(Windows Chrome)에서 결과를 누르면 목록만 닫히고 등록 창이 안 뜨는 사례 — 지도 이동 단계에서
+       오류가 나면 그 뒤(깃발·등록 창)가 실행되지 않았다 → 지도 이동은 실패해도 깃발·등록 창은 반드시 띄움 */
+    try {
+      if (map) {
+        map.setView([lat, lng], Math.max(map.getZoom() || 0, 17), { animate: false });
+        panLatLngToMapCenter(lat, lng);
+      }
+    } catch (eMove) {
+      console.warn('[favPickPlace] 지도 이동 실패(등록 창은 계속):', eMove && eMove.message);
+    }
+    try {
+      placeFavFlag(lat, lng);
+    } catch (eFlag) {
+      console.warn('[favPickPlace] 깃발 표시 실패(등록 창은 계속):', eFlag && eFlag.message);
+      fav.pickLL = { lat: lat, lng: lng };
+      favPickBanner(false);
+      openFavForm();
+    }
     var f = $('outdFavForm');
     var nm = f && f.querySelector('[name=name]');
     if (nm && !nm.value) nm.value = String(pl.name || '').slice(0, 40);
@@ -3344,7 +3359,9 @@
   function placeFavFlag(lat, lng) {
     var L = window.L;
     fav.pickLL = { lat: lat, lng: lng };
-    if (!fav.flag) {
+    if (!st.map || !L) {
+      // 지도가 없으면 깃발만 생략(아래 등록 창은 그대로)
+    } else if (!fav.flag) {
       fav.flag = L.marker([lat, lng], {
         icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">🚩</div>', iconSize: [34, 34], iconAnchor: [8, 32] }),
         interactive: false,
