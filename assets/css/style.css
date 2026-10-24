@@ -35240,3 +35240,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__pendcol { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 #outdoorRideScreen .outd-fav__pendcol .outd-fav__pending,
 #outdoorRideScreen .outd-fav__pendcol .outd-fav__approve { justify-content: center; text-align: center; }
+/* 관리자: '공개 대기 중' 배지 = 바로 공개 버튼, 카테고리 아이콘 = 숨김/공개 토글(2026-10-25) */
+#outdoorRideScreen button.outd-fav__pending.is-btn { cursor: pointer; font-family: inherit; }
+#outdoorRideScreen button.outd-fav__pending.is-btn:active { transform: scale(0.96); }
+#outdoorRideScreen button.outd-fav__cat.is-btn { border: 0; padding: 0; cursor: pointer; font-family: inherit; }
+#outdoorRideScreen .outd-fav__item.is-admin-hidden .outd-fav__cat,
+#outdoorRideScreen .outd-fav__item.is-admin-hidden .outd-fav__txt,
+#outdoorRideScreen .outd-fav__item.is-admin-hidden .outd-fav__right { opacity: 0.35; filter: grayscale(1); }
+#outdoorRideScreen .outd-favpin.is-admin-hidden .outd-favpin__in { opacity: 0.35; filter: grayscale(1); }

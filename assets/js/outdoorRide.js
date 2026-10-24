@@ -3116,6 +3116,8 @@
       var tab = t.closest('[data-fav-tab]');
       if (tab) { fav.tab = tab.getAttribute('data-fav-tab'); renderFavTabs(); loadFavList(false); return; }
       if (t.closest('[data-fav-add]')) { el.style.display = 'none'; startFavPick(); return; }
+      var hideBtn = t.closest('[data-fav-hide]');
+      if (hideBtn) { e.stopPropagation(); toggleFavAdminHidden(hideBtn.getAttribute('data-fav-hide'), hideBtn); return; }
       var appr = t.closest('[data-fav-approve]');
       if (appr) { e.stopPropagation(); approveFavPublic(appr.getAttribute('data-fav-approve'), appr); return; }
       var like = t.closest('[data-fav-like]');
@@ -3293,23 +3295,30 @@
       if (fav.tab === 'public') {
         // 2026-10-25: 공개 대기 장소(관리자=전체, 요청자=본인 것) — 좋아요 배지 바로 왼쪽에 '공개 대기 중', 관리자는 수동 공개 버튼
         var pend = it.public_status === 'pending';
+        // 관리자: '공개 대기 중' 배지를 누르면 바로 공개(별도 버튼 없음)
         right = (pend
-          ? '<span class="outd-fav__pendcol"><span class="outd-fav__pending">⏳ 공개 대기 중</span>' +
-            (favIsAdmin() ? '<button type="button" class="outd-fav__approve" data-fav-approve="' + it.id + '" aria-label="공개로 전환">공개 전환</button>' : '') + '</span>'
+          ? (favIsAdmin()
+            ? '<button type="button" class="outd-fav__pending is-btn" data-fav-approve="' + it.id + '" aria-label="공개로 전환">⏳ 공개 대기 중</button>'
+            : '<span class="outd-fav__pending">⏳ 공개 대기 중</span>')
           : '') +
           '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>';
       } else {
         right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
           '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public
-            ? (it.public_status === 'pending'
+            ? (it.public_status === 'pending' || it.public_status === 'hidden'
               ? '⏳ 공개 대기 중'
               : '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개')
             : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-edit="' + it.id + '" aria-label="수정">' + ICON_EDIT_SM + '</button>';
       }
-      return '<div class="coachm-picker__item outd-fav__item" data-fav-id="' + it.id + '">' +
-        '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>' +
+      // 관리자(공개 장소 탭): 카테고리 아이콘을 누르면 숨김/다시 공개 토글 — 숨긴 장소는 연하게
+      var adminHideBtn = fav.tab === 'public' && favIsAdmin();
+      var hiddenRow = adminHideBtn && it.admin_hidden;
+      return '<div class="coachm-picker__item outd-fav__item' + (hiddenRow ? ' is-admin-hidden' : '') + '" data-fav-id="' + it.id + '">' +
+        (adminHideBtn
+          ? '<button type="button" class="outd-fav__cat is-btn" data-fav-hide="' + it.id + '" aria-label="' + (it.admin_hidden ? '다시 공개' : '공개 장소에서 숨기기') + '" title="' + (it.admin_hidden ? '숨김 · 눌러서 다시 공개' : '공개 중 · 눌러서 숨기기') + '">' + c.e + '</button>'
+          : '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>') +
         '<span class="outd-fav__txt"><span class="outd-fav__namerow"><span class="outd-route__name">' + escHtml(it.name) + '</span>' +
         (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 24) : '') + '</span>' +
         '<span class="outd-route__sub">' + escHtml(sub) + '</span>' +
@@ -3326,6 +3335,22 @@
   /* 2026-10-25 공개 규칙: 관리자 공개 = 바로 공개 장소, 일반 사용자 공개 = 같은 장소를 즐겨찾기한 사람이 3명 이상일 때 공개(서버 fn_route_fav_list) */
   var FAV_ENDORSE_MIN = 3;
   var FAV_PUBLIC_PENDING_MSG = '공개 장소 표시 조건에 충족시 표시됩니다';
+  /** 관리자: 공개 장소 숨김/다시 공개(카테고리 아이콘 토글) */
+  function toggleFavAdminHidden(id, btn) {
+    if (!favIsAdmin() || btn.__busy) return;
+    var it = null;
+    (fav.items.public || []).forEach(function (x) { if (x.id === id) it = x; });
+    if (!it) return;
+    var next = !it.admin_hidden;
+    btn.__busy = true;
+    favRpc('fn_route_fav_admin_hide', { p_id: id, p_hidden: next }).then(function () {
+      toast(next ? '공개 장소에서 숨겼습니다 · 아이콘을 다시 누르면 공개됩니다' : '다시 공개했습니다', 'info');
+      fav.items.public = null;
+      return refreshFavMarkers();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '처리하지 못했습니다.', 'error');
+    }).then(function () { btn.__busy = false; });
+  }
   /** 관리자: 조건(등록자 수) 미충족 공개 대기 장소를 수동으로 공개 전환 */
   function approveFavPublic(id, btn) {
     if (!favIsAdmin() || btn.__busy) return;
@@ -3393,7 +3418,7 @@
     favAllItems().forEach(function (it) {
       var c = favCat(it.category);
       var kind = it.is_mine ? 'mine' : 'pub';
-      var html = '<div class="outd-favpin outd-favpin--' + kind + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
+      var html = '<div class="outd-favpin outd-favpin--' + kind + (it.admin_hidden ? ' is-admin-hidden' : '') + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
         (Number(it.affiliate_discount) > 0
           ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 36) + '</i>'
@@ -3503,7 +3528,7 @@
       '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(it.name) + '</b>' +
       (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 36) : '') + '</div>' +
       (it.affiliate_name ? '<span class="outd-favpop__aff">제휴 · ' + escHtml(it.affiliate_name) + '</span>' : '') +
-      '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? (it.public_status === 'pending' ? '내 장소 · 공개 대기중' : '내 장소 · 공개') : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
+      '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? (it.public_status === 'pending' || it.public_status === 'hidden' ? '내 장소 · 공개 대기중' : '내 장소 · 공개') : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
       '<div class="outd-favpop__likerow">' + (likeHtml || '<span></span>') + favPopModesHtml(it, el) + '</div>' +
