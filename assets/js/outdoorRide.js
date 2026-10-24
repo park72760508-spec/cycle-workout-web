@@ -2946,7 +2946,7 @@
       var del = t.closest('[data-fav-del]');
       if (del) { e.stopPropagation(); deleteFav(del.getAttribute('data-fav-del')); return; }
       var item = t.closest('[data-fav-id]');
-      if (item) goFav(item.getAttribute('data-fav-id'));
+      if (item) focusFav(item.getAttribute('data-fav-id'));
     });
     return el;
   }
@@ -3268,10 +3268,35 @@
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
       '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 안내</button></div>' +
       '</div>';
+    el.classList.remove('is-bottom');
     el.__openedAt = Date.now();
     el.style.display = 'flex';
   }
 
+  /** 2026-10-24: 즐겨찾기 목록 항목 → 지도에서 그 핀 위치로 이동 + 핀 팝업(길찾기는 팝업의 '목적지로 안내'로) */
+  function focusFav(id) {
+    var it = findFav(id);
+    if (!it) return;
+    var favSh = $('outdFavSheet');
+    if (favSh) favSh.style.display = 'none';
+    var map = st.map || ensureMap();
+    var lat = Number(it.lat), lng = Number(it.lng);
+    st.follow = false;
+    st.userPanAt = Date.now() + 20000; // 주행 중이어도 팝업을 보는 동안 내 위치로 끌려가지 않게(20초 뒤 평소대로)
+    try {
+      if (map) {
+        if (!fav.layer) renderFavMarkers();
+        map.setView([lat, lng], Math.max(map.getZoom() || 0, 16), { animate: false });
+        panLatLngToMapCenter(lat, lng, 0.3); // 아래쪽 팝업에 가리지 않게 지도 위쪽에
+        applyFavPinUnrotate(true);
+      }
+    } catch (eMove) {
+      console.warn('[focusFav] 지도 이동 실패:', eMove && eMove.message);
+    }
+    openFavPopup(id);
+    var pop = $('outdFavPop');
+    if (pop) pop.classList.add('is-bottom'); // 핀이 보이게 팝업은 화면 아래쪽에
+  }
   /** 즐겨찾기 → 길찾기(경로 선택 화면으로) */
   function goFav(id) {
     var it = findFav(id);
@@ -3409,7 +3434,7 @@
     }
   }
   /** 화면(지도 칸) 가운데로 이 위치를 옮김 — 회전된 지도에서도 정확히(회전을 되돌려 이동량 계산) */
-  function panLatLngToMapCenter(lat, lng) {
+  function panLatLngToMapCenter(lat, lng, yRatio) {
     var map = st.map, el = $('outdMap'), wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
     if (!map || !el || !wrap) return;
     var P = map.latLngToContainerPoint([lat, lng]);
@@ -3418,7 +3443,7 @@
     var vx = P.x - el.offsetWidth / 2, vy = P.y - el.offsetHeight / 2;
     var sx = r.left + r.width / 2 + vx * Math.cos(th) - vy * Math.sin(th);
     var sy = r.top + r.height / 2 + vx * Math.sin(th) + vy * Math.cos(th);
-    var dx = (wr.left + wr.width / 2) - sx, dy = (wr.top + wr.height * 0.4) - sy; // 아래 등록 창에 가리지 않게 조금 위쪽
+    var dx = (wr.left + wr.width / 2) - sx, dy = (wr.top + wr.height * (yRatio || 0.4)) - sy; // 아래 등록 창에 가리지 않게 조금 위쪽
     var mx = dx * Math.cos(th) + dy * Math.sin(th);
     var my = -dx * Math.sin(th) + dy * Math.cos(th);
     map.panBy([-mx, -my], { animate: false });
