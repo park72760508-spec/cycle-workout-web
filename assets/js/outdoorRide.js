@@ -774,11 +774,20 @@
    */
   /*
    * 2026-10-25: 지도 축소 단계별 즐겨찾기 핀 — 줌 14 미만이면 좋아요 배지 숨김,
-   * 그보다 더 축소하면 핀 크기를 비율로 줄여 줌 10 이하에서 최소 1/3(핀 끝점 기준이라 위치는 그대로).
+   * 그보다 더 축소하면 핀 크기를 비율로 줄여 줌 10 이하에서 최소 1/2(핀 끝점 기준이라 위치는 그대로), 화면 크기 보정 곱함.
    */
   function favPinScaleForZoom(z) {
     if (!(z > 0)) return 1;
-    return Math.max(1 / 3, Math.min(1, 1 - (14 - z) * (2 / 3) / 4)); // 2026-10-25: 최소 1/3(줌 10 이하)
+    return Math.max(0.5, Math.min(1, 1 - (14 - z) * 0.125)); // 2026-10-25: 최소 1/2(줌 10 이하)
+  }
+  /** 화면(지도 영역) 크기 보정: 짧은 변 400px = 100%, 작은 화면 최소 80%·큰 화면 최대 120% */
+  function favPinScaleForScreen() {
+    var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap') || $('outdMap');
+    if (!wrap) return 1;
+    var r = wrap.getBoundingClientRect();
+    var m = Math.min(r.width, r.height);
+    if (!(m > 0)) return 1;
+    return Math.max(0.8, Math.min(1.2, m / 400));
   }
   function syncFavPinZoom() {
     var map = st.map, el = $('outdMap');
@@ -786,7 +795,7 @@
     var z = map.getZoom();
     el.classList.toggle('outd-favlabels', z >= 15);
     el.classList.toggle('outd-favnolikes', z < 14);
-    var sc = favPinScaleForZoom(z);
+    var sc = Math.round(favPinScaleForZoom(z) * favPinScaleForScreen() * 1000) / 1000;
     if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
   }
   function applyFavPinUnrotate(force) {
@@ -794,7 +803,7 @@
     if (!force && st.__pinRot != null && Math.abs(d - st.__pinRot) < 0.3) return;
     st.__pinRot = d;
     var sc = st.__pinScale != null ? st.__pinScale : 1;
-    var tr = 'rotate(' + (-d).toFixed(1) + 'deg)' + (sc < 1 ? ' scale(' + sc.toFixed(3) + ')' : '');
+    var tr = 'rotate(' + (-d).toFixed(1) + 'deg)' + (sc !== 1 ? ' scale(' + sc.toFixed(3) + ')' : '');
     var els = document.querySelectorAll('#outdMap .outd-favpin__in');
     for (var i = 0; i < els.length; i++) els[i].style.transform = tr;
   }
@@ -4608,6 +4617,7 @@
   function fixMapSize() {
     if (!isActive()) return;
     placeStartPulse();
+    syncFavPinZoom(); // 화면 크기·방향이 바뀌면 즐겨찾기 핀 크기도 다시
     // 가로 화면(좌우 분할)에서는 '지도 크게 보기'를 쓰지 않음 — 켜진 채로 돌리면 해제
     if (st.expanded && window.matchMedia && window.matchMedia('(orientation: landscape)').matches) {
       try { window.toggleOutdoorExpand(); } catch (e) {}
