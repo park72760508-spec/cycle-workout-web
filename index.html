@@ -21606,47 +21606,24 @@
  * 절대순위(전일 survivor rank − 오늘 rank)로 등락을 계산한다.
  * 양일 모두 탈퇴 제외 스냅샷이면 일반적인 (↑n)(↓n) 과 동일하다.
  */
+    /*
+     * 2026-10-25 변경: 생존자 기준 → 절대 순위 비교. 새 사람이 들어와 밀린 순위도 그대로 (↓n) 로 반영
+     * (rankChange = 전일 순위 − 오늘 목록 순위, 부문 목록이면 부문 안 위치). 함수 이름은 호출부 호환용으로 유지.
+     */
     function stelvioComputeSurvivorAwareRankMovementForRows(rows, baseline) {
       var rankChanges = {};
       var previousRanks = {};
       if (!rows || !rows.length || !baseline || typeof baseline !== 'object') {
         return { rankChanges: rankChanges, previousRanks: previousRanks };
       }
-      var survivorUids = [];
-      var i;
-      for (i = 0; i < rows.length; i++) {
+      for (var i = 0; i < rows.length; i++) {
         var e = rows[i];
         var uid = e && e.userId != null ? String(e.userId).trim() : '';
         if (!uid || baseline[uid] == null) continue;
-        var prevRaw = Math.floor(Number(baseline[uid]));
-        if (!isFinite(prevRaw) || prevRaw < 1) continue;
-        survivorUids.push(uid);
-      }
-      if (!survivorUids.length) return { rankChanges: rankChanges, previousRanks: previousRanks };
-
-      var yesterdayOrderAsc = survivorUids.slice().sort(function (a, b) {
-        return Math.floor(Number(baseline[a])) - Math.floor(Number(baseline[b]));
-      });
-      var prevAmongSurvivors = {};
-      for (i = 0; i < yesterdayOrderAsc.length; i++) {
-        prevAmongSurvivors[yesterdayOrderAsc[i]] = i + 1;
-      }
-      var currAmongSurvivors = {};
-      var si = 0;
-      for (i = 0; i < rows.length; i++) {
-        var e2 = rows[i];
-        var uid2 = e2 && e2.userId != null ? String(e2.userId).trim() : '';
-        if (!uid2 || prevAmongSurvivors[uid2] == null) continue;
-        si++;
-        currAmongSurvivors[uid2] = si;
-      }
-      for (i = 0; i < survivorUids.length; i++) {
-        var suid = survivorUids[i];
-        var prevN = prevAmongSurvivors[suid];
-        var currN = currAmongSurvivors[suid];
-        if (prevN == null || currN == null) continue;
-        rankChanges[suid] = prevN - currN;
-        previousRanks[suid] = prevN;
+        var prev = Math.floor(Number(baseline[uid]));
+        if (!isFinite(prev) || prev < 1) continue;
+        rankChanges[uid] = prev - (i + 1);
+        previousRanks[uid] = prev;
       }
       return { rankChanges: rankChanges, previousRanks: previousRanks };
     }
@@ -29754,7 +29731,7 @@
   <script defer src="assets/js/runningRanking/runningRankingFormat.js"></script>
   <script defer src="assets/js/runningRanking/runningRankingApi.js"></script>
   <script defer src="assets/js/runningRanking/runningRankingData.js"></script>
-  <script defer src="assets/js/runningRanking/runningRankingMovement.js?v=run-rank-movement-overall-absolute-20260928a"></script>
+  <script defer src="assets/js/runningRanking/runningRankingMovement.js?v=20261025absmv"></script>
   <script defer src="assets/js/runningRanking/runningRankingRankChange.js?v=run-rank-change-20260706e"></script>
   <script defer src="assets/js/runningRanking/runningRankingAvatarOverlay.js?v=viewer-identity-fix-20260818v1"></script>
   <script defer src="assets/js/runningRanking/runningRankingSocial.js"></script>

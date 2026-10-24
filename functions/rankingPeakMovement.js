@@ -77,51 +77,21 @@ function buildPeakBoardRankMapForCategoryRows(rows) {
  * @param {Record<string, number>} baseline uid → 전일(공식) 순위
  */
 function computeSurvivorAwareRankMovementForRows(rows, baseline) {
+  // 2026-10-25: 생존자 기준 → 절대 순위 비교(새 진입으로 밀린 순위도 ↓ 로 반영). 이름은 호출부 호환용으로 유지.
   const rankChanges = {};
   const previousRanks = {};
   if (!Array.isArray(rows) || !rows.length || !baseline || typeof baseline !== "object") {
     return { rankChanges, previousRanks };
   }
-
-  const survivorUids = [];
   for (let i = 0; i < rows.length; i++) {
     const e = rows[i];
     const uid = e && e.userId != null ? String(e.userId).trim() : "";
     if (!uid || baseline[uid] == null) continue;
-    const prevRaw = Math.floor(Number(baseline[uid]));
-    if (!isFinite(prevRaw) || prevRaw < 1) continue;
-    survivorUids.push(uid);
-  }
-  if (!survivorUids.length) return { rankChanges, previousRanks };
-
-  const yesterdayOrderAsc = survivorUids
-    .slice()
-    .sort((a, b) => Math.floor(Number(baseline[a])) - Math.floor(Number(baseline[b])));
-
-  const prevAmongSurvivors = {};
-  for (let i = 0; i < yesterdayOrderAsc.length; i++) {
-    prevAmongSurvivors[yesterdayOrderAsc[i]] = i + 1;
-  }
-
-  const currAmongSurvivors = {};
-  let si = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const e = rows[i];
-    const uid = e && e.userId != null ? String(e.userId).trim() : "";
-    if (!uid || prevAmongSurvivors[uid] == null) continue;
-    si++;
-    currAmongSurvivors[uid] = si;
-  }
-
-  for (let i = 0; i < survivorUids.length; i++) {
-    const uid = survivorUids[i];
-    const prev = prevAmongSurvivors[uid];
-    const curr = currAmongSurvivors[uid];
-    if (prev == null || curr == null) continue;
-    rankChanges[uid] = prev - curr;
+    const prev = Math.floor(Number(baseline[uid]));
+    if (!isFinite(prev) || prev < 1) continue;
+    rankChanges[uid] = prev - (i + 1);
     previousRanks[uid] = prev;
   }
-
   return { rankChanges, previousRanks };
 }
 

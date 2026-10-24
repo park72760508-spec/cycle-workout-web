@@ -339,7 +339,8 @@
    */
   function useAbsoluteMovementForTab(tabId) {
     /* 종합(overall): CYCLE GC 와 동일하게 신규 진입으로 밀려난 하락도 실제 등락으로 표기 */
-    return tabId === 'tss' || tabId === 'weekly_distance' || tabId === 'overall';
+    /* 2026-10-25: 모든 탭 절대순위 비교(새 진입으로 밀린 순위도 ↓ 로 반영 — 사용자 요청) */
+    return true;
   }
 
   function applyMovementForTab(list, baseline, tabId) {
