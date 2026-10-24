@@ -1801,13 +1801,14 @@ async function fetchStravaStreams(accessToken, activityId) {
  *                           사람이 낼 수 없는 속도(차량 탑승·GPS 튐)도 제외
  *  - 실내·가상(VirtualRide 등)은 계산 안 함, 전기자전거는 기록만 하고 순위용은 비움
  */
+// 구간별 순위 상한: 2026-10-25 모두 70 km/h(기록 전체 평균 60 km/h까지 인정하는 기준과 맞춤) — 70 초과 구간은 순위 제외
 const SPEED_PEAK_WINDOWS = [
   { min: 1, sec: 60, rankCap: 70 },
-  { min: 5, sec: 300, rankCap: 58 },
-  { min: 10, sec: 600, rankCap: 55 },
-  { min: 20, sec: 1200, rankCap: 52 },
-  { min: 40, sec: 2400, rankCap: 50 },
-  { min: 60, sec: 3600, rankCap: 50 },
+  { min: 5, sec: 300, rankCap: 70 },
+  { min: 10, sec: 600, rankCap: 70 },
+  { min: 20, sec: 1200, rankCap: 70 },
+  { min: 40, sec: 2400, rankCap: 70 },
+  { min: 60, sec: 3600, rankCap: 70 },
 ];
 const SPEED_RAW_CAP_KMH = 100;
 const SPEED_RANK_MIN_GRADE = -0.015;

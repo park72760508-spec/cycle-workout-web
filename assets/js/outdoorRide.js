@@ -4279,7 +4279,7 @@
    * 평속 랭킹(2026-10-24, 서버 functions computeSpeedPeaksFromStreams 와 같은 기준):
    *  max_*  = 기록 그대로의 최고 평속, rank_* = 순위용(평균 경사 -1.5%보다 내리막 구간·비현실 속도 제외)
    */
-  var SPEED_PEAK_WINDOWS = [[1, 60, 70], [5, 300, 58], [10, 600, 55], [20, 1200, 52], [40, 2400, 50], [60, 3600, 50]];
+  var SPEED_PEAK_WINDOWS = [[1, 60, 70], [5, 300, 70], [10, 600, 70], [20, 1200, 70], [40, 2400, 70], [60, 3600, 70]]; // 구간별 순위 상한 모두 70 km/h(2026-10-25)
   function computeSpeedPeaksFromTrack(tr) {
     var out = {};
     if (!tr || tr.length < 2) return out;
