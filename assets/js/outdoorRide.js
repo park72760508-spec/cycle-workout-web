@@ -3176,6 +3176,29 @@
     }
     return null;
   }
+  /*
+   * 핀 팝업 이동 수단 원형 탭(2026-10-24): 오토바이·자전거·걷기 — 고를 수 있으면 흰색, 너무 멀면 연한 회색(걷기 15km·자전거 150km 초과),
+   * 고른 수단은 오렌지. 처음엔 길찾기에서 마지막으로 쓴 수단(없거나 못 고르면 가능한 첫 수단).
+   */
+  var FAV_POP_MODES = [
+    { k: 'moto', l: '오토바이', maxKm: Infinity },
+    { k: 'bike', l: '자전거', maxKm: 150 },
+    { k: 'walk', l: '걷기', maxKm: 15 }
+  ];
+  function favPopModesHtml(it, el) {
+    var km = st.lastFix ? hav(st.lastFix.lat, st.lastFix.lng, Number(it.lat), Number(it.lng)) / 1000 : null;
+    var ok = {};
+    FAV_POP_MODES.forEach(function (m) { ok[m.k] = km == null || km <= m.maxKm; });
+    var sel = ok[travelMode] ? travelMode : (FAV_POP_MODES.filter(function (m) { return ok[m.k]; })[0] || {}).k || travelMode;
+    el.__mode = sel;
+    var icon = { moto: ICON_MOTO, bike: ICON_BIKE, walk: ICON_WALK };
+    return '<div class="outd-favpop__modes" role="radiogroup" aria-label="이동 수단">' + FAV_POP_MODES.map(function (m) {
+      var cls = 'outd-favpop__mode' + (m.k === sel ? ' is-on' : '') + (ok[m.k] ? '' : ' is-disabled');
+      return '<button type="button" class="' + cls + '" data-pop-mode="' + m.k + '" role="radio" aria-checked="' + (m.k === sel) + '"' +
+        (ok[m.k] ? '' : ' aria-disabled="true" title="거리가 멀어 선택할 수 없습니다"') + '>' +
+        '<span class="outd-favpop__mode-ico">' + icon[m.k] + '</span><span class="outd-favpop__mode-label">' + m.l + '</span></button>';
+    }).join('') + '</div>';
+  }
   function openFavPopup(id) {
     var it = null;
     favAllItems().forEach(function (x) { if (x.id === id) it = x; });
@@ -3193,8 +3216,25 @@
            바깥(배경)·버튼이 눌린 것으로 처리돼 팝업이 바로 닫히거나 엉뚱하게 동작했다 → 뜬 직후 0.45초 클릭 무시 */
         if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; }
         if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var modeBtn = t.closest('[data-pop-mode]');
+        if (modeBtn) {
+          if (modeBtn.classList.contains('is-disabled')) return;
+          el.__mode = modeBtn.getAttribute('data-pop-mode');
+          Array.prototype.forEach.call(el.querySelectorAll('[data-pop-mode]'), function (b) {
+            var on = b.getAttribute('data-pop-mode') === el.__mode;
+            b.classList.toggle('is-on', on);
+            b.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+          return;
+        }
         var go = t.closest('[data-pop-go]');
-        if (go) { el.style.display = 'none'; goFav(go.getAttribute('data-pop-go')); return; }
+        if (go) {
+          // 고른 이동 수단으로 길찾기(경로 선택 화면 위 수단 버튼도 같은 수단으로 표시)
+          if (el.__mode && el.__mode !== travelMode) { travelMode = el.__mode; renderTravelModes(); }
+          el.style.display = 'none';
+          goFav(go.getAttribute('data-pop-go'));
+          return;
+        }
         var lk = t.closest('[data-pop-like]');
         if (lk) {
           var fid = lk.getAttribute('data-pop-like');
@@ -3224,7 +3264,7 @@
       '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? '내 장소 · 공개' : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
-      (likeHtml ? '<div class="outd-favpop__likerow">' + likeHtml + '</div>' : '') +
+      '<div class="outd-favpop__likerow">' + (likeHtml || '<span></span>') + favPopModesHtml(it, el) + '</div>' +
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
       '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 안내</button></div>' +
       '</div>';

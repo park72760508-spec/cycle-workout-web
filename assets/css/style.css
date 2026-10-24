@@ -35176,3 +35176,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__dditem b { visibility: hidden; color: #facc15; font-size: 14px; }
 #outdoorRideScreen .outd-fav__dditem.is-on { color: #facc15; font-weight: 800; background: rgba(250, 204, 21, 0.1); }
 #outdoorRideScreen .outd-fav__dditem.is-on b { visibility: visible; }
+/* ===== 2026-10-24: 핀 팝업 이동 수단 원형 탭(오토바이·자전거·걷기) — 가능=흰색, 불가=연한 회색, 선택=오렌지 ===== */
+#outdoorRideScreen .outd-favpop__likerow { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+#outdoorRideScreen .outd-favpop__modes { display: flex; gap: 8px; }
+#outdoorRideScreen .outd-favpop__mode {
+  width: 46px; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0; border: 0; background: transparent; cursor: pointer;
+  color: #ffffff;
+}
+#outdoorRideScreen .outd-favpop__mode-ico {
+  width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #4b5563; background: #1a1a1a; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: #ffffff;
+  transition: background-color 0.14s ease, border-color 0.14s ease, transform 0.14s ease;
+}
+#outdoorRideScreen .outd-favpop__mode:active .outd-favpop__mode-ico { transform: scale(0.93); }
+#outdoorRideScreen .outd-favpop__mode-ico svg { width: 22px; height: 22px; display: block; }
+#outdoorRideScreen .outd-favpop__mode-ico .outd-route__moto-ico { width: 24px; height: 24px; }
+#outdoorRideScreen .outd-favpop__mode-label { font-size: 10.5px; font-weight: 700; color: #e2e8f0; white-space: nowrap; }
+#outdoorRideScreen .outd-favpop__mode.is-on .outd-favpop__mode-ico { background: rgba(249, 115, 22, 0.2); border-color: #f97316; color: #fb923c; }
+#outdoorRideScreen .outd-favpop__mode.is-on .outd-favpop__mode-label { color: #fb923c; }
+#outdoorRideScreen .outd-favpop__mode.is-disabled { cursor: not-allowed; }
+#outdoorRideScreen .outd-favpop__mode.is-disabled .outd-favpop__mode-ico { color: #6b7280; border-color: #374151; background: #161616; }
+#outdoorRideScreen .outd-favpop__mode.is-disabled .outd-favpop__mode-label { color: #6b7280; }
