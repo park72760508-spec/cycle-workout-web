@@ -3293,8 +3293,10 @@
       if (fav.tab === 'public') {
         // 2026-10-25: 공개 대기 장소(관리자=전체, 요청자=본인 것) — 좋아요 배지 바로 왼쪽에 '공개 대기 중', 관리자는 수동 공개 버튼
         var pend = it.public_status === 'pending';
-        right = (pend && favIsAdmin() ? '<button type="button" class="outd-fav__approve" data-fav-approve="' + it.id + '" aria-label="공개로 전환">공개 전환</button>' : '') +
-          (pend ? '<span class="outd-fav__pending">⏳ 공개 대기 중</span>' : '') +
+        right = (pend
+          ? '<span class="outd-fav__pendcol"><span class="outd-fav__pending">⏳ 공개 대기 중</span>' +
+            (favIsAdmin() ? '<button type="button" class="outd-fav__approve" data-fav-approve="' + it.id + '" aria-label="공개로 전환">공개 전환</button>' : '') + '</span>'
+          : '') +
           '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>';
       } else {
