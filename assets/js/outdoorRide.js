@@ -3226,6 +3226,28 @@
     if (fav.filter.sigungu && it.sigungu !== fav.filter.sigungu) return false;
     return true;
   }
+  /** 시도 이름 비교용 정규화(서울특별시·서울 → 서울, 경상북도·경북 → 경북 등) */
+  function favSidoKey(v) {
+    var t = String(v || '').replace(/\s+/g, '');
+    if (!t) return '';
+    var m = { '경상북': '경북', '경상남': '경남', '전라북': '전북', '전북특별자치': '전북', '전라남': '전남', '충청북': '충북', '충청남': '충남' };
+    var base = t.replace(/(특별자치도|특별자치시|특별시|광역시|자치도|도)$/, '');
+    if (m[base]) return m[base];
+    return base.slice(0, 2);
+  }
+  function ensureFavMySido() {
+    var fx = st.lastFix;
+    if (!fx || fav.mySidoBusy) return;
+    var c = fav.mySido;
+    if (c && hav(c.lat, c.lng, fx.lat, fx.lng) < 2000) return;
+    fav.mySidoBusy = true;
+    var lat = fx.lat, lng = fx.lng;
+    reverseRegion(lat, lng).then(function (r) {
+      var prev = fav.mySido && fav.mySido.sido;
+      fav.mySido = { sido: (r && r.sido) || '', lat: lat, lng: lng };
+      if (fav.mySido.sido !== prev && $('outdFavSheet') && $('outdFavSheet').style.display === 'flex') renderFavList();
+    }, function () {}).then(function () { fav.mySidoBusy = false; });
+  }
   function renderFavList() {
     var box = $('outdFavList');
     renderFavFilterOptions();
@@ -3235,10 +3257,17 @@
       b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     var full = fav.items[fav.tab] || [];
-    // 2026-10-25: 정렬 = 시도(가나다) → 장소명(가나다). 시도가 없는 장소는 맨 뒤
+    /* 2026-10-25 정렬: ① 내 위치가 속한 시도 → 장소명 가나다, ② 나머지 시도 가나다 → 장소명 가나다.
+       시도가 없는 장소는 맨 뒤. 내 시도는 현재 위치를 행정구역으로 바꿔 알아냄(2km 이상 이동 시에만 다시 조회) */
+    ensureFavMySido();
+    var mySido = favSidoKey(fav.mySido && fav.mySido.sido);
     var list = full.filter(favMatchesFilter).slice().sort(function (a, b) {
       var sa = String(a.sido || ''), sb = String(b.sido || '');
       if (!sa !== !sb) return sa ? -1 : 1;
+      if (mySido) {
+        var ma = favSidoKey(sa) === mySido, mb = favSidoKey(sb) === mySido;
+        if (ma !== mb) return ma ? -1 : 1;
+      }
       var c = sa.localeCompare(sb, 'ko');
       if (c) return c;
       return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
