@@ -807,6 +807,15 @@
         max_40min_watts: log.max_40min_watts,
         max_60min_watts: log.max_60min_watts,
         max_watts: log.max_watts,
+        // 2026-10-25: 최고 속도·이동 시간·구간별 피크 평속(Summary 그래프)
+        max_speed_kmh: log.max_speed_kmh,
+        moving_time_sec: log.moving_time_sec,
+        max_1min_speed_kmh: log.max_1min_speed_kmh,
+        max_5min_speed_kmh: log.max_5min_speed_kmh,
+        max_10min_speed_kmh: log.max_10min_speed_kmh,
+        max_20min_speed_kmh: log.max_20min_speed_kmh,
+        max_40min_speed_kmh: log.max_40min_speed_kmh,
+        max_60min_speed_kmh: log.max_60min_speed_kmh,
         weight: log.weight,
         time_in_zones: log.time_in_zones,
         source: log.source,
@@ -833,6 +842,7 @@
     var maxHr = 0, maxHr5 = 0, maxHr1 = 0, maxHr5m = 0, maxHr10 = 0, maxHr20 = 0, maxHr40 = 0, maxHr60 = 0;
     var max1w = 0, max5w = 0, max10w = 0, max20w = 0, max30w = 0, max40w = 0, max60w = 0, maxW = 0;
     var aggPower = {}, aggHr = {};
+    var spdMax = {}, maxSpd = 0, movingSum = 0; // 하루 여러 건: 구간별 피크 평속·최고 속도는 그날 최고값
     for (var i = 0; i < logs.length; i++) {
       var l = logs[i];
       var s = Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
@@ -868,6 +878,9 @@
       max40w = Math.max(max40w, Number(l.max_40min_watts || 0));
       max60w = Math.max(max60w, Number(l.max_60min_watts || 0));
       maxW = Math.max(maxW, Number(l.max_watts || 0));
+      SPEED_PEAK_FIELDS.forEach(function(f) { spdMax[f] = Math.max(spdMax[f] || 0, Number(l[f] || 0)); });
+      maxSpd = Math.max(maxSpd, Number(l.max_speed_kmh || 0));
+      movingSum += Number(l.moving_time_sec || 0);
       var tiz = l.time_in_zones;
       if (tiz && tiz.power) {
         ['z0', 'z1', 'z2', 'z3', 'z4', 'z5', 'z6', 'z7'].forEach(function(k) { aggPower[k] = (aggPower[k] || 0) + (Number(tiz.power[k]) || 0); });
@@ -921,6 +934,14 @@
       max_40min_watts: max40w || null,
       max_60min_watts: max60w || null,
       max_watts: maxW || null,
+      max_speed_kmh: maxSpd || null,
+      moving_time_sec: movingSum || null,
+      max_1min_speed_kmh: spdMax.max_1min_speed_kmh || null,
+      max_5min_speed_kmh: spdMax.max_5min_speed_kmh || null,
+      max_10min_speed_kmh: spdMax.max_10min_speed_kmh || null,
+      max_20min_speed_kmh: spdMax.max_20min_speed_kmh || null,
+      max_40min_speed_kmh: spdMax.max_40min_speed_kmh || null,
+      max_60min_speed_kmh: spdMax.max_60min_speed_kmh || null,
       weight: logs[0].weight,
       time_in_zones: mergedTiz,
       source: logs[0].source,
