@@ -35226,3 +35226,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 루트맵 즐겨찾기 핀: 줌 14 미만에서 좋아요 배지 숨김(2026-10-25) — 핀 크기 축소는 JS(rotate+scale) */
 #outdoorRideScreen #outdMap.outd-favnolikes .outd-favpin__likes { display: none; }
+
+/* 즐겨찾기 공개 대기 표시·관리자 수동 공개 버튼(2026-10-25) */
+#outdoorRideScreen .outd-fav__pending {
+  display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; white-space: nowrap;
+  background: rgba(251, 191, 36, 0.14); border: 1px solid rgba(251, 191, 36, 0.55); color: #fbbf24; font-size: 11px; font-weight: 700;
+}
+#outdoorRideScreen .outd-fav__approve {
+  padding: 5px 9px; border-radius: 999px; border: 0; white-space: nowrap; cursor: pointer;
+  background: #00d4aa; color: #062a22; font-size: 11px; font-weight: 800;
+}
+#outdoorRideScreen .outd-fav__approve:disabled { opacity: 0.5; cursor: default; }

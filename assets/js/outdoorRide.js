@@ -3116,6 +3116,8 @@
       var tab = t.closest('[data-fav-tab]');
       if (tab) { fav.tab = tab.getAttribute('data-fav-tab'); renderFavTabs(); loadFavList(false); return; }
       if (t.closest('[data-fav-add]')) { el.style.display = 'none'; startFavPick(); return; }
+      var appr = t.closest('[data-fav-approve]');
+      if (appr) { e.stopPropagation(); approveFavPublic(appr.getAttribute('data-fav-approve'), appr); return; }
       var like = t.closest('[data-fav-like]');
       if (like) { e.stopPropagation(); toggleFavLike(like.getAttribute('data-fav-like'), like); return; }
       var pubBtn = t.closest('[data-fav-pub]');
@@ -3289,13 +3291,17 @@
       var sub = [c.l, region, fav.tab === 'public' && it.owner_name ? it.owner_name : '', favDistText(it)].filter(Boolean).join(' · ');
       var right;
       if (fav.tab === 'public') {
-        right = '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
+        // 2026-10-25: 공개 대기 장소(관리자=전체, 요청자=본인 것) — 좋아요 배지 바로 왼쪽에 '공개 대기 중', 관리자는 수동 공개 버튼
+        var pend = it.public_status === 'pending';
+        right = (pend && favIsAdmin() ? '<button type="button" class="outd-fav__approve" data-fav-approve="' + it.id + '" aria-label="공개로 전환">공개 전환</button>' : '') +
+          (pend ? '<span class="outd-fav__pending">⏳ 공개 대기 중</span>' : '') +
+          '<button type="button" class="outd-fav__like' + (it.liked ? ' is-on' : '') + (it.is_mine ? ' is-mine' : '') + '" data-fav-like="' + it.id + '" aria-label="좋아요">' +
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>';
       } else {
         right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
           '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public
             ? (it.public_status === 'pending'
-              ? '⏳ 공개 대기 ' + Math.min(Number(it.endorse_count) || 1, FAV_ENDORSE_MIN) + '/' + FAV_ENDORSE_MIN
+              ? '⏳ 공개 대기 중'
               : '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개')
             : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-edit="' + it.id + '" aria-label="수정">' + ICON_EDIT_SM + '</button>';
@@ -3317,7 +3323,21 @@
   /** 내 즐겨찾기 공개 ↔ 비공개 (라벨을 눌러 바로 전환) */
   /* 2026-10-25 공개 규칙: 관리자 공개 = 바로 공개 장소, 일반 사용자 공개 = 같은 장소를 즐겨찾기한 사람이 3명 이상일 때 공개(서버 fn_route_fav_list) */
   var FAV_ENDORSE_MIN = 3;
-  var FAV_PUBLIC_PENDING_MSG = '공개 신청했습니다 · 같은 장소를 ' + FAV_ENDORSE_MIN + '명 이상 즐겨찾기에 등록하면 공개 장소에 표시됩니다';
+  var FAV_PUBLIC_PENDING_MSG = '공개 장소 표시 조건에 충족시 표시됩니다';
+  /** 관리자: 조건(등록자 수) 미충족 공개 대기 장소를 수동으로 공개 전환 */
+  function approveFavPublic(id, btn) {
+    if (!favIsAdmin() || btn.__busy) return;
+    btn.__busy = true;
+    btn.disabled = true;
+    favRpc('fn_route_fav_admin_approve', { p_id: id, p_on: true }).then(function () {
+      toast('공개 장소로 전환했습니다', 'success');
+      fav.items.public = null;
+      return refreshFavMarkers();
+    }).catch(function (err) {
+      toast(err && err.message ? err.message : '공개 전환하지 못했습니다.', 'error');
+      btn.disabled = false;
+    }).then(function () { btn.__busy = false; });
+  }
   function toggleFavPublic(id, btn) {
     var it = null;
     (fav.items.mine || []).forEach(function (x) { if (x.id === id) it = x; });
@@ -3481,7 +3501,7 @@
       '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(it.name) + '</b>' +
       (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 36) : '') + '</div>' +
       (it.affiliate_name ? '<span class="outd-favpop__aff">제휴 · ' + escHtml(it.affiliate_name) + '</span>' : '') +
-      '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? (it.public_status === 'pending' ? '내 장소 · 공개 대기(' + Math.min(Number(it.endorse_count) || 1, FAV_ENDORSE_MIN) + '/' + FAV_ENDORSE_MIN + '명)' : '내 장소 · 공개') : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
+      '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? (it.public_status === 'pending' ? '내 장소 · 공개 대기중' : '내 장소 · 공개') : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
       '<div class="outd-favpop__likerow">' + (likeHtml || '<span></span>') + favPopModesHtml(it, el) + '</div>' +
