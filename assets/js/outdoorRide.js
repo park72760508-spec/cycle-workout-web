@@ -4158,6 +4158,44 @@
   var MAX_GAP_SEC = 10; // 이보다 긴 점 사이 간격(일시정지·신호 끊김)은 이동 시간에 넣지 않음
 
   /** 이동 시간축 기준 누적 거리(m)·시간(s) 배열 */
+  /*
+   * 평속 랭킹(2026-10-24, 서버 functions computeSpeedPeaksFromStreams 와 같은 기준):
+   *  max_*  = 기록 그대로의 최고 평속, rank_* = 순위용(평균 경사 -1.5%보다 내리막 구간·비현실 속도 제외)
+   */
+  var SPEED_PEAK_WINDOWS = [[1, 60, 75], [5, 300, 65], [10, 600, 60], [20, 1200, 58], [40, 2400, 56], [60, 3600, 56]];
+  function computeSpeedPeaksFromTrack(tr) {
+    var out = {};
+    if (!tr || tr.length < 2) return out;
+    var t = [], d = [0], a = [];
+    for (var i = 0; i < tr.length; i++) {
+      t.push(Number(tr[i][3]) / 1000);
+      a.push(tr[i][2]);
+      if (i > 0) d.push(d[i - 1] + hav(tr[i - 1][0], tr[i - 1][1], tr[i][0], tr[i][1]));
+    }
+    var n = t.length;
+    SPEED_PEAK_WINDOWS.forEach(function (w) {
+      var best = 0, bestRank = 0, j = 0;
+      for (var i = 0; i < n; i++) {
+        if (j < i) j = i;
+        while (j < n && t[j] - t[i] < w[1]) j++;
+        if (j >= n) break;
+        var span = t[j] - t[i];
+        if (!(span > 0) || span > w[1] * 1.5) continue;
+        var dist = d[j] - d[i];
+        if (!(dist > 0)) continue;
+        var kmh = dist / span * 3.6;
+        if (kmh > 100) continue;
+        if (kmh > best) best = kmh;
+        if (kmh > w[2] || kmh <= bestRank) continue;
+        if (a[i] != null && a[j] != null && (a[j] - a[i]) / dist < -0.015) continue;
+        bestRank = kmh;
+      }
+      if (best > 0) out['max_' + w[0] + 'min_speed_kmh'] = Math.round(best * 10) / 10;
+      if (bestRank > 0) out['rank_' + w[0] + 'min_speed_kmh'] = Math.round(bestRank * 10) / 10;
+    });
+    return out;
+  }
+
   function trackSeries() {
     var tr = st.track;
     var dist = [0], time = [0];
@@ -4333,6 +4371,8 @@
       summary_polyline: st.track.length >= 2 ? encodePolyline(thin(st.track, 1500)) : null,
       elevation_profile: elevationProfile()
     };
+    var speedPeaks = {};
+    try { if (kind === 'ride') speedPeaks = computeSpeedPeaksFromTrack(st.track); } catch (eSpk) {}
     if (kind !== 'ride') {
       var s = trackSeries();
       var splits = computeSplits(s);
@@ -4355,6 +4395,15 @@
       return mod.callSupabaseRpcAsUser('fn_save_outdoor_activity', { p: payload });
     }).then(function (res) {
       if (kind === 'ride') {
+        // 평속 랭킹(2026-10-24): 1·5·10·20·40·60분 피크 평속 저장(실패해도 기록 저장에는 영향 없음)
+        try {
+          var sp = speedPeaks;
+          if (Object.keys(sp).length) {
+            loadDualWriteModule().then(function (mod) {
+              return mod.callSupabaseRpcAsUser('fn_set_ride_speed_peaks', { p_activity_id: payload.activity_id, p: sp });
+            }).catch(function () {});
+          }
+        } catch (eSp) {}
         // 주간 TSS·랭킹 등 실시간 보드 갱신 신호(실내 훈련 저장과 동일)
         try {
           if (typeof window.stelvioHandleRankingMetricsLiveUpdate === 'function') {

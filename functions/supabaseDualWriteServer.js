@@ -498,6 +498,13 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
   if (weightForPeaks != null && weightForPeaks > 0) {
     sanitizePeakPowerWattsOnRow(row, weightForPeaks);
   }
+  // 평속 랭킹(2026-10-24): 로그에 값이 있을 때만 싣는다(없는 로그로 덮어써 기존 값이 지워지지 않게)
+  for (const m of [1, 5, 10, 20, 40, 60]) {
+    for (const k of [`max_${m}min_speed_kmh`, `rank_${m}min_speed_kmh`]) {
+      const v = num(log[k]);
+      if (v != null && v > 0) row[k] = v;
+    }
+  }
   return row;
 }
 

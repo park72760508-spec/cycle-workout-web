@@ -121,7 +121,7 @@
     })();
   </script>
   <!-- 비용 절감 3단계: 랭킹보드 공용 스냅샷(Supabase) 우선 읽기 — getPeakPowerRanking 호출부 공통 -->
-  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261008weeklyrpc"></script>
+  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261024avgspd"></script>
   <script src="assets/js/stelvioFirestoreReconnect.js"></script>
   <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
   <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -12622,7 +12622,7 @@
         }
         return stelvioWeeklyTssBoardPayloadMatchesWeek(data);
       }
-      if (data.durationType === 'personal_speed') {
+      if (data.durationType === 'personal_speed' || stelvioIsAvgSpeedDuration(data.durationType)) {
         try {
           var todayPs = new Intl.DateTimeFormat('en-CA', {
             timeZone: 'Asia/Seoul',
@@ -15561,6 +15561,9 @@
     var stelvioGroupTabMetric = 'gc';
     /** 구간 탭 내 선택된 피크 duration (Max·1분·…·60분) */
     var stelvioPeakSegmentLastDuration = 'max';
+    var stelvioSpeedSegmentLastDuration = 'spd_1min'; /* 평속 탭 마지막 선택 구간 */
+    function stelvioIsAvgSpeedDuration(dt) { return /^spd_(1|5|10|20|40|60)min$/.test(String(dt || '')); }
+    function stelvioIsAvgSpeedRanking() { return typeof stelvioRankingState !== 'undefined' && !!stelvioRankingState && stelvioIsAvgSpeedDuration(stelvioRankingState.duration); }
     /** CYCLE 랭킹 클럽 탭 — RUN 카테고리 소모임 제외 (라이딩/CYCLE만) */
     function stelvioFilterClubTabMyGroups(rows) {
       if (
@@ -15656,6 +15659,12 @@
       'tss': 'TSS',
       'personal_dist': '거리',
       'personal_speed': '독주',
+      'spd_1min': '평속 1분',
+      'spd_5min': '평속 5분',
+      'spd_10min': '평속 10분',
+      'spd_20min': '평속 20분',
+      'spd_40min': '평속 40분',
+      'spd_60min': '평속 60분',
       'group_dist': '클럽',
       'gc': 'GC',
       '1min': '1분',
@@ -17769,6 +17778,7 @@
       stelvioRankingState.gender = 'all';
       stelvioRankingState.activeCategory = 'Supremo';
       stelvioPeakSegmentLastDuration = 'max';
+      stelvioSpeedSegmentLastDuration = 'spd_1min';
       if (typeof stelvioSyncDurationTabActiveUi === 'function') {
         stelvioSyncDurationTabActiveUi();
       }
@@ -18102,10 +18112,10 @@
       return stelvioIsPersonalDistanceRanking();
     }
     function stelvioIsSpeedKmhRanking() {
-      return stelvioIsPersonalSpeedRanking();
+      return stelvioIsPersonalSpeedRanking() || stelvioIsAvgSpeedRanking();
     }
     function stelvioIsRollingWindowDurationRanking() {
-      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking() || stelvioIsPersonalSpeedRanking();
+      return stelvioIsTssRankingMode() || stelvioIsPersonalDistanceRanking() || stelvioIsPersonalSpeedRanking() || stelvioIsAvgSpeedRanking();
     }
     function stelvioUpdateGroupRankingFilterUi() {
       var isGroup = stelvioIsGroupDistanceRanking();
@@ -18181,7 +18191,7 @@
         } else if (stelvioIsKmDistanceRanking()) {
           label.textContent = '';
           stelvioSetPeriodDayIcon('30day');
-        } else if (stelvioIsPersonalSpeedRanking()) {
+        } else if (stelvioIsPersonalSpeedRanking() || stelvioIsAvgSpeedRanking()) {
           label.textContent = '';
           stelvioSetPeriodDayIcon('90day');
         } else if (stelvioIsGcRankingMode()) {
@@ -19051,9 +19061,25 @@
       if (uiDur === 'peak_segment') {
         return stelvioPeakSegmentLastDuration || 'max';
       }
+      if (uiDur === 'avg_speed') {
+        return stelvioSpeedSegmentLastDuration || 'spd_1min';
+      }
       return uiDur;
     }
+    function stelvioSyncSpeedSegmentFilterUi() {
+      var filterEl = document.getElementById('stelvioSpeedSegmentFilter');
+      if (!filterEl) return;
+      var isSpd = stelvioIsAvgSpeedRanking();
+      filterEl.classList.toggle('hidden', !isSpd);
+      if (!isSpd) return;
+      var cur = stelvioRankingState.duration;
+      var chips = filterEl.querySelectorAll('.stelvio-group-metric-chip[data-speed-duration]');
+      for (var ci = 0; ci < chips.length; ci++) {
+        chips[ci].classList.toggle('active', chips[ci].getAttribute('data-speed-duration') === cur);
+      }
+    }
     function stelvioSyncPeakSegmentFilterUi() {
+      stelvioSyncSpeedSegmentFilterUi();
       var filterEl = document.getElementById('stelvioPeakSegmentFilter');
       if (!filterEl) return;
       var isPeak =
@@ -19080,6 +19106,8 @@
           isActive =
             typeof stelvioIsPeakPowerDurationRankingMode === 'function' &&
             stelvioIsPeakPowerDurationRankingMode();
+        } else if (tabDur === 'avg_speed') {
+          isActive = stelvioIsAvgSpeedDuration(dur);
         } else {
           isActive = tabDur === dur;
         }
@@ -19096,6 +19124,9 @@
       if (!nextDur || !stelvioRankingState) return;
       if (stelvioIsPeakPowerDurationForRankChange(nextDur)) {
         stelvioPeakSegmentLastDuration = nextDur;
+      }
+      if (stelvioIsAvgSpeedDuration(nextDur)) {
+        stelvioSpeedSegmentLastDuration = nextDur;
       }
       if (nextDur === stelvioRankingState.duration) {
         stelvioScrollRankingBoardToTopSmooth();
@@ -19236,6 +19267,15 @@
           var peakDur = chip.getAttribute('data-peak-duration');
           if (!peakDur) return;
           await stelvioSwitchRankingBoardDuration(peakDur);
+        });
+      }
+      var speedFilter = document.getElementById('stelvioSpeedSegmentFilter');
+      if (speedFilter && !speedFilter._stelvioSpeedSegmentDelegated) {
+        speedFilter._stelvioSpeedSegmentDelegated = true;
+        speedFilter.addEventListener('click', async function (ev) {
+          var chipS = ev.target && ev.target.closest ? ev.target.closest('.stelvio-group-metric-chip[data-speed-duration]') : null;
+          if (!chipS || !speedFilter.contains(chipS)) return;
+          await stelvioSwitchRankingBoardDuration(chipS.getAttribute('data-speed-duration'));
         });
       }
       stelvioEnsureRankingFavoriteUiListeners();
@@ -20095,6 +20135,7 @@
     function stelvioResolveRankingBoardPeriod(duration, period) {
       if (duration === 'tss') return 'weekly';
       if (duration === 'personal_speed') return 'rolling90';
+      if (stelvioIsAvgSpeedDuration(duration)) return 'rolling90';
       if (duration === 'personal_dist' || duration === 'group_dist') return 'rolling30';
       if (period === 'yearly') return 'monthly';
       return period || (typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) || 'monthly';
@@ -29914,7 +29955,7 @@
   <script src="assets/js/openRiding/openRidingMoimCategory.js"></script>
   <script src="assets/js/openRiding/openRidingCycleClubRanking.js?v=20261004missionMetrics1"></script>
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
-  <script src="assets/js/outdoorRide.js?v=20261024kakao2"></script>
+  <script src="assets/js/outdoorRide.js?v=20261024avgspd"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -44001,6 +44042,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
             <div class="stelvio-duration-chips" id="stelvioDurationTabs">
               <button type="button" class="stelvio-duration-tab active" data-duration="gc">GC</button>
               <button type="button" class="stelvio-duration-tab" data-duration="peak_segment">구간</button>
+              <button type="button" class="stelvio-duration-tab" data-duration="avg_speed">평속</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_speed">독주</button>
               <button type="button" class="stelvio-duration-tab" data-duration="tss">TSS</button>
               <button type="button" class="stelvio-duration-tab" data-duration="personal_dist">거리</button>
@@ -44075,6 +44117,17 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <button type="button" class="stelvio-group-metric-chip" data-peak-duration="60min">60분</button>
             </div>
           </div>
+          <!-- 평속 탭(2026-10-24): 아웃도어 1·5·10·20·40·60분 피크 평속(최근 90일 상위 2개 평균, 긴 내리막 제외) -->
+          <div id="stelvioSpeedSegmentFilter" class="stelvio-group-metric-filter stelvio-peak-segment-filter hidden" role="group" aria-label="평속 구간 선택">
+            <div class="stelvio-group-metric-chips">
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_1min">1분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_5min">5분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_10min">10분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_20min">20분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_40min">40분</button>
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_60min">60분</button>
+            </div>
+          </div>
         </div>
         <!-- ② 내 랭킹 요약 Hero 카드 -->
         <div id="stelvioHeroCard" class="stelvio-hero-card hidden">
@@ -44123,6 +44176,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="20min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="40min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="60min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_1min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_5min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_10min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_20min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_40min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_60min"></div>
             </div>
           </div>
           <div id="stelvio-distribution-chart-root" class="stelvio-distribution-chart-root" aria-live="polite"></div>

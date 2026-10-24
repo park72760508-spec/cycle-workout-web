@@ -535,8 +535,51 @@
       .catch(function () { return false; });
   }
 
+  /*
+   * 평속 탭(2026-10-24): duration=spd_1min…spd_60min 은 Cloud Run 대신 Supabase 공개 RPC(fn_speed_peak_ranking)로 바로 집계
+   * (최근 90일 순위용 피크 평속 상위 2개 평균). 응답 모양은 독주(personal_speed)와 같게(speedKmh) 맞춘다.
+   */
+  var speedMemo = Object.create(null);
+  function speedBoardTry(url) {
+    var u;
+    try { u = new URL(String(url), window.location.href); } catch (e) { return null; }
+    if (u.pathname.indexOf('getPeakPowerRanking') < 0) return null;
+    var dur = u.searchParams.get('duration') || '';
+    if (!/^spd_(1|5|10|20|40|60)min$/.test(dur)) return null;
+    var gender = u.searchParams.get('gender') || 'all';
+    var uid = u.searchParams.get('uid') || '';
+    var key = dur + '|' + gender;
+    var memo = speedMemo[key];
+    var p = memo && Date.now() - memo.at < 60000 ? memo.p : null;
+    if (!p) {
+      var cfg = supabaseCfg();
+      if (!cfg) return null;
+      p = originalFetch(cfg.supabaseUrl + '/rest/v1/rpc/fn_speed_peak_ranking', {
+        method: 'POST',
+        headers: { apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey, 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ p_duration: dur, p_gender: gender })
+      }).then(function (res) { return res.ok ? res.json() : null; });
+      speedMemo[key] = { at: Date.now(), p: p };
+      p.then(function (j) { if (!j || j.success !== true) delete speedMemo[key]; }, function () { delete speedMemo[key]; });
+    }
+    return p.then(function (j) {
+      if (!j || j.success !== true) return null;
+      var entries = (j.entries || []).map(function (e, i) { var o = Object.assign({}, e); o.rank = i + 1; return o; });
+      var byCategory = { Supremo: entries, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
+      entries.forEach(function (e) { if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e); });
+      var payload = {
+        success: true, byCategory: byCategory, entries: entries, durationType: dur, period: 'rolling90',
+        startStr: j.startStr, endStr: j.endStr, gender: gender, readSource: 'supabase_rpc'
+      };
+      attachCurrentUser(payload, uid);
+      return payload;
+    });
+  }
+
   function stelvioRankingSnapshotTry(url) {
     if (window.__stelvioRankingSnapshotOff === true) return Promise.resolve(null);
+    var spd = speedBoardTry(url);
+    if (spd) return spd.catch(function () { return null; });
     var info = parseRankingUrl(url);
     if (!info) return Promise.resolve(null);
     return fetchSnapshotWithEpoch(info).then(function (shared) {

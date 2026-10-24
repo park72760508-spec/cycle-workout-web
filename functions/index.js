@@ -1737,7 +1737,7 @@ function stravaLogNeedsRouteProfile(logData) {
 
 /** Strava Streams API 호출 (watts, heartrate, altitude). 429 시 최대 5회 재시도 */
 async function fetchStravaStreams(accessToken, activityId) {
-  const url = `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,watts,heartrate,altitude&key_by_type=true`;
+  const url = `https://www.strava.com/api/v3/activities/${activityId}/streams?keys=time,watts,heartrate,altitude,distance&key_by_type=true`;
   const maxRetries = 5;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -1758,6 +1758,7 @@ async function fetchStravaStreams(accessToken, activityId) {
       let heartrateArray = null;
       let altitudeArray = null;
       let timeArray = null;
+      let distanceArray = null;
       if (raw && typeof raw === "object" && !Array.isArray(raw)) {
         wattsArray = Array.isArray(raw.watts) ? raw.watts : (raw.watts && Array.isArray(raw.watts.data) ? raw.watts.data : null);
         heartrateArray = Array.isArray(raw.heartrate)
@@ -1771,6 +1772,7 @@ async function fetchStravaStreams(accessToken, activityId) {
             ? raw.altitude.data
             : null;
         timeArray = Array.isArray(raw.time) ? raw.time : (raw.time && Array.isArray(raw.time.data) ? raw.time.data : null);
+        distanceArray = Array.isArray(raw.distance) ? raw.distance : (raw.distance && Array.isArray(raw.distance.data) ? raw.distance.data : null);
       } else {
         const streamArray = Array.isArray(raw) ? raw : raw && Array.isArray(raw.data) ? raw.data : [];
         const wattsStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "watts");
@@ -1781,13 +1783,69 @@ async function fetchStravaStreams(accessToken, activityId) {
         heartrateArray = heartrateStream && Array.isArray(heartrateStream.data) ? heartrateStream.data : null;
         altitudeArray = altitudeStream && Array.isArray(altitudeStream.data) ? altitudeStream.data : null;
         timeArray = timeStream && Array.isArray(timeStream.data) ? timeStream.data : null;
+        const distanceStream = streamArray.find((s) => s && String(s.type || "").toLowerCase() === "distance");
+        distanceArray = distanceStream && Array.isArray(distanceStream.data) ? distanceStream.data : null;
       }
-      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray, time: timeArray };
+      return { success: true, watts: wattsArray, heartrate: heartrateArray, altitude: altitudeArray, time: timeArray, distance: distanceArray };
     } catch (e) {
       if (attempt === maxRetries) return { success: false, watts: null, heartrate: null, time: null };
     }
   }
   return { success: false, watts: null, heartrate: null, time: null };
+}
+
+/*
+ * 평속 랭킹(2026-10-24): 아웃도어 라이딩 1·5·10·20·40·60분 피크 평균속도(km/h).
+ *  - max_{N}min_speed_kmh : 기록 그대로의 최고 평속(일일 기록용, GPS 오류만 제외)
+ *  - rank_{N}min_speed_kmh: 순위용 — 그 구간 평균 경사가 -1.5%보다 내리막이면 제외(긴 내리막 속도 제외),
+ *                           사람이 낼 수 없는 속도(차량 탑승·GPS 튐)도 제외
+ *  - 실내·가상(VirtualRide 등)은 계산 안 함, 전기자전거는 기록만 하고 순위용은 비움
+ */
+const SPEED_PEAK_WINDOWS = [
+  { min: 1, sec: 60, rankCap: 75 },
+  { min: 5, sec: 300, rankCap: 65 },
+  { min: 10, sec: 600, rankCap: 60 },
+  { min: 20, sec: 1200, rankCap: 58 },
+  { min: 40, sec: 2400, rankCap: 56 },
+  { min: 60, sec: 3600, rankCap: 56 },
+];
+const SPEED_RAW_CAP_KMH = 100;
+const SPEED_RANK_MIN_GRADE = -0.015;
+const SPEED_OUTDOOR_TYPES = new Set(["ride", "mountainbikeride", "gravelride", "ebikeride", "emountainbikeride", "velomobile"]);
+function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer) {
+  const out = {};
+  if (!streamsRes || !streamsRes.success) return out;
+  const type = String(activityType || "").trim().toLowerCase();
+  if (isTrainer === true || !SPEED_OUTDOOR_TYPES.has(type)) return out;
+  const t = streamsRes.time, d = streamsRes.distance, a = streamsRes.altitude;
+  if (!Array.isArray(t) || !Array.isArray(d) || t.length < 2 || d.length !== t.length) return out;
+  const hasAlt = Array.isArray(a) && a.length === t.length;
+  const rankable = type !== "ebikeride" && type !== "emountainbikeride";
+  const n = t.length;
+  for (const w of SPEED_PEAK_WINDOWS) {
+    let best = 0, bestRank = 0, j = 0;
+    for (let i = 0; i < n; i++) {
+      if (j < i) j = i;
+      while (j < n && Number(t[j]) - Number(t[i]) < w.sec) j++;
+      if (j >= n) break;
+      const span = Number(t[j]) - Number(t[i]);
+      if (!(span > 0) || span > w.sec * 1.5) continue; // 기록 끊김(긴 일시정지)은 제외
+      const dist = Number(d[j]) - Number(d[i]);
+      if (!(dist > 0)) continue;
+      const kmh = (dist / span) * 3.6;
+      if (kmh > SPEED_RAW_CAP_KMH) continue;
+      if (kmh > best) best = kmh;
+      if (!rankable || kmh > w.rankCap || kmh <= bestRank) continue;
+      if (hasAlt) {
+        const grade = (Number(a[j]) - Number(a[i])) / dist;
+        if (grade < SPEED_RANK_MIN_GRADE) continue;
+      }
+      bestRank = kmh;
+    }
+    if (best > 0) out[`max_${w.min}min_speed_kmh`] = Math.round(best * 10) / 10;
+    if (bestRank > 0) out[`rank_${w.min}min_speed_kmh`] = Math.round(bestRank * 10) / 10;
+  }
+  return out;
 }
 
 async function fetchStravaActivitiesPage(accessToken, afterUnix, beforeUnix, page, perPage) {
@@ -2159,6 +2217,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
   if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
   if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
+  Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer));
   if (userWeight != null && userWeight > 0) {
     sanitizePeakPowerWattsOnRow(logDoc, userWeight);
   }
@@ -3111,6 +3170,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
+        Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, d.activity_type || act.sport_type || act.type, act.trainer));
         if (needsActivityType) {
           const at = String(act.sport_type || act.type || "").trim() || null;
           if (at) updateData.activity_type = at;
@@ -3282,6 +3342,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
     if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
     if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
+    Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, detailedActivity && detailedActivity.trainer));
     if (hrPeaks) {
       if (hrPeaks.max_hr_5sec != null) logDoc.max_hr_5sec = hrPeaks.max_hr_5sec;
       if (hrPeaks.max_hr_1min != null) logDoc.max_hr_1min = hrPeaks.max_hr_1min;
@@ -4285,6 +4346,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
+          Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, existingData.activity_type || act.sport_type || act.type, act.trainer));
           const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
             ? Number(userData.weight ?? userData.weightKg)
             : null;
@@ -4497,6 +4559,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           max_40min_watts: max40minWatts,
           max_60min_watts: max60minWatts,
         };
+        Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer));
         if (userWeight != null && userWeight > 0) {
           sanitizePeakPowerWattsOnRow(logDoc, userWeight);
         }
@@ -17237,6 +17300,85 @@ exports.adminRebuildPrivateUserIds = onRequest(
  * → Supabase users 백필 (배치). 트리거 배포 이전에 비공개로 설정된 사용자를 정정한다.
  * body/query: startAfterUid, maxUsers (기본 500, 최대 5000), dryRun
  */
+/**
+ * 평속 랭킹 — 오늘(한국 날짜) 아웃도어 Strava 라이딩만 스트림을 다시 받아 피크 평속을 채움(2026-10-24, 관리자 전용).
+ * 90일 백필은 하지 않음(사용자 결정). 한 번 호출에 최대 maxRides 건, 다음 호출은 응답의 nextAfterId 로 이어서.
+ */
+exports.adminBackfillSpeedPeaksToday = onRequest(
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 3600, memory: "512MiB", invoker: "public" }),
+  async (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+    if (req.method !== "POST") { res.status(405).json({ success: false, error: "POST만 지원합니다." }); return; }
+    const uid = await getUidFromRequest(req, res);
+    if (!uid) return;
+    try {
+      await rankingReadRoutingAdmin.assertAdminGrade1(admin, uid);
+      const body = req.body && typeof req.body === "object" ? req.body : {};
+      const todayKst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(body.dateStr || "")) ? String(body.dateStr) : todayKst;
+      const maxRides = Math.max(1, Math.min(400, Number(body.maxRides) || 200));
+      const afterId = String(body.afterId || "");
+      const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+      let q = supabase.from("rides")
+        .select("id, user_id, activity_id, activity_type")
+        .eq("ride_date", dateStr).eq("source", "strava")
+        .in("activity_type", ["Ride", "MountainBikeRide", "GravelRide", "EBikeRide", "EMountainBikeRide", "Velomobile"])
+        .is("max_1min_speed_kmh", null)
+        .order("id", { ascending: true }).limit(maxRides);
+      if (afterId) q = q.gt("id", afterId);
+      const { data: rides, error: rErr } = await q;
+      if (rErr) throw new Error(rErr.message);
+      const sbIds = [...new Set((rides || []).map((r) => r.user_id))];
+      const uidMap = {};
+      if (sbIds.length) {
+        const { data: us } = await supabase.from("users").select("id, firebase_uid").in("id", sbIds);
+        (us || []).forEach((u) => { uidMap[u.id] = u.firebase_uid; });
+      }
+      const db = admin.firestore();
+      const tokens = {};
+      let updated = 0, noData = 0, lastId = "";
+      const errors = [];
+      for (const r of rides || []) {
+        lastId = r.id;
+        const fbUid = uidMap[r.user_id];
+        if (!fbUid || !r.activity_id) { noData++; continue; }
+        try {
+          if (!(fbUid in tokens)) {
+            const us = await db.collection("users").doc(fbUid).get();
+            const ud = us.exists ? us.data() || {} : {};
+            let tk = ud.strava_access_token || "";
+            if (!tk || Number(ud.strava_expires_at || 0) < Math.floor(Date.now() / 1000) + 300) {
+              try { tk = (await refreshStravaTokenForUser(db, fbUid)).accessToken; } catch (eTk) { tk = ""; }
+            }
+            tokens[fbUid] = tk;
+          }
+          if (!tokens[fbUid]) { noData++; continue; }
+          if (updated + noData > 0) await new Promise((rs) => setTimeout(rs, STRAVA_CALL_DELAY_MS));
+          const streamsRes = await fetchStravaStreams(tokens[fbUid], r.activity_id);
+          const sp = computeSpeedPeaksFromStreams(streamsRes, r.activity_type, false);
+          if (!Object.keys(sp).length) { noData++; continue; }
+          const { error: uErr } = await supabase.from("rides").update(sp).eq("id", r.id);
+          if (uErr) throw new Error(uErr.message);
+          // Supabase rides 만 갱신(이후 재동기화에서 값이 없는 로그로 덮여도 매핑이 빈 값은 싣지 않아 유지됨)
+          updated++;
+        } catch (e) {
+          errors.push(`${r.activity_id}: ${e && e.message ? e.message : String(e)}`);
+        }
+      }
+      res.status(200).json({
+        success: true, dateStr, scanned: (rides || []).length, updated, noData,
+        nextAfterId: (rides || []).length >= maxRides ? lastId : null, errors: errors.slice(0, 20),
+      });
+    } catch (e) {
+      console.warn("[adminBackfillSpeedPeaksToday]", e.message || e);
+      res.status(e.status || 500).json({ success: false, error: e.message || String(e) });
+    }
+  }
+);
+
 exports.adminBackfillSupabaseUserGender = onRequest(
   supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 540, memory: "1GiB" }),
   async (req, res) => {
