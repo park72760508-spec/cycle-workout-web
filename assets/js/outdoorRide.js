@@ -4162,7 +4162,7 @@
    * 평속 랭킹(2026-10-24, 서버 functions computeSpeedPeaksFromStreams 와 같은 기준):
    *  max_*  = 기록 그대로의 최고 평속, rank_* = 순위용(평균 경사 -1.5%보다 내리막 구간·비현실 속도 제외)
    */
-  var SPEED_PEAK_WINDOWS = [[1, 60, 75], [5, 300, 65], [10, 600, 60], [20, 1200, 58], [40, 2400, 56], [60, 3600, 56]];
+  var SPEED_PEAK_WINDOWS = [[1, 60, 70], [5, 300, 58], [10, 600, 55], [20, 1200, 52], [40, 2400, 50], [60, 3600, 50]];
   function computeSpeedPeaksFromTrack(tr) {
     var out = {};
     if (!tr || tr.length < 2) return out;
@@ -4173,6 +4173,8 @@
       if (i > 0) d.push(d[i - 1] + hav(tr[i - 1][0], tr[i - 1][1], tr[i][0], tr[i][1]));
     }
     var n = t.length;
+    var totalSec = t[n - 1] - t[0];
+    var rankable = !(totalSec > 0 && d[n - 1] / totalSec * 3.6 > 45); // 기록 전체 평균 45 km/h 초과 → 차량 이동 등으로 보고 순위 제외
     SPEED_PEAK_WINDOWS.forEach(function (w) {
       var best = 0, bestRank = 0, j = 0;
       for (var i = 0; i < n; i++) {
@@ -4186,7 +4188,7 @@
         var kmh = dist / span * 3.6;
         if (kmh > 100) continue;
         if (kmh > best) best = kmh;
-        if (kmh > w[2] || kmh <= bestRank) continue;
+        if (!rankable || kmh > w[2] || kmh <= bestRank) continue;
         if (a[i] != null && a[j] != null && (a[j] - a[i]) / dist < -0.015) continue;
         bestRank = kmh;
       }

@@ -1802,48 +1802,68 @@ async function fetchStravaStreams(accessToken, activityId) {
  *  - 실내·가상(VirtualRide 등)은 계산 안 함, 전기자전거는 기록만 하고 순위용은 비움
  */
 const SPEED_PEAK_WINDOWS = [
-  { min: 1, sec: 60, rankCap: 75 },
-  { min: 5, sec: 300, rankCap: 65 },
-  { min: 10, sec: 600, rankCap: 60 },
-  { min: 20, sec: 1200, rankCap: 58 },
-  { min: 40, sec: 2400, rankCap: 56 },
-  { min: 60, sec: 3600, rankCap: 56 },
+  { min: 1, sec: 60, rankCap: 70 },
+  { min: 5, sec: 300, rankCap: 58 },
+  { min: 10, sec: 600, rankCap: 55 },
+  { min: 20, sec: 1200, rankCap: 52 },
+  { min: 40, sec: 2400, rankCap: 50 },
+  { min: 60, sec: 3600, rankCap: 50 },
 ];
 const SPEED_RAW_CAP_KMH = 100;
 const SPEED_RANK_MIN_GRADE = -0.015;
+/** 기록 전체 평균속도가 이보다 빠르면(차량 이동·GPS 오류) 순위용 값 없음 */
+const SPEED_RANK_MAX_RIDE_AVG_KMH = 45;
+/** 파워 데이터가 있으면: 구간 평균 파워 < 평지 단독 주행 필요 파워 × 이 비율 → 순위 제외(드래프팅·뒷바람 여유 포함) */
+const SPEED_RANK_MIN_POWER_RATIO = 0.45;
 const SPEED_OUTDOOR_TYPES = new Set(["ride", "mountainbikeride", "gravelride", "ebikeride", "emountainbikeride", "velomobile"]);
+/** 평지·무풍 단독 주행 필요 파워(W) — CdA 0.30, 75kg, Crr 0.004, 공기밀도 1.2, 경사 반영 */
+function speedRequiredWatts(vMs, grade) {
+  const m = 75, g = 9.81;
+  return 0.5 * 1.2 * 0.30 * vMs * vMs * vMs + 0.004 * m * g * vMs + m * g * vMs * grade;
+}
 function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer) {
   const out = {};
   if (!streamsRes || !streamsRes.success) return out;
   const type = String(activityType || "").trim().toLowerCase();
   if (isTrainer === true || !SPEED_OUTDOOR_TYPES.has(type)) return out;
-  const t = streamsRes.time, d = streamsRes.distance, a = streamsRes.altitude;
+  const t = streamsRes.time, d = streamsRes.distance, a = streamsRes.altitude, w = streamsRes.watts;
   if (!Array.isArray(t) || !Array.isArray(d) || t.length < 2 || d.length !== t.length) return out;
-  const hasAlt = Array.isArray(a) && a.length === t.length;
-  const rankable = type !== "ebikeride" && type !== "emountainbikeride";
   const n = t.length;
-  for (const w of SPEED_PEAK_WINDOWS) {
+  const hasAlt = Array.isArray(a) && a.length === n;
+  const hasPow = Array.isArray(w) && w.length === n && w.some((x) => Number(x) > 0);
+  // 파워 누적합(구간 평균 파워 계산용 — 시간 가중)
+  let pc = null;
+  if (hasPow) {
+    pc = new Float64Array(n);
+    for (let k = 1; k < n; k++) pc[k] = pc[k - 1] + (Number(w[k]) || 0) * Math.max(0, Number(t[k]) - Number(t[k - 1]));
+  }
+  const totalSec = Number(t[n - 1]) - Number(t[0]);
+  const rideAvg = totalSec > 0 ? ((Number(d[n - 1]) - Number(d[0])) / totalSec) * 3.6 : 0;
+  const rankable = type !== "ebikeride" && type !== "emountainbikeride" && rideAvg <= SPEED_RANK_MAX_RIDE_AVG_KMH;
+  for (const win of SPEED_PEAK_WINDOWS) {
     let best = 0, bestRank = 0, j = 0;
     for (let i = 0; i < n; i++) {
       if (j < i) j = i;
-      while (j < n && Number(t[j]) - Number(t[i]) < w.sec) j++;
+      while (j < n && Number(t[j]) - Number(t[i]) < win.sec) j++;
       if (j >= n) break;
       const span = Number(t[j]) - Number(t[i]);
-      if (!(span > 0) || span > w.sec * 1.5) continue; // 기록 끊김(긴 일시정지)은 제외
+      if (!(span > 0) || span > win.sec * 1.5) continue; // 기록 끊김(긴 일시정지)은 제외
       const dist = Number(d[j]) - Number(d[i]);
       if (!(dist > 0)) continue;
       const kmh = (dist / span) * 3.6;
       if (kmh > SPEED_RAW_CAP_KMH) continue;
       if (kmh > best) best = kmh;
-      if (!rankable || kmh > w.rankCap || kmh <= bestRank) continue;
-      if (hasAlt) {
-        const grade = (Number(a[j]) - Number(a[i])) / dist;
-        if (grade < SPEED_RANK_MIN_GRADE) continue;
+      if (!rankable || kmh > win.rankCap || kmh <= bestRank) continue;
+      const grade = hasAlt ? (Number(a[j]) - Number(a[i])) / dist : 0;
+      if (grade < SPEED_RANK_MIN_GRADE) continue;
+      if (hasPow) {
+        const avgW = (pc[j] - pc[i]) / span;
+        if (avgW < speedRequiredWatts(dist / span, Math.max(0, grade)) * SPEED_RANK_MIN_POWER_RATIO) continue;
       }
       bestRank = kmh;
     }
-    if (best > 0) out[`max_${w.min}min_speed_kmh`] = Math.round(best * 10) / 10;
-    if (bestRank > 0) out[`rank_${w.min}min_speed_kmh`] = Math.round(bestRank * 10) / 10;
+    if (best > 0) out[`max_${win.min}min_speed_kmh`] = Math.round(best * 10) / 10;
+    if (bestRank > 0) out[`rank_${win.min}min_speed_kmh`] = Math.round(bestRank * 10) / 10;
   }
   return out;
 }
@@ -17321,13 +17341,14 @@ exports.adminBackfillSpeedPeaksToday = onRequest(
       const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(body.dateStr || "")) ? String(body.dateStr) : todayKst;
       const maxRides = Math.max(1, Math.min(400, Number(body.maxRides) || 200));
       const afterId = String(body.afterId || "");
+      const force = body.force === true; // 기준 변경 후 오늘 기록 다시 계산
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
       let q = supabase.from("rides")
         .select("id, user_id, activity_id, activity_type")
         .eq("ride_date", dateStr).eq("source", "strava")
         .in("activity_type", ["Ride", "MountainBikeRide", "GravelRide", "EBikeRide", "EMountainBikeRide", "Velomobile"])
-        .is("max_1min_speed_kmh", null)
         .order("id", { ascending: true }).limit(maxRides);
+      if (!force) q = q.is("max_1min_speed_kmh", null);
       if (afterId) q = q.gt("id", afterId);
       const { data: rides, error: rErr } = await q;
       if (rErr) throw new Error(rErr.message);
@@ -17360,6 +17381,10 @@ exports.adminBackfillSpeedPeaksToday = onRequest(
           const streamsRes = await fetchStravaStreams(tokens[fbUid], r.activity_id);
           const sp = computeSpeedPeaksFromStreams(streamsRes, r.activity_type, false);
           if (!Object.keys(sp).length) { noData++; continue; }
+          // 기준 변경으로 빠진 값(예: 순위 제외)은 비워서 덮어씀
+          for (const m of [1, 5, 10, 20, 40, 60]) {
+            for (const k of [`max_${m}min_speed_kmh`, `rank_${m}min_speed_kmh`]) if (!(k in sp)) sp[k] = null;
+          }
           const { error: uErr } = await supabase.from("rides").update(sp).eq("id", r.id);
           if (uErr) throw new Error(uErr.message);
           // Supabase rides 만 갱신(이후 재동기화에서 값이 없는 로그로 덮여도 매핑이 빈 값은 싣지 않아 유지됨)

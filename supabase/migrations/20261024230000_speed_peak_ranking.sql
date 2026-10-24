@@ -99,12 +99,12 @@ BEGIN
     max_20min_speed_kmh = CASE WHEN (p->>'max_20min_speed_kmh')::numeric BETWEEN 0.1 AND 100 THEN (p->>'max_20min_speed_kmh')::numeric END,
     max_40min_speed_kmh = CASE WHEN (p->>'max_40min_speed_kmh')::numeric BETWEEN 0.1 AND 100 THEN (p->>'max_40min_speed_kmh')::numeric END,
     max_60min_speed_kmh = CASE WHEN (p->>'max_60min_speed_kmh')::numeric BETWEEN 0.1 AND 100 THEN (p->>'max_60min_speed_kmh')::numeric END,
-    rank_1min_speed_kmh  = CASE WHEN (p->>'rank_1min_speed_kmh')::numeric  BETWEEN 0.1 AND 75 THEN (p->>'rank_1min_speed_kmh')::numeric END,
-    rank_5min_speed_kmh  = CASE WHEN (p->>'rank_5min_speed_kmh')::numeric  BETWEEN 0.1 AND 65 THEN (p->>'rank_5min_speed_kmh')::numeric END,
-    rank_10min_speed_kmh = CASE WHEN (p->>'rank_10min_speed_kmh')::numeric BETWEEN 0.1 AND 60 THEN (p->>'rank_10min_speed_kmh')::numeric END,
-    rank_20min_speed_kmh = CASE WHEN (p->>'rank_20min_speed_kmh')::numeric BETWEEN 0.1 AND 58 THEN (p->>'rank_20min_speed_kmh')::numeric END,
-    rank_40min_speed_kmh = CASE WHEN (p->>'rank_40min_speed_kmh')::numeric BETWEEN 0.1 AND 56 THEN (p->>'rank_40min_speed_kmh')::numeric END,
-    rank_60min_speed_kmh = CASE WHEN (p->>'rank_60min_speed_kmh')::numeric BETWEEN 0.1 AND 56 THEN (p->>'rank_60min_speed_kmh')::numeric END
+    rank_1min_speed_kmh  = CASE WHEN (p->>'rank_1min_speed_kmh')::numeric  BETWEEN 0.1 AND 70 THEN (p->>'rank_1min_speed_kmh')::numeric END,
+    rank_5min_speed_kmh  = CASE WHEN (p->>'rank_5min_speed_kmh')::numeric  BETWEEN 0.1 AND 58 THEN (p->>'rank_5min_speed_kmh')::numeric END,
+    rank_10min_speed_kmh = CASE WHEN (p->>'rank_10min_speed_kmh')::numeric BETWEEN 0.1 AND 55 THEN (p->>'rank_10min_speed_kmh')::numeric END,
+    rank_20min_speed_kmh = CASE WHEN (p->>'rank_20min_speed_kmh')::numeric BETWEEN 0.1 AND 52 THEN (p->>'rank_20min_speed_kmh')::numeric END,
+    rank_40min_speed_kmh = CASE WHEN (p->>'rank_40min_speed_kmh')::numeric BETWEEN 0.1 AND 50 THEN (p->>'rank_40min_speed_kmh')::numeric END,
+    rank_60min_speed_kmh = CASE WHEN (p->>'rank_60min_speed_kmh')::numeric BETWEEN 0.1 AND 50 THEN (p->>'rank_60min_speed_kmh')::numeric END
   WHERE user_id = v_uid AND source = 'stelvio' AND activity_id = p_activity_id;
   GET DIAGNOSTICS v_n = ROW_COUNT;
   RETURN jsonb_build_object('success', v_n > 0);
