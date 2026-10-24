@@ -774,11 +774,11 @@
    */
   /*
    * 2026-10-25: 지도 축소 단계별 즐겨찾기 핀 — 줌 14 미만이면 좋아요 배지 숨김,
-   * 그보다 더 축소하면 핀 크기를 비율로 줄여 줌 10 이하에서 최대 1/4(핀 끝점 기준이라 위치는 그대로).
+   * 그보다 더 축소하면 핀 크기를 비율로 줄여 줌 10 이하에서 최소 1/3(핀 끝점 기준이라 위치는 그대로).
    */
   function favPinScaleForZoom(z) {
     if (!(z > 0)) return 1;
-    return Math.max(0.25, Math.min(1, 1 - (14 - z) * 0.1875));
+    return Math.max(1 / 3, Math.min(1, 1 - (14 - z) * (2 / 3) / 4)); // 2026-10-25: 최소 1/3(줌 10 이하)
   }
   function syncFavPinZoom() {
     var map = st.map, el = $('outdMap');
