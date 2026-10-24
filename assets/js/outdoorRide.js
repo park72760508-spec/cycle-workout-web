@@ -2797,20 +2797,57 @@
     } catch (e) { return false; }
   }
   /** 제휴사 목록(Firestore affiliates) — 관리자 수정 화면에서만, 한 번만 읽음 */
+  /*
+   * 2026-10-24: 맥북 Chrome(관리자)에서 Firestore 가 내부 오류 상태("INTERNAL ASSERTION FAILED: Unexpected state")면
+   * getDocs 가 즉시 예외를 던져 등록 창을 띄우기 전에 멈췄다(검색 결과를 눌러도 '목록만 사라짐').
+   * → 예외·실패 모두 잡고, 실패하면 Firestore REST(ID 토큰)로 다시 읽는다. 끝내 실패하면 빈 목록(등록 창은 정상).
+   */
+  function parseFavAffiliates(rows) {
+    var out = [];
+    rows.forEach(function (r) {
+      var disc = parseInt(r.discount, 10);
+      out.push({ id: r.id, name: String(r.name || '').trim() || '(이름 없음)', discount: !isNaN(disc) && disc > 0 ? disc : null });
+    });
+    out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
+    return out;
+  }
+  function loadFavAffiliatesRest() {
+    var cfg = window.__FIREBASE_CONFIG__ || {};
+    var u = (window.authV9 && window.authV9.currentUser) || (window.auth && window.auth.currentUser);
+    if (!cfg.projectId || !u || typeof u.getIdToken !== 'function') return Promise.resolve([]);
+    return u.getIdToken(false).then(function (tok) {
+      return fetch('https://firestore.googleapis.com/v1/projects/' + encodeURIComponent(cfg.projectId) +
+        '/databases/(default)/documents/affiliates?pageSize=300', { headers: { Authorization: 'Bearer ' + tok }, cache: 'no-store' });
+    }).then(function (r) { return r.ok ? r.json() : { documents: [] }; }).then(function (j) {
+      return parseFavAffiliates((j.documents || []).map(function (d) {
+        var f = d.fields || {};
+        var disc = f.discount ? (f.discount.integerValue || f.discount.doubleValue || f.discount.stringValue) : null;
+        return { id: String(d.name || '').split('/').pop(), name: f.name && f.name.stringValue, discount: disc };
+      }));
+    }).catch(function () { return []; });
+  }
   function loadFavAffiliates() {
     if (fav.affPromise) return fav.affPromise;
-    var fns = window._firebaseFirestoreFns, db = window.firestoreV9;
-    if (!fns || !db || typeof fns.getDocs !== 'function' || typeof fns.collection !== 'function') return Promise.resolve([]);
-    fav.affPromise = fns.getDocs(fns.collection(db, 'affiliates')).then(function (snap) {
-      var out = [];
-      snap.forEach(function (d) {
-        var x = d.data() || {};
-        var disc = parseInt(x.discount, 10);
-        out.push({ id: d.id, name: String(x.name || '').trim() || '(이름 없음)', discount: !isNaN(disc) && disc > 0 ? disc : null });
-      });
-      out.sort(function (a, b) { return a.name.localeCompare(b.name, 'ko'); });
-      return out;
-    }).catch(function () { fav.affPromise = null; return []; });
+    fav.affPromise = new Promise(function (resolve) {
+      var fns = window._firebaseFirestoreFns, db = window.firestoreV9;
+      try {
+        if (!fns || !db || typeof fns.getDocs !== 'function' || typeof fns.collection !== 'function') throw new Error('no firestore');
+        fns.getDocs(fns.collection(db, 'affiliates')).then(function (snap) {
+          var rows = [];
+          snap.forEach(function (d) { var x = d.data() || {}; rows.push({ id: d.id, name: x.name, discount: x.discount }); });
+          resolve(parseFavAffiliates(rows));
+        }, function (err) {
+          console.warn('[favAffiliates] Firestore 실패 → REST:', err && err.message);
+          loadFavAffiliatesRest().then(resolve);
+        });
+      } catch (eSync) {
+        console.warn('[favAffiliates] Firestore 예외 → REST:', eSync && eSync.message);
+        loadFavAffiliatesRest().then(resolve);
+      }
+    }).then(function (list) {
+      if (!list.length) fav.affPromise = null; // 비어 있으면 다음에 다시 시도
+      return list;
+    });
     return fav.affPromise;
   }
   /** 제휴사 할인율 배지(빨간 톱니 인장 + N% / OFF) — 제휴 할인 화면 배지와 같은 모양 */
@@ -3482,7 +3519,8 @@
     if (favIsAdmin()) {
       affWrap.style.display = '';
       var sel = f.querySelector('[name=affiliate]');
-      loadFavAffiliates().then(function (list) {
+      // 등록 창을 먼저 띄우고 제휴사 목록은 나중에 채움(목록 읽기 실패가 창 표시를 막지 않게)
+      Promise.resolve().then(loadFavAffiliates).then(function (list) {
         var cur = fav.form && fav.form.aff;
         var html = '<option value="">제휴사 없음</option>' + list.map(function (a) {
           return '<option value="' + escHtml(a.id) + '" data-name="' + escHtml(a.name) + '" data-disc="' + (a.discount || '') + '">' +
