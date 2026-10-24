@@ -4530,9 +4530,15 @@
         try {
           var sp = speedPeaks;
           if (Object.keys(sp).length) {
-            loadDualWriteModule().then(function (mod) {
-              return mod.callSupabaseRpcAsUser('fn_set_ride_speed_peaks', { p_activity_id: payload.activity_id, p: sp });
-            }).catch(function () {});
+            var saveSpeed = function () {
+              return loadDualWriteModule().then(function (mod) {
+                return mod.callSupabaseRpcAsUser('fn_set_ride_speed_peaks', { p_activity_id: payload.activity_id, p: sp });
+              });
+            };
+            // 평속 랭킹 반영(가민 등 속도계 없는 휴대폰 GPS 기록도 포함) — 실패하면 3초 뒤 한 번 더
+            saveSpeed().catch(function () {
+              return new Promise(function (r) { setTimeout(r, 3000); }).then(saveSpeed);
+            }).catch(function (e2) { console.warn('[outdoor] 평속 저장 실패:', e2 && e2.message); });
           }
         } catch (eSp) {}
         // 주간 TSS·랭킹 등 실시간 보드 갱신 신호(실내 훈련 저장과 동일)
