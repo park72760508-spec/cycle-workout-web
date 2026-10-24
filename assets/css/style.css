@@ -35223,3 +35223,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-kusage__item b { color: #fde047; font-weight: 700; }
 #outdoorRideScreen .outd-kusage__item.is-warn b { color: #fb923c; }
 #outdoorRideScreen .outd-kusage__item.is-out b { color: #f87171; }
+
+/* 루트맵 즐겨찾기 핀: 줌 14 미만에서 좋아요 배지 숨김(2026-10-25) — 핀 크기 축소는 JS(rotate+scale) */
+#outdoorRideScreen #outdMap.outd-favnolikes .outd-favpin__likes { display: none; }

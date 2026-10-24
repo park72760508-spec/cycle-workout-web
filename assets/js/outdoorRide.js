@@ -772,11 +772,29 @@
    * 즐겨찾기 핀을 지도판 회전의 반대로 돌려 똑바로(2026-10-24 발열): 예전엔 지도판에 CSS 변수(--outd-unrot)를 매 프레임 바꿔
    * 지도 안 요소 전체(타일·마커)의 스타일을 다시 계산했다 → 핀 몇 개에만 직접 적용, 0.3° 이상 바뀔 때만.
    */
+  /*
+   * 2026-10-25: 지도 축소 단계별 즐겨찾기 핀 — 줌 14 미만이면 좋아요 배지 숨김,
+   * 그보다 더 축소하면 핀 크기를 비율로 줄여 줌 10 이하에서 최대 1/4(핀 끝점 기준이라 위치는 그대로).
+   */
+  function favPinScaleForZoom(z) {
+    if (!(z > 0)) return 1;
+    return Math.max(0.25, Math.min(1, 1 - (14 - z) * 0.1875));
+  }
+  function syncFavPinZoom() {
+    var map = st.map, el = $('outdMap');
+    if (!map || !el) return;
+    var z = map.getZoom();
+    el.classList.toggle('outd-favlabels', z >= 15);
+    el.classList.toggle('outd-favnolikes', z < 14);
+    var sc = favPinScaleForZoom(z);
+    if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
+  }
   function applyFavPinUnrotate(force) {
     var d = st.dispRot || 0;
     if (!force && st.__pinRot != null && Math.abs(d - st.__pinRot) < 0.3) return;
     st.__pinRot = d;
-    var tr = 'rotate(' + (-d).toFixed(1) + 'deg)';
+    var sc = st.__pinScale != null ? st.__pinScale : 1;
+    var tr = 'rotate(' + (-d).toFixed(1) + 'deg)' + (sc < 1 ? ' scale(' + sc.toFixed(3) + ')' : '');
     var els = document.querySelectorAll('#outdMap .outd-favpin__in');
     for (var i = 0; i < els.length; i++) els[i].style.transform = tr;
   }
@@ -3290,12 +3308,8 @@
     if (!map || !L) return;
     if (!fav.layer) {
       fav.layer = L.layerGroup().addTo(map);
-      var syncLabels = function () {
-        var el = $('outdMap');
-        if (el) el.classList.toggle('outd-favlabels', map.getZoom() >= 15);
-      };
-      map.on('zoomend', syncLabels);
-      syncLabels();
+      map.on('zoomend', syncFavPinZoom);
+      syncFavPinZoom();
       bindFavPickTap();
     }
     fav.layer.clearLayers();
