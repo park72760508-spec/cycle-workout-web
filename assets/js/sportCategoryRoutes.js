@@ -129,6 +129,12 @@
   }
 
   /** RUN 베이스캠프 → 대시보드(분석) */
+  /** RUN 베이스캠프 '나의 기록' → RUN 기록(훈련 일지) 화면 (2026-10-24, 예전엔 분석 대시보드로 연결) */
+  function openRunJournalFromBasecamp() {
+    setActiveSport('run');
+    if (typeof showScreen === 'function') showScreen('runTrainingJournalScreen');
+  }
+
   function openRunDashboardFromBasecamp() {
     setActiveSport('run');
     if (typeof showScreen === 'function') showScreen('runDashboardScreen');
@@ -209,6 +215,7 @@
   window.navigateToRidingMoimFromBasecamp = navigateToRidingMoimFromBasecamp;
   window.navigateToRunCrewFromBasecamp = navigateToRunCrewFromBasecamp;
   window.openRunDashboardFromBasecamp = openRunDashboardFromBasecamp;
+  window.openRunJournalFromBasecamp = openRunJournalFromBasecamp;
   window.openCompetitionFromRunBasecamp = openCompetitionFromRunBasecamp;
   window.openCompetitionFromCycleBasecamp = openCompetitionFromCycleBasecamp;
   window.openCycleDashboardFromBasecamp = openCycleDashboardFromBasecamp;

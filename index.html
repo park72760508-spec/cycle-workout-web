@@ -4438,7 +4438,7 @@
 
   <!-- 조기 부트: app.js 로드 전 로고(스플래시) → 인증 화면 (Android WebView HTML 파싱 대기 제거) -->
   <script src="assets/js/stelvioBootEarly.js"></script>
-  <script src="assets/js/sportCategoryRoutes.js"></script>
+  <script src="assets/js/sportCategoryRoutes.js?v=20261024runjournal"></script>
 
   <!-- Performance Dashboard Dependencies: 조기 부트 이후 로드 → 인증 화면 노출 우선 -->
   <script>
@@ -5237,7 +5237,7 @@
               <button type="button" class="btn btn-device basecamp-btn basecamp-btn-ranking" id="btnRunBasecampRanking" onclick="if(typeof openRunningRankingBoard==='function')openRunningRankingBoard();" aria-label="랭킹보드">
                 <span>랭킹보드</span>
               </button>
-              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof openRunDashboardFromBasecamp==='function')openRunDashboardFromBasecamp();else if(typeof showScreen==='function')showScreen('runDashboardScreen');" aria-label="나의 기록">
+              <button type="button" class="btn btn-device basecamp-btn basecamp-btn-career" id="btnRunBasecampCareer" onclick="if(typeof openRunJournalFromBasecamp==='function')openRunJournalFromBasecamp();else if(typeof showScreen==='function')showScreen('runTrainingJournalScreen');" aria-label="나의 기록">
                 <span>나의 기록</span>
                 <!-- 오늘(KST) STRAVA 기록 수집 배지: 러닝 크루 숫자 배지와 동일 위치, 참석확정 스타일 체크마크 -->
                 <span id="runBasecampCareerNotiBadge" class="basecamp-check-badge" aria-label="오늘 STRAVA 기록 수집됨">
@@ -44553,12 +44553,6 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               </button>
             </div>
             <div class="open-riding-bottom-glass-nav__slot">
-              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
-                <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
-                <span class="open-riding-bottom-glass-nav__label">분석</span>
-              </button>
-            </div>
-            <div class="open-riding-bottom-glass-nav__slot">
               <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="journal" aria-label="라이딩 기록">
                 <img src="assets/img/mrank3.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
                 <span class="open-riding-bottom-glass-nav__label">기록</span>
@@ -44568,6 +44562,12 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="moim" aria-label="라이딩 모임">
                 <img src="assets/img/people.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" onerror="this.src='assets/img/user.png';this.onerror=null;" />
                 <span class="open-riding-bottom-glass-nav__label">모임</span>
+              </button>
+            </div>
+            <div class="open-riding-bottom-glass-nav__slot">
+              <button type="button" class="open-riding-bottom-glass-nav__btn rounded-xl border-0 bg-transparent" data-hub-nav="analysis" aria-label="대시보드 분석">
+                <img src="assets/img/mrank2.png" alt="" class="open-riding-bottom-glass-nav__friend-img block object-contain" width="22" height="22" decoding="async" />
+                <span class="open-riding-bottom-glass-nav__label">분석</span>
               </button>
             </div>
             <div class="open-riding-bottom-glass-nav__slot">
