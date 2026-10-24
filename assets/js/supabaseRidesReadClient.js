@@ -207,6 +207,13 @@ export function mapRideRowToTrainingLog(row) {
     avg_speed_kmh: row.avg_speed_kmh != null ? Number(row.avg_speed_kmh) : null,
     max_speed_kmh: row.max_speed_kmh != null ? Number(row.max_speed_kmh) : null,
     moving_time_sec: row.moving_time_sec != null ? Number(row.moving_time_sec) : null,
+    // 구간별 피크 평속(2026-10-25, 상세 기록 Summary 그래프) — 기록 그대로의 최고 평속(max_*)
+    max_1min_speed_kmh: row.max_1min_speed_kmh != null ? Number(row.max_1min_speed_kmh) : null,
+    max_5min_speed_kmh: row.max_5min_speed_kmh != null ? Number(row.max_5min_speed_kmh) : null,
+    max_10min_speed_kmh: row.max_10min_speed_kmh != null ? Number(row.max_10min_speed_kmh) : null,
+    max_20min_speed_kmh: row.max_20min_speed_kmh != null ? Number(row.max_20min_speed_kmh) : null,
+    max_40min_speed_kmh: row.max_40min_speed_kmh != null ? Number(row.max_40min_speed_kmh) : null,
+    max_60min_speed_kmh: row.max_60min_speed_kmh != null ? Number(row.max_60min_speed_kmh) : null,
     weight:
       row.weight_at_ride_kg != null
         ? Number(row.weight_at_ride_kg)
@@ -258,7 +265,7 @@ export function mapRideRowToTrainingLog(row) {
 
 /** Firestore users/logs 호환 — JournalDetail Heart Rate·Power Profile 필드 포함 */
 const RIDE_SELECT =
-  'activity_id, source, activity_type, title, ride_date, workout_id, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, weight_at_ride_kg, ftp_at_time, avg_cadence, avg_hr, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, avg_watts, weighted_watts, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, tss, intensity_factor, kilojoules, earned_points, efficiency_factor, rpe, tss_applied, summary_polyline, elevation_profile_json, route_profile_updated_at, time_in_zones_json, segment_avg_watts_json, max_speed_kmh, moving_time_sec';
+  'activity_id, source, activity_type, title, ride_date, workout_id, duration_sec, distance_km, elevation_gain_m, avg_speed_kmh, weight_at_ride_kg, ftp_at_time, avg_cadence, avg_hr, max_hr, max_hr_5sec, max_hr_1min, max_hr_5min, max_hr_10min, max_hr_20min, max_hr_40min, max_hr_60min, avg_watts, weighted_watts, max_watts, max_1min_watts, max_5min_watts, max_10min_watts, max_20min_watts, max_30min_watts, max_40min_watts, max_60min_watts, tss, intensity_factor, kilojoules, earned_points, efficiency_factor, rpe, tss_applied, summary_polyline, elevation_profile_json, route_profile_updated_at, time_in_zones_json, segment_avg_watts_json, max_speed_kmh, moving_time_sec, max_1min_speed_kmh, max_5min_speed_kmh, max_10min_speed_kmh, max_20min_speed_kmh, max_40min_speed_kmh, max_60min_speed_kmh';
 
 /** localStorage에 남은 만료/무효 세션으로 /auth/v1/user 403이 반복되지 않도록 검사 */
 function hasFreshSupabaseClientSession(session) {

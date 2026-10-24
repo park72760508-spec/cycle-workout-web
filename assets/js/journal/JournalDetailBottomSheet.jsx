@@ -396,6 +396,153 @@
   }
 
   /**
+   * 세션 구간별 피크 평속 막대 + 평균 속도 가이드(주황 실선) — 2026-10-25, Summary 탭.
+   * 구간별 피크 파워 그래프(JournalSessionPowerPeakChart)와 같은 디자인, 값만 km/h. Max = 라이딩 중 최고 속도.
+   */
+  var SPEED_PEAK_FIELDS = ['max_1min_speed_kmh', 'max_5min_speed_kmh', 'max_10min_speed_kmh', 'max_20min_speed_kmh', 'max_40min_speed_kmh', 'max_60min_speed_kmh'];
+  function journalLogHasSpeedPeaks(log) {
+    if (!log) return false;
+    return SPEED_PEAK_FIELDS.some(function(f) { return Number(log[f]) > 0; });
+  }
+  function JournalSessionSpeedPeakChart(props) {
+    var log = props.log;
+    var chartRef = useRef(null);
+    var chartInst = useRef(null);
+    var depKey = log ? [log.max_speed_kmh, log.avg_speed_kmh].concat(SPEED_PEAK_FIELDS.map(function(f) { return log[f]; })).join('|') : '';
+
+    useEffect(function() {
+      if (chartInst.current) {
+        chartInst.current.destroy();
+        chartInst.current = null;
+      }
+      if (!log || typeof Chart === 'undefined') return;
+      var ctx = chartRef.current && chartRef.current.getContext('2d');
+      if (!ctx) return;
+      var rows = [
+        { label: '최고 속도', shortLabel: 'Max', val: Number(log.max_speed_kmh) || 0 },
+        { label: '1분', shortLabel: '1분', val: Number(log.max_1min_speed_kmh) || 0 },
+        { label: '5분', shortLabel: '5분', val: Number(log.max_5min_speed_kmh) || 0 },
+        { label: '10분', shortLabel: '10', val: Number(log.max_10min_speed_kmh) || 0 },
+        { label: '20분', shortLabel: '20', val: Number(log.max_20min_speed_kmh) || 0 },
+        { label: '40분', shortLabel: '40', val: Number(log.max_40min_speed_kmh) || 0 },
+        { label: '60분', shortLabel: '60', val: Number(log.max_60min_speed_kmh) || 0 }
+      ];
+      capPeakRowsMonotonicDesc(rows);
+      var values = rows.map(function(r) { return r.val; });
+      var avgGuide = Number(log.avg_speed_kmh) > 0
+        ? Number(log.avg_speed_kmh)
+        : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec) || 0;
+      if (!values.some(function(v) { return v > 0; })) return;
+      var numsForMax = values.filter(function(n) { return n > 0; });
+      if (avgGuide > 0) numsForMax.push(avgGuide);
+      var maxV = Math.max.apply(null, numsForMax);
+      var yMax = Math.ceil(maxV * 1.15 / 10) * 10 || 50;
+      var labels = rows.map(function(r) { return r.label; });
+      var plugin = {
+        id: 'journalSpeedPeakLabels',
+        afterDatasetsDraw: function(chart) {
+          var meta = chart.getDatasetMeta(0);
+          if (!meta || !meta.data || meta.data.length === 0) return;
+          var chartArea = chart.chartArea;
+          var radius = JOURNAL_PEAK_AXIS_CIRCLE_R;
+          var circleY = chartArea.bottom + radius + 4;
+          chart.ctx.save();
+          meta.data.forEach(function(bar, i) {
+            if (!bar || bar.x == null || bar.y == null) return;
+            var row = rows[i];
+            if (row.val > 0) drawPeakBarTopValue(chart.ctx, row.val.toFixed(1), bar.x, bar.y - 12, false);
+            chart.ctx.beginPath();
+            chart.ctx.arc(bar.x, circleY, radius, 0, Math.PI * 2);
+            chart.ctx.fillStyle = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
+            chart.ctx.fill();
+            chart.ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+            chart.ctx.lineWidth = 1;
+            chart.ctx.stroke();
+            chart.ctx.fillStyle = '#1f2937';
+            chart.ctx.font = JOURNAL_PEAK_AXIS_LABEL_FONT;
+            chart.ctx.textAlign = 'center';
+            chart.ctx.textBaseline = 'middle';
+            chart.ctx.fillText(row.shortLabel, bar.x, circleY);
+          });
+          if (chartArea) drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'km/h', false);
+          chart.ctx.restore();
+        }
+      };
+      var datasets = [{
+        type: 'bar',
+        label: '평속 (km/h)',
+        data: values,
+        backgroundColor: rows.map(function(d, i) { return JOURNAL_PEAK_ZONE_COLORS[i]; }),
+        borderColor: rows.map(function(r, i) { return borderRgbFromZone(i); }),
+        borderWidth: rows.map(function() { return 1; }),
+        borderRadius: { topLeft: 6, topRight: 6 },
+        order: 0
+      }];
+      if (avgGuide > 0) {
+        datasets.push({
+          type: 'line',
+          label: '평균 속도',
+          data: labels.map(function() { return avgGuide; }),
+          borderColor: AVG_GUIDE_LINE,
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 0,
+          hitRadius: 0,
+          fill: false,
+          order: 1,
+          tension: 0
+        });
+      }
+      chartInst.current = new Chart(ctx, {
+        type: 'bar',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          layout: { padding: { top: 40, bottom: 48 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: function(c) {
+                  var i = c.dataIndex;
+                  if (c.datasetIndex === 1) return '평균 속도: ' + avgGuide.toFixed(1) + ' km/h';
+                  return rows[i] && rows[i].val > 0 ? rows[i].label + ': ' + rows[i].val.toFixed(1) + ' km/h' : (rows[i] ? rows[i].label + ': —' : '');
+                }
+              }
+            }
+          },
+          scales: {
+            x: { grid: { display: false }, ticks: { display: false } },
+            y: {
+              beginAtZero: true,
+              max: yMax,
+              grid: { color: '#e5e7eb' },
+              ticks: {
+                font: { size: 11 },
+                color: '#6b7280',
+                callback: function(v) { return v === 0 ? '0km/h' : String(v); }
+              }
+            }
+          }
+        },
+        plugins: [plugin]
+      });
+      return function cleanup() {
+        if (chartInst.current) {
+          chartInst.current.destroy();
+          chartInst.current = null;
+        }
+      };
+    }, [depKey]);
+
+    if (!log || !journalLogHasSpeedPeaks(log)) return null;
+    return React.createElement('div', { className: 'journal-peak-chart-wrap' },
+      React.createElement('canvas', { ref: chartRef })
+    );
+  }
+
+  /**
    * 세션 심박 피크 막대 + 평균 심박 가이드(주황 실선)
    */
   function JournalSessionHrPeakChart(props) {
@@ -878,6 +1025,12 @@
         ? DetailRow({ label: '최고 속도', value: formatSpeedKmh(Number(log.max_speed_kmh)), isPr: false })
         : null,
       DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
+      // 2026-10-25: 구간별 피크 평속 그래프(평속 기록이 있을 때만)
+      journalLogHasSpeedPeaks(log)
+        ? React.createElement('div', { key: 'spd-peak', className: 'journal-summary-speed-peak' },
+            React.createElement('div', { className: 'journal-summary-speed-peak-title' }, '구간별 피크 평속'),
+            React.createElement(JournalSessionSpeedPeakChart, { log: log }))
+        : null,
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
       DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false }),
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
@@ -890,18 +1043,8 @@
           'journal-tab-content journal-tab-content--summary-route' +
           (showWorkoutGraph ? ' journal-tab-content--summary-workout' : '')
       },
-      CourseMap && routeInfo.hasRoute
-        ? React.createElement(CourseMap, {
-            key: String((log.date || '') + '-seg-' + (routeInfo.segmentCount || 0)),
-            logs: logsForRoute,
-            log: log,
-            routeProfile: routeInfo,
-            dailyRouteDoc: dailyRouteDoc,
-            dateKey: log.date,
-            mapHeight: 200,
-            className: 'journal-summary-sheet-course-map'
-          })
-        : showWorkoutGraph
+      /* 2026-10-25: Summary 탭 경로 지도 제거(요청) — 실내 워크아웃 그래프는 유지 */
+      showWorkoutGraph
           ? React.createElement(WorkoutGraph, {
               key: 'wo-' + workoutId + '-' + (log.date || ''),
               workoutId: workoutId,
@@ -910,9 +1053,7 @@
               actualSegmentAvgWatts: actualPowerLog ? actualPowerLog.segment_avg_watts : null,
               actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null
             })
-          : React.createElement('p', { className: 'journal-course-preview-empty' },
-              '코스 지도 없음 — Strava MMP 동기화 후 다시 열어 주세요.'
-            ),
+          : null,
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows)
     );
   }
