@@ -34624,6 +34624,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   -webkit-mask: url("../img/motorcycle.svg?v=20261022") center / contain no-repeat;
   mask: url("../img/motorcycle.svg?v=20261022") center / contain no-repeat;
 }
+#outdoorRideScreen .outd-route__walk-ico {
+  width: 24px; height: 24px; display: block; background-color: currentColor;
+  -webkit-mask: url("../img/walking.svg?v=20261024") center / contain no-repeat;
+  mask: url("../img/walking.svg?v=20261024") center / contain no-repeat;
+}
+#outdoorRideScreen .outd-favpop__modes .outd-route__walk-ico { width: 24px; height: 24px; }
 
 /* 사용자 등록: 인증번호 확인 중 오버레이(2026-10-21) — 로그인 로딩 녹색 원 스피너 재사용, 등록 화면 위 반투명 */
 .phone-verify-overlay {
