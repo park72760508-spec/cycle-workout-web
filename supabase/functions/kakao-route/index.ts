@@ -2,7 +2,7 @@
 //
 // 앱 → (STELVIO 커스텀 JWT) → 이 함수 → 카카오 REST API(dapi.kakao.com/v2/routing/{bicycle|walk})
 //  - 카카오 REST 키는 Vault('kakao_rest_api_key')에만 있다(브라우저에 노출하지 않음).
-//  - 같은 출발지 근처(약 50m) → 같은 목적지(약 20m)·같은 방식이면 7일간 저장해 둔 결과를 쓴다(카카오 호출 없음).
+//  - 오늘(한국 날짜) 같은 목적지·같은 방식으로 저장된 경로가 있고 출발지가 그 경로 근처면 그 경로를 쓴다(카카오 호출 없음).
 //  - 무료 한도(API별 하루 1,000건, 한국 날짜)를 우리 쪽에서 세어 넘으면 호출하지 않는다 → 앱은 기본 경로(Valhalla)로 전환.
 //  - verify_jwt: false 로 배포(커스텀 JWT 는 게이트웨이 검증을 통과하지 못함) — 함수 안에서 JWKS 로 직접 검증.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -62,13 +62,29 @@ Deno.serve(async (req) => {
   if (!inKr(sx, sy) || !inKr(ex, ey)) return json({ success: false, error: "국내 경로만 지원", code: "OUT_OF_KR" });
 
   const admin = createClient(supabaseUrl, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-  const key = [api, mode, grid(sx, 0.0005), grid(sy, 0.0005), grid(ex, 0.0002), grid(ey, 0.0002)].join("|");
+  const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); // 한국 날짜
+  const key = [day, api, mode, grid(sx, 0.0005), grid(sy, 0.0005), grid(ex, 0.0002), grid(ey, 0.0002)].join("|");
 
-  const { data: hit } = await admin.from("kakao_route_cache").select("route,created_at").eq("key", key)
-    .gte("created_at", new Date(Date.now() - 7 * 86400 * 1000).toISOString()).maybeSingle();
-  if (hit && hit.route) {
+  // 1) 오늘 같은 목적지(약 30m 안)·같은 방식으로 저장된 경로 중, 지금 출발지가 경로 근처(자전거 500m·걷기 250m)인 것
+  //    → 카카오를 부르지 않고 그 경로를 돌려준다. reuse.idx = 출발지에서 가장 가까운 경로 점(앱이 거기까지 짧게 연결)
+  const near = api === "walk" ? 250 : 500;
+  const { data: cands } = await admin.from("kakao_route_cache").select("route")
+    .eq("api", api).eq("mode", mode).eq("day", day)
+    .gte("ex", ex - 0.0004).lte("ex", ex + 0.0004).gte("ey", ey - 0.0003).lte("ey", ey + 0.0003)
+    .order("created_at", { ascending: false }).limit(20);
+  let best: { route: any; idx: number; dist: number } | null = null;
+  const kx = 111320 * Math.cos((sy * Math.PI) / 180), ky = 110540;
+  for (const c of cands || []) {
+    const pts: number[][] = (c.route && c.route.pts) || [];
+    for (let i = 0; i < pts.length; i++) {
+      const dx = (pts[i][1] - sx) * kx, dy = (pts[i][0] - sy) * ky;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= near && (!best || dist < best.dist)) best = { route: c.route, idx: i, dist };
+    }
+  }
+  if (best) {
     await admin.rpc("kakao_route_mark", { p_api: api, p_cache_hit: true, p_exhausted: false });
-    return json({ success: true, cached: true, route: hit.route, usage: await usageOf(admin) });
+    return json({ success: true, cached: true, reuse: { idx: best.idx, dist: Math.round(best.dist) }, route: best.route, usage: await usageOf(admin) });
   }
 
   const { data: n } = await admin.rpc("kakao_route_take", { p_api: api, p_limit: DAILY_LIMIT });
@@ -125,6 +141,6 @@ Deno.serve(async (req) => {
     dist: Number(d.route.properties && d.route.properties.totalDistance) || 0,
     time: Number(d.route.properties && d.route.properties.totalTime) || 0,
   };
-  await admin.from("kakao_route_cache").upsert({ key, api, route, created_at: new Date().toISOString() });
+  await admin.from("kakao_route_cache").upsert({ key, api, mode, day, sx, sy, ex, ey, route, created_at: new Date().toISOString() });
   return json({ success: true, cached: false, route, usage: await usageOf(admin) });
 });

@@ -2108,7 +2108,11 @@
         if (d && (d.code === 'QUOTA' || d.code === 'NOT_FOUND' || /not found|404/i.test(String(d.error || d.msg || '')))) kakaoOff[km.api] = kakaoDay();
         throw new Error((d && (d.error || d.msg)) || '카카오 경로 없음');
       }
-      return kakaoToRoute(d.route, mode, !!d.cached);
+      var rt = kakaoToRoute(d.route, mode, !!d.cached);
+      // 오늘 저장된 같은 목적지 경로를 재사용: 출발지가 경로 시작점이 아니면 가장 가까운 경로 점까지 짧게 연결
+      var ru = d.reuse;
+      if (ru && (ru.idx > 0 || ru.dist > 25)) return spliceKakao(rt, ru.idx, from, mode, null);
+      return rt;
     });
   }
   /** 카카오 안내 문구 → 회전 종류(Valhalla maneuver type 번호, maneuverDelta 와 같은 기준) */
@@ -2153,33 +2157,43 @@
     var i = 0;
     while (i < c.cum.length - 1 && c.cum[i] < rejoinAlong) i++;
     var bi = i < k.connLen ? k.baseStart : k.baseStart + (i - k.connLen);
-    var base = k.base;
+    return spliceKakao(k.base, bi, from, c.routeMode, heading);
+  }
+  /** 지금 위치(from) → 원래 카카오 경로 bi 번 점까지 기본 방식(Valhalla)으로 잇고, 그 뒤는 카카오 경로 그대로 */
+  function spliceKakao(base, bi, from, routeMode, heading) {
     bi = Math.max(0, Math.min(base.latlngs.length - 2, bi));
     var to = { lat: base.latlngs[bi][0], lng: base.latlngs[bi][1] };
-    var rawMode = c.routeMode === 'walk' || c.routeMode === 'walkShort' ? 'walkShort' : 'short';
+    var rawMode = routeMode === 'walk' || routeMode === 'walkShort' ? 'walkShort' : 'short';
+    var gap = hav(from.lat, from.lng, to.lat, to.lng);
+    if (gap < 25) return Promise.resolve(joinKakao(base, bi, [[from.lat, from.lng], [to.lat, to.lng]], [], gap / 1000, routeMode));
     return fetchValhallaRouteRaw(from, to, rawMode, { heading: heading }).then(function (conn) {
-      var cl = conn.latlngs.slice();
-      var tail = base.latlngs.slice(bi + 1);
-      var off = cl.length - 1 - bi; // 원래 경로 번호 → 새 경로 번호
-      var mans = (conn.maneuvers || []).filter(function (m) { return maneuverDelta(m.type) != null; });
-      base.maneuvers.forEach(function (m) {
-        if (m.begin_shape_index > bi) mans.push({ type: m.type, begin_shape_index: m.begin_shape_index + off, instruction: m.instruction });
-      });
-      var tailM = 0;
-      for (var j = bi; j < base.latlngs.length - 1; j++) tailM += hav(base.latlngs[j][0], base.latlngs[j][1], base.latlngs[j + 1][0], base.latlngs[j + 1][1]);
-      var km = conn.km + tailM / 1000;
-      return {
-        mode: c.routeMode,
-        latlngs: cl.concat(tail),
-        maneuvers: mans,
-        km: km,
-        min: Math.max(1, Math.round(base.min * (km / Math.max(0.01, base.km)))),
-        kakao: true,
-        kakaoBase: base,
-        baseStart: bi,
-        connLen: cl.length - 1 // 연결 경로 마지막 점 = 원래 경로 bi 번 점
-      };
+      return joinKakao(base, bi, conn.latlngs.slice(), (conn.maneuvers || []).filter(function (m) { return maneuverDelta(m.type) != null; }), conn.km, routeMode);
+    }, function () {
+      // 연결 경로를 못 찾으면 지금 위치에서 곧장 경로 점으로(짧은 거리일 때 점선 연결과 같은 효과)
+      return joinKakao(base, bi, [[from.lat, from.lng], [to.lat, to.lng]], [], hav(from.lat, from.lng, to.lat, to.lng) / 1000, routeMode);
     });
+  }
+  function joinKakao(base, bi, cl, mans, connKm, routeMode) {
+    var tail = base.latlngs.slice(bi + 1);
+    var off = cl.length - 1 - bi; // 원래 경로 번호 → 새 경로 번호
+    base.maneuvers.forEach(function (m) {
+      if (m.begin_shape_index > bi) mans.push({ type: m.type, begin_shape_index: m.begin_shape_index + off, instruction: m.instruction });
+    });
+    var tailM = 0;
+    for (var j = bi; j < base.latlngs.length - 1; j++) tailM += hav(base.latlngs[j][0], base.latlngs[j][1], base.latlngs[j + 1][0], base.latlngs[j + 1][1]);
+    var km = connKm + tailM / 1000;
+    return {
+      mode: routeMode,
+      latlngs: cl.concat(tail),
+      maneuvers: mans,
+      km: km,
+      min: Math.max(1, Math.round(base.min * (km / Math.max(0.01, base.km)))),
+      kakao: true,
+      kakaoCached: true,
+      kakaoBase: base,
+      baseStart: bi,
+      connLen: cl.length - 1 // 연결 경로 마지막 점 = 원래 경로 bi 번 점
+    };
   }
   /** 길찾기 화면 위: 오늘 카카오 무료 사용량 */
   function refreshKakaoUsage() {
@@ -2876,7 +2890,7 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
-          (rt.kakao ? ' · 카카오' : '') +
+          (rt.kakao ? (rt.kakaoCached ? ' · 카카오(오늘 저장 경로)' : ' · 카카오') : '') +
           (rt.sameAsReco ? ' · 추천 경로와 같음' : rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
