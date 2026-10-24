@@ -1876,7 +1876,29 @@ function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer, hasGp
     if (bestRank > 0) out[`rank_${win.min}min_speed_kmh`] = Math.round(bestRank * 10) / 10;
   }
   capSpeedPeaksMonotonicInPlace(out);
+  // 최고 속도(상세 기록 그래프 Max): 5초 평균 최고값(GPS 순간 튐 완화) — Strava 활동 max_speed 가 있으면 호출부에서 그 값 우선
+  if (out.max_1min_speed_kmh > 0) {
+    let mx = 0, j5 = 0;
+    for (let i = 0; i < n; i++) {
+      if (j5 < i) j5 = i;
+      while (j5 < n && Number(t[j5]) - Number(t[i]) < 5) j5++;
+      if (j5 >= n) break;
+      const sp5 = Number(t[j5]) - Number(t[i]);
+      if (!(sp5 > 0) || sp5 > 8) continue;
+      const v = ((Number(d[j5]) - Number(d[i])) / sp5) * 3.6;
+      if (v > mx && v <= SPEED_RAW_CAP_KMH) mx = v;
+    }
+    if (mx > 0) out.max_speed_kmh = Math.round(Math.max(mx, out.max_1min_speed_kmh) * 10) / 10;
+  }
   return out;
+}
+/** Strava 활동의 최고 속도(m/s → km/h)가 있으면 평속 결과의 max_speed_kmh 를 그 값으로 */
+function withStravaMaxSpeed(sp, activity) {
+  const ms = activity && Number(activity.max_speed);
+  if (sp && sp.max_1min_speed_kmh > 0 && ms > 0 && ms * 3.6 <= SPEED_RAW_CAP_KMH) {
+    sp.max_speed_kmh = Math.round(Math.max(ms * 3.6, sp.max_1min_speed_kmh) * 10) / 10;
+  }
+  return sp;
 }
 /**
  * 평속 프로파일 단조 규칙(피크 파워 capPeakPowerMonotonicInPlace 와 같은 방식): 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분.
@@ -2266,7 +2288,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
   if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
   if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
-  Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)));
+  Object.assign(logDoc, withStravaMaxSpeed(computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)), activity));
   if (userWeight != null && userWeight > 0) {
     sanitizePeakPowerWattsOnRow(logDoc, userWeight);
   }
@@ -3219,7 +3241,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
-        Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, d.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)));
+        Object.assign(updateData, withStravaMaxSpeed(computeSpeedPeaksFromStreams(streamsRes, d.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)), act));
         if (needsActivityType) {
           const at = String(act.sport_type || act.type || "").trim() || null;
           if (at) updateData.activity_type = at;
@@ -3391,7 +3413,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
     if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
     if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
-    Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, detailedActivity && detailedActivity.trainer, stravaActivityHasGps(detailedActivity)));
+    Object.assign(logDoc, withStravaMaxSpeed(computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, detailedActivity && detailedActivity.trainer, stravaActivityHasGps(detailedActivity)), detailedActivity));
     if (hrPeaks) {
       if (hrPeaks.max_hr_5sec != null) logDoc.max_hr_5sec = hrPeaks.max_hr_5sec;
       if (hrPeaks.max_hr_1min != null) logDoc.max_hr_1min = hrPeaks.max_hr_1min;
@@ -4395,7 +4417,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
-          Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, existingData.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)));
+          Object.assign(updateData, withStravaMaxSpeed(computeSpeedPeaksFromStreams(streamsRes, existingData.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)), act));
           const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
             ? Number(userData.weight ?? userData.weightKg)
             : null;
@@ -4608,7 +4630,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           max_40min_watts: max40minWatts,
           max_60min_watts: max60minWatts,
         };
-        Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)));
+        Object.assign(logDoc, withStravaMaxSpeed(computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)), activity));
         if (userWeight != null && userWeight > 0) {
           sanitizePeakPowerWattsOnRow(logDoc, userWeight);
         }

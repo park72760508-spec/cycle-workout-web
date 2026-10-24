@@ -505,6 +505,7 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
       if (v != null && v > 0) row[k] = v;
     }
   }
+  { const ms = num(log.max_speed_kmh); if (ms != null && ms > 0) row.max_speed_kmh = ms; } // 최고 속도(값 있을 때만)
   return row;
 }
 
