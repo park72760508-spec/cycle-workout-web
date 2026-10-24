@@ -780,14 +780,14 @@
     if (!(z > 0)) return 1;
     return Math.max(0.5, Math.min(1, 1 - (14 - z) * 0.125)); // 2026-10-25: 최소 1/2(줌 10 이하)
   }
-  /** 화면(지도 영역) 크기 보정: 짧은 변 400px = 100%, 작은 화면 최소 80%·큰 화면 최대 120% */
+  /** 화면(지도 영역) 크기 보정: 짧은 변 350px(일반 휴대폰 세로) = 100%, 작은 화면 최소 85%·큰 화면(태블릿·PC) 최대 125% */
   function favPinScaleForScreen() {
     var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap') || $('outdMap');
     if (!wrap) return 1;
     var r = wrap.getBoundingClientRect();
     var m = Math.min(r.width, r.height);
     if (!(m > 0)) return 1;
-    return Math.max(0.8, Math.min(1.2, m / 400));
+    return Math.max(0.85, Math.min(1.25, m / 350));
   }
   function syncFavPinZoom() {
     var map = st.map, el = $('outdMap');
@@ -795,7 +795,8 @@
     var z = map.getZoom();
     el.classList.toggle('outd-favlabels', z >= 15);
     el.classList.toggle('outd-favnolikes', z < 14);
-    var sc = Math.round(favPinScaleForZoom(z) * favPinScaleForScreen() * 1000) / 1000;
+    // 최종 크기도 최소 1/2 아래로는 줄이지 않음
+    var sc = Math.round(Math.max(0.5, favPinScaleForZoom(z) * favPinScaleForScreen()) * 1000) / 1000;
     if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
   }
   function applyFavPinUnrotate(force) {
