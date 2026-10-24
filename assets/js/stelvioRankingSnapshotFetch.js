@@ -564,12 +564,26 @@
     }
     return p.then(function (j) {
       if (!j || j.success !== true) return null;
-      var entries = (j.entries || []).map(function (e, i) { var o = Object.assign({}, e); o.rank = i + 1; return o; });
+      /* 순위 등락(2026-10-25): 서버가 어제 마감 순위 대비 전체(mvAll)·부문(mvCat) 등락을 줌 →
+         전체 목록 행엔 전체 등락, 부문 목록 행(별도 복사본)엔 부문 등락 */
+      function withMv(e, mv) {
+        var o = Object.assign({}, e);
+        delete o.mvAll; delete o.mvCat;
+        if (mv && mv.previousBoardRank != null) { o.rankChange = mv.rankChange; o.previousBoardRank = mv.previousBoardRank; }
+        return o;
+      }
+      var entries = (j.entries || []).map(function (e, i) { var o = withMv(e, e.mvAll); o.rank = i + 1; return o; });
       var byCategory = { Supremo: entries, Bianco: [], Rosa: [], Infinito: [], Leggenda: [], Assoluto: [] };
-      entries.forEach(function (e) { if (byCategory[e.ageCategory]) byCategory[e.ageCategory].push(e); });
+      (j.entries || []).forEach(function (e, i) {
+        if (!byCategory[e.ageCategory]) return;
+        var c = withMv(e, e.mvCat);
+        c.rank = i + 1;
+        byCategory[e.ageCategory].push(c);
+      });
       var payload = {
         success: true, byCategory: byCategory, entries: entries, durationType: dur, period: 'rolling90',
-        startStr: j.startStr, endStr: j.endStr, gender: gender, readSource: 'supabase_rpc'
+        startStr: j.startStr, endStr: j.endStr, gender: gender, readSource: 'supabase_rpc',
+        rankMovementSource: 'server_prev_day', rankMovementAsOfSeoul: j.rankMovementBaseline || null
       };
       attachCurrentUser(payload, uid);
       return payload;

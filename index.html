@@ -121,7 +121,7 @@
     })();
   </script>
   <!-- 비용 절감 3단계: 랭킹보드 공용 스냅샷(Supabase) 우선 읽기 — getPeakPowerRanking 호출부 공통 -->
-  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261024avgspd"></script>
+  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261025spdmv"></script>
   <script src="assets/js/stelvioFirestoreReconnect.js"></script>
   <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
   <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -20011,6 +20011,7 @@
     function stelvioSupportsRankMovementDuration(dt) {
       if (!dt) return false;
       if (stelvioIsPeakPowerDurationForRankChange(dt)) return true;
+      if (stelvioIsAvgSpeedDuration(dt)) return true; /* 평속: 서버(Supabase)가 어제 마감 대비 등락을 계산해 줌 */
       return dt === 'gc' || dt === 'tss' || dt === 'personal_dist' || dt === 'personal_speed' || dt === 'group_dist';
     }
     function stelvioResolveRankMovementDurationType(data) {
@@ -22817,7 +22818,7 @@
         stelvioApplyTssWeeklyRankMovementPipeline(data);
         return;
       }
-      if (stelvioSupportsRankMovementDuration(duration)) {
+      if (stelvioSupportsRankMovementDuration(duration) && !stelvioIsAvgSpeedDuration(duration)) {
         var serverMvBeforeClear = stelvioExtractRankMovementFromPayload(data);
         stelvioClearPeakRankMovementOnPayload(data);
         stelvioApplyClientPeakRankMovementFromSnapshot(data, serverMvBeforeClear);
@@ -23151,6 +23152,7 @@
       if (!data || !data.byCategory) return;
       var duration = stelvioResolveRankMovementDurationType(data);
       if (!stelvioSupportsRankMovementDuration(duration)) return;
+      if (stelvioIsAvgSpeedDuration(duration)) return; /* 평속: 서버 등락 그대로(브라우저 기준 재계산 안 함) */
       if (!data.durationType) data.durationType = duration;
       if (!data.period && typeof stelvioRankingState !== 'undefined' && stelvioRankingState.period) {
         data.period = stelvioRankingState.period;
