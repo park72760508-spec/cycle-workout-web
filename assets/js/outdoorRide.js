@@ -3566,7 +3566,7 @@
           return '<button type="button" data-v="' + c.k + '">' + c.e + ' ' + c.l + '</button>';
         }).join('') + '</div>' +
         '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
-        '<label class="outd-fav__label">메모<input name="memo" type="text" maxlength="20" placeholder="20자 이내 (선택)" enterkeyhint="done"></label>' +
+        '<label class="outd-fav__label">메모<input name="memo" type="text" maxlength="30" placeholder="30자 이내 (선택)" enterkeyhint="done"></label>' +
         '<div class="outd-fav__label">공개 여부</div>' +
         '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개</button></div>' +
         '<p class="outd-fav__hint" data-pub-hint></p>' +
@@ -3727,7 +3727,7 @@
       lat: Math.round(fav.pickLL.lat * 1e7) / 1e7,
       lng: Math.round(fav.pickLL.lng * 1e7) / 1e7,
       is_public: fav.form.pub === '1',
-      memo: f.querySelector('[name=memo]').value.trim().slice(0, 20)
+      memo: f.querySelector('[name=memo]').value.trim().slice(0, 30)
     };
     var editing = !!fav.editId;
     if (editing) payload.id = fav.editId;
