@@ -4195,6 +4195,18 @@
       if (best > 0) out['max_' + w[0] + 'min_speed_kmh'] = Math.round(best * 10) / 10;
       if (bestRank > 0) out['rank_' + w[0] + 'min_speed_kmh'] = Math.round(bestRank * 10) / 10;
     });
+    // 단조 규칙: 1분 ≥ 5분 ≥ … ≥ 60분(긴 구간이 크면 앞 구간 값으로, 앞 구간이 없으면 긴 구간도 비움)
+    ['max', 'rank'].forEach(function (pre) {
+      var prev = null;
+      SPEED_PEAK_WINDOWS.forEach(function (w, idx) {
+        var k = pre + '_' + w[0] + 'min_speed_kmh';
+        var v = Number(out[k]) || 0;
+        if (idx === 0) { prev = v > 0 ? v : null; return; }
+        if (prev == null || !(v > 0)) { delete out[k]; prev = null; return; }
+        if (v > prev) out[k] = prev;
+        prev = out[k];
+      });
+    });
     return out;
   }
 

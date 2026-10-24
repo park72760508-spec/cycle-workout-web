@@ -1865,6 +1865,25 @@ function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer) {
     if (best > 0) out[`max_${win.min}min_speed_kmh`] = Math.round(best * 10) / 10;
     if (bestRank > 0) out[`rank_${win.min}min_speed_kmh`] = Math.round(bestRank * 10) / 10;
   }
+  capSpeedPeaksMonotonicInPlace(out);
+  return out;
+}
+/**
+ * 평속 프로파일 단조 규칙(피크 파워 capPeakPowerMonotonicInPlace 와 같은 방식): 1분 ≥ 5분 ≥ 10분 ≥ 20분 ≥ 40분 ≥ 60분.
+ * 긴 구간이 앞 구간보다 크면 앞 구간 값으로 맞추고, 앞 구간이 없으면(제외) 긴 구간도 비움.
+ */
+function capSpeedPeaksMonotonicInPlace(out) {
+  for (const pre of ["max", "rank"]) {
+    let prev = null;
+    SPEED_PEAK_WINDOWS.forEach((win, idx) => {
+      const k = `${pre}_${win.min}min_speed_kmh`;
+      const v = Number(out[k]) || 0;
+      if (idx === 0) { prev = v > 0 ? v : null; return; }
+      if (prev == null || !(v > 0)) { delete out[k]; prev = null; return; }
+      if (v > prev) out[k] = prev;
+      prev = Number(out[k]);
+    });
+  }
   return out;
 }
 
