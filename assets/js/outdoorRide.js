@@ -3235,7 +3235,14 @@
       b.setAttribute('aria-selected', on ? 'true' : 'false');
     });
     var full = fav.items[fav.tab] || [];
-    var list = full.filter(favMatchesFilter);
+    // 2026-10-25: 정렬 = 시도(가나다) → 장소명(가나다). 시도가 없는 장소는 맨 뒤
+    var list = full.filter(favMatchesFilter).slice().sort(function (a, b) {
+      var sa = String(a.sido || ''), sb = String(b.sido || '');
+      if (!sa !== !sb) return sa ? -1 : 1;
+      var c = sa.localeCompare(sb, 'ko');
+      if (c) return c;
+      return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
+    });
     if (full.length && !list.length) {
       box.innerHTML = '<div class="coachm-picker__empty">선택한 조건(' + escHtml([fav.filter.sido, fav.filter.sigungu, fav.filter.cat ? favCat(fav.filter.cat).l : ''].filter(Boolean).join(' · ')) + ')에 ' +
         (fav.tab === 'mine' ? '내 즐겨찾기가' : '공개 장소가') + ' 없습니다.<br><small>지역·카테고리를 \'전체\'로 바꾸면 모든 목록이 보입니다.</small></div>';
