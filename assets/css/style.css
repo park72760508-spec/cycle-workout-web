@@ -35147,3 +35147,32 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #outdoorRideScreen .outd-reroute-btn { bottom: 206px; }
   #outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
 }
+/* ===== 2026-10-24: 즐겨찾기 시도·구군 — STELVIO 어두운 펼침 목록(브라우저 기본 목록 대신) ===== */
+#outdoorRideScreen .outd-fav .outd-route__sheet { position: relative; }
+#outdoorRideScreen .outd-fav__dd {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 112px; min-width: 0; height: 32px; padding: 0 10px;
+  border-radius: 9px; border: 1px solid #3a3a3a; background: #121212; color: #e2e8f0; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__dd-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-fav__dd i {
+  flex: 0 0 auto; width: 7px; height: 7px; margin-top: -3px; border-right: 2px solid #94a3b8; border-bottom: 2px solid #94a3b8;
+  transform: rotate(45deg); transition: transform 0.15s ease;
+}
+#outdoorRideScreen .outd-fav__dd.is-set { border-color: rgba(250, 204, 21, 0.55); color: #facc15; }
+#outdoorRideScreen .outd-fav__dd.is-open { border-color: #facc15; }
+#outdoorRideScreen .outd-fav__dd.is-open i { transform: rotate(-135deg); margin-top: 3px; }
+#outdoorRideScreen .outd-fav__dd:disabled { opacity: 0.4; cursor: default; }
+#outdoorRideScreen .outd-fav__ddpop {
+  position: absolute; z-index: 20; max-height: 50vh; overflow-y: auto; padding: 5px; box-sizing: border-box;
+  background: #1c1c1c; border: 1px solid #333; border-radius: 12px; box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+  animation: outdDdIn 0.12s ease-out;
+}
+@keyframes outdDdIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+#outdoorRideScreen .outd-fav__dditem {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 11px 12px;
+  border: 0; border-radius: 8px; background: transparent; color: #e2e8f0; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+}
+#outdoorRideScreen .outd-fav__dditem:hover, #outdoorRideScreen .outd-fav__dditem:active { background: #2a2a2a; }
+#outdoorRideScreen .outd-fav__dditem b { visibility: hidden; color: #facc15; font-size: 14px; }
+#outdoorRideScreen .outd-fav__dditem.is-on { color: #facc15; font-weight: 800; background: rgba(250, 204, 21, 0.1); }
+#outdoorRideScreen .outd-fav__dditem.is-on b { visibility: visible; }

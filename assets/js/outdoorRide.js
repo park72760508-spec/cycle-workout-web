@@ -2898,8 +2898,10 @@
       '<div class="coachm-picker__sheet outd-route__sheet">' +
       '<div class="coachm-picker__head"><span class="outd-route__title">' + ICON_STAR_SM + ' 즐겨찾기</span>' +
       // 2026-10-23: 지역(시도·구군) 선택 — 기본은 전체
-      '<span class="outd-fav__filters"><select data-fav-sido aria-label="시도"><option value="">시도 전체</option></select>' +
-      '<select data-fav-sigungu aria-label="구군" disabled><option value="">구군 전체</option></select></span>' +
+      // 2026-10-24: 시도·구군 — 브라우저 기본 목록 대신 STELVIO 어두운 펼침 목록
+      '<span class="outd-fav__filters">' +
+      '<button type="button" class="outd-fav__dd" data-fav-dd="sido" aria-haspopup="listbox"><span class="outd-fav__dd-label">시도 전체</span><i aria-hidden="true"></i></button>' +
+      '<button type="button" class="outd-fav__dd" data-fav-dd="sigungu" aria-haspopup="listbox" disabled><span class="outd-fav__dd-label">구군 전체</span><i aria-hidden="true"></i></button></span>' +
       '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
       // 2026-10-24: 카테고리 원형 탭(중고랜드와 같은 형식) — 전체·맛집·카페·명소·기타·집
       '<div class="outd-fav__cats" role="tablist" aria-label="카테고리">' +
@@ -2916,17 +2918,19 @@
       '<div class="outd-fav__foot"><button type="button" class="outd-fav__add" data-fav-add>＋ 등록하기</button></div>' +
       '</div>';
     $(SCREEN_ID).appendChild(el);
-    el.querySelector('[data-fav-sido]').addEventListener('change', function () {
-      fav.filter.sido = this.value;
-      fav.filter.sigungu = '';
-      renderFavList();
-    });
-    el.querySelector('[data-fav-sigungu]').addEventListener('change', function () {
-      fav.filter.sigungu = this.value;
-      renderFavList();
-    });
     el.addEventListener('click', function (e) {
       var t = e.target;
+      var ddItem = t.closest('[data-fav-dd-v]');
+      if (ddItem) {
+        var kind = ddItem.getAttribute('data-fav-dd-kind'), v = ddItem.getAttribute('data-fav-dd-v');
+        if (kind === 'sido') { fav.filter.sido = v; fav.filter.sigungu = ''; } else fav.filter.sigungu = v;
+        closeFavDd();
+        renderFavList();
+        return;
+      }
+      var ddBtn = t.closest('[data-fav-dd]');
+      if (ddBtn) { if (!ddBtn.disabled) toggleFavDd(ddBtn.getAttribute('data-fav-dd'), ddBtn); return; }
+      if (!t.closest('.outd-fav__ddpop')) closeFavDd();
       if (t === el || t.closest('[data-fav-close]')) { el.style.display = 'none'; return; }
       var catTab = t.closest('[data-fav-cat]');
       if (catTab) { fav.filter.cat = catTab.getAttribute('data-fav-cat'); renderFavList(); return; }
@@ -2958,6 +2962,7 @@
     closeMenu();
     if (fav.picking) cancelFavPick();
     var el = favSheet();
+    closeFavDd();
     renderFavTabs();
     el.style.display = 'flex';
     loadFavList(true);
@@ -2986,9 +2991,9 @@
   }
   /** 시도·구군 선택 상자 — 등록된 즐겨찾기(내 것+공개 장소)에 있는 지역만, 구군은 고른 시도 안에서 */
   function renderFavFilterOptions() {
-    var sel1 = document.querySelector('#outdFavSheet [data-fav-sido]');
-    var sel2 = document.querySelector('#outdFavSheet [data-fav-sigungu]');
-    if (!sel1 || !sel2) return;
+    var b1 = document.querySelector('#outdFavSheet [data-fav-dd=sido]');
+    var b2 = document.querySelector('#outdFavSheet [data-fav-dd=sigungu]');
+    if (!b1 || !b2) return;
     var all = favAllItems();
     var sidos = {}, sggs = {};
     all.forEach(function (it) {
@@ -2997,10 +3002,44 @@
     });
     if (fav.filter.sido) sidos[fav.filter.sido] = 1;
     if (fav.filter.sigungu) sggs[fav.filter.sigungu] = 1;
-    var opt = function (v, label, cur) { return '<option value="' + escHtml(v) + '"' + (v === cur ? ' selected' : '') + '>' + escHtml(label) + '</option>'; };
-    sel1.innerHTML = opt('', '시도 전체', fav.filter.sido) + Object.keys(sidos).sort().map(function (v) { return opt(v, v, fav.filter.sido); }).join('');
-    sel2.innerHTML = opt('', '구군 전체', fav.filter.sigungu) + Object.keys(sggs).sort().map(function (v) { return opt(v, v, fav.filter.sigungu); }).join('');
-    sel2.disabled = !fav.filter.sido;
+    fav.ddOpts = { sido: Object.keys(sidos).sort(), sigungu: Object.keys(sggs).sort() };
+    b1.querySelector('.outd-fav__dd-label').textContent = fav.filter.sido || '시도 전체';
+    b2.querySelector('.outd-fav__dd-label').textContent = fav.filter.sigungu || '구군 전체';
+    b1.classList.toggle('is-set', !!fav.filter.sido);
+    b2.classList.toggle('is-set', !!fav.filter.sigungu);
+    b2.disabled = !fav.filter.sido;
+  }
+  /** 시도·구군 펼침 목록(STELVIO 어두운 테마) — 버튼 바로 아래, 고른 항목 노랑 ✓, 바깥 누르면 닫힘 */
+  function closeFavDd() {
+    var pop = document.querySelector('#outdFavSheet .outd-fav__ddpop');
+    if (pop) pop.remove();
+    Array.prototype.forEach.call(document.querySelectorAll('#outdFavSheet [data-fav-dd]'), function (b) { b.classList.remove('is-open'); });
+  }
+  function toggleFavDd(kind, btn) {
+    var sheet = document.querySelector('#outdFavSheet .outd-route__sheet');
+    var open = document.querySelector('#outdFavSheet .outd-fav__ddpop');
+    var wasSame = open && open.getAttribute('data-kind') === kind;
+    closeFavDd();
+    if (wasSame || !sheet) return;
+    var opts = (fav.ddOpts && fav.ddOpts[kind]) || [];
+    var cur = kind === 'sido' ? fav.filter.sido : fav.filter.sigungu;
+    var pop = document.createElement('div');
+    pop.className = 'outd-fav__ddpop';
+    pop.setAttribute('role', 'listbox');
+    pop.setAttribute('data-kind', kind);
+    pop.innerHTML = [''].concat(opts).map(function (v) {
+      var label = v || (kind === 'sido' ? '시도 전체' : '구군 전체');
+      return '<button type="button" class="outd-fav__dditem' + (v === (cur || '') ? ' is-on' : '') + '" role="option" data-fav-dd-kind="' + kind + '" data-fav-dd-v="' + escHtml(v) + '">' +
+        '<span>' + escHtml(label) + '</span><b aria-hidden="true">✓</b></button>';
+    }).join('');
+    sheet.appendChild(pop);
+    var sr = sheet.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    pop.style.top = (br.bottom - sr.top + 6) + 'px';
+    var w = Math.max(br.width, 150);
+    var left = Math.min(br.left - sr.left, sr.width - w - 8);
+    pop.style.left = Math.max(8, left) + 'px';
+    pop.style.minWidth = w + 'px';
+    btn.classList.add('is-open');
   }
   function favMatchesFilter(it) {
     if (fav.filter.cat && (it.category || 'etc') !== fav.filter.cat) return false;
