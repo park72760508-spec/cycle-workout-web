@@ -18131,6 +18131,7 @@
           'hidden',
           isGroup ||
             stelvioIsPersonalSpeedRanking() ||
+            stelvioIsAvgSpeedRanking() ||
             stelvioIsGcRankingMode() ||
             stelvioIsTssRankingMode() ||
             stelvioIsKmDistanceRanking() ||
@@ -18175,10 +18176,6 @@
       var label = document.getElementById('stelvioPeriodLabel');
       var sel = document.getElementById('stelvioPeriodSelect');
       if (!label || !sel) return;
-      /* 평속 탭(2026-10-25): '90일' 아이콘 왼쪽 '기간' 글자 숨김 */
-      var periodCaption = document.getElementById('stelvioPeriodCaption');
-      var periodDd = periodCaption && periodCaption.closest ? periodCaption.closest('.stelvio-period-dropdown') : null;
-      if (periodDd) periodDd.style.display = stelvioIsAvgSpeedRanking() ? 'none' : ''; /* 빈 칸·▾ 까지 통째로 숨김 */
       if (stelvioIsRollingWindowDurationRanking() || stelvioIsGcRankingMode() || stelvioIsGroupDistanceRanking()) {
         if (stelvioIsGroupDistanceRanking()) {
           if (stelvioGroupTabMetric === 'tss') label.textContent = '주간';
