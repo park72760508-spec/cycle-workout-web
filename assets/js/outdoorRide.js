@@ -3192,12 +3192,12 @@
     var sel = ok[travelMode] ? travelMode : (FAV_POP_MODES.filter(function (m) { return ok[m.k]; })[0] || {}).k || travelMode;
     el.__mode = sel;
     var icon = { moto: ICON_MOTO, bike: ICON_BIKE, walk: ICON_WALK };
-    return '<div class="outd-favpop__modes" role="radiogroup" aria-label="이동 수단">' + FAV_POP_MODES.map(function (m) {
-      var cls = 'outd-favpop__mode' + (m.k === sel ? ' is-on' : '') + (ok[m.k] ? '' : ' is-disabled');
+    // 2026-10-24: 길찾기 화면 위쪽 이동 수단 탭과 같은 모양(어두운 칸 + 아이콘 버튼) — 선택=흰색, 가능=회색, 불가=흐린 회색
+    return '<span class="outd-route__modes outd-favpop__modes" role="radiogroup" aria-label="이동 수단">' + FAV_POP_MODES.map(function (m) {
+      var cls = 'outd-route__mode' + (m.k === sel ? ' is-on' : '') + (ok[m.k] ? '' : ' is-disabled');
       return '<button type="button" class="' + cls + '" data-pop-mode="' + m.k + '" role="radio" aria-checked="' + (m.k === sel) + '"' +
-        (ok[m.k] ? '' : ' aria-disabled="true" title="거리가 멀어 선택할 수 없습니다"') + '>' +
-        '<span class="outd-favpop__mode-ico">' + icon[m.k] + '</span><span class="outd-favpop__mode-label">' + m.l + '</span></button>';
-    }).join('') + '</div>';
+        ' aria-label="' + m.l + (ok[m.k] ? '' : ' (거리가 멀어 선택 불가)') + '"' + (ok[m.k] ? '' : ' aria-disabled="true"') + '>' + icon[m.k] + '</button>';
+    }).join('') + '</span>';
   }
   function openFavPopup(id) {
     var it = null;

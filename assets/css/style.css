@@ -35197,3 +35197,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpop__mode.is-disabled { cursor: not-allowed; }
 #outdoorRideScreen .outd-favpop__mode.is-disabled .outd-favpop__mode-ico { color: #6b7280; border-color: #374151; background: #161616; }
 #outdoorRideScreen .outd-favpop__mode.is-disabled .outd-favpop__mode-label { color: #6b7280; }
+/* 2026-10-24: 핀 팝업 이동 수단 — 길찾기 화면 탭 모양으로 교체. 가능=회색(#94a3b8), 불가=흐린 회색, 선택=흰색 */
+#outdoorRideScreen .outd-favpop__modes .outd-route__mode { color: #94a3b8; }
+#outdoorRideScreen .outd-favpop__modes .outd-route__mode.is-on { color: #ffffff; background: #2a2a2a; }
+#outdoorRideScreen .outd-favpop__modes .outd-route__mode.is-disabled { color: #3f4654; cursor: not-allowed; }
+#outdoorRideScreen .outd-favpop__modes .outd-route__moto-ico { width: 26px; height: 26px; }
