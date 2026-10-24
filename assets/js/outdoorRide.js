@@ -4291,7 +4291,7 @@
     }
     var n = t.length;
     var totalSec = t[n - 1] - t[0];
-    var rankable = !(totalSec > 0 && d[n - 1] / totalSec * 3.6 > 45); // 기록 전체 평균 45 km/h 초과 → 차량 이동 등으로 보고 순위 제외
+    var rankable = !(totalSec > 0 && d[n - 1] / totalSec * 3.6 > 60); // 기록 전체 평균 60 km/h 초과 → 차량 이동 등으로 보고 순위 제외(2026-10-25: 45 → 60, 시합 평속 허용)
     SPEED_PEAK_WINDOWS.forEach(function (w) {
       var best = 0, bestRank = 0, j = 0;
       for (var i = 0; i < n; i++) {

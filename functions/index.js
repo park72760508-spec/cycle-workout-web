@@ -1811,8 +1811,16 @@ const SPEED_PEAK_WINDOWS = [
 ];
 const SPEED_RAW_CAP_KMH = 100;
 const SPEED_RANK_MIN_GRADE = -0.015;
-/** 기록 전체 평균속도가 이보다 빠르면(차량 이동·GPS 오류) 순위용 값 없음 */
-const SPEED_RANK_MAX_RIDE_AVG_KMH = 45;
+/** 기록 전체 평균속도가 이보다 빠르면(차량 이동·GPS 오류) 순위용 값 없음 — 2026-10-25: 45 → 60(실제 시합 평속 허용) */
+const SPEED_RANK_MAX_RIDE_AVG_KMH = 60;
+/** Strava 활동에 GPS 경로가 있는지(실내 로라·가상 활동은 'Ride' 여도 경로 없음 → 평속 순위 제외) */
+function stravaActivityHasGps(a) {
+  if (!a || typeof a !== "object") return null;
+  const m = a.map || {};
+  if (String(m.summary_polyline || m.polyline || "").trim()) return true;
+  if (Array.isArray(a.start_latlng) && a.start_latlng.length === 2) return true;
+  return false;
+}
 /** 파워 데이터가 있으면: 구간 평균 파워 < 평지 단독 주행 필요 파워 × 이 비율 → 순위 제외(드래프팅·뒷바람 여유 포함) */
 const SPEED_RANK_MIN_POWER_RATIO = 0.45;
 const SPEED_OUTDOOR_TYPES = new Set(["ride", "mountainbikeride", "gravelride", "ebikeride", "emountainbikeride", "velomobile"]);
@@ -1821,7 +1829,7 @@ function speedRequiredWatts(vMs, grade) {
   const m = 75, g = 9.81;
   return 0.5 * 1.2 * 0.30 * vMs * vMs * vMs + 0.004 * m * g * vMs + m * g * vMs * grade;
 }
-function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer) {
+function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer, hasGps) {
   const out = {};
   if (!streamsRes || !streamsRes.success) return out;
   const type = String(activityType || "").trim().toLowerCase();
@@ -1839,7 +1847,8 @@ function computeSpeedPeaksFromStreams(streamsRes, activityType, isTrainer) {
   }
   const totalSec = Number(t[n - 1]) - Number(t[0]);
   const rideAvg = totalSec > 0 ? ((Number(d[n - 1]) - Number(d[0])) / totalSec) * 3.6 : 0;
-  const rankable = type !== "ebikeride" && type !== "emountainbikeride" && rideAvg <= SPEED_RANK_MAX_RIDE_AVG_KMH;
+  // 순위용: 전기자전거 제외, GPS 경로 없는 기록(실내 로라·가상) 제외, 기록 전체 평균 60km/h 초과 제외
+  const rankable = type !== "ebikeride" && type !== "emountainbikeride" && hasGps !== false && rideAvg <= SPEED_RANK_MAX_RIDE_AVG_KMH;
   for (const win of SPEED_PEAK_WINDOWS) {
     let best = 0, bestRank = 0, j = 0;
     for (let i = 0; i < n; i++) {
@@ -2256,7 +2265,7 @@ async function processStravaActivity(db, ownerId, objectId, options = {}) {
   if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
   if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
   if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
-  Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer));
+  Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)));
   if (userWeight != null && userWeight > 0) {
     sanitizePeakPowerWattsOnRow(logDoc, userWeight);
   }
@@ -3209,7 +3218,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
       if ((needsMmp || needsHrPeaks || needsTimeInZones || needsWeight || needsActivityType || needsRouteProfile) && entry) {
         const streamsRes = await fetchStravaStreams(accessToken, actId);
         const updateData = {};
-        Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, d.activity_type || act.sport_type || act.type, act.trainer));
+        Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, d.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)));
         if (needsActivityType) {
           const at = String(act.sport_type || act.type || "").trim() || null;
           if (at) updateData.activity_type = at;
@@ -3381,7 +3390,7 @@ async function processOneUserStravaSync(db, userId, userData, { afterUnix, befor
     if (max30minWatts != null) logDoc.max_30min_watts = max30minWatts;
     if (max40minWatts != null) logDoc.max_40min_watts = max40minWatts;
     if (max60minWatts != null) logDoc.max_60min_watts = max60minWatts;
-    Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, detailedActivity && detailedActivity.trainer));
+    Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, detailedActivity && detailedActivity.trainer, stravaActivityHasGps(detailedActivity)));
     if (hrPeaks) {
       if (hrPeaks.max_hr_5sec != null) logDoc.max_hr_5sec = hrPeaks.max_hr_5sec;
       if (hrPeaks.max_hr_1min != null) logDoc.max_hr_1min = hrPeaks.max_hr_1min;
@@ -4385,7 +4394,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           await new Promise((r) => setTimeout(r, STRAVA_CALL_DELAY_MS));
           const streamsRes = await fetchStravaStreams(accessToken, actId);
           apiCallCount += 1;
-          Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, existingData.activity_type || act.sport_type || act.type, act.trainer));
+          Object.assign(updateData, computeSpeedPeaksFromStreams(streamsRes, existingData.activity_type || act.sport_type || act.type, act.trainer, stravaActivityHasGps(act)));
           const userWeight = (Number(userData.weight ?? userData.weightKg ?? 0) > 0)
             ? Number(userData.weight ?? userData.weightKg)
             : null;
@@ -4598,7 +4607,7 @@ exports.manualStravaSyncWithMmp = onRequest(
           max_40min_watts: max40minWatts,
           max_60min_watts: max60minWatts,
         };
-        Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer));
+        Object.assign(logDoc, computeSpeedPeaksFromStreams(streamsRes, mapped.activity_type, activity && activity.trainer, stravaActivityHasGps(activity)));
         if (userWeight != null && userWeight > 0) {
           sanitizePeakPowerWattsOnRow(logDoc, userWeight);
         }
@@ -17363,7 +17372,7 @@ exports.adminBackfillSpeedPeaksToday = onRequest(
       const force = body.force === true; // 기준 변경 후 오늘 기록 다시 계산
       const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
       let q = supabase.from("rides")
-        .select("id, user_id, activity_id, activity_type")
+        .select("id, user_id, activity_id, activity_type, summary_polyline")
         .eq("ride_date", dateStr).eq("source", "strava")
         .in("activity_type", ["Ride", "MountainBikeRide", "GravelRide", "EBikeRide", "EMountainBikeRide", "Velomobile"])
         .order("id", { ascending: true }).limit(maxRides);
@@ -17398,7 +17407,7 @@ exports.adminBackfillSpeedPeaksToday = onRequest(
           if (!tokens[fbUid]) { noData++; continue; }
           if (updated + noData > 0) await new Promise((rs) => setTimeout(rs, STRAVA_CALL_DELAY_MS));
           const streamsRes = await fetchStravaStreams(tokens[fbUid], r.activity_id);
-          const sp = computeSpeedPeaksFromStreams(streamsRes, r.activity_type, false);
+          const sp = computeSpeedPeaksFromStreams(streamsRes, r.activity_type, false, !!String(r.summary_polyline || "").trim());
           if (!Object.keys(sp).length) { noData++; continue; }
           // 기준 변경으로 빠진 값(예: 순위 제외)은 비워서 덮어씀
           for (const m of [1, 5, 10, 20, 40, 60]) {
