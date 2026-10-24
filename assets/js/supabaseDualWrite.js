@@ -819,6 +819,29 @@ function clearRpcTokenCaches() {
   try { localStorage.removeItem(MINTED_SESSION_CACHE_KEY); } catch (e) {}
 }
 
+/**
+ * 로그인 사용자 토큰(RPC 와 같은 커스텀 JWT)으로 Supabase Edge Function 호출(2026-10-24, 루트맵 카카오 길찾기).
+ * 응답 JSON 을 그대로 돌려준다(success:false 도 예외 없이 반환 — 호출한 쪽에서 code 로 판단).
+ */
+export async function callSupabaseEdgeAsUser(name, body) {
+  const cfg = getConfig();
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) throw new Error('Supabase 설정 없음');
+  const post = async (token) => fetch(cfg.supabaseUrl + '/functions/v1/' + name, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, apikey: cfg.supabaseAnonKey },
+    body: JSON.stringify(body || {})
+  });
+  let res = await post(await getFreshRpcAccessToken());
+  if (res.status === 401) {
+    clearRpcTokenCaches();
+    res = await post(await getFreshRpcAccessToken());
+  }
+  let data = null;
+  try { data = await res.json(); } catch (e) { data = null; }
+  if (!data) throw new Error('HTTP ' + res.status);
+  return data;
+}
+
 export async function callSupabaseRpcAsUser(fnName, args) {
   await getFreshRpcAccessToken(); // 로그인·토큰 확보 실패를 먼저 드러냄
   const supabase = await getRpcSupabaseClient();

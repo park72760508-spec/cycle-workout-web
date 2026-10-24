@@ -2062,11 +2062,140 @@
    *   via: 경유(through) 지점 — 원래 경로 앞쪽에 다시 합류하는 재탐색 후보용
    */
   function fetchBikeRoute(from, to, mode, opt) {
+    // 2026-10-24: 자전거·걷기는 카카오 경로 먼저(첫 검색·직접 다시 찾기). 경로 이탈 자동 재탐색(noKakao)·경유지(via)·실패·한도 초과는 기존 방식
+    if (KAKAO_MODE[mode] && !(opt && (opt.noKakao || opt.via))) {
+      return fetchKakaoRoute(from, to, mode).catch(function (err) {
+        if (err && err.message) console.info('[kakao-route] 기본 경로로 전환:', err.message);
+        return fetchBikeRouteBase(from, to, mode, opt);
+      });
+    }
+    return fetchBikeRouteBase(from, to, mode, opt);
+  }
+  function fetchBikeRouteBase(from, to, mode, opt) {
     if (mode === 'walk' || mode === 'walkShort') return fetchWalkRoute(from, to, mode, opt);
     if (/^moto/.test(mode)) return fetchMotoRoute(from, to, mode, opt);
     return fetchValhallaRoute(from, to, mode, opt).then(function (base) {
       return improveBikeRouteSidePath(base, mode);
     });
+  }
+
+  /* ---------- 카카오 도보·자전거 경로(2026-10-24) ----------
+   * Supabase Edge Function 'kakao-route' 가 카카오 REST(키는 서버 Vault)를 대신 불러 준다.
+   * 하루 무료 1,000건(자전거·도보 각각)을 서버가 세고, 같은 출발지 근처 → 같은 목적지는 저장된 결과를 다시 쓴다.
+   * 결과는 Valhalla 경로와 같은 모양({latlngs, maneuvers, km, min})으로 바꿔 나머지 화면·안내 로직을 그대로 쓴다.
+   */
+  var KAKAO_MODE = {
+    bike: { api: 'bicycle', mode: 'BIKE_ONLY' },
+    short: { api: 'bicycle', mode: 'SHORTEST' },
+    walk: { api: 'walk', mode: 'BROAD_FIRST' },
+    walkShort: { api: 'walk', mode: 'SHORTEST' }
+  };
+  var kakaoUsage = null;
+  var kakaoOff = { bicycle: '', walk: '' }; // 오늘 한도 초과·서버 없음 → 그날은 바로 기본 경로
+  function kakaoDay() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
+  function fetchKakaoRoute(from, to, mode) {
+    var km = KAKAO_MODE[mode];
+    if (kakaoOff[km.api] === kakaoDay()) return Promise.reject(new Error('오늘 카카오 사용 안 함'));
+    return loadDualWriteModule().then(function (mod) {
+      if (!mod || typeof mod.callSupabaseEdgeAsUser !== 'function') throw new Error('모듈 없음');
+      return Promise.race([
+        mod.callSupabaseEdgeAsUser('kakao-route', { api: km.api, mode: km.mode, sx: from.lng, sy: from.lat, ex: to.lng, ey: to.lat }),
+        new Promise(function (_, rej) { setTimeout(function () { rej(new Error('카카오 응답 지연')); }, 15000); })
+      ]);
+    }).then(function (d) {
+      if (d && d.usage) { kakaoUsage = d.usage; renderKakaoUsage(); }
+      if (!d || !d.success || !d.route) {
+        if (d && (d.code === 'QUOTA' || d.code === 'NOT_FOUND' || /not found|404/i.test(String(d.error || d.msg || '')))) kakaoOff[km.api] = kakaoDay();
+        throw new Error((d && (d.error || d.msg)) || '카카오 경로 없음');
+      }
+      return kakaoToRoute(d.route, mode, !!d.cached);
+    });
+  }
+  /** 카카오 안내 문구 → 회전 종류(Valhalla maneuver type 번호, maneuverDelta 와 같은 기준) */
+  function kakaoTurnType(g) {
+    var t = String(g || '');
+    var head = t.split(' 후 ')[0];
+    if (/유턴/.test(head)) return 13;
+    if (/좌회전/.test(head)) return 15;
+    if (/우회전/.test(head)) return 10;
+    if (/(왼쪽|좌측)/.test(head)) return 16;
+    if (/(오른쪽|우측)/.test(head)) return 9;
+    return null;
+  }
+  function kakaoToRoute(r, mode, cached) {
+    var maneuvers = [];
+    (r.steps || []).forEach(function (s, k) {
+      var type = k === 0 ? null : kakaoTurnType(s.g);
+      if (type == null) return;
+      maneuvers.push({ type: type, begin_shape_index: s.i, instruction: String(s.g).split(' 후 ')[0] });
+    });
+    var rt = {
+      mode: mode,
+      latlngs: r.pts,
+      maneuvers: maneuvers,
+      km: (r.dist || 0) / 1000,
+      min: Math.max(1, Math.round((r.time || 0) / 60)),
+      kakao: true,
+      kakaoCached: cached
+    };
+    rt.kakaoBase = rt; // 경로 이탈 시 다시 붙을 원래 카카오 경로
+    rt.baseStart = 0;
+    rt.connLen = 0;
+    return rt;
+  }
+  /**
+   * 경로 이탈(카카오 경로): 카카오에 다시 묻지 않고, 지금 위치 → 원래 카카오 경로의 앞쪽 지점까지만 기본 방식(Valhalla)으로 잇고
+   * 그 뒤는 원래 카카오 경로를 그대로 쓴다.
+   */
+  function kakaoRejoinRoute(c, from, rejoinAlong, heading) {
+    var k = c.kakao;
+    if (!k || !k.base) return Promise.resolve(null);
+    var i = 0;
+    while (i < c.cum.length - 1 && c.cum[i] < rejoinAlong) i++;
+    var bi = i < k.connLen ? k.baseStart : k.baseStart + (i - k.connLen);
+    var base = k.base;
+    bi = Math.max(0, Math.min(base.latlngs.length - 2, bi));
+    var to = { lat: base.latlngs[bi][0], lng: base.latlngs[bi][1] };
+    var rawMode = c.routeMode === 'walk' || c.routeMode === 'walkShort' ? 'walkShort' : 'short';
+    return fetchValhallaRouteRaw(from, to, rawMode, { heading: heading }).then(function (conn) {
+      var cl = conn.latlngs.slice();
+      var tail = base.latlngs.slice(bi + 1);
+      var off = cl.length - 1 - bi; // 원래 경로 번호 → 새 경로 번호
+      var mans = (conn.maneuvers || []).filter(function (m) { return maneuverDelta(m.type) != null; });
+      base.maneuvers.forEach(function (m) {
+        if (m.begin_shape_index > bi) mans.push({ type: m.type, begin_shape_index: m.begin_shape_index + off, instruction: m.instruction });
+      });
+      var tailM = 0;
+      for (var j = bi; j < base.latlngs.length - 1; j++) tailM += hav(base.latlngs[j][0], base.latlngs[j][1], base.latlngs[j + 1][0], base.latlngs[j + 1][1]);
+      var km = conn.km + tailM / 1000;
+      return {
+        mode: c.routeMode,
+        latlngs: cl.concat(tail),
+        maneuvers: mans,
+        km: km,
+        min: Math.max(1, Math.round(base.min * (km / Math.max(0.01, base.km)))),
+        kakao: true,
+        kakaoBase: base,
+        baseStart: bi,
+        connLen: cl.length - 1 // 연결 경로 마지막 점 = 원래 경로 bi 번 점
+      };
+    });
+  }
+  /** 길찾기 화면 위: 오늘 카카오 무료 사용량 */
+  function refreshKakaoUsage() {
+    favRpc('fn_kakao_route_usage', {}).then(function (u) { kakaoUsage = u; renderKakaoUsage(); }, function () {});
+  }
+  function renderKakaoUsage() {
+    var el = $('outdKakaoUsage');
+    if (!el || !kakaoUsage) return;
+    var lim = Number(kakaoUsage.limit) || 1000;
+    function part(label, api) {
+      var n = Number(kakaoUsage[api]) || 0;
+      var out = kakaoUsage[api + '_exhausted'] || n >= lim;
+      return '<span class="outd-kusage__item' + (out ? ' is-out' : n >= lim * 0.8 ? ' is-warn' : '') + '">' + label + ' <b>' + n.toLocaleString('ko-KR') + '</b>/' + lim.toLocaleString('ko-KR') + '</span>';
+    }
+    el.innerHTML = '<span class="outd-kusage__title">카카오 경로 오늘 무료 사용량</span>' + part('자전거', 'bicycle') + part('걷기', 'walk');
+    el.style.display = '';
   }
 
   /** 오토바이 경로: 고속도로(motorway)가 조금이라도 포함되면 쓰지 않음(한국 오토바이 통행 금지) */
@@ -2468,6 +2597,7 @@
     course.isRoute = true;
     course.dest = dest;
     course.routeMode = route.mode;
+    course.kakao = route.kakaoBase ? { base: route.kakaoBase, baseStart: route.baseStart || 0, connLen: (route.connLen || 0) + lead } : null;
     st.course = course;
     st.courseIdx = 0;
     resetMatch();
@@ -2534,8 +2664,11 @@
     var rejoinAt = baseAlong + (navIsWalk() ? 100 : 200);
     var via = rejoinAt < c.totalM - 150 ? (function () { var p = pointAtDist(rejoinAt); return { lat: p[0], lng: p[1] }; })() : null;
 
-    var fresh = fetchBikeRoute(from, c.dest, mode, { heading: heading }).catch(function () { return null; });
-    var rejoin = via ? fetchBikeRoute(from, c.dest, mode, { heading: heading, via: via }).catch(function () { return null; }) : Promise.resolve(null);
+    // 2026-10-24: 카카오 경로는 카카오에 다시 묻지 않음 — 원래 카카오 경로로 다시 붙는 길(①) vs 기본 방식 새 경로(②)
+    var fresh = fetchBikeRoute(from, c.dest, mode, { heading: heading, noKakao: true }).catch(function () { return null; });
+    var rejoin = c.kakao && via
+      ? kakaoRejoinRoute(c, from, rejoinAt, heading).catch(function () { return null; })
+      : via ? fetchBikeRoute(from, c.dest, mode, { heading: heading, via: via }).catch(function () { return null; }) : Promise.resolve(null);
     Promise.all([rejoin, fresh]).then(function (res) {
       var rj = res[0], fr = res[1];
       var pick = null, how = '';
@@ -2579,8 +2712,9 @@
       '<button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
       '<form class="outd-route__search" id="outdRouteForm" action="#" role="search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search">' +
       '<button type="submit" class="outd-route__go">검색</button></form>' +
+      '<div id="outdKakaoUsage" class="outd-kusage" style="display:none"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
-      '<div class="outd-route__credit">경로: Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
+      '<div class="outd-route__credit">경로: 카카오(자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
       '</div>';
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
@@ -2742,6 +2876,7 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
+          (rt.kakao ? ' · 카카오' : '') +
           (rt.sameAsReco ? ' · 추천 경로와 같음' : rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
@@ -2764,6 +2899,8 @@
     var el = routeSheet();
     renderTravelModes();
     el.style.display = 'flex';
+    renderKakaoUsage();
+    refreshKakaoUsage();
     var input = $('outdRouteInput');
     renderRouteList([]);
     if (!(e && e.noFocus)) setTimeout(function () { try { input.focus(); } catch (err) {} }, 50);

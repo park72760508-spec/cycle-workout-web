@@ -35213,3 +35213,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpop__modes .outd-route__mode.is-on { color: #ffffff; background: #2a2a2a; }
 #outdoorRideScreen .outd-favpop__modes .outd-route__mode.is-disabled { color: #3f4654; cursor: not-allowed; }
 #outdoorRideScreen .outd-favpop__modes .outd-route__moto-ico { width: 26px; height: 26px; }
+
+/* 루트맵 길찾기: 카카오 경로 오늘 무료 사용량(2026-10-24) */
+#outdoorRideScreen .outd-kusage {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 14px 6px; padding: 6px 10px;
+  border-radius: 8px; background: #121212; font-size: 11px; color: #94a3b8;
+}
+#outdoorRideScreen .outd-kusage__title { color: #cbd5e1; font-weight: 600; margin-right: auto; }
+#outdoorRideScreen .outd-kusage__item b { color: #fde047; font-weight: 700; }
+#outdoorRideScreen .outd-kusage__item.is-warn b { color: #fb923c; }
+#outdoorRideScreen .outd-kusage__item.is-out b { color: #f87171; }
