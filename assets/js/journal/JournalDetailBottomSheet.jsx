@@ -742,6 +742,44 @@
     return m + '분 ' + s + '초';
   }
 
+  /*
+   * IF(강도 지수) 산정(2026-10-26): 저장값 → 정규화 파워(NP)÷FTP → TSS·시간 역산(TSS = 시간(초)×IF²÷36).
+   * 하루 여러 건은 시간 가중(√(Σ IF²×시간 ÷ Σ 시간)) — TSS 합산과 같은 기준.
+   */
+  function journalLogDurationSec(l) {
+    return Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
+  }
+  function journalResolveIf(l, ftpFallback) {
+    if (!l) return null;
+    var v = Number(l.if != null ? l.if : l.intensity_factor);
+    if (v > 0 && v < 3) return v;
+    var np = Number(l.weighted_watts || l.avg_watts || 0);
+    var ftp = Number(l.ftp_at_time || ftpFallback || 0);
+    if (np > 0 && ftp > 0) {
+      var r = np / ftp;
+      if (r > 0 && r < 3) return Math.round(r * 100) / 100;
+    }
+    var tss = Number(l.tss || 0), sec = journalLogDurationSec(l);
+    if (tss > 0 && sec > 0) {
+      var r2 = Math.sqrt((36 * tss) / sec);
+      if (r2 > 0 && r2 < 3) return Math.round(r2 * 100) / 100;
+    }
+    return null;
+  }
+  function journalCombinedIf(logs, ftpFallback) {
+    var num = 0, den = 0;
+    (logs || []).forEach(function (l) {
+      var v = journalResolveIf(l, ftpFallback), s = journalLogDurationSec(l);
+      if (v > 0 && s > 0) { num += v * v * s; den += s; }
+    });
+    return den > 0 ? Math.round(Math.sqrt(num / den) * 100) / 100 : null;
+  }
+  function journalUserFtp() {
+    try {
+      var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      return cu ? Number(cu.ftp || 0) : 0;
+    } catch (e) { return 0; }
+  }
   function avgSpeedKmhFromDistanceTime(distanceKm, durationSec) {
     var d = Number(distanceKm) || 0;
     var t = Number(durationSec) || 0;
@@ -777,7 +815,8 @@
         distance_km: log.distance_km,
         duration_sec: sec,
         tss: log.tss,
-        if: log.if,
+        if: journalResolveIf(log, journalUserFtp()),
+        ftp_at_time: log.ftp_at_time,
         kilojoules: log.kilojoules,
         elevation_gain: log.elevation_gain != null ? Number(log.elevation_gain) : null,
         avg_speed_kmh: spd0,
@@ -904,7 +943,7 @@
       distance_km: totalDist,
       duration_sec: totalSec,
       tss: totalTSS,
-      if: null,
+      if: journalCombinedIf(logs, journalUserFtp()),
       kilojoules: totalKj,
       elevation_gain: sumElev > 0 ? sumElev : null,
       avg_speed_kmh: avgSpeedKmhFromDistanceTime(totalDist, totalSec),

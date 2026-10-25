@@ -34,6 +34,44 @@
     return Math.round((d / (t / 3600)) * 100) / 100;
   }
 
+  /*
+   * IF(강도 지수) 산정(2026-10-26): 저장값 → 정규화 파워(NP)÷FTP → TSS·시간 역산(TSS = 시간(초)×IF²÷36).
+   * 하루 여러 건은 시간 가중(√(Σ IF²×시간 ÷ Σ 시간)) — TSS 합산과 같은 기준.
+   */
+  function journalLogDurationSec(l) {
+    return Number(l.duration_sec != null ? l.duration_sec : (l.time != null ? l.time : l.duration)) || 0;
+  }
+  function journalResolveIf(l, ftpFallback) {
+    if (!l) return null;
+    var v = Number(l.if != null ? l.if : l.intensity_factor);
+    if (v > 0 && v < 3) return v;
+    var np = Number(l.weighted_watts || l.avg_watts || 0);
+    var ftp = Number(l.ftp_at_time || ftpFallback || 0);
+    if (np > 0 && ftp > 0) {
+      var r = np / ftp;
+      if (r > 0 && r < 3) return Math.round(r * 100) / 100;
+    }
+    var tss = Number(l.tss || 0), sec = journalLogDurationSec(l);
+    if (tss > 0 && sec > 0) {
+      var r2 = Math.sqrt((36 * tss) / sec);
+      if (r2 > 0 && r2 < 3) return Math.round(r2 * 100) / 100;
+    }
+    return null;
+  }
+  function journalCombinedIf(logs, ftpFallback) {
+    var num = 0, den = 0;
+    (logs || []).forEach(function (l) {
+      var v = journalResolveIf(l, ftpFallback), s = journalLogDurationSec(l);
+      if (v > 0 && s > 0) { num += v * v * s; den += s; }
+    });
+    return den > 0 ? Math.round(Math.sqrt(num / den) * 100) / 100 : null;
+  }
+  function journalUserFtp() {
+    try {
+      var cu = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+      return cu ? Number(cu.ftp || 0) : 0;
+    } catch (e) { return 0; }
+  }
   function mergeLogsForSummary(logs, userProfile) {
     if (!logs || logs.length === 0) return null;
     if (logs.length === 1) {
@@ -48,7 +86,7 @@
         distance: dist,
         durationSec: sec,
         tss: getEffectiveTss(log, userProfile),
-        if: log.if != null ? Number(log.if) : null,
+        if: journalResolveIf(log, (userProfile && userProfile.ftp) || journalUserFtp()),
         kj: log.kilojoules != null ? Number(log.kilojoules) : 0,
         avgWatts: log.avg_watts != null ? Number(log.avg_watts) : null,
         np: log.weighted_watts != null ? Number(log.weighted_watts) : (log.avg_watts != null ? Number(log.avg_watts) : null),
@@ -89,7 +127,7 @@
       distance: totalDist,
       durationSec: totalSec,
       tss: totalTSS,
-      if: null,
+      if: journalCombinedIf(logs, (userProfile && userProfile.ftp) || journalUserFtp()),
       kj: totalKj,
       avgWatts: totalSec > 0 ? sumApSec / totalSec : null,
       np: totalSec > 0 ? sumNpSec / totalSec : null,
