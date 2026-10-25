@@ -4732,7 +4732,12 @@
     if (!box.width || !a.width || !b.width) return;
     var ax = a.left + a.width / 2 - box.left, ay = a.top + a.height / 2 - box.top;
     var bx = b.left + b.width / 2 - box.left, by = b.top + b.height / 2 - box.top;
-    var size = Math.max(40, Math.min(56, Math.abs(bx - ax) - 10));
+    // 계기판 칸 아래로 잘리지 않게(버튼 중심~칸 아래 끝 거리 × 2) — 그래도 위로 넘치면 아래 끝에 맞춰 조금 올림
+    var room = (Math.min(box.height - ay, box.height - by)) * 2 - 6;
+    var size = Math.max(40, Math.min(56, Math.abs(bx - ax) - 10, room));
+    var maxTop = box.height - size - 3;
+    ay = Math.min(ay, maxTop + size / 2);
+    by = Math.min(by, maxTop + size / 2);
     var btns = [$('outdGaugeStartBtn'), $('outdGaugeStopBtn')];
     [[ax, ay], [bx, by]].forEach(function (p, i) {
       var el = btns[i];
