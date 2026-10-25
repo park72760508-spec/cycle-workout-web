@@ -408,6 +408,11 @@
     if (fimg) fimg.setAttribute('src', st.status === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png');
     var fctrl = $('outdFloatCtrl');
     if (fctrl) fctrl.classList.toggle('is-running', st.status === 'running');
+    // 계기판 시작·종료 버튼(2026-10-25, 떠 있는 버튼과 같은 디자인)도 같은 상태
+    var gimg = $('outdGaugeToggleImg');
+    if (gimg) gimg.setAttribute('src', st.status === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png');
+    var gctrl = $('outdGaugeCtrl');
+    if (gctrl) gctrl.classList.toggle('is-running', st.status === 'running');
     // 기록 중이면 시작 버튼의 흰 바탕을 빨간색으로(구동 중 표시), 멈추면 다시 흰색(2026-10-22)
     var tc = $('outdToggleCircle');
     if (tc) tc.setAttribute('fill', st.status === 'running' ? '#ef4444' : '#ffffff');
@@ -4714,9 +4719,34 @@
     pulse.style.top = (c.top + c.height / 2 - b.top) + 'px';
     pulse.style.width = c.width + 'px';
   }
+  /*
+   * 계기판 시작·종료 버튼(2026-10-25): 계기판 그림 속 원래 버튼(보이지 않게 둔 SVG 원) 중심에 HTML 버튼을 올림.
+   * 크기는 떠 있는 버튼과 같은 56px, 두 버튼 간격이 좁은 화면이면 간격에 맞춰 줄임(최소 40px).
+   */
+  function placeGaugeCtrl() {
+    var ctrl = $('outdGaugeCtrl');
+    var circles = document.querySelectorAll('#' + SCREEN_ID + ' .mobile-gauge-container .svg-btn-group .svg-neon-circle');
+    if (!ctrl || circles.length < 2) return;
+    var box = ctrl.parentNode.getBoundingClientRect();
+    var a = circles[0].getBoundingClientRect(), b = circles[1].getBoundingClientRect();
+    if (!box.width || !a.width || !b.width) return;
+    var ax = a.left + a.width / 2 - box.left, ay = a.top + a.height / 2 - box.top;
+    var bx = b.left + b.width / 2 - box.left, by = b.top + b.height / 2 - box.top;
+    var size = Math.max(40, Math.min(56, Math.abs(bx - ax) - 10));
+    var btns = [$('outdGaugeStartBtn'), $('outdGaugeStopBtn')];
+    [[ax, ay], [bx, by]].forEach(function (p, i) {
+      var el = btns[i];
+      if (!el) return;
+      el.style.width = el.style.height = size + 'px';
+      el.style.left = (p[0] - size / 2) + 'px';
+      el.style.top = (p[1] - size / 2) + 'px';
+    });
+    ctrl.classList.add('is-placed');
+  }
   function fixMapSize() {
     if (!isActive()) return;
     placeStartPulse();
+    placeGaugeCtrl();
     syncFavPinZoom(); // 화면 크기·방향이 바뀌면 즐겨찾기 핀 크기도 다시
     // 가로 화면(좌우 분할)에서는 '지도 크게 보기'를 쓰지 않음 — 켜진 채로 돌리면 해제
     if (st.expanded && window.matchMedia && window.matchMedia('(orientation: landscape)').matches) {

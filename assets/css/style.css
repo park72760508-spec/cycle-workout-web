@@ -35248,3 +35248,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__item.is-admin-hidden .outd-fav__txt,
 #outdoorRideScreen .outd-fav__item.is-admin-hidden .outd-fav__right { opacity: 0.35; filter: grayscale(1); }
 #outdoorRideScreen .outd-favpin.is-admin-hidden .outd-favpin__in { opacity: 0.35; filter: grayscale(1); }
+
+/* 계기판 시작·종료 버튼(2026-10-25): 지도 크게 보기의 떠 있는 버튼(.outd-float-btn)과 같은 디자인.
+   계기판 그림 속 원래 버튼은 위치 기준으로만 남기고 숨김(placeGaugeCtrl 이 그 중심에 맞춤) */
+#outdoorRideScreen .mobile-gauge-container .svg-btn-group { opacity: 0; pointer-events: none; }
+#outdoorRideScreen .mobile-gauge-container .outd-start-pulse-html { display: none !important; }
+#outdoorRideScreen .outd-gauge-ctrl { position: absolute; inset: 0; z-index: 2; pointer-events: none; visibility: hidden; }
+#outdoorRideScreen .outd-gauge-ctrl.is-placed { visibility: visible; }
+#outdoorRideScreen .outd-gauge-ctrl .outd-float-btn { position: absolute; pointer-events: auto; }
+#outdoorRideScreen .outd-gauge-ctrl .outd-float-btn img { width: 46%; height: 46%; }
+#outdoorRideScreen .outd-gauge-ctrl.is-running .outd-float-pulse { display: none; }
+#outdoorRideScreen .outd-gauge-ctrl.is-running .outd-float-btn--start { background: #ef4444; } /* 기록 중 빨간색 */
