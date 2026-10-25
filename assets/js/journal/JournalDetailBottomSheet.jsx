@@ -1045,13 +1045,13 @@
       log.max_speed_kmh != null && Number(log.max_speed_kmh) > 0
         ? DetailRow({ label: '최고 속도', value: formatSpeedKmh(Number(log.max_speed_kmh)), isPr: false })
         : null,
-      DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
-      // 2026-10-25: 구간별 피크 평속 그래프(평속 기록이 있을 때만)
+      // 2026-10-25: 구간별 평속 그래프(평속 기록이 있을 때만) — 최고 속도 항목 바로 아래
       journalLogHasSpeedPeaks(log)
         ? React.createElement('div', { key: 'spd-peak', className: 'journal-summary-speed-peak' },
-            React.createElement('div', { className: 'journal-summary-speed-peak-title' }, '구간별 피크 평속'),
+            React.createElement('div', { className: 'journal-summary-speed-peak-title' }, '구간별 평속'),
             React.createElement(JournalSessionSpeedPeakChart, { log: log }))
         : null,
+      DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
       DetailRow({ label: 'IF', value: log.if != null && log.if > 0 ? log.if.toFixed(2) : '-', isPr: false }),
       DetailRow({ label: 'KJ', value: log.kilojoules != null && log.kilojoules > 0 ? Math.round(log.kilojoules) + ' KJ' : '-', isPr: false })
