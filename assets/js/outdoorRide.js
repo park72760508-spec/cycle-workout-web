@@ -3313,7 +3313,7 @@
           '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public
             ? (it.public_status === 'pending' || it.public_status === 'hidden'
               ? '⏳ 공개 대기 중'
-              : '<img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개')
+              : '<img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""> 공개') // 2026-10-25: 흰색 STELVIO 로고
             : '🔒 비공개') + '</button>' +
           '<button type="button" class="outd-fav__del" data-fav-edit="' + it.id + '" aria-label="수정">' + ICON_EDIT_SM + '</button>';
       }
