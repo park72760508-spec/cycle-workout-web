@@ -3340,6 +3340,25 @@
   /* 2026-10-25 공개 규칙: 관리자 공개 = 바로 공개 장소, 일반 사용자 공개 = 같은 장소를 즐겨찾기한 사람이 3명 이상일 때 공개(서버 fn_route_fav_list) */
   var FAV_ENDORSE_MIN = 3;
   var FAV_PUBLIC_PENDING_MSG = '공개 장소 표시 조건에 충족시 표시됩니다';
+  /** 처리 중인 목록 줄 위에 같은 위치·높이로 녹색 원 스피너 오버레이(2026-10-25, 관리자 공개 전환·숨김) */
+  function favRowBusy(id, on) {
+    var row = document.querySelector('#outdFavList [data-fav-id="' + id + '"]');
+    if (!row) return;
+    var ov = row.querySelector('.outd-fav__rowbusy');
+    if (!on) { if (ov) ov.parentNode.removeChild(ov); row.classList.remove('is-busy'); return; }
+    if (ov) return;
+    var size = Math.max(28, Math.min(44, Math.round(row.getBoundingClientRect().height * 0.62)));
+    ov = document.createElement('div');
+    ov.className = 'outd-fav__rowbusy';
+    ov.setAttribute('role', 'status');
+    ov.setAttribute('aria-label', '처리 중');
+    ov.innerHTML = '<div class="auth-transition-spinner-stage" style="width:' + size + 'px;height:' + size + 'px;margin:0">' +
+      '<div class="auth-transition-spinner-glow" aria-hidden="true"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--track" aria-hidden="true"></div>' +
+      '<div class="auth-transition-spinner-ring auth-transition-spinner-ring--spin" aria-hidden="true"></div></div>';
+    row.classList.add('is-busy');
+    row.appendChild(ov);
+  }
   /** 관리자: 공개 장소 숨김/다시 공개(카테고리 아이콘 토글) */
   function toggleFavAdminHidden(id, btn) {
     if (!favIsAdmin() || btn.__busy) return;
@@ -3348,19 +3367,21 @@
     if (!it) return;
     var next = !it.admin_hidden;
     btn.__busy = true;
+    favRowBusy(id, true);
     favRpc('fn_route_fav_admin_hide', { p_id: id, p_hidden: next }).then(function () {
       toast(next ? '공개 장소에서 숨겼습니다 · 아이콘을 다시 누르면 공개됩니다' : '다시 공개했습니다', 'info');
       fav.items.public = null;
       return refreshFavMarkers();
     }).catch(function (err) {
       toast(err && err.message ? err.message : '처리하지 못했습니다.', 'error');
-    }).then(function () { btn.__busy = false; });
+    }).then(function () { btn.__busy = false; favRowBusy(id, false); });
   }
   /** 관리자: 조건(등록자 수) 미충족 공개 대기 장소를 수동으로 공개 전환 */
   function approveFavPublic(id, btn) {
     if (!favIsAdmin() || btn.__busy) return;
     btn.__busy = true;
     btn.disabled = true;
+    favRowBusy(id, true);
     favRpc('fn_route_fav_admin_approve', { p_id: id, p_on: true }).then(function () {
       toast('공개 장소로 전환했습니다', 'success');
       fav.items.public = null;
@@ -3368,7 +3389,7 @@
     }).catch(function (err) {
       toast(err && err.message ? err.message : '공개 전환하지 못했습니다.', 'error');
       btn.disabled = false;
-    }).then(function () { btn.__busy = false; });
+    }).then(function () { btn.__busy = false; favRowBusy(id, false); });
   }
   function toggleFavPublic(id, btn) {
     var it = null;
