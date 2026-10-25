@@ -4353,6 +4353,62 @@
     return out;
   }
 
+  /*
+   * 라이딩 TSS·IF 추정(2026-10-26): 파워미터가 없는 휴대폰 GPS 기록 — 1초 간격으로 속도·경사·가속을 구해
+   * 주행 저항 모델로 파워를 추정(공기저항 CdA 0.32·구름저항 0.005·자전거 9kg·구동 효율 97%),
+   * 30초 이동평균의 4제곱 평균으로 NP(정규화 파워) → IF = NP÷FTP, TSS = 이동시간×NP×IF÷(FTP×3600)×100.
+   * 추정 파워 값은 저장하지 않음(TSS·IF·FTP 만) — 파워 랭킹·피크 파워에는 반영 안 됨.
+   */
+  function estimateRideLoadFromTrack(tr, weightKg, ftp) {
+    if (!tr || tr.length < 10 || !(ftp > 0)) return null;
+    var n = tr.length, T = [], D = [0], A = [];
+    for (var i = 0; i < n; i++) {
+      T.push(Number(tr[i][3]) / 1000);
+      A.push(tr[i][2] != null && isFinite(tr[i][2]) ? Number(tr[i][2]) : null);
+      if (i > 0) D.push(D[i - 1] + hav(tr[i - 1][0], tr[i - 1][1], tr[i][0], tr[i][1]));
+    }
+    var t0 = T[0], t1 = T[n - 1];
+    if (!(t1 - t0 > 60)) return null;
+    // 1초 간격 재표본(직선 보간) — 기록 공백 10초 이상은 정지로 봄
+    var secs = Math.floor(t1 - t0), dist = [], alt = [], gap = [], j = 0;
+    for (var s = 0; s <= secs; s++) {
+      var t = t0 + s;
+      while (j < n - 2 && T[j + 1] < t) j++;
+      var dt = T[j + 1] - T[j], f = dt > 0 ? Math.min(1, Math.max(0, (t - T[j]) / dt)) : 0;
+      dist.push(D[j] + (D[j + 1] - D[j]) * f);
+      alt.push(A[j] != null && A[j + 1] != null ? A[j] + (A[j + 1] - A[j]) * f : null);
+      gap.push(dt > 10);
+    }
+    var m = Math.max(45, Number(weightKg) || 70) + 9, g = 9.81, N = dist.length;
+    var P = new Array(N), vPrev = 0, moving = 0;
+    for (var k = 0; k < N; k++) {
+      var a0 = Math.max(0, k - 2), a1 = Math.min(N - 1, k + 2);
+      var v = (dist[a1] - dist[a0]) / Math.max(1, a1 - a0); // 5초 평균 속도(m/s)
+      if (gap[k] || v < 1) { P[k] = 0; vPrev = v; continue; }
+      moving++;
+      var b0 = Math.max(0, k - 10), b1 = Math.min(N - 1, k + 10), dd = dist[b1] - dist[b0], grade = 0;
+      if (dd > 20 && alt[b0] != null && alt[b1] != null) grade = Math.max(-0.15, Math.min(0.15, (alt[b1] - alt[b0]) / dd));
+      var acc = v - vPrev;
+      vPrev = v;
+      var pw = (0.5 * 1.2 * 0.32 * v * v * v + 0.005 * m * g * v + m * g * v * grade + m * Math.max(0, acc) * v) / 0.97;
+      P[k] = Math.max(0, Math.min(1500, pw));
+    }
+    if (moving < 60) return null;
+    // NP: 30초 이동평균의 4제곱 평균의 4제곱근(정지 구간 제외)
+    var sum = 0, q = [], acc4 = 0, cnt = 0;
+    for (var k2 = 0; k2 < N; k2++) {
+      q.push(P[k2]); sum += P[k2];
+      if (q.length > 30) sum -= q.shift();
+      if (q.length === 30 && !gap[k2]) { var r = sum / 30; acc4 += r * r * r * r; cnt++; }
+    }
+    if (!cnt) return null;
+    var np = Math.pow(acc4 / cnt, 0.25);
+    var IF = np / ftp;
+    var tss = (moving * np * IF) / (ftp * 3600) * 100;
+    if (!(IF > 0) || IF > 1.5 || !(tss >= 0) || tss > 500) return null;
+    return { tss: Math.round(tss * 10) / 10, intensity_factor: Math.round(IF * 1000) / 1000, ftp_at_time: Math.round(ftp) };
+  }
+
   function trackSeries() {
     var tr = st.track;
     var dist = [0], time = [0];
@@ -4530,6 +4586,14 @@
     };
     var speedPeaks = {};
     try { if (kind === 'ride') speedPeaks = computeSpeedPeaksFromTrack(st.track); } catch (eSpk) {}
+    // 라이딩 TSS·IF 추정(GPS 속도·경사·체중, FTP 기준) — 주간 TSS·분석에 반영
+    if (kind === 'ride') {
+      try {
+        var ftpNow = Number((window.currentUser && window.currentUser.ftp) || 0);
+        var load = estimateRideLoadFromTrack(st.track, weight, ftpNow);
+        if (load) { payload.tss = load.tss; payload.intensity_factor = load.intensity_factor; payload.ftp_at_time = load.ftp_at_time; }
+      } catch (eLoad) {}
+    }
     if (kind !== 'ride') {
       var s = trackSeries();
       var splits = computeSplits(s);
