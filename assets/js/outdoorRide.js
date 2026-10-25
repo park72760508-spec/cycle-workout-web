@@ -3861,7 +3861,7 @@
         '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
         '<label class="outd-fav__label">메모<input name="memo" type="text" maxlength="30" placeholder="30자 이내 (선택)" enterkeyhint="done"></label>' +
         '<div class="outd-fav__label">공개 여부</div>' +
-        '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio.svg" alt=""> 공개</button></div>' +
+        '<div class="outd-fav__chips" data-chips="pub"><button type="button" data-v="0">🔒 비공개</button><button type="button" data-v="1"><img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""> 공개</button></div>' +
         '<p class="outd-fav__hint" data-pub-hint></p>' +
         // 2026-10-24: 관리자 전용 — 제휴사를 고르면 지도 핀·팝업에 제휴사 할인율 배지
         '<div class="outd-fav__affwrap" data-aff-wrap style="display:none"><div class="outd-fav__label">제휴사 선택 (관리자)</div>' +
