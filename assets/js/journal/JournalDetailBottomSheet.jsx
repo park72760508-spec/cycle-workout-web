@@ -405,6 +405,7 @@
    * 파워·심박 PR(isPrField)과 같은 방식이되, 평속은 소수 1자리까지 비교한다.
    */
   function isSpeedPrField(log, yearlyPeaks, field) {
+    if (typeof window.isSpeedPrField === 'function') return window.isSpeedPrField(log, yearlyPeaks, field);
     if (!log || !yearlyPeaks || !field) return false;
     var peak = Number(yearlyPeaks[field]);
     var v = Number(log[field]);

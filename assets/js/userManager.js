@@ -3918,8 +3918,30 @@ function toWkg2Decimals(watts, weightKg) {
  * @param {number} [userWeight] - 사용자 현재 몸무게(kg). log.weight 없을 때 사용
  * @returns {boolean}
  */
+/**
+ * 구간별 평속 PR(2026-10-26) — 그해 최고 평속(fn_my_yearly_peaks 의 max_*_speed_kmh)과 같거나 높으면 PR.
+ * 소수 1자리까지 비교(정수 비교 시 35.4·35.8 이 같은 값이 됨). 라이딩 상세 Summary 그래프·달력 PR 공용.
+ */
+var SPEED_PR_FIELDS = ['max_speed_kmh', 'max_1min_speed_kmh', 'max_5min_speed_kmh', 'max_10min_speed_kmh', 'max_20min_speed_kmh', 'max_40min_speed_kmh', 'max_60min_speed_kmh'];
+function isSpeedPrField(log, yearlyPeaks, field) {
+  if (!log || !yearlyPeaks || !field) return false;
+  var peak = Number(yearlyPeaks[field]);
+  var v = Number(log[field]);
+  if (!(peak > 0) || !(v > 0)) return false;
+  // 최고 속도(Max)는 구간 평속이 있는 기록만 연간 최고에 들어가므로 같은 조건으로 비교
+  if (field === 'max_speed_kmh' && !(Number(log.max_1min_speed_kmh) > 0)) return false;
+  return Math.round(v * 10) >= Math.round(peak * 10);
+}
+if (typeof window !== 'undefined') {
+  window.SPEED_PR_FIELDS = SPEED_PR_FIELDS;
+  window.isSpeedPrField = isSpeedPrField;
+}
+
 function logHasAnyPr(log, yearlyPeaks, userWeight) {
   if (!log || !yearlyPeaks) return false;
+  for (var si = 0; si < SPEED_PR_FIELDS.length; si++) {
+    if (isSpeedPrField(log, yearlyPeaks, SPEED_PR_FIELDS[si])) return true;
+  }
   var weightKg = getWeightForPr(log, userWeight);
   for (var i = 0; i < PR_FIELDS.length; i++) {
     var key = PR_FIELDS[i];
