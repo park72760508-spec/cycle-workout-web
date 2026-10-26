@@ -399,6 +399,29 @@ export async function getTrainingLogsInRangeFromSupabase(userId, startStr, endSt
 }
 
 /** PR 표시 — Supabase yearly_peaks relay (Auth Bridge 불필요) */
+/**
+ * 라이딩 기록 PR 기준(2026-10-26): 최근 365일 최고값(fn_my_rolling_peaks). RUN 과 같은 기간.
+ * 달력·상세가 연도별로 여러 번 부르므로 60초 동안 한 번만 조회한다. 반환값에 window_start(YYYY-MM-DD) 포함.
+ */
+let rollingPeaksMemo = null;
+export async function fetchRollingPeaksFromSupabase() {
+  if (rollingPeaksMemo && Date.now() - rollingPeaksMemo.at < 60000) return rollingPeaksMemo.p;
+  const p = callSupabaseRpcAsUser('fn_my_rolling_peaks', {}).then(function (data) {
+    if (!data || data.success !== true) throw new Error('fn_my_rolling_peaks 실패');
+    const row = data.row;
+    if (!row) return null;
+    const mapped = mapYearlyPeaksRow(row);
+    mapped.year = null;
+    mapped.window_start = row.window_start || null;
+    mapped.window_end = row.window_end || null;
+    mapped.prBasis = 'rolling365';
+    return mapped;
+  });
+  rollingPeaksMemo = { at: Date.now(), p: p };
+  p.catch(function () { rollingPeaksMemo = null; });
+  return p;
+}
+
 export async function fetchYearlyPeaksForYearFromSupabase(userId, year) {
   if (!userId || year == null) return null;
   try {

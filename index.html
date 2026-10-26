@@ -4479,7 +4479,7 @@
   <script defer src="assets/js/dynamicFtpCalculation.js"></script>
   <script defer src="assets/js/dynamicEtpCalculation.js"></script>
   <script defer src="assets/js/dynamicRunFtpCalculation.js"></script>
-  <script defer src="assets/js/runEffortsReadClient.js?v=20261026prvy"></script>
+  <script defer src="assets/js/runEffortsReadClient.js?v=20261026r365"></script>
 
   <!-- 1) 연결 화면 -->
   <div id="connectionScreen" class="screen active">
@@ -9419,7 +9419,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
-  <script src="assets/js/userManager.js?v=20261026ypk"></script>
+  <script src="assets/js/userManager.js?v=20261026r365"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -28315,7 +28315,14 @@
       if (uid && typeof window.fetchYearlyPeaksForYear === 'function') {
         try {
           var yearsToFetch = [currentYear - 1, currentYear, currentYear + 1];
-          var peaks = await Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(uid, y); }));
+          /* PR 기준(2026-10-26): 최근 365일 최고값 하나를 모든 연도에 사용(RUN 과 같은 기간) */
+          var peaks;
+          if (typeof window.fetchPrPeaksRolling365 === 'function') {
+            var rollingPk = await window.fetchPrPeaksRolling365(uid);
+            peaks = yearsToFetch.map(function() { return rollingPk; });
+          } else {
+            peaks = await Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(uid, y); }));
+          }
           yearsToFetch.forEach(function(y, i) {
             if (peaks[i]) miniCalendarStateJournal.yearlyPeaksByYear[y] = peaks[i];
           });
@@ -28895,7 +28902,9 @@
         if (!yearlyPeaks && typeof window.fetchYearlyPeaksForYear === 'function') {
           var uid = miniCalendarStateJournal.currentUserId || (window.currentUser && (window.currentUser.id || window.currentUser.uid));
           if (uid) {
-            yearlyPeaks = await window.fetchYearlyPeaksForYear(uid, logYear);
+            yearlyPeaks = typeof window.fetchPrPeaksRolling365 === 'function'
+              ? await window.fetchPrPeaksRolling365(uid) // PR 기준: 최근 365일(2026-10-26)
+              : await window.fetchYearlyPeaksForYear(uid, logYear);
             if (yearlyPeaks) miniCalendarStateJournal.yearlyPeaksByYear[logYear] = yearlyPeaks;
           }
         }
@@ -29710,7 +29719,7 @@
   <script defer src="assets/js/journal/journalTransparentShare.js"></script>
   <script src="assets/js/journal/JournalTransparentShareComposer.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script defer src="assets/js/journal/journalCalendarLogsFetch.js"></script>
-  <script defer src="assets/js/journal/useJournalData.js"></script>
+  <script defer src="assets/js/journal/useJournalData.js?v=20261026r365"></script>
   <script src="assets/js/journal/JournalCalendarWidget.jsx?v=20261026spdpr" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/RidingCourseSvgBackground.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/JournalCourseMapPreview.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
@@ -29721,8 +29730,8 @@
   <script src="assets/js/journal/JournalMonthlyDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/journal/TrainingJournalScreen.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN 기록 일지 (CYCLE 라이딩 기록과 분리) -->
-  <script defer src="assets/js/runJournal/runJournalPrUtils.js?v=20261026walk"></script>
-  <script defer src="assets/js/runJournal/useRunJournalData.js?v=20261026prvy"></script>
+  <script defer src="assets/js/runJournal/runJournalPrUtils.js?v=20261026r365"></script>
+  <script defer src="assets/js/runJournal/useRunJournalData.js?v=20261026r365"></script>
   <script src="assets/js/runJournal/RunJournalCalendarWidget.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runJournal/RunJournalDailySummary.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runJournal/RunJournalMonthlySummary.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>

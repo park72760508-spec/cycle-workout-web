@@ -75,10 +75,12 @@
     }, [efforts]);
 
     var yearlyPacePrByYear = useMemo(function () {
+      // PR 기준(2026-10-26): 그해 → 최근 365일(CYCLE 과 같은 기간). 어느 연도 기록이든 같은 기준과 비교
       var years = [currentYear - 1, currentYear, currentYear + 1];
+      var rolling = pr().buildRollingPacePrByAxis(efforts);
       var out = {};
       years.forEach(function (y) {
-        out[y] = pr().buildYearlyPacePrByAxis(efforts, y);
+        out[y] = rolling;
       });
       return out;
     }, [efforts, currentYear]);
@@ -116,7 +118,7 @@
       setError(null);
       var fetchPromise = Promise.all([
         fetchLogs(userId, { limit: 500 }),
-        fetchEfforts(userId, { limit: 500, includeWalk: true, fromPrevYearStart: true }),
+        fetchEfforts(userId, { limit: 500, includeWalk: true }),
       ])
         .then(function (res) {
           var logs = res[0] || [];

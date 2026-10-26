@@ -3894,6 +3894,47 @@ async function fetchYearlyPeaksForYear(userId, year) {
 }
 if (typeof window !== 'undefined') window.fetchYearlyPeaksForYear = fetchYearlyPeaksForYear;
 
+/**
+ * 라이딩 기록 PR 기준(2026-10-26): 최근 365일 최고값(RUN 과 같은 기간). 달력·상세 PR 전용.
+ * 대시보드 '년간 파워 PR' 그래프는 그해 기준이라 fetchYearlyPeaksForYear 를 그대로 쓴다.
+ * Supabase 를 못 쓰면 그해 최고값으로 대신한다(이 경우 window_start 가 없어 기간 확인을 하지 않음).
+ */
+async function fetchPrPeaksRolling365(userId) {
+  if (!userId) return null;
+  try {
+    if (typeof window.refreshLogsReadRouting !== 'function') {
+      try { await import('./logsReadRouter.js'); } catch (eImp) {}
+    }
+    if (typeof window.refreshLogsReadRouting === 'function' && await window.refreshLogsReadRouting(false)) {
+      var sbMod = await import('./supabaseRidesReadClient.js');
+      if (typeof sbMod.fetchRollingPeaksFromSupabase === 'function') {
+        return await sbMod.fetchRollingPeaksFromSupabase();
+      }
+    }
+  } catch (eRoll) {
+    console.warn('[UserManager] fetchPrPeaksRolling365 실패 → 그해 기준:', eRoll);
+  }
+  return fetchYearlyPeaksForYear(userId, new Date().getFullYear());
+}
+if (typeof window !== 'undefined') window.fetchPrPeaksRolling365 = fetchPrPeaksRolling365;
+
+/** PR 기준 기간(window_start) 이전 기록이면 true — 기간 밖 기록은 PR 대상 아님 */
+function prLogOutsideWindow(log, peaks) {
+  var ws = peaks && peaks.window_start;
+  if (!ws || !log) return false;
+  var d = log.date != null ? log.date : (log.ride_date != null ? log.ride_date : null);
+  var ymd = '';
+  try {
+    if (typeof d === 'string') ymd = d.slice(0, 10);
+    else if (d && typeof d.toDate === 'function') d = d.toDate();
+    if (!ymd && d instanceof Date && !isNaN(d.getTime())) {
+      ymd = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+  } catch (eD) {}
+  return !!ymd && ymd < String(ws).slice(0, 10);
+}
+if (typeof window !== 'undefined') window.prLogOutsideWindow = prLogOutsideWindow;
+
 /** PR 적용 필드: yearly_peaks 키 → 로그 필드 매핑 */
 var PR_FIELDS = ['max_hr', 'max_1min_watts', 'max_5min_watts', 'max_10min_watts', 'max_20min_watts', 'max_40min_watts', 'max_60min_watts', 'max_watts'];
 /** W/kg 비교 대상 필드 (파워 계열: 몸무게 변동 시 절대값 비교 오류 방지) */
@@ -3930,6 +3971,7 @@ function toWkg2Decimals(watts, weightKg) {
 var SPEED_PR_FIELDS = ['max_speed_kmh', 'max_1min_speed_kmh', 'max_5min_speed_kmh', 'max_10min_speed_kmh', 'max_20min_speed_kmh', 'max_40min_speed_kmh', 'max_60min_speed_kmh'];
 function isSpeedPrField(log, yearlyPeaks, field) {
   if (!log || !yearlyPeaks || !field) return false;
+  if (prLogOutsideWindow(log, yearlyPeaks)) return false;
   var peak = Number(yearlyPeaks[field]);
   var v = Number(log[field]);
   if (!(peak > 0) || !(v > 0)) return false;
@@ -3944,6 +3986,7 @@ if (typeof window !== 'undefined') {
 
 function logHasAnyPr(log, yearlyPeaks, userWeight) {
   if (!log || !yearlyPeaks) return false;
+  if (prLogOutsideWindow(log, yearlyPeaks)) return false;
   for (var si = 0; si < SPEED_PR_FIELDS.length; si++) {
     if (isSpeedPrField(log, yearlyPeaks, SPEED_PR_FIELDS[si])) return true;
   }
@@ -3987,6 +4030,7 @@ if (typeof window !== 'undefined') window.logHasAnyPr = logHasAnyPr;
  */
 function isPrField(log, yearlyPeaks, field, userWeight) {
   if (!log || !yearlyPeaks || !field) return false;
+  if (prLogOutsideWindow(log, yearlyPeaks)) return false;
   var peakVal = yearlyPeaks[field];
   if (peakVal == null || peakVal === '' || Number.isNaN(Number(peakVal))) return false;
   var logVal = log[field];

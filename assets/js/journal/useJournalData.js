@@ -98,9 +98,15 @@
     // PR 표시용 yearly_peaks 조회
     var runYearlyPeaksFetch = useCallback(function() {
       var userId = getCurrentUserId();
-      if (!userId || typeof window.fetchYearlyPeaksForYear !== 'function') return;
+      if (!userId) return;
       var yearsToFetch = [currentYear - 1, currentYear, currentYear + 1];
-      Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(userId, y); }))
+      // PR 기준(2026-10-26): 최근 365일 최고값 하나를 모든 연도 칸에 사용(RUN 과 같은 기간). 없으면 기존 그해 기준
+      var peaksPromise = typeof window.fetchPrPeaksRolling365 === 'function'
+        ? window.fetchPrPeaksRolling365(userId).then(function(p) { return yearsToFetch.map(function() { return p; }); })
+        : (typeof window.fetchYearlyPeaksForYear === 'function'
+          ? Promise.all(yearsToFetch.map(function(y) { return window.fetchYearlyPeaksForYear(userId, y); }))
+          : Promise.resolve([]));
+      peaksPromise
         .then(function(peaks) {
           var next = {};
           yearsToFetch.forEach(function(y, i) {

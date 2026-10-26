@@ -80,6 +80,40 @@
     return best;
   }
 
+  /** 서울 기준 오늘 포함 최근 365일 시작일(YYYY-MM-DD) — CYCLE fn_my_rolling_peaks 와 같은 기간 */
+  function prWindowStartYmd() {
+    var fmt = function (d) {
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+    };
+    var today = fmt(new Date());
+    var t = new Date(today + 'T00:00:00Z');
+    t.setUTCDate(t.getUTCDate() - 364);
+    return t.toISOString().slice(0, 10);
+  }
+
+  /**
+   * PR 기준(2026-10-26): 최근 365일 구간 최고 페이스. 기간 밖 기록은 best 에 없으므로 PR 이 될 수 없다.
+   * @param {object[]} efforts
+   */
+  function buildRollingPacePrByAxis(efforts) {
+    var start = prWindowStartYmd();
+    var best = {};
+    PACE_AXES.forEach(function (axis) { best[axis] = null; });
+    (efforts || []).forEach(function (e) {
+      var actDate = e.activity_date ? String(e.activity_date).slice(0, 10) : '';
+      if (!actDate || actDate < start) return;
+      if (String(e.activity_type || '').trim().toLowerCase() === 'walk') return; // 걷기는 러닝 PR 제외
+      PACE_AXES.forEach(function (axis) {
+        var sp = effortSpeed(e, axis);
+        if (sp == null) return;
+        if (!best[axis] || sp > best[axis].speed) {
+          best[axis] = { speed: sp, activity_id: String(e.activity_id || ''), activity_date: actDate };
+        }
+      });
+    });
+    return best;
+  }
+
   function isAxisPrForEffort(effort, axis, yearlyBest) {
     if (!effort || !yearlyBest) return false;
     var sp = effortSpeed(effort, axis);
@@ -162,6 +196,8 @@
     formatSpeedKmhFromKmh: formatSpeedKmhFromKmh,
     formatPaceWithSpeed: formatPaceWithSpeed,
     buildYearlyPacePrByAxis: buildYearlyPacePrByAxis,
+    buildRollingPacePrByAxis: buildRollingPacePrByAxis,
+    prWindowStartYmd: prWindowStartYmd,
     isAxisPrForEffort: isAxisPrForEffort,
     effortHasAnyPr: effortHasAnyPr,
     logsHaveAnyPr: logsHaveAnyPr,
