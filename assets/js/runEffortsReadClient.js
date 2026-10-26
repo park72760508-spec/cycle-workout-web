@@ -96,6 +96,7 @@
     url.searchParams.set('uid', String(userId).trim());
     url.searchParams.set('limit', String(Math.min(1000, Math.max(1, Number(options.limit) || 400))));
     if (options.includeWalk) url.searchParams.set('includeWalk', '1'); // RUN 일지: 걷기 구간 페이스 표시용
+    if (options.fromPrevYearStart) url.searchParams.set('prevYear', '1'); // RUN 일지 PR: 작년 1월 1일부터
     var token = await getFirebaseIdTokenForReadRelay();
     var res = await fetch(url.toString(), {
       method: 'GET',

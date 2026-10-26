@@ -833,7 +833,11 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400, opts = {}) {
   if (!userUuid) return [];
 
   const cap = Math.min(1000, Math.max(1, Number(limit) || 400));
-  const fromYmd = shiftYmd(seoulTodayYmd(), -365);
+  // fromPrevYearStart: RUN 일지 PR — 작년 PR 도 작년 전체 기록과 비교하도록 작년 1월 1일부터(기본은 최근 365일)
+  const todayYmd = seoulTodayYmd();
+  const fromYmd = opts && opts.fromPrevYearStart
+    ? (Number(todayYmd.slice(0, 4)) - 1) + "-01-01"
+    : shiftYmd(todayYmd, -365);
 
   const { data: efforts, error: effErr } = await supabase
     .from("run_activity_efforts")
