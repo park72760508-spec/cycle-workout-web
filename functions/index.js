@@ -11863,7 +11863,8 @@ exports.getRunEffortsForRead = onRequest(
 
     try {
       const limit = Number(req.query.limit) || 400;
-      const efforts = await supabaseGroupReader.fetchUserRunEffortsRecent(requestedUid, limit);
+      const includeWalk = String(req.query.includeWalk || "") === "1";
+      const efforts = await supabaseGroupReader.fetchUserRunEffortsRecent(requestedUid, limit, { includeWalk });
       res.status(200).json({
         success: true,
         efforts,

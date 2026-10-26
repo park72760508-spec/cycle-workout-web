@@ -95,6 +95,7 @@
     var url = new URL(getReadRelayUrl());
     url.searchParams.set('uid', String(userId).trim());
     url.searchParams.set('limit', String(Math.min(1000, Math.max(1, Number(options.limit) || 400))));
+    if (options.includeWalk) url.searchParams.set('includeWalk', '1'); // RUN 일지: 걷기 구간 페이스 표시용
     var token = await getFirebaseIdTokenForReadRelay();
     var res = await fetch(url.toString(), {
       method: 'GET',

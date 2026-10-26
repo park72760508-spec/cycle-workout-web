@@ -63,6 +63,8 @@
     (efforts || []).forEach(function (e) {
       var actDate = e.activity_date ? String(e.activity_date).slice(0, 10) : '';
       if (!actDate || actDate.slice(0, 4) !== y) return;
+      // 걷기 구간 기록은 표시만 하고 러닝 PR 에는 넣지 않음
+      if (String(e.activity_type || '').trim().toLowerCase() === 'walk') return;
       PACE_AXES.forEach(function (axis) {
         var sp = effortSpeed(e, axis);
         if (sp == null) return;

@@ -116,7 +116,7 @@
       setError(null);
       var fetchPromise = Promise.all([
         fetchLogs(userId, { limit: 500 }),
-        fetchEfforts(userId, { limit: 500 }),
+        fetchEfforts(userId, { limit: 500, includeWalk: true }),
       ])
         .then(function (res) {
           var logs = res[0] || [];

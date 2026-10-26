@@ -4608,7 +4608,8 @@
           .reduce(function (b, x) { return b == null || x.elapsed_time < b ? x.elapsed_time : b; }, null),
         classification: st.lastClassify || null
       };
-      if (kind === 'run') {
+      // 걷기도 러닝과 같이 구간 페이스(1k~42k) 저장 — 러닝 랭킹·대시보드는 Walk 를 제외해 영향 없음
+      {
         var eff = computeEfforts(s);
         // 1km 미만 등 기록할 구간이 하나도 없으면 빈 행을 만들지 않음
         if (Object.keys(eff).some(function (k) { return eff[k] != null; })) payload.efforts = eff;

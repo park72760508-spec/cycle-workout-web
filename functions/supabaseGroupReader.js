@@ -818,7 +818,9 @@ function shiftYmd(ymd, deltaDays) {
  * @param {string} firebaseUid
  * @param {number} [limit=400]
  */
-async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
+async function fetchUserRunEffortsRecent(firebaseUid, limit = 400, opts = {}) {
+  // includeWalk: RUN 일지 상세에서만 걷기 구간 페이스도 표시(대시보드·피크 계산은 Run 계열만)
+  const includeWalk = !!(opts && opts.includeWalk);
   const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
   if (!supabase) return [];
   const uid = String(firebaseUid || "").trim();
@@ -856,7 +858,8 @@ async function fetchUserRunEffortsRecent(firebaseUid, limit = 400) {
 
   const actMap = new Map();
   for (const a of acts || []) {
-    if (!isRunningActivityType(a.activity_type)) continue;
+    const isWalk = String(a.activity_type || "").trim().toLowerCase() === "walk";
+    if (!isRunningActivityType(a.activity_type) && !(includeWalk && isWalk)) continue;
     actMap.set(String(a.activity_id), a);
   }
 
