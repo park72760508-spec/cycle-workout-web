@@ -545,7 +545,7 @@
     try { u = new URL(String(url), window.location.href); } catch (e) { return null; }
     if (u.pathname.indexOf('getPeakPowerRanking') < 0) return null;
     var dur = u.searchParams.get('duration') || '';
-    if (!/^spd_(1|5|10|20|40|60)min$/.test(dur)) return null;
+    if (!/^spd_(max|(1|5|10|20|40|60)min)$/.test(dur)) return null; // spd_max = 최고 속도(2026-10-26)
     var gender = u.searchParams.get('gender') || 'all';
     var uid = u.searchParams.get('uid') || '';
     var key = dur + '|' + gender;

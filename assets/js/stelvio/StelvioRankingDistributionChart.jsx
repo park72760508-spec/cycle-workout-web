@@ -220,7 +220,7 @@
 
     var isTss = duration === 'tss';
     var isKmMode = duration === 'personal_dist' || duration === 'group_dist';
-    var isAvgSpeedDur = /^spd_(1|5|10|20|40|60)min$/.test(String(duration || '')); // 평속 탭(2026-10-25)
+    var isAvgSpeedDur = /^spd_(max|(1|5|10|20|40|60)min)$/.test(String(duration || '')); // 평속 탭(2026-10-25)
     var isSpeedMode = duration === 'personal_speed' || isAvgSpeedDur;
     var isGcMode = duration === 'gc';
     var isPaceMode = duration === 'run_pace';
@@ -228,7 +228,7 @@
     var durLabel = isTss
       ? '주간 TSS'
       : isSpeedMode
-        ? (isAvgSpeedDur ? '평속 ' + String(duration).replace('spd_', '').replace('min', '분') : '독주')
+        ? (isAvgSpeedDur ? (String(duration) === 'spd_max' ? '최고 속도' : '평속 ' + String(duration).replace('spd_', '').replace('min', '분')) : '독주')
         : isKmMode
           ? (duration === 'group_dist' ? '그룹 30일 거리' : '거리 30일')
           : isGcMode

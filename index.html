@@ -121,7 +121,7 @@
     })();
   </script>
   <!-- 비용 절감 3단계: 랭킹보드 공용 스냅샷(Supabase) 우선 읽기 — getPeakPowerRanking 호출부 공통 -->
-  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261025spdmv"></script>
+  <script src="assets/js/stelvioRankingSnapshotFetch.js?v=20261026spdmax"></script>
   <script src="assets/js/stelvioFirestoreReconnect.js"></script>
   <!-- 랭킹보드 성능: DOM diff + Worker fetch (기능 동일, 렌더/파싱 분리) -->
   <script src="https://cdn.jsdelivr.net/npm/morphdom@2.7.4/dist/morphdom-umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -15565,7 +15565,7 @@
     /** 구간 탭 내 선택된 피크 duration (Max·1분·…·60분) */
     var stelvioPeakSegmentLastDuration = 'max';
     var stelvioSpeedSegmentLastDuration = 'spd_1min'; /* 평속 탭 마지막 선택 구간 */
-    function stelvioIsAvgSpeedDuration(dt) { return /^spd_(1|5|10|20|40|60)min$/.test(String(dt || '')); }
+    function stelvioIsAvgSpeedDuration(dt) { return /^spd_(max|(1|5|10|20|40|60)min)$/.test(String(dt || '')); }
     function stelvioIsAvgSpeedRanking() { return typeof stelvioRankingState !== 'undefined' && !!stelvioRankingState && stelvioIsAvgSpeedDuration(stelvioRankingState.duration); }
     /** CYCLE 랭킹 클럽 탭 — RUN 카테고리 소모임 제외 (라이딩/CYCLE만) */
     function stelvioFilterClubTabMyGroups(rows) {
@@ -15662,6 +15662,7 @@
       'tss': 'TSS',
       'personal_dist': '거리',
       'personal_speed': '독주',
+      'spd_max': '평속 Max',
       'spd_1min': '평속 1분',
       'spd_5min': '평속 5분',
       'spd_10min': '평속 10분',
@@ -26092,8 +26093,9 @@
       } else if (stelvioIsAvgSpeedRanking()) {
         /* 평속 탭(2026-10-24) */
         var avsP = (cu.speedKmh != null ? Number(cu.speedKmh) : 0).toFixed(1);
+        var avsIsMax = String(stelvioRankingState.duration || '') === 'spd_max'; /* Max 탭(2026-10-26): 기록 최고 속도 */
         var avsDur = String(stelvioRankingState.duration || '').replace('spd_', '').replace('min', '분');
-        var avsMain = userNameEsc + '님은 ' + avsDur + ' 평속 ';
+        var avsMain = userNameEsc + '님은 ' + (avsIsMax ? '최고 속도 ' : avsDur + ' 평속 ');
         if (cu.ageCategory === 'Supremo' || !ageLabel || (currentUser && currentUser.ageCategory === 'Supremo')) {
           avsMain += '전체 ' + globalRank + '위(' + avsP + ' km/h)입니다.';
         } else {
@@ -44130,6 +44132,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
           <!-- 평속 탭(2026-10-24): 아웃도어 1·5·10·20·40·60분 피크 평속(최근 90일 상위 2개 평균, 긴 내리막 제외) -->
           <div id="stelvioSpeedSegmentFilter" class="stelvio-group-metric-filter stelvio-peak-segment-filter hidden" role="group" aria-label="평속 구간 선택">
             <div class="stelvio-group-metric-chips">
+              <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_max">Max</button>
               <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_1min">1분</button>
               <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_5min">5분</button>
               <button type="button" class="stelvio-group-metric-chip" data-speed-duration="spd_10min">10분</button>
@@ -44186,6 +44189,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="20min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="40min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="60min"></div>
+              <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_max"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_1min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_5min"></div>
               <div class="stelvio-category-body stelvio-ranking-tab-view" data-ranking-view-duration="spd_10min"></div>
@@ -45286,7 +45290,7 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script defer src="assets/js/runDashboard/stelvioHexagonRankLog.js"></script>
   <script src="assets/js/runDashboard/components/StelvioHexagonRanksCard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/runDashboard/RunDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
-  <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx?v=20261025avgspd" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/stelvio/StelvioRankingDistributionChart.jsx?v=20261026spdmax" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script defer src="assets/js/competition/competitionApi.js"></script>
   <script defer src="assets/js/competition/competitionBottomSheet.js?v=applicants-popup-20260906"></script>
   <script defer src="assets/js/competition/competitionAdminForm.js"></script>
