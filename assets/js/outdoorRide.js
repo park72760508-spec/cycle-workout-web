@@ -596,12 +596,31 @@
     // 현재 속도: 기기가 주는 speed(m/s) 우선, 없으면 직전 위치와의 거리/시간
     var spd = null;
     var accOk = acc != null && acc <= 35; // 위치 정확도가 나쁘면(실내·PC 네트워크 위치 등) 위치가 튀어 엉뚱한 속도가 나온다
-    if (accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
+    // 기기 속도는 정확도 15m 이내일 때만 믿음(실내 Wi-Fi 위치는 정지해 있어도 가짜 속도를 준다, 2026-10-26)
+    if (accOk && acc <= 15 && c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
     var d = prev ? hav(prev.lat, prev.lng, lat, lng) : 0;
     var dt = prev ? (t - prev.t) / 1000 : 0;
     // 기기가 속도를 주지 않으면 1초 사이 두 점이 아니라 4초 이상 전 위치와의 거리로(GPS 흔들림에 덜 예민, 2026-10-21)
     var sh = st.spdHist || (st.spdHist = []);
-    if (accOk) { sh.push([t, lat, lng]); while (sh.length && t - sh[0][0] > 8000) sh.shift(); }
+    if (accOk) { sh.push([t, lat, lng, acc]); while (sh.length && t - sh[0][0] > 10000) sh.shift(); }
+    /*
+     * 정지 판정(2026-10-26 — 아파트 실내에서 가만히 있어도 간헐적으로 속도가 뜨던 문제):
+     *  실내는 Wi-Fi·GPS 위치가 수~수십 m 튀고 기기 속도(coords.speed)도 가짜로 올라온다.
+     *  최근 6~10초 동안 실제로 옮겨 간 직선 거리가 위치 오차보다 작으면 정지 → 속도 0.
+     *  위치 오차 = 두 점 정확도 평균 m 이 12m 이하면 m×0.5(최소 5m), 그보다 나쁘면(실내) m×0.85(최대 30m).
+     *  모의 계산: 실내 ±10m 튐(정확도 20m) 590번 중 7번만 표시(예전엔 대부분), 걷기 5km/h(정확도 8m) 95% 정상 표시,
+     *  자전거 20km/h 100% 정상.
+     */
+    var still = false;
+    if (accOk) {
+      var sbase = null;
+      for (var sj = 0; sj < sh.length; sj++) { if (t - sh[sj][0] >= 6000) { sbase = sh[sj]; break; } }
+      if (sbase) {
+        var accM = (acc + (sbase[3] != null ? sbase[3] : acc)) / 2;
+        var noiseM = accM > 12 ? Math.min(30, accM * 0.85) : Math.max(5, accM * 0.5);
+        still = hav(sbase[1], sbase[2], lat, lng) < noiseM;
+      }
+    }
     if (spd == null && accOk && sh.length >= 2) {
       var sb = null;
       for (var si = sh.length - 1; si >= 0; si--) { if (t - sh[si][0] >= 4000) { sb = sh[si]; break; } }
@@ -609,8 +628,12 @@
       else if (prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
       if (spd != null && st.speedKmh > 0) spd = st.speedKmh * 0.5 + spd * 0.5; // 위치로 계산한 속도는 살짝 평활
     }
-    if (!accOk) spd = 0;
-    if (spd != null && isFinite(spd)) st.speedKmh = spd < 1.5 ? 0 : Math.min(spd, 120);
+    if (!accOk || still) spd = 0;
+    // 움직임은 연속 2번(정확도 20m 초과면 3번) 잡혀야 속도로 표시 — 위치가 한 번 튄 것만으로 속도계가 반응하지 않게
+    if (spd != null && isFinite(spd)) {
+      st.moveVotes = spd >= 1.5 ? (st.moveVotes || 0) + 1 : 0;
+      st.speedKmh = spd < 1.5 || st.moveVotes < (acc > 20 ? 3 : 2) ? 0 : Math.min(spd, 120);
+    }
     kickLoop();
 
     if (st.status === 'running') {
@@ -629,7 +652,7 @@
         var base = null;
         for (var hi = 0; hi < hist.length; hi++) { if (t - hist[hi][0] >= 8000) base = hist[hi]; }
         var winS = base ? (t - base[0]) / 1000 : 0;
-        st.isMoving = (base && hav(base[1], base[2], lat, lng) / winS >= 0.6) || st.speedKmh >= 2.5;
+        st.isMoving = !still && ((base && hav(base[1], base[2], lat, lng) / winS >= 0.6) || st.speedKmh >= 2.5);
         if (prev && dt > 0 && dt <= 30 && st.isMoving) {
           // 시작(재개) 이전 구간은 빼고, 경과 시간을 넘지 않게
           var fromMs = Math.max(prev.t, st.runSince || 0);
