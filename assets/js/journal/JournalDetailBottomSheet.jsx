@@ -400,15 +400,30 @@
    * 구간별 피크 파워 그래프(JournalSessionPowerPeakChart)와 같은 디자인, 값만 km/h. Max = 라이딩 중 최고 속도.
    */
   var SPEED_PEAK_FIELDS = ['max_1min_speed_kmh', 'max_5min_speed_kmh', 'max_10min_speed_kmh', 'max_20min_speed_kmh', 'max_40min_speed_kmh', 'max_60min_speed_kmh'];
+  /**
+   * 구간별 평속 PR — 그해 최고 평속(yearlyPeaks.max_*_speed_kmh, fn_my_yearly_peaks)과 같거나 높으면 PR.
+   * 파워·심박 PR(isPrField)과 같은 방식이되, 평속은 소수 1자리까지 비교한다.
+   */
+  function isSpeedPrField(log, yearlyPeaks, field) {
+    if (!log || !yearlyPeaks || !field) return false;
+    var peak = Number(yearlyPeaks[field]);
+    var v = Number(log[field]);
+    if (!(peak > 0) || !(v > 0)) return false;
+    return Math.round(v * 10) >= Math.round(peak * 10);
+  }
   function journalLogHasSpeedPeaks(log) {
     if (!log) return false;
     return SPEED_PEAK_FIELDS.some(function(f) { return Number(log[f]) > 0; });
   }
   function JournalSessionSpeedPeakChart(props) {
     var log = props.log;
+    var yearlyPeaks = props.yearlyPeaks || null;
     var chartRef = useRef(null);
     var chartInst = useRef(null);
-    var depKey = log ? [log.max_speed_kmh, log.avg_speed_kmh].concat(SPEED_PEAK_FIELDS.map(function(f) { return log[f]; })).join('|') : '';
+    var depKey = log
+      ? [log.max_speed_kmh, log.avg_speed_kmh].concat(SPEED_PEAK_FIELDS.map(function(f) { return log[f]; }))
+        .concat(['max_speed_kmh'].concat(SPEED_PEAK_FIELDS).map(function(f) { return yearlyPeaks ? yearlyPeaks[f] : ''; })).join('|')
+      : '';
 
     useEffect(function() {
       if (chartInst.current) {
@@ -419,15 +434,17 @@
       var ctx = chartRef.current && chartRef.current.getContext('2d');
       if (!ctx) return;
       var rows = [
-        { label: '최고 속도', shortLabel: 'Max', val: Number(log.max_speed_kmh) || 0 },
-        { label: '1분', shortLabel: '1분', val: Number(log.max_1min_speed_kmh) || 0 },
-        { label: '5분', shortLabel: '5분', val: Number(log.max_5min_speed_kmh) || 0 },
-        { label: '10분', shortLabel: '10', val: Number(log.max_10min_speed_kmh) || 0 },
-        { label: '20분', shortLabel: '20', val: Number(log.max_20min_speed_kmh) || 0 },
-        { label: '40분', shortLabel: '40', val: Number(log.max_40min_speed_kmh) || 0 },
-        { label: '60분', shortLabel: '60', val: Number(log.max_60min_speed_kmh) || 0 }
+        { label: '최고 속도', shortLabel: 'Max', field: 'max_speed_kmh', val: Number(log.max_speed_kmh) || 0 },
+        { label: '1분', shortLabel: '1분', field: 'max_1min_speed_kmh', val: Number(log.max_1min_speed_kmh) || 0 },
+        { label: '5분', shortLabel: '5분', field: 'max_5min_speed_kmh', val: Number(log.max_5min_speed_kmh) || 0 },
+        { label: '10분', shortLabel: '10', field: 'max_10min_speed_kmh', val: Number(log.max_10min_speed_kmh) || 0 },
+        { label: '20분', shortLabel: '20', field: 'max_20min_speed_kmh', val: Number(log.max_20min_speed_kmh) || 0 },
+        { label: '40분', shortLabel: '40', field: 'max_40min_speed_kmh', val: Number(log.max_40min_speed_kmh) || 0 },
+        { label: '60분', shortLabel: '60', field: 'max_60min_speed_kmh', val: Number(log.max_60min_speed_kmh) || 0 }
       ];
       capPeakRowsMonotonicDesc(rows);
+      var prFn = function(field) { return isSpeedPrField(log, yearlyPeaks, field); };
+      var hasChartPr = rows.some(function(r) { return r.val > 0 && prFn(r.field); });
       var values = rows.map(function(r) { return r.val; });
       var avgGuide = Number(log.avg_speed_kmh) > 0
         ? Number(log.avg_speed_kmh)
@@ -450,7 +467,7 @@
           meta.data.forEach(function(bar, i) {
             if (!bar || bar.x == null || bar.y == null) return;
             var row = rows[i];
-            if (row.val > 0) drawPeakBarTopValue(chart.ctx, row.val.toFixed(1), bar.x, bar.y - 12, false);
+            if (row.val > 0) drawPeakBarTopValue(chart.ctx, row.val.toFixed(1), bar.x, bar.y - 12, prFn(row.field));
             chart.ctx.beginPath();
             chart.ctx.arc(bar.x, circleY, radius, 0, Math.PI * 2);
             chart.ctx.fillStyle = JOURNAL_PEAK_ZONE_COLORS[i] || 'rgba(156,163,175,0.7)';
@@ -464,7 +481,7 @@
             chart.ctx.textBaseline = 'middle';
             chart.ctx.fillText(row.shortLabel, bar.x, circleY);
           });
-          if (chartArea) drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'km/h', false);
+          if (chartArea) drawUnitRowWithOptionalPrLegend(chart.ctx, chartArea, 'km/h', hasChartPr);
           chart.ctx.restore();
         }
       };
@@ -507,7 +524,11 @@
                 label: function(c) {
                   var i = c.dataIndex;
                   if (c.datasetIndex === 1) return '평균 속도: ' + avgGuide.toFixed(1) + ' km/h';
-                  return rows[i] && rows[i].val > 0 ? rows[i].label + ': ' + rows[i].val.toFixed(1) + ' km/h' : (rows[i] ? rows[i].label + ': —' : '');
+                  if (rows[i] && rows[i].val > 0) {
+                    var line = rows[i].label + ': ' + rows[i].val.toFixed(1) + ' km/h';
+                    return prFn(rows[i].field) ? [line, 'PR'] : line;
+                  }
+                  return rows[i] ? rows[i].label + ': —' : '';
                 }
               }
             }
@@ -1088,7 +1109,7 @@
       journalLogHasSpeedPeaks(log)
         ? React.createElement('div', { key: 'spd-peak', className: 'journal-summary-speed-peak' },
             React.createElement('div', { className: 'journal-summary-speed-peak-title' }, '구간별 평속'),
-            React.createElement(JournalSessionSpeedPeakChart, { log: log }))
+            React.createElement(JournalSessionSpeedPeakChart, { log: log, yearlyPeaks: props.yearlyPeaks || null }))
         : null,
       DetailRow({ label: '평균 케이던스', value: formatCadenceRpm(log.avg_cadence), isPr: false }),
       DetailRow({ label: 'TSS', value: log.tss != null && log.tss > 0 ? Math.round(log.tss) : '-', isPr: false }),
@@ -1294,7 +1315,7 @@
                 })
               : logs[0] || null;
             var p = t.id === 'summary'
-              ? { log: summaryLog, logs: logs, dailyRouteDoc: dailyRouteDoc, userProfile: props.userProfile || {} }
+              ? { log: summaryLog, logs: logs, dailyRouteDoc: dailyRouteDoc, yearlyPeaks: yearlyPeaks, userProfile: props.userProfile || {} }
               : { log: merged, yearlyPeaks: yearlyPeaks, userWeight: userWeightForPr, userProfile: props.userProfile || {} };
             return React.createElement(t.C, Object.assign({ key: t.id }, p));
           })

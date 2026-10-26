@@ -44,6 +44,14 @@ function mapYearlyPeaksRow(row) {
     max_60min_wkg: n(row.max_60min_wkg),
     max_watts: n(row.max_watts),
     max_wkg: n(row.max_wkg),
+    // 구간별 평속 PR(2026-10-26): 그해 rides 최고값(fn_my_yearly_peaks)
+    max_speed_kmh: n(row.peak_max_speed_kmh),
+    max_1min_speed_kmh: n(row.max_1min_speed_kmh),
+    max_5min_speed_kmh: n(row.max_5min_speed_kmh),
+    max_10min_speed_kmh: n(row.max_10min_speed_kmh),
+    max_20min_speed_kmh: n(row.max_20min_speed_kmh),
+    max_40min_speed_kmh: n(row.max_40min_speed_kmh),
+    max_60min_speed_kmh: n(row.max_60min_speed_kmh),
     updated_at: row.updated_at || null,
     readBackend: 'supabase',
   };
