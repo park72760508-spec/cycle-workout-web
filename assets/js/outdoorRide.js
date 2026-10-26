@@ -456,7 +456,7 @@
     if (list) list.innerHTML = '';
     var empty = $('outdMapEmpty');
     if (empty) {
-      empty.innerHTML = '코스맵을 선택하면 경로를 안내합니다<br><small>메뉴 &gt; 코스맵 선택 · 길찾기</small>';
+      empty.innerHTML = '코스맵을 선택하면 경로를 안내합니다<br><small>☰ &gt; 코스맵 선택 · 길찾기</small>';
       empty.style.display = st.status === 'running' ? 'none' : '';
     }
     updateRerouteBtn();
