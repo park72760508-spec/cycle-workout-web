@@ -5,7 +5,7 @@
  */
 const { onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
 /** v1 전용(runWith · firestore.document). v7 패키지 루트는 v2라 runWith 미제공 → /v1 필요 */
 const functions = require("firebase-functions/v1");
 const { defineSecret } = require("firebase-functions/params");
@@ -36,6 +36,8 @@ const competitionAlimRelaySecret = defineSecret("COMPETITION_ALIM_RELAY_SECRET")
 /** 중고랜드 알림톡 — tossPaymentWebhook(VPC 미적용, 결제 웹훅이라 네트워킹 변경 리스크를 피함) →
  *  marketAlimtalkHttpsRelay(VPC) 내부 호출 인증용. 위 경쟁 릴레이와 동일 이유·구조. */
 const marketAlimRelaySecret = defineSecret("MARKET_ALIM_RELAY_SECRET");
+/** 중고랜드 알림톡 대기열(Firestore) — 결제 웹훅 응답과 알림톡 발송을 분리 */
+const MARKET_ALIMTALK_QUEUE_COLLECTION = "market_alimtalk_queue";
 /** Supabase Postgres 트리거(notify_market_order_delivered, market_orders AFTER UPDATE) →
  *  notifyMarketOrderDeliveredWebhook 실시간 호출 인증용 공유 비밀. Supabase Vault의
  *  market_delivery_notify_trigger_secret와 같은 값이어야 한다. */
@@ -18376,6 +18378,12 @@ exports.tossPaymentWebhook = onRequest(tossPaymentWebhookOptions, async (req, re
       res.status(200).send("OK");
       return;
     }
+    // 중고랜드 주문(market_)은 대회 신청 조회 없이 바로 처리 — 토스 응답 시간 단축(10초 제한)
+    if (orderId.startsWith("market_")) {
+      await handleMarketOrderWebhook(orderId, flat);
+      res.status(200).send("OK");
+      return;
+    }
 
     const appSnap = await db
       .collection(RACE_APPLICATIONS_COLLECTION)
@@ -18887,7 +18895,22 @@ async function handleMarketOrderWebhook(orderId, flat) {
     .select();
   if (!updatedOrders || !updatedOrders.length) return; // 동시 웹훅 재시도 등으로 이미 처리됨(멱등)
 
-  // 입금완료 알림톡(UK_6794, 판매자 수신) — 결제 확정 자체는 이미 끝났으므로 실패해도 무시(로그만).
+  // 입금완료 알림톡(UK_6794, 판매자 수신) — 토스 응답을 늦추지 않도록 대기열에 넣고
+  // processMarketAlimtalkQueue(Firestore 트리거)가 따로 보낸다. 대기열 기록이 실패하면 예전처럼 바로 보낸다.
+  try {
+    await admin.firestore().collection(MARKET_ALIMTALK_QUEUE_COLLECTION).add({
+      kind: "payment_confirmed",
+      orderId: order.id,
+      itemId: order.item_id,
+      recipientUserId: order.seller_id,
+      progressContent: marketNegoAlimtalk.MARKET_PAYMENT_CONFIRMED_PROGRESS_LINE,
+      status: "pending",
+      created_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return;
+  } catch (queueErr) {
+    console.error("[handleMarketOrderWebhook] 알림톡 대기열 기록 실패 — 바로 발송:", order.id, queueErr && queueErr.message ? queueErr.message : queueErr);
+  }
   try {
     await sendMarketProgressAlimtalkServerSide({
       supabase,
@@ -18899,6 +18922,39 @@ async function handleMarketOrderWebhook(orderId, flat) {
     console.error("[handleMarketOrderWebhook] 입금완료 알림톡 발송 실패(수동 확인 필요):", order.id, alimErr && alimErr.message ? alimErr.message : alimErr);
   }
 }
+
+/**
+ * 중고랜드 알림톡 대기열 처리 — tossPaymentWebhook이 넣은 문서를 받아 발송한다.
+ * 중복 발송을 막으려고 자동 재시도는 하지 않고, 결과(sent/skipped/failed)를 문서에 남긴다.
+ */
+const processMarketAlimtalkQueueOptions = supabaseDualWriteServer.appendServiceRoleSecret({
+  document: MARKET_ALIMTALK_QUEUE_COLLECTION + "/{docId}",
+  region: "asia-northeast3",
+  timeoutSeconds: 60,
+  retry: false,
+});
+processMarketAlimtalkQueueOptions.secrets.push(marketAlimRelaySecret);
+exports.processMarketAlimtalkQueue = onDocumentCreated(processMarketAlimtalkQueueOptions, async (event) => {
+  const snap = event && event.data;
+  if (!snap) return;
+  const job = snap.data() || {};
+  if (job.status !== "pending") return;
+  const supabase = supabaseDualWriteServer.getSupabaseAdminClient();
+  try {
+    if (!supabase) throw new Error("Supabase 클라이언트 없음");
+    const sent = await sendMarketProgressAlimtalkServerSide({
+      supabase,
+      itemId: job.itemId,
+      recipientUserId: job.recipientUserId,
+      progressContent: job.progressContent,
+    });
+    await snap.ref.update({ status: sent ? "sent" : "skipped", processed_at: admin.firestore.FieldValue.serverTimestamp() });
+  } catch (e) {
+    const msg = (e && e.message) || String(e);
+    console.error("[processMarketAlimtalkQueue] 알림톡 발송 실패(수동 확인 필요):", job.orderId, msg);
+    await snap.ref.update({ status: "failed", error: msg, processed_at: admin.firestore.FieldValue.serverTimestamp() }).catch(() => {});
+  }
+});
 
 const createMarketOrderOptions = appendMarketSecrets({ region: "asia-northeast3", cors: true, timeoutSeconds: 60 });
 exports.createMarketOrder = onRequest(createMarketOrderOptions, async (req, res) => {
