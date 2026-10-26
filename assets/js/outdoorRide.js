@@ -2230,11 +2230,14 @@
   }
   /** 길찾기 화면 위: 오늘 카카오 무료 사용량 */
   function refreshKakaoUsage() {
+    if (!favIsAdmin()) return; // 일반 사용자는 사용량 표시 안 함
     favRpc('fn_kakao_route_usage', {}).then(function (u) { kakaoUsage = u; renderKakaoUsage(); }, function () {});
   }
   function renderKakaoUsage() {
     var el = $('outdKakaoUsage');
-    if (!el || !kakaoUsage) return;
+    if (!el) return;
+    if (!favIsAdmin()) { el.style.display = 'none'; return; } // 관리자 화면에서만 표시
+    if (!kakaoUsage) return;
     var lim = Number(kakaoUsage.limit) || 1000;
     function part(label, api) {
       var n = Number(kakaoUsage[api]) || 0;
