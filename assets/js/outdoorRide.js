@@ -3457,6 +3457,16 @@
       if ($('outdFavSheet') && $('outdFavSheet').style.display === 'flex') renderFavList();
     }, function () {});
   }
+  /**
+   * 루트맵 화면이 다시 보일 때마다 즐겨찾기를 새로 읽음(2026-10-27) — 루트맵 버튼 진입, 다른 경로로 화면 전환,
+   * 앱을 백그라운드에 두었다가 돌아온 경우 모두. 같은 순간 여러 신호가 겹쳐도 3초에 한 번만 조회.
+   */
+  var favRefreshAt = 0;
+  function scheduleFavRefresh() {
+    if (Date.now() - favRefreshAt < 3000) return;
+    favRefreshAt = Date.now();
+    refreshFavMarkers();
+  }
   function renderFavMarkers() {
     var map = st.map, L = window.L;
     if (!map || !L) return;
@@ -4881,13 +4891,22 @@
     var el = $(SCREEN_ID);
     if (!el || typeof MutationObserver !== 'function' || el.__outdWatch) return;
     el.__outdWatch = true;
+    var wasActive = isActive();
     new MutationObserver(function () {
-      if (isActive()) {
+      var nowActive = isActive();
+      if (nowActive) {
         setTimeout(fixMapSize, 50);
         setTimeout(fixMapSize, 400);
+        // 다른 화면에서 루트맵으로 돌아온 순간 — 즐겨찾기 새로 읽기(지도가 준비된 뒤)
+        if (!wasActive) setTimeout(function () { if (isActive() && st.map) scheduleFavRefresh(); }, 300);
       }
+      wasActive = nowActive;
     }).observe(el, { attributes: true, attributeFilter: ['class'] });
   }
+  // 휴대폰 홈 화면 등으로 나갔다가 앱으로 돌아왔을 때 루트맵이 보이고 있으면 새로 읽기
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && isActive() && st.map) scheduleFavRefresh();
+  });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchScreen);
   else watchScreen();
 
@@ -4917,7 +4936,7 @@
       fixMapSize();
       applyRotation();
       if (opts.gpxUrl) loadCourseFromUrl(opts.gpxUrl, opts.title || '');
-      refreshFavMarkers(); // 지도 위 즐겨찾기 핀
+      scheduleFavRefresh(); // 지도 위 즐겨찾기 핀·목록 새로 읽기
     }, 80);
     setTimeout(fixMapSize, 600);
     startGps();
