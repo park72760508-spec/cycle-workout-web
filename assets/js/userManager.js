@@ -3846,6 +3846,11 @@ async function fetchYearlyPeaksForYear(userId, year) {
 
   // Phase 6: Supabase Read 시 yearly_peaks는 rides 트리거로 Supabase에 갱신됨
   try {
+    /* 2026-10-26: 라우터 모듈은 다른 화면이 import 해야 window 에 생겨서, 일지가 먼저 열리면 함수가 없어
+       항상 Firestore(마이그레이션 잔재, 평속 PR 값 없음)를 읽었다 → 없으면 여기서 직접 불러온다 */
+    if (typeof window.refreshLogsReadRouting !== 'function') {
+      try { await import('./logsReadRouter.js'); } catch (eImp) {}
+    }
     if (typeof window.refreshLogsReadRouting === 'function') {
       var useSb = await window.refreshLogsReadRouting(false);
       if (useSb) {
