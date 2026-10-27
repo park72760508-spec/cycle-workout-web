@@ -180,7 +180,7 @@ async function fetchOpenMeteoHours(lat, lon, targetYmd) {
     "https://api.open-meteo.com/v1/forecast" +
     "?latitude=" + encodeURIComponent(lat) +
     "&longitude=" + encodeURIComponent(lon) +
-    "&hourly=temperature_2m,weathercode" +
+    "&hourly=temperature_2m,weathercode,precipitation_probability" +
     "&timezone=" + encodeURIComponent("Asia/Seoul") +
     "&start_date=" + targetYmd +
     "&end_date=" + targetYmd;
@@ -200,12 +200,13 @@ async function fetchOpenMeteoHours(lat, lon, targetYmd) {
   const times = json && json.hourly && json.hourly.time;
   const temps = json && json.hourly && json.hourly.temperature_2m;
   const codes = json && json.hourly && json.hourly.weathercode;
+  const pops = json && json.hourly && json.hourly.precipitation_probability;
   if (!Array.isArray(times)) throw new Error("Open-Meteo 응답 형식 오류");
 
   const byHour = {};
   times.forEach((iso, i) => {
     const hh = Number(String(iso).slice(11, 13));
-    byHour[hh] = { tempC: temps ? Number(temps[i]) : null, code: codes ? codes[i] : null };
+    byHour[hh] = { tempC: temps ? Number(temps[i]) : null, code: codes ? codes[i] : null, pop: pops && pops[i] != null ? Number(pops[i]) : null };
   });
 
   return TARGET_HOURS.map((h) => {
@@ -217,6 +218,7 @@ async function fetchOpenMeteoHours(lat, lon, targetYmd) {
       tempC: isFinite(row.tempC) ? row.tempC : null,
       sky: null,
       pty: null,
+      pop: row.pop != null && isFinite(row.pop) ? row.pop : null,
       icon: meta.icon,
       label: meta.label,
     };
@@ -245,7 +247,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     return { success: true, region: grid.region, date: targetYmd, hours: [], note: "지난 일정" };
   }
 
-  const cacheKey = grid.nx + "_" + grid.ny + "_" + targetCompact;
+  const cacheKey = grid.nx + "_" + grid.ny + "_" + targetCompact + "_v2"; // v2: 강수확률(pop) 포함
   const cacheRef = db ? db.collection("weather_forecast_cache").doc(cacheKey) : null;
   if (cacheRef) {
     try {
@@ -271,7 +273,8 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     const byFcstTime = {};
     items.forEach((it) => {
       if (it.fcstDate !== targetCompact) return;
-      if (it.category !== "TMP" && it.category !== "SKY" && it.category !== "PTY") return;
+      // 2026-10-28: POP(강수확률 %) 추가 — 루트맵 날씨 카드 대표 날씨(비 80% 등)
+      if (it.category !== "TMP" && it.category !== "SKY" && it.category !== "PTY" && it.category !== "POP") return;
       const t = it.fcstTime;
       if (!byFcstTime[t]) byFcstTime[t] = {};
       byFcstTime[t][it.category] = it.fcstValue;
@@ -306,7 +309,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     const usedFcstKeys = new Set();
     const kmaHours = TARGET_HOURS.map((h) => {
       const { row, key } = nearestRow(h);
-      if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
+      if (!row) return { hour: h, tempC: null, sky: null, pty: null, pop: null, icon: null, label: null };
       usedFcstKeys.add(key);
       const tempC = row.TMP != null ? Number(row.TMP) : null;
       const meta = iconAndLabelFor(row.SKY, row.PTY);
@@ -315,6 +318,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
         tempC: isFinite(tempC) ? tempC : null,
         sky: row.SKY != null ? String(row.SKY) : null,
         pty: row.PTY != null ? String(row.PTY) : null,
+        pop: row.POP != null && isFinite(Number(row.POP)) ? Number(row.POP) : null,
         icon: meta.icon,
         label: meta.label,
       };

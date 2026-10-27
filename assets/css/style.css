@@ -35315,24 +35315,21 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__rowbusy .auth-transition-spinner-ring--spin { border-width: 3px; }
 #outdoorRideScreen .outd-fav__item.is-busy { pointer-events: none; }
 
-/* ===== 2026-10-28: 루트맵 오늘의 날씨 카드 — 하늘 상태에 맞춘 그라데이션(맑음·구름·흐림·비·눈·밤) ===== */
+/* ===== 2026-10-28: 루트맵 오늘의 날씨 카드 — 반투명 남색 ===== */
 #outdoorRideScreen .outd-wx {
   position: absolute; top: 8px; left: 8px; right: 8px; z-index: 595;
   border-radius: 14px; padding: 7px 10px 8px; color: #fff; cursor: pointer; -webkit-tap-highlight-color: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.14);
-  background: linear-gradient(135deg, #1f2937 0%, #334155 100%);
+  /* 2026-10-28: 아래 '코스맵을 선택하면…' 안내와 같은 반투명 형식, 색은 남색 톤 */
+  border: 1px solid rgba(147, 170, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  background: rgba(16, 28, 72, 0.66);
   font-size: 12px; line-height: 1.2; user-select: none;
 }
-#outdoorRideScreen .outd-wx--clear  { background: linear-gradient(135deg, #0b4ea2 0%, #1d7fe0 55%, #4fb3f6 100%); }
-#outdoorRideScreen .outd-wx--partly { background: linear-gradient(135deg, #1f4b7a 0%, #3b78b0 55%, #7aa7cf 100%); }
-#outdoorRideScreen .outd-wx--cloudy { background: linear-gradient(135deg, #2b3442 0%, #4a5668 60%, #6b778a 100%); }
-#outdoorRideScreen .outd-wx--rain   { background: linear-gradient(135deg, #172133 0%, #2d3f5c 55%, #4a6286 100%); }
-#outdoorRideScreen .outd-wx--snow   { background: linear-gradient(135deg, #3a4a63 0%, #6f86a6 60%, #a9bcd6 100%); }
-#outdoorRideScreen .outd-wx--night  { background: linear-gradient(135deg, #0c1430 0%, #1b2756 60%, #34407a 100%); }
 #outdoorRideScreen .outd-wx__head { display: flex; align-items: center; gap: 8px; min-width: 0; }
 #outdoorRideScreen .outd-wx__place { display: inline-flex; align-items: center; gap: 3px; font-weight: 800; font-size: 13px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25); }
 #outdoorRideScreen .outd-wx__now { font-weight: 800; font-size: 13px; white-space: nowrap; }
+#outdoorRideScreen .outd-wx__now { font-size: 15px; display: inline-flex; align-items: center; gap: 2px; line-height: 1; }
+#outdoorRideScreen .outd-wx__pop { font-size: 11.5px; font-weight: 800; color: #93c5fd; }
 #outdoorRideScreen .outd-wx__pills { margin-left: auto; display: flex; gap: 4px; min-width: 0; }
 #outdoorRideScreen .outd-wx__pill {
   display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 999px; white-space: nowrap;

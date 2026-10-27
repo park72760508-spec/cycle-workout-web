@@ -3,7 +3,7 @@
  *  - 지역: 현재 위치 → 시도·구군(루트맵 reverseRegion: 카카오 → OSM)
  *  - 날씨: 라이딩 모임과 같은 getOpenRidingDepartureWeather(기상청 단기예보, 6~18시 2시간 간격)
  *  - 미세먼지(PM10)·초미세먼지(PM2.5)·자외선: Open-Meteo Air Quality(현재값) → 환경부·기상청 등급
- *  - 카드 바탕: 지금 시각의 하늘 상태(맑음·구름·흐림·비·눈·밤)에 맞춘 그라데이션
+ *  - 첫 줄: 구·군 + 오늘의 대표 날씨(비·눈이면 최고 강수확률) + 미세·초미세·자외선, 바탕은 반투명 남색
  * 조회는 지역이 바뀌거나(3km 이상 이동) 30분이 지났을 때만 다시 한다.
  */
 (function () {
@@ -58,18 +58,33 @@
     S.wx.forEach(function (x) { if (x && x.tempC != null && Math.abs(x.hour - h) < bd) { bd = Math.abs(x.hour - h); best = x; } });
     return best;
   }
-  /** 카드 바탕 테마: 지금 하늘 상태(기상청 SKY 1맑음·3구름많음·4흐림, PTY 강수 1비·2비/눈·3눈·4소나기) + 밤 */
-  function theme() {
-    var k = kstNow().getHours();
-    if (k >= 19 || k < 6) return 'night';
-    var s = nowSlot();
-    if (!s) return 'base';
-    var pty = Number(s.pty || 0), sky = Number(s.sky || 0);
-    if (pty === 3) return 'snow';
-    if (pty > 0) return 'rain';
-    if (sky === 4) return 'cloudy';
-    if (sky === 3) return 'partly';
-    return 'clear';
+  /**
+   * 오늘의 대표 날씨(낮 6~18시 예보 기준, 2026-10-28):
+   *  비·눈 예보가 한 번이라도 있으면 🌧️/🌨️ + 그날 최고 강수확률, 아니면 가장 많은 하늘 상태(같으면 더 흐린 쪽).
+   *  비가 없어도 강수확률 30% 이상이면 % 표시.
+   */
+  function representative() {
+    if (!S.wx || !S.wx.length) return null;
+    var cnt = [0, 0, 0], rain = 0, maxPop = null;
+    S.wx.forEach(function (x) {
+      if (!x || (x.tempC == null && !x.icon)) return;
+      if (x.pop != null && isFinite(x.pop)) maxPop = maxPop == null ? x.pop : Math.max(maxPop, x.pop);
+      var pty = Number(x.pty || 0), sky = Number(x.sky || 0), ic = String(x.icon || '');
+      if (pty === 3 || /❄|🌨/.test(ic)) { rain = Math.max(rain, 2); return; }
+      if (pty > 0 || /🌧|🌦|⛈|☔/.test(ic)) { rain = Math.max(rain, 1); return; }
+      if (sky === 4 || /☁/.test(ic) && !/⛅|🌤|🌥/.test(ic)) cnt[2]++;
+      else if (sky === 3 || /⛅|🌤|🌥/.test(ic)) cnt[1]++;
+      else cnt[0]++;
+    });
+    var icon, label;
+    if (rain === 2) { icon = '🌨️'; label = '눈'; }
+    else if (rain === 1) { icon = '🌧️'; label = '비'; }
+    else {
+      var k = 0; for (var i = 1; i < 3; i++) if (cnt[i] >= cnt[k]) k = i;
+      icon = ['☀️', '⛅', '☁️'][k]; label = ['맑음', '구름많음', '흐림'][k];
+    }
+    var showPop = maxPop != null && (rain > 0 || maxPop >= 30);
+    return { icon: icon, label: label, pop: showPop ? Math.round(maxPop) : null };
   }
 
   function pill(name, g, valTxt) {
@@ -80,9 +95,11 @@
   function render() {
     var box = el();
     if (!box) return;
-    box.className = 'outd-wx outd-wx--' + theme() + (S.collapsed ? ' is-collapsed' : '');
+    box.className = 'outd-wx' + (S.collapsed ? ' is-collapsed' : '');
     var s = nowSlot();
-    var now = s && s.tempC != null ? '<span class="outd-wx__now">' + (s.icon || '') + ' ' + Math.round(s.tempC) + '°</span>' : '';
+    var rep = representative();
+    var now = rep ? '<span class="outd-wx__now" title="오늘의 대표 날씨: ' + rep.label + '">' + rep.icon +
+      (rep.pop != null ? '<span class="outd-wx__pop">' + rep.pop + '%</span>' : '') + '</span>' : '';
     var place = S.label ? esc(S.label) : '위치 확인 중';
     var aq = S.aq || {};
     var pills = pill('미세', pm10Grade(aq.pm10), aq.pm10 != null ? Math.round(aq.pm10) + '㎍/㎥' : '') +
