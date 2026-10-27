@@ -4307,7 +4307,7 @@
     ov.id = 'outdSaver';
     ov.className = 'outd-saver';
     ov.innerHTML = '<div class="outd-saver__hint"><b>배터리 절약 중</b><span>GPS 기록은 계속됩니다</span>' +
-      '<span class="outd-saver__how">화면을 길게 누르거나 전원 버튼으로 껐다 켜면 돌아옵니다</span></div>' +
+      '<span class="outd-saver__how">화면을 길게 누르면 돌아옵니다</span></div>' +
       '<div class="outd-saver__hold"><i></i><span>계속 누르고 있으면 화면이 켜집니다</span></div>';
     document.body.appendChild(ov);
     var timer = null;
