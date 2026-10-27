@@ -54,6 +54,7 @@
   function nowSlot() {
     if (!S.wx || !S.wx.length) return null;
     var h = kstNow().getHours() + kstNow().getMinutes() / 60, best = null, bd = 99;
+    if (h < 5 || h >= 20) return null; // 밤에는 예보 칸(6~18시)을 '지금 날씨'로 보이지 않게
     S.wx.forEach(function (x) { if (x && x.tempC != null && Math.abs(x.hour - h) < bd) { bd = Math.abs(x.hour - h); best = x; } });
     return best;
   }
