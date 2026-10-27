@@ -747,10 +747,15 @@
     var deliveredDone = order.delivery_status === 'DELIVERED';
     var confirmedDone = status === 'CONFIRMED';
 
+    // 2026-10-27: 송장만 입력되고 택배사 집하 전(또는 배송 조회 대기)이면 '택배접수'까지만 완료로 표시.
+    // 집하(PICKED_UP)·배송중 등 실제 이동이 조회되면 그때 '배송중'을 진행중으로.
+    var ds = String(order.delivery_status || '').toUpperCase();
+    var awaitingPickup = shippedDone && !deliveredDone && (ds === 'REGISTERED' || ds === 'PENDING' || ds === 'PICKUP_READY' || ds === 'UNKNOWN' || ds === '');
+
     var paidState = paidDone ? 'done' : 'active';
     var shippedState = !paidDone ? 'pending' : shippedDone ? 'done' : 'active';
-    // 송장 등록 후 배송완료 전까지는 "배송중"이 지금 실제로 진행되는 단계.
-    var transitState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'active';
+    // 송장 등록 후 배송완료 전까지는 "배송중"이 지금 실제로 진행되는 단계(집하 전이면 아직 대기).
+    var transitState = !shippedDone || awaitingPickup ? 'pending' : deliveredDone ? 'done' : 'active';
     var deliveredState = !shippedDone ? 'pending' : deliveredDone ? 'done' : 'pending';
     // 반품이 신청된 이후로는 구매확정이 더 이상 진행될 수 없는 경로이므로(반품이 최종 종료를
     // 대신함) "구매확정" 단계를 다른 완료 단계와 동일한 done 스타일로 표시하되 라벨만

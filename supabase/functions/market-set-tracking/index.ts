@@ -202,8 +202,8 @@ Deno.serve(async (req) => {
     courier_name: courierName,
     tracking_number: trackingNumber,
     shipped_at: nowIso,
-    delivery_status: "IN_TRANSIT",
-    delivery_status_text: null,
+    delivery_status: "REGISTERED", // 송장 입력 직후는 '택배 접수'(실제 집하·배송은 조회 결과로 갱신)
+    delivery_status_text: "택배 접수",
     delivery_checked_at: null,
     delivered_at: null,
     delivery_events: null,
@@ -212,9 +212,24 @@ Deno.serve(async (req) => {
 
   const isCorrection = !!order.tracking_number && (order.courier_code !== courierCode || order.tracking_number !== trackingNumber);
 
+  /**
+   * 2026-10-27: 송장 입력은 항상 받아들인다 — 지금 배송 조회가 안 되는 경우(택배사 집하 전, Tracker 키 만료,
+   * 예비 deliveryapi 한도 초과·설정 없음)에도 '택배 접수'로 저장하고, 30분 주기 Tracker 폴링
+   * (market-check-delivery-status mode=tracker, delivery_provider='tracker' 대상)이 키가 정상화된 뒤 실제 상태를 반영한다.
+   */
+  function markPendingTracker() {
+    update.delivery_provider = "tracker";
+    update.delivery_status = "REGISTERED";
+    update.delivery_status_text = "택배 접수";
+    update.delivery_checked_at = null; // 다음 폴링 주기에 바로 조회
+    update.delivery_events = null;
+    update.delivery_request_id = null;
+    update.webhook_registered = false;
+  }
+
   // 2026-10-09: 1차 공급자 Delivery Tracker(V2). 설정돼 있고 송장이 실제로 조회되면 deliveryapi
   // 구독 등록(건당 과금)을 생략하고 30분 주기 폴링(market-check-delivery-status mode=tracker)으로
-  // 추적한다. 미조회(NOT_FOUND)는 '송장 접수'로 저장 후 폴링에 맡기고, 미설정·오류면 아래 기존 deliveryapi 경로로 폴백한다.
+  // 추적한다. 미조회(NOT_FOUND)는 '택배 접수'로 저장 후 폴링에 맡기고, 미설정·오류면 deliveryapi 를 시도하되 실패해도 '택배 접수'로 저장한다.
   let trackerHandled = false;
   await loadTrackerCredentials(admin);
   if (isTrackerEnabled()) {
@@ -237,14 +252,9 @@ Deno.serve(async (req) => {
       if (eTr instanceof TrackerNotFoundError) {
         // 2026-10-27: 송장을 막 받은 직후라 택배사 전산에 아직 안 올라온 경우(NOT_FOUND)는 정상 상황.
         // 예전엔 여기서 deliveryapi(건당 과금)로 넘어가 그쪽 한도 초과("한도 초과" 오류)로 등록 자체가 막혔다.
-        // → 일단 '송장 접수'로 저장하고 30분 주기 Tracker 폴링(NOT_FOUND 는 다음 주기 재시도)이 이어서 추적한다.
+        // → 일단 '택배 접수'로 저장하고 30분 주기 Tracker 폴링(NOT_FOUND 는 다음 주기 재시도)이 이어서 추적한다.
         trackerHandled = true;
-        update.delivery_provider = "tracker";
-        update.delivery_status = "REGISTERED";
-        update.delivery_status_text = "송장 접수(택배사 집하 전)";
-        update.delivery_checked_at = nowIso;
-        update.delivery_request_id = null;
-        update.webhook_registered = false;
+        markPendingTracker();
       } else {
         console.warn("[market-set-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
         if (eTr instanceof TrackerAuthError) await reportTrackerVerify(admin, false, (eTr as Error).message);
@@ -259,7 +269,10 @@ Deno.serve(async (req) => {
     const keyRes = await admin.rpc("get_delivery_api_key");
     apiKey = keyRes.data;
     if (!trackerHandled && (keyRes.error || !apiKey)) {
-      return jsonResponse({ success: false, error: "배송 조회 API 키를 찾을 수 없습니다." }, 500);
+      // 예비 서비스 키가 없어도 송장은 받아 두고 Tracker 폴링에 맡긴다
+      console.warn("[market-set-tracking] deliveryapi 키 없음 → 택배 접수로 저장");
+      trackerHandled = true;
+      markPendingTracker();
     }
   }
   if (isCorrection && order.delivery_request_id && apiKey) {
@@ -268,11 +281,12 @@ Deno.serve(async (req) => {
 
   if (!trackerHandled) {
     const { data: webhookConfig, error: webhookConfigErr } = await admin.rpc("get_delivery_webhook_config").single();
+    let registeredOk = false;
     if (webhookConfigErr || !webhookConfig?.endpoint_id) {
-      return jsonResponse({ success: false, error: "웹훅 엔드포인트 설정을 찾을 수 없습니다." }, 500);
-    }
-    update.delivery_provider = "deliveryapi";
-    try {
+      console.warn("[market-set-tracking] deliveryapi 웹훅 설정 없음 → 택배 접수로 저장");
+      markPendingTracker();
+    } else try {
+      update.delivery_provider = "deliveryapi";
       const registered = await registerTracking(
         apiKey as string,
         webhookConfig.endpoint_id as string,
@@ -283,11 +297,14 @@ Deno.serve(async (req) => {
       update.delivery_request_id = registered.requestId;
       update.webhook_registered = true;
       update.webhook_registered_at = nowIso;
+      registeredOk = true;
     } catch (eReg) {
-      return jsonResponse({ success: false, error: (eReg as Error).message }, 400);
+      // 예: deliveryapi '한도 초과' — 입력을 막지 않고 택배 접수로 저장(Tracker 폴링이 이어서 추적)
+      console.warn("[market-set-tracking] deliveryapi 등록 실패 → 택배 접수로 저장:", (eReg as Error).message);
+      markPendingTracker();
     }
 
-    try {
+    if (registeredOk) try {
       const immediate = await fetchImmediateStatus(apiKey as string, courierCode, trackingNumber);
       if (immediate) {
         update.delivery_status = immediate.status;
