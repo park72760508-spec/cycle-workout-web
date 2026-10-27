@@ -98,8 +98,9 @@
         body = '<div class="outd-wx__hours">' + HOURS.map(function (h) {
           var it = null; S.wx.forEach(function (x) { if (x && x.hour === h) it = x; });
           return '<div class="outd-wx__cell' + (h === curH ? ' is-now' : '') + '"><span class="outd-wx__h">' + h + '시</span>' +
-            '<span class="outd-wx__i">' + (it && it.icon ? it.icon : '–') + '</span>' +
-            '<span class="outd-wx__t">' + (it && it.tempC != null ? Math.round(it.tempC) + '°' : '-') + '</span></div>';
+            // 2026-10-28: 시간 아래에 날씨 아이콘과 온도를 한 줄로 붙여서
+            '<span class="outd-wx__wt"><span class="outd-wx__i">' + (it && it.icon ? it.icon : '–') + '</span>' +
+            '<span class="outd-wx__t">' + (it && it.tempC != null ? Math.round(it.tempC) + '°' : '-') + '</span></span></div>';
         }).join('') + '</div>';
       } else {
         body = '<div class="outd-wx__msg">' + (S.wxErr ? '날씨 정보를 불러올 수 없습니다' : S.region ? '날씨 불러오는 중…' : '현재 위치를 확인하고 있습니다') + '</div>';
