@@ -13,15 +13,15 @@
   var HOURS = [6, 8, 10, 12, 14, 16, 18];
   var REFRESH_MS = 30 * 60 * 1000;
   var MOVE_M = 3000;
-  var LS_COLLAPSED = 'stelvio_outd_wx_collapsed';
+  var NOW_URL = 'https://api.open-meteo.com/v1/forecast'; // 현재 기온(2026-10-28)
 
   var S = {
     region: '', label: '', regionLL: null, regionAt: 0, regionBusy: false,
     wx: null, wxAt: 0, wxBusy: false, wxErr: false,
     aq: null, aqLL: null, aqAt: 0, aqBusy: false,
-    collapsed: false
+    tempNow: null,
+    collapsed: true // 기본은 접힌 상태(루트맵을 열 때마다 접힘으로 시작)
   };
-  try { S.collapsed = localStorage.getItem(LS_COLLAPSED) === '1'; } catch (e) {}
 
   function el() { return document.getElementById('outdWeather'); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
@@ -100,6 +100,9 @@
     var rep = representative();
     var now = rep ? '<span class="outd-wx__now" title="오늘의 대표 날씨: ' + rep.label + '">' + rep.icon +
       (rep.pop != null ? '<span class="outd-wx__pop">' + rep.pop + '%</span>' : '') + '</span>' : '';
+    // 현재 기온(Open-Meteo 현재값, 없으면 지금 시각 예보 칸)
+    var tNow = S.tempNow != null ? S.tempNow : (s && s.tempC != null ? s.tempC : null);
+    if (tNow != null) now += '<span class="outd-wx__tnow">' + Math.round(tNow) + '°</span>';
     var place = S.label ? esc(S.label) : '위치 확인 중';
     var aq = S.aq || {};
     var pills = pill('미세', pm10Grade(aq.pm10), aq.pm10 != null ? Math.round(aq.pm10) + '㎍/㎥' : '') +
@@ -153,6 +156,13 @@
         if (c) S.aq = { pm10: c.pm10 != null ? Number(c.pm10) : null, pm25: c.pm2_5 != null ? Number(c.pm2_5) : null, uv: c.uv_index != null ? Number(c.uv_index) : null };
         render();
       }, function () { S.aqBusy = false; S.aqAt = Date.now(); });
+    // 현재 기온 — 같은 주기로 함께 갱신
+    fetch(NOW_URL + '?latitude=' + lat.toFixed(4) + '&longitude=' + lng.toFixed(4) + '&current=temperature_2m&timezone=Asia%2FSeoul', { method: 'GET', mode: 'cors' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var t = d && d.current && d.current.temperature_2m;
+        if (t != null && isFinite(Number(t))) { S.tempNow = Number(t); render(); }
+      }, function () {});
   }
 
   /**
@@ -184,9 +194,10 @@
   function toggle(e) {
     if (e && e.stopPropagation) e.stopPropagation();
     S.collapsed = !S.collapsed;
-    try { localStorage.setItem(LS_COLLAPSED, S.collapsed ? '1' : '0'); } catch (err) {}
     render();
   }
+  /** 루트맵을 열 때 — 기본(접힌 상태)으로 시작 */
+  function resetView() { S.collapsed = true; render(); }
 
-  window.OutdoorWeather = { update: update, render: render, toggle: toggle };
+  window.OutdoorWeather = { update: update, render: render, toggle: toggle, resetView: resetView };
 })();

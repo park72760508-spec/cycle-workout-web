@@ -5014,7 +5014,7 @@
     startTimer();
     // 지도는 화면이 보인 뒤 크기를 다시 계산해야 타일이 제대로 그려진다
     if (window.OutdoorWeather) {
-      window.OutdoorWeather.render();
+      if (window.OutdoorWeather.resetView) window.OutdoorWeather.resetView(); else window.OutdoorWeather.render();
       if (st.lastFix) window.OutdoorWeather.update(st.lastFix.lat, st.lastFix.lng, reverseRegion);
     }
     setTimeout(function () {
