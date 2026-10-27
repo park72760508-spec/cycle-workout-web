@@ -3597,18 +3597,18 @@
     return null;
   }
   /*
-   * 핀 팝업 이동 수단 원형 탭(2026-10-24): 오토바이·자전거·걷기 — 고를 수 있으면 흰색, 너무 멀면 연한 회색(걷기 15km·자전거 150km 초과),
+   * 핀 팝업 이동 수단 원형 탭(2026-10-24): 오토바이·자전거·걷기 — 고를 수 있으면 흰색, 너무 멀면 연한 회색(2026-10-28: 걷기 43km 이상만 불가, 자전거 제한 없음),
    * 고른 수단은 오렌지. 처음엔 길찾기에서 마지막으로 쓴 수단(없거나 못 고르면 가능한 첫 수단).
    */
   var FAV_POP_MODES = [
     { k: 'moto', l: '오토바이', maxKm: Infinity },
-    { k: 'bike', l: '자전거', maxKm: 150 },
-    { k: 'walk', l: '걷기', maxKm: 15 }
+    { k: 'bike', l: '자전거', maxKm: Infinity },
+    { k: 'walk', l: '걷기', maxKm: 43 } // 43km 미만만(풀코스 마라톤 거리 기준)
   ];
   function favPopModesHtml(it, el) {
     var km = st.lastFix ? hav(st.lastFix.lat, st.lastFix.lng, Number(it.lat), Number(it.lng)) / 1000 : null;
     var ok = {};
-    FAV_POP_MODES.forEach(function (m) { ok[m.k] = km == null || km <= m.maxKm; });
+    FAV_POP_MODES.forEach(function (m) { ok[m.k] = km == null || km < m.maxKm; });
     var sel = ok[travelMode] ? travelMode : (FAV_POP_MODES.filter(function (m) { return ok[m.k]; })[0] || {}).k || travelMode;
     el.__mode = sel;
     var icon = { moto: ICON_MOTO, bike: ICON_BIKE, walk: ICON_WALK };
