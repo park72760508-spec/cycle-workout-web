@@ -35153,6 +35153,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__cat-tab.is-on .outd-fav__cat-label { color: #facc15; }
 /* 2026-10-27: 즐겨찾기 등록 창 카테고리 — 탭 모양은 목록 화면과 같게, 선택 표시는 기존 녹색 톤·테두리 */
 #outdoorRideScreen .outd-fav__cats--form { padding: 2px 0 4px; gap: 8px; }
+/* 등록 창은 높이 제한(62vh)이 있는 세로 배치 — 항목이 눌리지 않고 창 전체가 스크롤되게(가로 스크롤인 카테고리 줄이 높이 0으로 눌리던 문제) */
+#outdoorRideScreen .outd-fav__form > * { flex-shrink: 0; }
 #outdoorRideScreen .outd-fav__cats--form .outd-fav__cat-tab.is-on .outd-fav__cat-ico { border-color: #00d4aa; background: rgba(0, 212, 170, 0.15); color: #fff; }
 #outdoorRideScreen .outd-fav__cats--form .outd-fav__cat-tab.is-on .outd-fav__cat-label { color: #00d4aa; }
 #outdoorRideScreen .outd-fav__namerow { display: flex; align-items: center; gap: 6px; min-width: 0; }
