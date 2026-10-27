@@ -74,8 +74,32 @@
    * @param {object} s create() 로 만든 상태
    * @param {{lat:number,lng:number,acc:number,speed:(number|null),t:number}} fix  speed 는 m/s(없으면 null)
    */
-  function step(s, fix) {
+  var WALK_MAX_V = 2.0;  // m/s(≈7.2km/h) 미만에서만 걸음 정보를 쓴다(자전거 노면 진동 오판 방지)
+  var STRIDE_M = 0.7;    // 걸음 수만 있을 때 보폭 가정(m)
+
+  /** 걸음 정보로 본 판단: 'walk'(걷는 중) | 'stopped'(걷다가 멈춤) | null(판단 안 함) */
+  function motionVerdict(s, motion) {
+    if (!motion || !motion.available) return null;
+    if (s.v > WALK_MAX_V) return null;
+    if (motion.walkingNow) return 'walk';
+    if (motion.walkContext && motion.lastStepAgo >= 1800) return 'stopped';
+    return null;
+  }
+
+  /**
+   * GPS 사이(약 0.3초마다) 걸음 상태만으로 빠르게 정지 — 걷다가 멈추면 GPS 를 기다리지 않고 바로 0.
+   * @returns {boolean} 이번에 정지로 바뀌었으면 true
+   */
+  function motionTick(s, motion) {
+    if (!s.moving) return false;
+    if (motionVerdict(s, motion) !== 'stopped') return false;
+    s.moving = false; s.goN = 0; s.v = 0; s.P = 1; s.zs = [];
+    return true;
+  }
+
+  function step(s, fix, motion) {
     var t = fix.t, acc = fix.acc != null ? fix.acc : 999;
+    var mv = motionVerdict(s, motion);
     if (acc <= ACC_POS_OK) {
       s.hist.push({ t: t, lat: fix.lat, lng: fix.lng, acc: acc });
       while (s.hist.length && t - s.hist[0].t > HIST_MS) s.hist.shift();
@@ -83,7 +107,7 @@
     var dev = fix.speed != null && isFinite(fix.speed) && fix.speed >= 0 && acc <= ACC_DEV_OK ? fix.speed : null;
     if (dev != null) s.lastDevT = t;
     // 기기 속도가 잠깐(5초 이내) 한두 번 빠진 것은 '측정 없음' — 위치 회귀·실내 정지 판정으로 넘어가지 않고 직전 값 유지
-    if (dev == null && s.lastDevT && t - s.lastDevT < 5000) {
+    if (dev == null && s.lastDevT && t - s.lastDevT < 5000 && mv !== 'stopped') {
       s.t = t;
       return s.moving ? Math.max(0, s.v * 3.6) : 0;
     }
@@ -103,8 +127,14 @@
     var dt = s.t ? Math.min(5, Math.max(0.2, (t - s.t) / 1000)) : 1;
     s.t = t;
 
-    // 실내 보호: 정확도가 나쁜데(기기 속도 미사용) 실제로 거의 안 움직였으면 정지
-    var still = dev == null && looksStill(s.hist, t);
+    // 걸음 수만 있고 GPS 속도가 없으면 분당 걸음 수 × 보폭으로 보조 측정
+    if (z == null && mv === 'walk' && motion.cadence > 0) {
+      z = (motion.cadence / 60) * STRIDE_M;
+      R = 0.3 * 0.3;
+    }
+    // 실내 보호: 정확도가 나쁜데(기기 속도 미사용) 실제로 거의 안 움직였으면 정지 — 단, 걷는 중이면 정지로 보지 않음
+    var still = dev == null && mv !== 'walk' && looksStill(s.hist, t);
+    if (mv === 'stopped') still = true; // 걷다가 멈춤(걸음 끊김) → 바로 정지
     if (z == null && !still) return s.moving ? Math.max(0, s.v * 3.6) : 0; // 측정 없음 → 직전 값 유지
 
     var zz = still ? 0 : z;
@@ -116,12 +146,16 @@
       // 정지: 도플러 속도가 사실상 0(1번) · 낮은 값 2번 연속 · 최근 3번 평균이 낮음 중 하나 → 바로 0
       var hardStop = dev != null && zz <= HARD_STOP_V;
       var low2 = s.zs.length >= 2 && s.zs[s.zs.length - 1] < STOP_V && s.zs[s.zs.length - 2] < STOP_V;
-      if (still || hardStop || low2 || (s.zs.length >= 3 && avg3 < STOP_V)) { s.moving = false; s.goN = 0; s.v = 0; s.P = 1; return 0; }
+      // 걷는 중(규칙적인 걸음)이면 GPS 값이 낮게 튀어도 정지로 보지 않는다
+      var walkHold = mv === 'walk' && !still;
+      if (still || (!walkHold && (hardStop || low2 || (s.zs.length >= 3 && avg3 < STOP_V)))) { s.moving = false; s.goN = 0; s.v = 0; s.P = 1; return 0; }
     } else {
       // 출발: 정확도가 좋으면 2번, 12m 보다 나쁘면(실내 가짜 속도 가능) 3번 연속 확인. 빠른 속도는 정확도 좋을 때 1번
       s.goN = zz >= GO_V ? s.goN + 1 : 0;
       var needGo = acc <= 12 ? 2 : 3;
-      if ((zz >= FAST_GO_V && acc <= 12) || s.goN >= needGo) { s.moving = true; s.v = zz; s.P = R || 1; return zz * 3.6; }
+      // 걷기 시작(규칙적인 걸음 확인) + GPS 도 약간이라도 움직임 → 1번에 출발
+      var walkGo = mv === 'walk' && zz >= STOP_V;
+      if (walkGo || (zz >= FAST_GO_V && acc <= 12) || s.goN >= needGo) { s.moving = true; s.v = zz; s.P = R || 1; return zz * 3.6; }
       return 0;
     }
 
@@ -133,6 +167,6 @@
     return s.v * 3.6;
   }
 
-  root.OutdoorSpeedFilter = { create: create, step: step };
+  root.OutdoorSpeedFilter = { create: create, step: step, motionTick: motionTick };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OutdoorSpeedFilter;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -622,10 +622,12 @@
     var SF = window.OutdoorSpeedFilter;
     if (SF) {
       if (!st.spdF) st.spdF = SF.create();
+      var motion = window.OutdoorStepDetector ? window.OutdoorStepDetector.state() : null; // 걸음 감지(2026-10-27)
       var kmh = SF.step(st.spdF, { lat: lat, lng: lng, acc: acc != null ? acc : 999, t: t,
-        speed: c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed : null });
+        speed: c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed : null }, motion);
       st.speedKmh = Math.min(120, Math.max(0, kmh || 0));
       if (st.speedKmh < 0.5) st.speedKmh = 0;
+      gpsDebugRecord(c, t, motion, still);
     } else {
       // 추정기 파일을 못 읽은 경우(구버전 캐시 등) — 기기 속도만 간단히
       var spd0 = accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed * 3.6 : 0;
@@ -700,9 +702,76 @@
     if (err && err.code === 1) setText('outdGpsText', '위치 권한이 필요합니다');
   }
 
+  /** 걸음 감지 시작 — 안드로이드는 권한 없이 바로, 아이폰은 기록 시작 버튼(터치) 안에서 권한 요청 */
+  function startStepDetector(fromUserGesture) {
+    var D = window.OutdoorStepDetector;
+    if (!D || typeof window.DeviceMotionEvent === 'undefined') return;
+    var needsPermission = typeof DeviceMotionEvent.requestPermission === 'function';
+    if (needsPermission && !fromUserGesture) return;
+    D.start().catch(function () {});
+  }
+  /** GPS 사이 0.3초마다: 걷다가 걸음이 끊기면 GPS 를 기다리지 않고 바로 속도 0 */
+  function startMotionTick() {
+    if (st.motionTimer) return;
+    st.motionTimer = setInterval(function () {
+      var SF = window.OutdoorSpeedFilter, D = window.OutdoorStepDetector;
+      if (!SF || !D || !st.spdF || !SF.motionTick) return;
+      if (SF.motionTick(st.spdF, D.state()) && st.speedKmh !== 0) { st.speedKmh = 0; kickLoop(); }
+    }, 300);
+  }
+
+  /* ---------- 원본 GPS 기록(관리자 전용, 2026-10-27) — 속도 로직을 실제 데이터로 맞추기 위함 ----------
+   * 기록 중(running)인 관리자만. 1초마다 [시각, 위도, 경도, 정확도, 도플러속도, 고도, 방향, 표시속도, 이동중,
+   * 걷는중, 분당걸음, 마지막걸음경과ms, 실내정지판정] 을 모아 1분마다·종료 시 fn_save_outdoor_gps_debug 로 올린다. */
+  var DBG_FIELDS = ['t', 'lat', 'lng', 'acc', 'speed_ms', 'alt', 'heading', 'out_kmh', 'moving', 'walking', 'cadence', 'last_step_ago_ms', 'still'];
+  function gpsDebugRecord(c, t, motion, still) {
+    var d = st.dbg;
+    if (!d || st.status !== 'running') return;
+    var r1 = function (v, k) { return v == null || !isFinite(v) ? null : Math.round(v * k) / k; };
+    d.buf.push([t, r1(c.latitude, 1e7), r1(c.longitude, 1e7), r1(c.accuracy, 10), r1(c.speed, 100), r1(c.altitude, 10), r1(c.heading, 1),
+      r1(st.speedKmh, 10), st.spdF && st.spdF.moving ? 1 : 0, motion && motion.walkingNow ? 1 : 0,
+      motion && motion.cadence ? Math.round(motion.cadence) : 0,
+      motion && isFinite(motion.lastStepAgo) ? Math.min(99999, Math.round(motion.lastStepAgo)) : null, still ? 1 : 0]);
+    if (d.buf.length >= 1500) gpsDebugFlush();
+  }
+  function gpsDebugFlush() {
+    var d = st.dbg;
+    if (!d || d.sending) return;
+    var D = window.OutdoorStepDetector;
+    var steps = D ? D.stepTimes().filter(function (x) { return x > d.lastStepSent; }) : [];
+    if (!d.buf.length && !steps.length) return;
+    var fixes = d.buf.splice(0, d.buf.length);
+    if (steps.length) d.lastStepSent = steps[steps.length - 1];
+    d.sending = true;
+    favRpc('fn_save_outdoor_gps_debug', { p: {
+      session_id: d.sid, started_at: new Date(d.started).toISOString(), device: (navigator.userAgent || '').slice(0, 200),
+      fixes: fixes, steps: steps,
+      meta: { fields: DBG_FIELDS, travelMode: travelMode, motionAvailable: !!(D && D.state().available), v: 1 }
+    } }).then(function (res) {
+      d.sending = false;
+      if (!res || res.success !== true) { d.buf = fixes.concat(d.buf); }
+    }, function () { d.sending = false; d.buf = fixes.concat(d.buf); });
+  }
+  function gpsDebugStart() {
+    if (st.dbg || !favIsAdmin()) return;
+    st.dbg = { sid: 'dbg_' + Date.now(), started: Date.now(), buf: [], lastStepSent: 0, sending: false };
+    st.dbgTimer = setInterval(gpsDebugFlush, 60000);
+    toast('관리자: GPS 원본 기록 중(속도 로직 분석용)', 'info');
+  }
+  function gpsDebugEnd() {
+    if (!st.dbg) return;
+    gpsDebugFlush();
+    if (st.dbgTimer) { clearInterval(st.dbgTimer); st.dbgTimer = null; }
+    var d = st.dbg;
+    // 마지막 전송이 끝난 뒤 정리
+    setTimeout(function () { if (st.dbg === d && !d.buf.length) st.dbg = null; else if (st.dbg === d) { gpsDebugFlush(); st.dbg = null; } }, 4000);
+  }
+
   function startGps() {
     if (st.watchId != null) return;
     st.spdF = null; // 속도 추정기 새로 시작(이전 세션 상태가 남지 않게)
+    startStepDetector(false);
+    startMotionTick();
     if (!navigator.geolocation) {
       setText('outdGpsText', '이 기기는 GPS를 지원하지 않습니다');
       return;
@@ -716,6 +785,9 @@
   function stopGps() {
     if (st.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(st.watchId);
     st.watchId = null;
+    if (st.motionTimer) { clearInterval(st.motionTimer); st.motionTimer = null; }
+    if (window.OutdoorStepDetector) window.OutdoorStepDetector.stop();
+    gpsDebugEnd();
   }
 
   /* ---------- 지도 ---------- */
@@ -4246,6 +4318,8 @@
       if (!st.startedAt) st.startedAt = Date.now();
       st.runSince = Date.now();
       st.status = 'running';
+      startStepDetector(true); // 사용자 터치 안 — 아이폰 '동작 및 방향' 권한 요청
+      gpsDebugStart();
       // 일시정지 동안 이동한 거리는 넣지 않도록 기준 위치를 지금으로
       st.lastTrackPt = st.lastFix ? [st.lastFix.lat, st.lastFix.lng, null, Date.now()] : st.lastTrackPt;
       // 일시정지 중 이동은 이동 시간·거리에 넣지 않음
@@ -4683,6 +4757,7 @@
   }
 
   function resetRide() {
+    gpsDebugEnd(); // 관리자 원본 기록: 이번 기록 묶음 마무리(다음 기록은 새 묶음)
     st.status = 'idle';
     st.elapsedMs = 0;
     st.runSince = 0;
@@ -4720,6 +4795,7 @@
       toast('라이딩을 시작하지 않았습니다.', 'info');
       return;
     }
+    gpsDebugFlush();
     if (st.status === 'running') {
       flushDistance();
       st.elapsedMs += Date.now() - st.runSince;
