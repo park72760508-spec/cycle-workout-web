@@ -691,6 +691,8 @@
         // 자유 라이딩 지나온 길은 화면 표시 위치(아바타와 같은 위치)로 updateMeOnMap 에서 그림
       }
     }
+    // 오늘의 날씨 카드(2026-10-28): 지역이 바뀌거나 30분 지났을 때만 내부에서 다시 조회
+    if (window.OutdoorWeather && acc != null && acc <= 1000) window.OutdoorWeather.update(lat, lng, reverseRegion);
     updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
     updateMeOnMap(lat, lng); // 그 방향 기준으로 지도 중심·내 위치 표시
   }
@@ -3926,7 +3928,7 @@
       f.querySelector('.outd-fav__addr').textContent = rg.address || '';
     });
   }
-  /** 좌표 → 시도·구군·주소(카카오 → 실패 시 OSM Nominatim) */
+  /** 좌표 → 시도·구군·주소(카카오 → 실패 시 OSM Nominatim) — 날씨 카드도 사용 */
   function reverseRegion(lat, lng) {
     return loadKakaoMaps().then(function (kakao) {
       return new Promise(function (resolve, reject) {
@@ -5011,6 +5013,10 @@
     renderStats();
     startTimer();
     // 지도는 화면이 보인 뒤 크기를 다시 계산해야 타일이 제대로 그려진다
+    if (window.OutdoorWeather) {
+      window.OutdoorWeather.render();
+      if (st.lastFix) window.OutdoorWeather.update(st.lastFix.lat, st.lastFix.lng, reverseRegion);
+    }
     setTimeout(function () {
       ensureMap();
       fixMapSize();
