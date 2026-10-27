@@ -35365,3 +35365,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (max-width: 360px) {
   #outdoorRideScreen .outd-wx__pill b { display: none; }
 }
+
+/* ===== 2026-10-28: 루트맵 ☰ 메뉴 '기록 보기' 펼침(라이딩 / 러닝·걷기) ===== */
+#outdoorRideScreen .outd-records-item .outd-records-chev {
+  margin-left: auto; width: 7px; height: 7px; border-right: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1;
+  transform: rotate(45deg); margin-top: -3px; transition: transform 0.15s ease; flex-shrink: 0;
+}
+#outdoorRideScreen .outd-records-item[aria-expanded="true"] .outd-records-chev { transform: rotate(-135deg); margin-top: 3px; }
+#outdoorRideScreen .outd-records-sub { background: rgba(255, 255, 255, 0.04); }
+#outdoorRideScreen .outd-records-subitem { padding-left: 34px !important; }
+#outdoorRideScreen .outd-records-subitem .outd-menu-svg { width: 20px; height: 20px; }

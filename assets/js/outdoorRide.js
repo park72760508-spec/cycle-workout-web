@@ -4169,6 +4169,9 @@
   function closeMenu() {
     var m = $('outdMenu');
     if (m) m.classList.remove('show');
+    var sub = $('outdRecordsSub'), it = $('outdRecordsItem'); // '기록 보기' 펼침도 접기
+    if (sub) sub.style.display = 'none';
+    if (it) it.setAttribute('aria-expanded', 'false');
   }
   document.addEventListener('click', function (e) {
     var m = $('outdMenu');
@@ -4276,6 +4279,26 @@
     });
   }
   /** 자유 라이딩: 코스맵 없이 현재 위치 기준으로 기록(코스 안내·회전 안내 끄기) */
+  /** ☰ 메뉴 '기록 보기' 펼치기/접기(2026-10-28) */
+  window.toggleOutdoorRecordsMenu = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var sub = $('outdRecordsSub'), it = $('outdRecordsItem');
+    if (!sub) return;
+    var open = sub.style.display === 'none';
+    sub.style.display = open ? '' : 'none';
+    if (it) it.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  /** 기록 보기 → CYCLE 나의 기록(라이딩) / RUN 나의 기록(러닝·걷기). 기록 중이어도 루트맵 기록은 그대로 이어짐 */
+  window.openOutdoorJournal = function (e, sport) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    var run = sport === 'run';
+    try {
+      if (window.sportCategoryRoutes && typeof window.sportCategoryRoutes.setActiveSport === 'function') window.sportCategoryRoutes.setActiveSport(run ? 'run' : 'cycle');
+    } catch (eS) {}
+    if (typeof window.showScreen === 'function') window.showScreen(run ? 'runTrainingJournalScreen' : 'trainingJournalScreen');
+  };
+
   window.startOutdoorFreeRide = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     closeMenu();
