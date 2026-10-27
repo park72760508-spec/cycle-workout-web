@@ -35178,11 +35178,27 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav .outd-fav__foot { flex-shrink: 0; }
 #outdoorRideScreen .outd-fav__cat-ico { flex-shrink: 0; }
 #outdoorRideScreen .outd-fav #outdFavList { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-/* 2026-10-24: 오른쪽 버튼 순서(위→아래) 즐겨찾기 · 화면 확대/축소 · 안내 문구 · 방향 · 나의 위치 — 확대/축소와 안내 문구 자리 바꿈 */
-#outdoorRideScreen .outd-expand { bottom: 158px; }
-#outdoorRideScreen .outd-navtext-btn { bottom: 110px; }
+/* 2026-10-27: 오른쪽 버튼 순서(위→아래) 즐겨찾기 · 길찾기 · 화면 확대/축소 · 진행(방향) · 나의 위치 */
+#outdoorRideScreen .outd-route-btn {
+  position: absolute; right: 8px; bottom: 158px; z-index: 600;
+  width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
+  background: rgba(17, 24, 39, 0.85); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#outdoorRideScreen .outd-route-btn:active { transform: scale(0.94); }
+#outdoorRideScreen .outd-expand { bottom: 110px; }
+/* ☰ 메뉴 '길안내 문구 표시' 켜기/끄기 스위치 */
+#outdoorRideScreen .outd-navtext-item { position: relative; }
+#outdoorRideScreen .outd-navtext-switch {
+  margin-left: auto; flex-shrink: 0; width: 34px; height: 20px; border-radius: 999px; background: #4b5563; position: relative; transition: background-color 0.15s ease;
+}
+#outdoorRideScreen .outd-navtext-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform 0.15s ease;
+}
+#outdoorRideScreen .outd-navtext-item[aria-checked="true"] .outd-navtext-switch { background: #00d4aa; }
+#outdoorRideScreen .outd-navtext-item[aria-checked="true"] .outd-navtext-switch::after { transform: translateX(14px); }
 /* 가로 화면: 확대/축소 버튼이 숨겨지므로 그 위 버튼을 한 칸씩 내려 빈자리 없게 */
 @media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-route-btn { bottom: 110px; }
   #outdoorRideScreen .outd-fav-btn { bottom: 158px; }
   #outdoorRideScreen .outd-reroute-btn { bottom: 206px; }
   #outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }

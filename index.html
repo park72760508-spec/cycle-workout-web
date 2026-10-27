@@ -4003,7 +4003,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261027gshrink2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261027routebtn" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29966,7 +29966,7 @@
   <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="assets/js/outdoorStepDetector.js?v=20261027step"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261027step"></script>
-  <script src="assets/js/outdoorRide.js?v=20261027owner"></script>
+  <script src="assets/js/outdoorRide.js?v=20261027routebtn"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36022,6 +36022,12 @@
               <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-10.5A6 6 0 0 1 18 10.5C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/></svg>
               <span>길찾기</span>
             </div>
+            <!-- 2026-10-27: 길안내 문구 표시/숨기기(예전 지도 오른쪽 버튼) — 누를 때마다 켜기/끄기 -->
+            <div id="outdNavTextItem" class="mobile-bluetooth-dropdown-item outd-navtext-item" onclick="toggleOutdoorNavText(event)" role="switch" aria-checked="false">
+              <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4 3.5V16H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M7.5 9h9M7.5 12.5h6"/></svg>
+              <span>길안내 문구 표시</span>
+              <i class="outd-navtext-switch" aria-hidden="true"></i>
+            </div>
             <div class="mobile-bluetooth-dropdown-item" onclick="cycleOutdoorSound(event)">
               <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
               <span id="outdSoundLabel">소리 안내: 음성 + 알림음</span>
@@ -36069,9 +36075,9 @@
         <button type="button" id="outdRerouteBtn" class="outd-reroute-btn" onclick="rerouteOutdoorNow(event)" aria-label="현재 위치에서 경로 다시 찾기" style="display: none;">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-13.7 5.6"/><path d="M4 12a8 8 0 0 1 13.7-5.6"/><path d="M17.7 2.8v3.8h-3.8"/><path d="M6.3 21.2v-3.8h3.8"/></svg>
         </button>
-        <!-- 2026-10-22: 상단 경로 안내 문구 표시/숨기기(기본 숨기기) — 오른쪽 버튼 줄 맨 위 -->
-        <button type="button" id="outdNavTextBtn" class="outd-navtext-btn" onclick="toggleOutdoorNavText(event)" aria-label="경로 안내 문구 표시" aria-pressed="false">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-9l-4 3.5V16H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/><path d="M7.5 9h9M7.5 12.5h6"/><path class="outd-navtext-btn__slash" d="M3 3l18 18"/></svg>
+        <!-- 2026-10-27: 오른쪽 버튼 '길찾기'(즐겨찾기 아래) — 예전 안내 문구 버튼 자리. 안내 문구 표시는 ☰ 메뉴로 옮김 -->
+        <button type="button" id="outdRouteBtn" class="outd-route-btn" onclick="openOutdoorRouteSearch(event)" aria-label="길찾기">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-10.5A6 6 0 0 1 18 10.5C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/></svg>
         </button>
         <!-- 2026-10-21: 지도 크게 보기(속도계 자리까지 지도 확장) / 원래대로 -->
         <button type="button" id="outdExpand" class="outd-expand" onclick="toggleOutdoorExpand(event)" aria-label="지도 크게 보기" aria-pressed="false">

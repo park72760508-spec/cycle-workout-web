@@ -515,11 +515,9 @@
     st.navTextOn = !!on;
     var screen = $(SCREEN_ID);
     if (screen) screen.classList.toggle('outd-navtext-off', !on);
-    var b = $('outdNavTextBtn');
-    if (b) {
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-      b.setAttribute('aria-label', on ? '경로 안내 문구 숨기기' : '경로 안내 문구 표시');
-    }
+    // 2026-10-27: 표시/숨기기 상태는 ☰ 메뉴 '길안내 문구 표시' 스위치로
+    var mi = $('outdNavTextItem');
+    if (mi) mi.setAttribute('aria-checked', on ? 'true' : 'false');
   }
   function applyNavTextPref() {
     renderNavText(readNavTextPref());
