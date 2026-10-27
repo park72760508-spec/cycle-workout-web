@@ -34413,9 +34413,27 @@
       window.open(STELVIO_ANDROID_PLAY_STORE_URL, '_blank', 'noopener');
     }
 
+    /**
+     * 카카오톡 앱 안 브라우저 → 기본 브라우저(Safari)로 열기.
+     * 2026-10-27: 예전 주소 'kakaotalk://web/openExternalApp' 는 카카오톡이 모르는 주소라 버튼을 눌러도 아무 반응이 없었다.
+     *  카카오톡 공식 주소 'kakaotalk://web/openExternal?url=' 로 바꾸고, 그래도 안 열리면 Safari 직접 열기 → 링크 복사 안내.
+     */
     function openKakaoExternalSafariWithUrl(url) {
       var target = url || STELVIO_IOS_TESTFLIGHT_URL;
-      window.location.href = 'kakaotalk://web/openExternalApp?url=' + encodeURIComponent(target);
+      var left = false;
+      var onHide = function () { if (document.hidden) left = true; };
+      document.addEventListener('visibilitychange', onHide);
+      window.addEventListener('pagehide', onHide);
+      window.location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(target);
+      setTimeout(function () {
+        if (left) return;
+        window.location.href = 'x-safari-' + target; // iOS 17+: x-safari-https://… 로 Safari 직접 열기
+        setTimeout(function () {
+          document.removeEventListener('visibilitychange', onHide);
+          window.removeEventListener('pagehide', onHide);
+          if (!left && typeof showStelvioSafariTestFlightModal === 'function') showStelvioSafariTestFlightModal(); // 링크 복사 안내
+        }, 1500);
+      }, 1200);
     }
 
     function showStelvioSafariTestFlightModal() {
