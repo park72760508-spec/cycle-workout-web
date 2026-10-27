@@ -351,7 +351,11 @@
     st.lastFrameTs = ts;
     var diff = st.speedKmh - st.displaySpeed;
     var needleSettled = Math.abs(diff) <= 0.05;
-    st.displaySpeed = needleSettled ? st.speedKmh : st.displaySpeed + diff * 0.25;
+    // 2026-10-27: 이동 중에는 약 0.5초에 걸쳐 미끄러지듯(1초 간격 GPS 사이를 이어 줌), 0 으로 멈출 때는 빠르게
+    var dtF = st.prevFrameTs ? Math.min(200, Math.max(16, ts - st.prevFrameTs)) : FRAME_MS;
+    st.prevFrameTs = ts;
+    var needleK = st.speedKmh === 0 ? 0.25 : 1 - Math.exp(-dtF / 450);
+    st.displaySpeed = needleSettled ? st.speedKmh : st.displaySpeed + diff * needleK;
     /*
      * 속도 숫자(2026-10-23): 45 → 41 처럼 바뀔 때 45, 44, 43, 42, 41 이 빠짐없이 보이게 숫자만 따로 센다.
      * 한 프레임(약 1/30초)에 최대 1km/h 만 움직여 정수가 건너뛰지 않고, 변화가 작으면(7.5km/h 이하) 0.5씩 더 천천히.
@@ -593,24 +597,18 @@
     var prev = st.lastFix;
     st.lastFix = { lat: lat, lng: lng, t: t, acc: acc };
 
-    // 현재 속도: 기기가 주는 speed(m/s) 우선, 없으면 직전 위치와의 거리/시간
-    var spd = null;
+    /*
+     * 현재 속도(2026-10-27 개편) — assets/js/outdoorSpeedFilter.js
+     *  GPS 도플러 속도 우선 + 위치 회귀(보조) + 칼만 필터 + 정지·출발 판정(히스테리시스).
+     *  예전: 한 번 1.5km/h 아래로 잡히면 바로 0, 다시 표시까지 2~3번 확인 → 걷는 중에도 수시로 0 으로 떨어짐.
+     *  모의 시험(1Hz GPS): 걷기 3~4km/h 이동 중 0 표시 33~75% → 2~6%, 멈추면 약 1.5초 안에 0, 속도 변화 폭 절반.
+     */
     var accOk = acc != null && acc <= 35; // 위치 정확도가 나쁘면(실내·PC 네트워크 위치 등) 위치가 튀어 엉뚱한 속도가 나온다
-    // 기기 속도는 정확도 15m 이내일 때만 믿음(실내 Wi-Fi 위치는 정지해 있어도 가짜 속도를 준다, 2026-10-26)
-    if (accOk && acc <= 15 && c.speed != null && isFinite(c.speed) && c.speed >= 0) spd = c.speed * 3.6;
     var d = prev ? hav(prev.lat, prev.lng, lat, lng) : 0;
     var dt = prev ? (t - prev.t) / 1000 : 0;
-    // 기기가 속도를 주지 않으면 1초 사이 두 점이 아니라 4초 이상 전 위치와의 거리로(GPS 흔들림에 덜 예민, 2026-10-21)
     var sh = st.spdHist || (st.spdHist = []);
     if (accOk) { sh.push([t, lat, lng, acc]); while (sh.length && t - sh[0][0] > 10000) sh.shift(); }
-    /*
-     * 정지 판정(2026-10-26 — 아파트 실내에서 가만히 있어도 간헐적으로 속도가 뜨던 문제):
-     *  실내는 Wi-Fi·GPS 위치가 수~수십 m 튀고 기기 속도(coords.speed)도 가짜로 올라온다.
-     *  최근 6~10초 동안 실제로 옮겨 간 직선 거리가 위치 오차보다 작으면 정지 → 속도 0.
-     *  위치 오차 = 두 점 정확도 평균 m 이 12m 이하면 m×0.5(최소 5m), 그보다 나쁘면(실내) m×0.85(최대 30m).
-     *  모의 계산: 실내 ±10m 튐(정확도 20m) 590번 중 7번만 표시(예전엔 대부분), 걷기 5km/h(정확도 8m) 95% 정상 표시,
-     *  자전거 20km/h 100% 정상.
-     */
+    // 실내 흔들림 판별(이동 시간·거리용): 6~10초 실제 이동 거리가 위치 오차보다 작으면 정지
     var still = false;
     if (accOk) {
       var sbase = null;
@@ -621,18 +619,17 @@
         still = hav(sbase[1], sbase[2], lat, lng) < noiseM;
       }
     }
-    if (spd == null && accOk && sh.length >= 2) {
-      var sb = null;
-      for (var si = sh.length - 1; si >= 0; si--) { if (t - sh[si][0] >= 4000) { sb = sh[si]; break; } }
-      if (sb) spd = (hav(sb[1], sb[2], lat, lng) / ((t - sb[0]) / 1000)) * 3.6;
-      else if (prev && prev.acc <= 35 && dt >= 1) spd = (d / dt) * 3.6;
-      if (spd != null && st.speedKmh > 0) spd = st.speedKmh * 0.5 + spd * 0.5; // 위치로 계산한 속도는 살짝 평활
-    }
-    if (!accOk || still) spd = 0;
-    // 움직임은 연속 2번(정확도 20m 초과면 3번) 잡혀야 속도로 표시 — 위치가 한 번 튄 것만으로 속도계가 반응하지 않게
-    if (spd != null && isFinite(spd)) {
-      st.moveVotes = spd >= 1.5 ? (st.moveVotes || 0) + 1 : 0;
-      st.speedKmh = spd < 1.5 || st.moveVotes < (acc > 20 ? 3 : 2) ? 0 : Math.min(spd, 120);
+    var SF = window.OutdoorSpeedFilter;
+    if (SF) {
+      if (!st.spdF) st.spdF = SF.create();
+      var kmh = SF.step(st.spdF, { lat: lat, lng: lng, acc: acc != null ? acc : 999, t: t,
+        speed: c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed : null });
+      st.speedKmh = Math.min(120, Math.max(0, kmh || 0));
+      if (st.speedKmh < 0.5) st.speedKmh = 0;
+    } else {
+      // 추정기 파일을 못 읽은 경우(구버전 캐시 등) — 기기 속도만 간단히
+      var spd0 = accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed * 3.6 : 0;
+      st.speedKmh = still || spd0 < 1 ? 0 : Math.min(120, spd0);
     }
     kickLoop();
 
@@ -652,7 +649,8 @@
         var base = null;
         for (var hi = 0; hi < hist.length; hi++) { if (t - hist[hi][0] >= 8000) base = hist[hi]; }
         var winS = base ? (t - base[0]) / 1000 : 0;
-        st.isMoving = !still && ((base && hav(base[1], base[2], lat, lng) / winS >= 0.6) || st.speedKmh >= 2.5);
+        // 속도 추정기가 '이동 중'이면 이동(느린 걷기도 이동 시간에 포함), 아니면 10초 실제 이동 거리로 판단
+        st.isMoving = (st.spdF && st.spdF.moving && st.speedKmh > 0) || (!still && base && hav(base[1], base[2], lat, lng) / winS >= 0.6);
         if (prev && dt > 0 && dt <= 30 && st.isMoving) {
           // 시작(재개) 이전 구간은 빼고, 경과 시간을 넘지 않게
           var fromMs = Math.max(prev.t, st.runSince || 0);
@@ -704,6 +702,7 @@
 
   function startGps() {
     if (st.watchId != null) return;
+    st.spdF = null; // 속도 추정기 새로 시작(이전 세션 상태가 남지 않게)
     if (!navigator.geolocation) {
       setText('outdGpsText', '이 기기는 GPS를 지원하지 않습니다');
       return;
