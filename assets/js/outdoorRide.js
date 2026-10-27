@@ -339,6 +339,7 @@
      새 GPS 값이 오면(kickLoop) 다시 시작. 화면이 가려져 있으면(document.hidden) 그리지 않는다. */
   var FRAME_MS = 33;
   function kickLoop() {
+    if (st.saver) return; // 배터리 절약 화면 중에는 속도계 애니메이션 멈춤
     if (st.rafId == null && isActive() && !document.hidden) st.rafId = requestAnimationFrame(loop);
   }
   function loop(ts) {
@@ -2040,6 +2041,18 @@
   var VALHALLA_URL = 'https://valhalla1.openstreetmap.de/route';
   /** 길찾기 이동 수단: 'bike'(기본) | 'walk' | 'moto'(2026-10-22 오토바이) */
   var travelMode = 'bike';
+  var travelModeUserSet = false; // 사용자가 이번에 직접 고른 이동 수단이면 기본값으로 덮지 않음
+  /** 기본 이동 수단(2026-10-28): 사용자 카테고리 CYCLE → 자전거, RUN·CYCLE+RUN → 걷기 */
+  function defaultTravelModeForUser() {
+    try {
+      var u = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null') || {};
+      var cat = u.sport_category || u.category || '';
+      var n = typeof window.normalizeUserSportCategory === 'function' ? window.normalizeUserSportCategory(cat) : String(cat || '').trim().toUpperCase();
+      n = String(n || '').toUpperCase();
+      if (n === 'RUN' || n === 'CYCLE+RUN' || n === 'CYCLE_RUN') return 'walk';
+    } catch (e) {}
+    return 'bike';
+  }
   var lastDest = null;
   var ICON_STAR_SM = '<svg class="outd-star-ico" viewBox="0 0 24 24" width="16" height="16" fill="#facc15" stroke="#facc15" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.62.96-5.57L3.9 9.5l5.6-.8z"/></svg>';
   var ICON_ALL_CAT = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>';
@@ -2868,6 +2881,7 @@
         var m = mb.getAttribute('data-travel');
         if (m === travelMode) return;
         travelMode = m;
+        travelModeUserSet = true;
         renderTravelModes();
         // 경로 후보를 보고 있었다면 같은 목적지로 새 이동 수단 경로를 다시 찾음
         if (lastDest && $('outdRouteList').querySelector('.outd-route__opt')) chooseDestination(lastDest);
@@ -3040,6 +3054,7 @@
   window.openOutdoorRouteSearch = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     closeMenu();
+    if (!travelModeUserSet) travelMode = defaultTravelModeForUser();
     var el = routeSheet();
     renderTravelModes();
     el.style.display = 'flex';
@@ -4279,6 +4294,66 @@
     });
   }
   /** 자유 라이딩: 코스맵 없이 현재 위치 기준으로 기록(코스 안내·회전 안내 끄기) */
+  /*
+   * 배터리 절약 모드(2026-10-28) — 휴대폰을 주머니에 넣고 달리기·걷기할 때.
+   *  화면만 완전한 검정(OLED 는 검정 화소가 전력을 거의 안 씀)으로 덮고, GPS·기록·음성 안내는 그대로.
+   *  속도계 애니메이션은 멈춤. 해제: 화면을 1.5초 길게 누르기, 또는 전원 버튼으로 껐다 켜기(화면이 다시 보이면 자동 해제).
+   *  주머니 속 가벼운 터치로는 해제되지 않음. 웹은 볼륨 버튼 입력을 받을 수 없어 볼륨 버튼 해제는 불가.
+   */
+  function saverOverlay() {
+    var ov = document.getElementById('outdSaver');
+    if (ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'outdSaver';
+    ov.className = 'outd-saver';
+    ov.innerHTML = '<div class="outd-saver__hint"><b>배터리 절약 중</b><span>GPS 기록은 계속됩니다</span>' +
+      '<span class="outd-saver__how">화면을 길게 누르거나 전원 버튼으로 껐다 켜면 돌아옵니다</span></div>' +
+      '<div class="outd-saver__hold"><i></i><span>계속 누르고 있으면 화면이 켜집니다</span></div>';
+    document.body.appendChild(ov);
+    var timer = null;
+    var cancel = function () { if (timer) { clearTimeout(timer); timer = null; } ov.classList.remove('is-holding'); };
+    ov.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      cancel();
+      ov.classList.add('is-holding');
+      timer = setTimeout(function () { timer = null; exitSaver(); }, 1500);
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) { ov.addEventListener(ev, cancel); });
+    ov.addEventListener('touchmove', function (e) { e.preventDefault(); }, { passive: false });
+    ov.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    return ov;
+  }
+  window.enterOutdoorSaver = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (st.saver) return;
+    closeMenu();
+    st.saver = true;
+    st.saverWasHidden = false;
+    if (st.rafId != null) { cancelAnimationFrame(st.rafId); st.rafId = null; }
+    var ov = saverOverlay();
+    ov.classList.remove('is-holding', 'is-dim');
+    ov.style.display = 'block';
+    clearTimeout(st.saverDimT);
+    st.saverDimT = setTimeout(function () { ov.classList.add('is-dim'); }, 4000); // 안내 글자도 4초 뒤 사라져 완전한 검정
+  };
+  function exitSaver() {
+    if (!st.saver) return;
+    st.saver = false;
+    clearTimeout(st.saverDimT);
+    var ov = document.getElementById('outdSaver');
+    if (ov) { ov.style.display = 'none'; ov.classList.remove('is-holding', 'is-dim'); }
+    renderStats();
+    kickLoop();
+    setTimeout(fixMapSize, 50);
+  }
+  window.exitOutdoorSaver = exitSaver;
+  // 전원 버튼으로 화면을 껐다 켜면(페이지가 숨겨졌다 다시 보이면) 절약 화면 해제
+  document.addEventListener('visibilitychange', function () {
+    if (!st.saver) return;
+    if (document.hidden) st.saverWasHidden = true;
+    else if (st.saverWasHidden) exitSaver();
+  });
+
   /** ☰ 메뉴 '기록 보기' 펼치기/접기(2026-10-28) */
   window.toggleOutdoorRecordsMenu = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -5025,6 +5100,7 @@
    * @param {{ gpxUrl?: string, title?: string, rideId?: string }} [opts]
    */
   window.openOutdoorRide = function (opts) {
+    travelModeUserSet = false; // 길찾기 이동 수단은 다시 사용자 카테고리 기본값부터
     renderNavText(st.navTextOn); // 경로 안내 문구 표시 설정(기본 숨기기, 이번 사용 중 바꾼 값 유지)
     opts = opts || {};
     st.prevScreen = activeScreenId() || st.prevScreen;
@@ -5054,6 +5130,7 @@
 
   window.exitOutdoorRide = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    exitSaver();
     closeMenu();
     if (st.status !== 'idle' && hasRideData()) {
       window.finishOutdoorRide();
