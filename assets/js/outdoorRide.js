@@ -3394,7 +3394,8 @@
     box.innerHTML = list.map(function (it) {
       var c = favCat(it.category);
       var region = [it.sido, it.sigungu].filter(Boolean).join(' ');
-      var sub = [c.l, region, fav.tab === 'public' && it.owner_name ? it.owner_name : '', favDistText(it)].filter(Boolean).join(' · ');
+      // 2026-10-27: 등록자 이름은 관리자에게만 표시
+      var sub = [c.l, region, fav.tab === 'public' && it.owner_name && favIsAdmin() ? it.owner_name : '', favDistText(it)].filter(Boolean).join(' · ');
       var right;
       if (fav.tab === 'public') {
         // 2026-10-25: 공개 대기 장소(관리자=전체, 요청자=본인 것) — 좋아요 배지 바로 왼쪽에 '공개 대기 중', 관리자는 수동 공개 버튼
@@ -3648,7 +3649,7 @@
     var rows = [];
     if (region) rows.push(['지역', region]);
     if (it.address) rows.push(['주소', it.address]);
-    if (!it.is_mine && it.owner_name) rows.push(['등록', it.owner_name]);
+    if (!it.is_mine && it.owner_name && favIsAdmin()) rows.push(['등록', it.owner_name]); // 등록자: 관리자에게만(2026-10-27)
     var dist = favDistText(it);
     if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
     if (it.memo) rows.push(['메모', it.memo]);
