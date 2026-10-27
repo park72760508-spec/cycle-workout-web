@@ -34700,6 +34700,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   cursor: pointer;
 }
 #outdoorRideScreen .outd-expand__out { display: none; }
+/* 2026-10-27: 세로 화면 속도계 오른쪽 위 '지도 크게 보기' 버튼 — 지도 오른쪽 버튼과 같은 모양 */
+#outdoorRideScreen .mobile-main-content { position: relative; }
+#outdoorRideScreen .outd-gauge-shrink {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
+  background: rgba(17, 24, 39, 0.85); display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+#outdoorRideScreen .outd-gauge-shrink:active { transform: scale(0.94); }
+@media screen and (orientation: landscape) { #outdoorRideScreen .outd-gauge-shrink { display: none !important; } }
 #outdoorRideScreen.outd-expanded .outd-expand__in { display: none; }
 #outdoorRideScreen.outd-expanded .outd-expand__out { display: block; }
 #outdoorRideScreen.outd-expanded .mobile-main-content { display: none !important; }

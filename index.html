@@ -4003,7 +4003,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261027store2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261027gshrink" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -36072,6 +36072,10 @@
     </div>
 
     <div class="mobile-main-content">
+      <!-- 2026-10-27: 세로 화면 속도계 오른쪽 위 — 지도 '크게 보기' 버튼과 같은 동작(속도계를 접고 지도를 크게) -->
+      <button type="button" id="outdGaugeShrink" class="outd-gauge-shrink" onclick="toggleOutdoorExpand(event)" aria-label="속도계 접고 지도 크게 보기">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+      </button>
       <div class="mobile-gauge-segment-wrap">
         <div class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0;">
         <svg viewBox="-13 34 220 202" style="width:100%; height:100%;" data-no-zone-bands="1">
