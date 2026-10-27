@@ -2989,12 +2989,14 @@
     { k: 'food', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#ef4444"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#b91c1c" stroke-width="0.8"/><path d="M7.6 5.2v3.6a1.6 1.6 0 0 0 3.2 0V5.2M9.2 5.2v3.4M9.2 10.4v8.4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.4 5.2c-1.7.9-2.4 3-2.4 5.6h2.4v8" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>', l: '맛집' },
     { k: 'cafe', e: '☕', l: '카페' }, // 2026-10-23: 카페 추가(맛집 오른쪽), 회사 제거
     { k: 'spot', e: '📸', l: '명소' },
-    { k: 'home', e: '🏠', l: '집' },
-    { k: 'etc', e: '📍', l: '기타' }
-  ];
+    { k: 'store', e: '🏪', l: '매장' }, // 2026-10-27: 매장 추가(명소 오른쪽)
+    { k: 'etc', e: '📍', l: '기타' },
+    { k: 'home', e: '🏠', l: '집' }
+  ]; // 순서 = 등록 창 카테고리 순서(맛집·카페·명소·매장·기타·집)
   function favCat(k) {
     for (var i = 0; i < FAV_CATS.length; i++) if (FAV_CATS[i].k === k) return FAV_CATS[i];
-    return FAV_CATS[FAV_CATS.length - 1]; // 모르는 값(예: 예전 '회사')은 기타로 표시
+    for (var j = 0; j < FAV_CATS.length; j++) if (FAV_CATS[j].k === 'etc') return FAV_CATS[j]; // 모르는 값(예: 예전 '회사')은 기타로 표시
+    return FAV_CATS[0];
   }
   var fav = { filter: { sido: '', sigungu: '', cat: '' }, tab: 'public', items: { mine: null, public: null }, picking: false, flag: null, pickLL: null, region: null, form: null, seq: 0 };
 
@@ -3115,7 +3117,7 @@
       '<button type="button" class="coachm-picker__close" data-fav-close aria-label="닫기">✕</button></div>' +
       // 2026-10-24: 카테고리 원형 탭(중고랜드와 같은 형식) — 전체·맛집·카페·명소·기타·집
       '<div class="outd-fav__cats" role="tablist" aria-label="카테고리">' +
-      [['', ICON_ALL_CAT, '전체'], ['food'], ['cafe'], ['spot'], ['etc'], ['home']].map(function (x) {
+      [['', ICON_ALL_CAT, '전체'], ['food'], ['cafe'], ['spot'], ['store'], ['etc'], ['home']].map(function (x) {
         var c = x[0] ? favCat(x[0]) : null;
         return '<button type="button" class="outd-fav__cat-tab" data-fav-cat="' + x[0] + '" role="tab">' +
           '<span class="outd-fav__cat-ico">' + (c ? c.e : x[1]) + '</span><span class="outd-fav__cat-label">' + (c ? c.l : x[2]) + '</span></button>';
@@ -3891,8 +3893,10 @@
         '<label>구군<input name="sigungu" type="text" maxlength="30" placeholder="구군"></label></div>' +
         '<div class="outd-fav__addr"></div>' +
         '<div class="outd-fav__label">카테고리</div>' +
-        '<div class="outd-fav__chips" data-chips="category">' + FAV_CATS.map(function (c) {
-          return '<button type="button" data-v="' + c.k + '">' + c.e + ' ' + c.l + '</button>';
+        // 2026-10-27: 즐겨찾기 화면 카테고리 탭과 같은 모양(원형 아이콘 + 아래 라벨), 선택 표시는 녹색 테두리 유지
+        '<div class="outd-fav__cats outd-fav__cats--form" data-chips="category">' + FAV_CATS.map(function (c) {
+          return '<button type="button" class="outd-fav__cat-tab" data-v="' + c.k + '">' +
+            '<span class="outd-fav__cat-ico">' + c.e + '</span><span class="outd-fav__cat-label">' + c.l + '</span></button>';
         }).join('') + '</div>' +
         '<label class="outd-fav__label">장소명<input name="name" type="text" maxlength="40" placeholder="예: 버거킹 하남" enterkeyhint="done"></label>' +
         '<label class="outd-fav__label">메모<input name="memo" type="text" maxlength="30" placeholder="30자 이내 (선택)" enterkeyhint="done"></label>' +
