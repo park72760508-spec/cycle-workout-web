@@ -34705,9 +34705,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-gauge-shrink {
   position: absolute; top: 8px; right: 8px; z-index: 5;
   width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
-  background: rgba(17, 24, 39, 0.85); display: flex; align-items: center; justify-content: center; cursor: pointer;
+  /* 2026-10-27: 속도계 바탕(검정)과 구분되게 밝은 회색 톤 + 옅은 테두리 */
+  background: #3a404b; border: 1px solid rgba(255, 255, 255, 0.22); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
-#outdoorRideScreen .outd-gauge-shrink:active { transform: scale(0.94); }
+#outdoorRideScreen .outd-gauge-shrink:active { transform: scale(0.94); background: #4a515e; }
 @media screen and (orientation: landscape) { #outdoorRideScreen .outd-gauge-shrink { display: none !important; } }
 #outdoorRideScreen.outd-expanded .outd-expand__in { display: none; }
 #outdoorRideScreen.outd-expanded .outd-expand__out { display: block; }
