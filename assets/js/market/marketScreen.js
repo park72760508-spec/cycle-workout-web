@@ -1016,7 +1016,7 @@
       '<img class="market-deal-contact-card__avatar" src="' + escapeHtml(avatarUrl) + '" alt="" />' +
       // 2026-10-27: 연락처가 공개된 단계(입금확인 이후)면 이름 옆에 전화번호도 표시
       '<span class="market-deal-contact-card__name">' + escapeHtml(name) +
-        (digitsOnly ? ' <span class="market-deal-contact-card__phone">(' + escapeHtml(phoneFormatted) + ')</span>' : '') +
+        (digitsOnly && !disabled ? ' <span class="market-deal-contact-card__phone">(' + escapeHtml(phoneFormatted) + ')</span>' : '') + // 구매확정 후(disabled)엔 번호 숨김
       '</span>' +
       actionsHtml +
     '</div>';
