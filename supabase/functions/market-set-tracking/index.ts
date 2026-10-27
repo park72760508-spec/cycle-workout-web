@@ -21,7 +21,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { createRemoteJWKSet, jwtVerify } from "npm:jose@5";
-import { isTrackerEnabled, loadTrackerCredentials, reportTrackerVerify, trackShipment, TrackerAuthError } from "../_shared/deliveryTracker.ts";
+import { isTrackerEnabled, loadTrackerCredentials, reportTrackerVerify, trackShipment, TrackerAuthError, TrackerNotFoundError } from "../_shared/deliveryTracker.ts";
 
 // 프로젝트 JWKS를 모듈 스코프에서 한 번만 생성 — jose가 내부적으로 키를 캐시해
 // 매 요청마다 JWKS를 다시 받아오지 않는다(PostgREST가 JWT를 검증하는 것과 동일한 방식).
@@ -214,7 +214,7 @@ Deno.serve(async (req) => {
 
   // 2026-10-09: 1차 공급자 Delivery Tracker(V2). 설정돼 있고 송장이 실제로 조회되면 deliveryapi
   // 구독 등록(건당 과금)을 생략하고 30분 주기 폴링(market-check-delivery-status mode=tracker)으로
-  // 추적한다. 미설정·미조회(NOT_FOUND)·오류면 아래 기존 deliveryapi 경로로 그대로 폴백한다.
+  // 추적한다. 미조회(NOT_FOUND)는 '송장 접수'로 저장 후 폴링에 맡기고, 미설정·오류면 아래 기존 deliveryapi 경로로 폴백한다.
   let trackerHandled = false;
   await loadTrackerCredentials(admin);
   if (isTrackerEnabled()) {
@@ -234,8 +234,21 @@ Deno.serve(async (req) => {
         }
       }
     } catch (eTr) {
-      console.warn("[market-set-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
-      if (eTr instanceof TrackerAuthError) await reportTrackerVerify(admin, false, (eTr as Error).message);
+      if (eTr instanceof TrackerNotFoundError) {
+        // 2026-10-27: 송장을 막 받은 직후라 택배사 전산에 아직 안 올라온 경우(NOT_FOUND)는 정상 상황.
+        // 예전엔 여기서 deliveryapi(건당 과금)로 넘어가 그쪽 한도 초과("한도 초과" 오류)로 등록 자체가 막혔다.
+        // → 일단 '송장 접수'로 저장하고 30분 주기 Tracker 폴링(NOT_FOUND 는 다음 주기 재시도)이 이어서 추적한다.
+        trackerHandled = true;
+        update.delivery_provider = "tracker";
+        update.delivery_status = "REGISTERED";
+        update.delivery_status_text = "송장 접수(택배사 집하 전)";
+        update.delivery_checked_at = nowIso;
+        update.delivery_request_id = null;
+        update.webhook_registered = false;
+      } else {
+        console.warn("[market-set-tracking] Delivery Tracker 조회 실패 → deliveryapi 폴백:", (eTr as Error).message);
+        if (eTr instanceof TrackerAuthError) await reportTrackerVerify(admin, false, (eTr as Error).message);
+      }
     }
   }
 
