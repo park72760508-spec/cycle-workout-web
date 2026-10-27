@@ -35376,9 +35376,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-records-subitem { padding-left: 34px !important; }
 #outdoorRideScreen .outd-records-subitem .outd-menu-svg { width: 20px; height: 20px; }
 
-/* ===== 2026-10-28: 루트맵 배터리 절약 모드 — 버튼(속도계 왼쪽 위) · 완전 검정 화면 ===== */
+/* ===== 2026-10-28: 루트맵 배터리 절약 모드 — 버튼(속도계 오른쪽, 지도 크게 보기 아래) · 완전 검정 화면 ===== */
 #outdoorRideScreen .outd-saver-btn {
-  position: absolute; top: 8px; left: 8px; z-index: 5;
+  position: absolute; top: 56px; right: 8px; z-index: 5; /* 2026-10-28: 지도 크게 보기 버튼 바로 아래 */
   width: 40px; height: 40px; border-radius: 12px; padding: 0;
   background: #3a404b; border: 1px solid rgba(255, 255, 255, 0.22); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
@@ -35403,3 +35403,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-saver__hold i { width: 46px; height: 46px; border-radius: 50%; border: 3px solid #1f2937; border-top-color: #00d4aa; animation: outdSaverSpin 1.5s linear forwards; }
 .outd-saver.is-holding .outd-saver__hold { display: flex; }
 @keyframes outdSaverSpin { to { transform: rotate(360deg); } }
+
+@media screen and (orientation: landscape) { #outdoorRideScreen .outd-saver-btn { top: 8px; } }
