@@ -3058,7 +3058,8 @@
     { k: 'food', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#ef4444"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#b91c1c" stroke-width="0.8"/><path d="M7.6 5.2v3.6a1.6 1.6 0 0 0 3.2 0V5.2M9.2 5.2v3.4M9.2 10.4v8.4" fill="none" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.4 5.2c-1.7.9-2.4 3-2.4 5.6h2.4v8" fill="#fff" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>', l: '맛집' },
     { k: 'cafe', e: '☕', l: '카페' }, // 2026-10-23: 카페 추가(맛집 오른쪽), 회사 제거
     { k: 'spot', e: '📸', l: '명소' },
-    { k: 'store', e: '🏪', l: '매장' }, // 2026-10-27: 매장 추가(명소 오른쪽)
+    // 2026-10-27: 매장 추가(명소 오른쪽) · 2026-10-28: 이모지 대신 맛집과 같은 형식(파란 원 + 흰 차양·가게 문)
+    { k: 'store', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#2563eb"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#1e40af" stroke-width="0.8"/><path d="M6.8 11.6v6.2h10.4v-6.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><rect x="10.5" y="14" width="3" height="3.8" fill="#fff"/><path d="M6 6.4h12l1.2 3.4a1.9 1.9 0 0 1-3.6.6 2 2 0 0 1-3.6 0 2 2 0 0 1-3.6 0 1.9 1.9 0 0 1-3.6-.6z" fill="#fff"/></svg>', l: '매장' },
     { k: 'etc', e: '📍', l: '기타' },
     { k: 'home', e: '🏠', l: '집' }
   ]; // 순서 = 등록 창 카테고리 순서(맛집·카페·명소·매장·기타·집)
