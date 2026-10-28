@@ -35493,3 +35493,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-light .outd-fav__pickitem span,
 #outdoorRideScreen .outd-light .outd-fav__pickitem em,
 #outdoorRideScreen .outd-light .outd-fav__pickempty { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-fav__cancel { border-color: #cbd5e1; color: #334155; background: #ffffff; } /* 팝업 '닫기' — 흰 바탕에서 보이게 */
