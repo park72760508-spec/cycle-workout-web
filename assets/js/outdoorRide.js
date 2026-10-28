@@ -4458,8 +4458,7 @@
       '<div class="outd-saver__title">🔋 배터리 절약 모드</div>' +
       '<div class="outd-saver__desc">화면만 꺼진 것처럼 검게 유지하고<br><b>GPS 기록·음성 안내는 계속됩니다.</b></div>' +
       '<div class="outd-saver__how"><div class="outd-saver__howtit">돌아오는 방법</div>' +
-      '<div>① 화면을 <b>1.5초 길게 누르기</b></div>' +
-      '<div>② <b>전원 버튼</b>으로 화면을 껐다 켜기</div></div>' +
+      '<div>화면을 <b>1.5초 길게 누르기</b></div></div>' +
       '<button type="button" class="outd-saver__ok" data-saver-ok>확인</button></div>' +
       '<div class="outd-saver__hold"><i></i><span>계속 누르고 있으면 화면이 켜집니다</span></div>';
     document.body.appendChild(ov);
