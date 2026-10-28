@@ -736,7 +736,13 @@
   }
   function iosLocationBridge() {
     var w = window.webkit;
-    return w && w.messageHandlers && w.messageHandlers.stelvioLocation ? w.messageHandlers.stelvioLocation : null;
+    if (w && w.messageHandlers && w.messageHandlers.stelvioLocation) return w.messageHandlers.stelvioLocation;
+    // App Store 아이폰 앱(React Native) — 위치 모듈이 있는 버전이면 StelvioNativeLocationIOS 표시
+    var rn = window.ReactNativeWebView;
+    if (window.StelvioNativeLocationIOS && rn && rn.postMessage) {
+      return { postMessage: function (m) { rn.postMessage(JSON.stringify({ type: 'STELVIO_LOCATION', cmd: m && m.cmd })); } };
+    }
+    return null;
   }
   /** 루트맵 화면이 보이는 동안 앱 위치 켜기/끄기 */
   function setNativePreview(on) {
