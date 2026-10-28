@@ -3079,7 +3079,8 @@
     { k: 'spot', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#16a34a"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#166534" stroke-width="0.8"/><path d="M9.4 8.2l1.1-1.9h3l1.1 1.9z" fill="#fff"/><rect x="5.4" y="8" width="13.2" height="9.6" rx="1.9" fill="#fff"/><circle cx="12" cy="12.8" r="2.7" fill="none" stroke="#16a34a" stroke-width="1.6"/><circle cx="16.3" cy="10" r="0.7" fill="#16a34a"/></svg>', l: '명소' },
     // 2026-10-27: 매장 추가(명소 오른쪽) · 2026-10-28: 이모지 대신 맛집과 같은 형식(파란 원 + 흰 차양·가게 문)
     { k: 'store', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#2563eb"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#1e40af" stroke-width="0.8"/><path d="M6.8 11.6v6.2h10.4v-6.2" fill="none" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/><rect x="10.5" y="14" width="3" height="3.8" fill="#fff"/><path d="M6 6.4h12l1.2 3.4a1.9 1.9 0 0 1-3.6.6 2 2 0 0 1-3.6 0 2 2 0 0 1-3.6 0 1.9 1.9 0 0 1-3.6-.6z" fill="#fff"/></svg>', l: '매장' },
-    { k: 'etc', e: '📍', l: '기타' },
+    // 2026-10-28: 이모지 대신 같은 형식(회청색 원 + 흰 책갈피). 📍는 등록할 때 지도 위치 표시로 사용
+    { k: 'etc', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#475569"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#334155" stroke-width="0.8"/><path d="M8.4 5.8h7.2a.9.9 0 0 1 .9.9v11.6l-4.5-3-4.5 3V6.7a.9.9 0 0 1 .9-.9z" fill="#fff"/></svg>', l: '기타' },
     // 2026-10-28: 이모지 대신 같은 형식(보라 원 + 흰 집)
     { k: 'home', e: '<svg class="outd-food-ico" viewBox="0 0 24 24" width="1.2em" height="1.2em" aria-hidden="true"><circle cx="12" cy="12" r="11.2" fill="#7c3aed"/><circle cx="12" cy="12" r="11.2" fill="none" stroke="#5b21b6" stroke-width="0.8"/><path d="M7.3 10.6L12 6.8l4.7 3.8v7.3H7.3z" fill="#fff"/><path d="M5.4 11.6L12 6.1l6.6 5.5" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><rect x="10.7" y="13.2" width="2.6" height="4.7" rx="0.4" fill="#7c3aed"/></svg>', l: '집' }
   ]; // 순서 = 등록 창 카테고리 순서(맛집·카페·명소·매장·기타·집)
@@ -3926,7 +3927,7 @@
       // 지도가 없으면 깃발만 생략(아래 등록 창은 그대로)
     } else if (!fav.flag) {
       fav.flag = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">🚩</div>', iconSize: [34, 34], iconAnchor: [8, 32] }),
+        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">📍</div>', iconSize: [34, 34], iconAnchor: [17, 32] }), // 2026-10-28: 🚩 → 📍(끝점이 위치)
         interactive: false,
         zIndexOffset: 1200
       }).addTo(st.map);
@@ -4103,7 +4104,7 @@
     fav.region = { sido: it.sido || '', sigungu: it.sigungu || '', address: it.address || '' };
     if (!fav.flag) {
       fav.flag = L.marker([lat, lng], {
-        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">🚩</div>', iconSize: [34, 34], iconAnchor: [8, 32] }),
+        icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">📍</div>', iconSize: [34, 34], iconAnchor: [17, 32] }), // 2026-10-28: 🚩 → 📍(끝점이 위치)
         interactive: false,
         zIndexOffset: 1200
       }).addTo(map);
