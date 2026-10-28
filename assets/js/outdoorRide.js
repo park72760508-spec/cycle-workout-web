@@ -713,6 +713,7 @@
         // 자유 라이딩 지나온 길은 화면 표시 위치(아바타와 같은 위치)로 updateMeOnMap 에서 그림
       }
     }
+    if (st.batching) return; // 앱이 모아 둔 위치를 한꺼번에 넣는 중 — 기록만 하고 지도·안내는 마지막 위치에서
     // 오늘의 날씨 카드(2026-10-28): 지역이 바뀌거나 30분 지났을 때만 내부에서 다시 조회
     if (window.OutdoorWeather && acc != null && acc <= 1000) window.OutdoorWeather.update(lat, lng, reverseRegion);
     updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
@@ -720,36 +721,68 @@
   }
 
   /*
-   * 앱 백그라운드 위치(2026-10-28) — 폴더블 폰을 접거나 화면이 꺼지면 웹 화면이 멈춰 GPS 도 멈춘다.
-   *  STELVIO 안드로이드 앱이 AndroidBridge.startBackgroundLocation() 을 지원하면(포그라운드 서비스) 기록 중에만 켜고,
-   *  앱은 위치를 window.stelvioNativeLocation(위치 하나 또는 배열, JSON 문자열도 가능)으로 넘긴다.
-   *  위치 형식: { lat, lng, acc, t(ms), speed(m/s, 선택), alt(선택), heading(선택) }
-   *  화면이 꺼져 웹이 멈춘 동안 모인 위치는 화면이 다시 켜질 때 배열로 한꺼번에 넘기면 된다.
+   * 앱 백그라운드 위치(2026-10-28, 안드로이드 앱 1.0.8+) — 폴더블 폰을 접거나 화면이 꺼지면 웹 화면이 멈춰 GPS 도 멈춘다.
+   *  기록 중에는 앱(포그라운드 서비스)이 GPS 를 계속 받아 모아 두고, 웹이 AndroidBridge.getBackgroundLocations(마지막 시각)로
+   *  1초마다(화면이 다시 켜지면 즉시) 가져온다. 앱 위치가 들어오는 동안 브라우저 GPS 는 쓰지 않음(같은 위치 두 번 방지).
+   *  window.stelvioNativeLocation(위치 또는 배열) 으로 앱이 직접 넣어도 된다.
    */
-  function syncNativeBgLocation() {
+  function nativeBridge() {
     var ab = window.AndroidBridge;
+    return ab && typeof ab.startBackgroundLocation === 'function' && typeof ab.getBackgroundLocations === 'function' ? ab : null;
+  }
+  function syncNativeBgLocation() {
+    var ab = nativeBridge();
     if (!ab) return;
     var on = st.status === 'running';
     if (on === !!st.nativeBgOn) return;
     try {
-      if (on && typeof ab.startBackgroundLocation === 'function') { ab.startBackgroundLocation(); st.nativeBgOn = true; }
-      else if (!on && typeof ab.stopBackgroundLocation === 'function') { ab.stopBackgroundLocation(); st.nativeBgOn = false; }
+      if (on) {
+        st.nativeBgOn = ab.startBackgroundLocation() !== false;
+        if (st.nativeBgOn && !st.nativePollT) st.nativePollT = setInterval(pollNativeLocations, 1000);
+      } else {
+        pollNativeLocations(); // 멈추기 직전까지 모인 위치 반영
+        ab.stopBackgroundLocation();
+        st.nativeBgOn = false;
+        clearInterval(st.nativePollT); st.nativePollT = null;
+      }
     } catch (e) {}
   }
+  function pollNativeLocations() {
+    var ab = nativeBridge();
+    if (!ab || !st.nativeBgOn) return;
+    try {
+      var since = st.lastFix ? st.lastFix.t : (st.runSince || Date.now()) - 5000;
+      var arr = JSON.parse(ab.getBackgroundLocations(String(since)) || '[]');
+      if (arr.length) window.stelvioNativeLocation(arr);
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && st.nativeBgOn) pollNativeLocations();
+  });
   window.stelvioNativeLocation = function (data) {
     try {
       if (typeof data === 'string') data = JSON.parse(data);
-      var arr = Array.isArray(data) ? data : [data];
-      arr.filter(function (f) { return f && isFinite(f.lat) && isFinite(f.lng); })
-        .sort(function (a, b) { return (a.t || 0) - (b.t || 0); })
-        .forEach(function (f) {
-          onPosition({ timestamp: f.t || Date.now(), coords: {
-            latitude: +f.lat, longitude: +f.lng, accuracy: f.acc != null ? +f.acc : 20,
-            speed: f.speed != null ? +f.speed : null, altitude: f.alt != null ? +f.alt : null,
-            heading: f.heading != null ? +f.heading : null } });
-        });
+      var arr = (Array.isArray(data) ? data : [data])
+        .filter(function (f) { return f && isFinite(f.lat) && isFinite(f.lng); })
+        .sort(function (a, b) { return (a.t || 0) - (b.t || 0); });
+      // 한꺼번에 많이 들어오면(화면이 꺼져 있던 동안) 지도·안내는 마지막 위치에서만 그림
+      st.batching = arr.length > 3;
+      arr.forEach(function (f, k) {
+        if (k === arr.length - 1) st.batching = false;
+        st.nativeLastAt = Date.now();
+        onPosition({ timestamp: f.t || Date.now(), coords: {
+          latitude: +f.lat, longitude: +f.lng, accuracy: f.acc != null ? +f.acc : 20,
+          speed: f.speed != null ? +f.speed : null, altitude: f.alt != null ? +f.alt : null,
+          heading: f.heading != null ? +f.heading : null } });
+      });
     } catch (e) {}
+    st.batching = false;
   };
+  /** 브라우저 GPS — 앱 위치가 최근 5초 안에 들어오고 있으면 건너뜀 */
+  function onBrowserPosition(pos) {
+    if (st.nativeBgOn && st.nativeLastAt && Date.now() - st.nativeLastAt < 5000) return;
+    onPosition(pos);
+  }
 
   function onPositionError(err) {
     renderGps(null);
@@ -830,7 +863,7 @@
       setText('outdGpsText', '이 기기는 GPS를 지원하지 않습니다');
       return;
     }
-    st.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
+    st.watchId = navigator.geolocation.watchPosition(onBrowserPosition, onPositionError, {
       enableHighAccuracy: true,
       maximumAge: 0,
       timeout: 20000
