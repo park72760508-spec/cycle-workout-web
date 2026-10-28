@@ -35510,3 +35510,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__pickbar .outd-dest__go {
   flex-shrink: 0; padding: 11px 14px; border: 0; border-radius: 12px; background: #00d4aa; color: #062a22; font-size: 14.5px; font-weight: 800; cursor: pointer;
 }
+
+/* 2026-10-28: 이동 수단 탭 선택 시인성 — 선택 = 민트 바탕 + 흰 아이콘, 미선택 = 진한 회색 아이콘 */
+#outdoorRideScreen .outd-light .outd-route__modes { background: #eef2f7; }
+#outdoorRideScreen .outd-light .outd-route__mode { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-route__mode.is-on,
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode.is-on { background: #00b894; color: #ffffff; box-shadow: 0 2px 6px rgba(0, 184, 148, 0.4); }
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-route__mode.is-disabled,
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode.is-disabled { color: #cbd5e1; }

@@ -2872,7 +2872,7 @@
       '<button type="button" class="outd-route__mappick" data-route-mappick>📍 지도에서 목적지 선택</button>' +
       '<div id="outdKakaoUsage" class="outd-kusage" style="display:none"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
-      '<div class="outd-route__credit">경로: 카카오(자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
+      '<div class="outd-route__credit" style="display:none">경로: 카카오(자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' + // 관리자에게만(2026-10-28)
       '</div>';
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
@@ -3036,7 +3036,8 @@
         item.innerHTML =
           '<span class="outd-route__optname">' + optName + '</span>' +
           '<span class="outd-route__optinfo">' + rt.km.toFixed(1) + ' km · 약 ' + rt.min + '분' +
-          (rt.kakao ? (rt.kakaoCached ? ' · 카카오(오늘 저장 경로)' : ' · 카카오') : '') +
+          // 2026-10-28: 경로 출처 표시 — 카카오 경로 = STELVIO L1, 그 외(STELVIO 자체 경로 계산) = STELVIO L2
+          (rt.kakao ? ' · STELVIO L1' : ' · STELVIO L2') +
           (rt.sameAsReco ? ' · 추천 경로와 같음' : rt.viaCycleway ? ' · 자전거도로(겸용) 경유' : rt.viaSidePath ? (rt.mode === 'bike' || rt.mode === 'short' ? ' · 길옆 자전거도로' : ' · 길옆 보행로·자전거도로') : '') + '</span>';
         item.addEventListener('click', function () {
           unlockAudio();
@@ -3058,6 +3059,8 @@
     closeMenu();
     if (!travelModeUserSet) travelMode = defaultTravelModeForUser();
     var el = routeSheet();
+    var credit = el.querySelector('.outd-route__credit');
+    if (credit) credit.style.display = favIsAdmin() ? '' : 'none'; // 경로·검색 출처 줄은 관리자에게만
     renderTravelModes();
     el.style.display = 'flex';
     renderKakaoUsage();
