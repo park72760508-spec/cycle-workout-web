@@ -35405,3 +35405,91 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @keyframes outdSaverSpin { to { transform: rotate(360deg); } }
 
 @media screen and (orientation: landscape) { #outdoorRideScreen .outd-saver-btn { top: 8px; } }
+
+/* ===== 2026-10-28: 루트맵 밝은 창(가독성) — 길찾기 검색 · 즐겨찾기 목록 · 즐겨찾기 상세 팝업 · 즐겨찾기 위치 검색 =====
+   바탕 흰색, 글자 짙은 남색, 입력·탭 연회색. 노랑 선택 표시는 흰 바탕에서 안 보여 호박색(#d97706)으로. 민트 버튼은 유지 */
+#outdoorRideScreen .outd-light .coachm-picker__sheet,
+#outdoorRideScreen .outd-light .outd-favpop__card { background: #ffffff; color: #0f172a; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28); }
+#outdoorRideScreen .outd-light .coachm-picker__head { border-bottom-color: #e5e7eb; }
+#outdoorRideScreen .outd-light .coachm-picker__close { color: #64748b; }
+#outdoorRideScreen .outd-light .coachm-picker__group { color: #00a884; }
+#outdoorRideScreen .outd-light .coachm-picker__item { color: #0f172a; border-bottom-color: #f1f5f9; }
+#outdoorRideScreen .outd-light .coachm-picker__item.selected { background: rgba(0, 212, 170, 0.12); }
+#outdoorRideScreen .outd-light .coachm-picker__item-min,
+#outdoorRideScreen .outd-light .coachm-picker__empty { color: #64748b; }
+/* 길찾기 */
+#outdoorRideScreen .outd-light .outd-route__search input,
+#outdoorRideScreen .outd-light .outd-fav__picksearch input { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-route__search input::placeholder,
+#outdoorRideScreen .outd-light .outd-fav__picksearch input::placeholder { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-route__search input:focus,
+#outdoorRideScreen .outd-light .outd-fav__picksearch input:focus { border-color: #00b894; background: #ffffff; }
+#outdoorRideScreen .outd-light .outd-route__name,
+#outdoorRideScreen .outd-light .outd-route__dest,
+#outdoorRideScreen .outd-light .outd-route__optname { color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-route__sub,
+#outdoorRideScreen .outd-light .outd-route__optinfo { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-route__credit { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-route__modes { background: #f1f5f9; }
+#outdoorRideScreen .outd-light .outd-route__mode { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-route__mode.is-on { background: #ffffff; color: #0f172a; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18); }
+#outdoorRideScreen .outd-light .outd-route__mode.is-disabled { color: #cbd5e1; }
+#outdoorRideScreen .outd-light .outd-kusage { background: #f1f5f9; color: #64748b; }
+#outdoorRideScreen .outd-light .outd-kusage__title { color: #334155; }
+#outdoorRideScreen .outd-light .outd-kusage__item b { color: #b45309; }
+#outdoorRideScreen .outd-light .outd-kusage__item.is-warn b { color: #ea580c; }
+#outdoorRideScreen .outd-light .outd-kusage__item.is-out b { color: #dc2626; }
+/* 즐겨찾기 목록 */
+#outdoorRideScreen .outd-light .outd-fav__tab { background: #f1f5f9; border-color: #e2e8f0; color: #64748b; }
+#outdoorRideScreen .outd-light .outd-fav__tab.is-on { background: #ffffff; border-color: #d97706; color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-fav__cat { background: #f1f5f9; }
+#outdoorRideScreen .outd-light .outd-fav__cat-tab { color: #334155; }
+#outdoorRideScreen .outd-light .outd-fav__cat-ico { background: #f1f5f9; border-color: #e2e8f0; color: #334155; }
+#outdoorRideScreen .outd-light .outd-fav__cat-label { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-fav__cat-tab.is-on .outd-fav__cat-ico { background: rgba(217, 119, 6, 0.14); border-color: transparent; color: #d97706; }
+#outdoorRideScreen .outd-light .outd-fav__cat-tab.is-on .outd-fav__cat-label { color: #d97706; }
+#outdoorRideScreen .outd-light .outd-fav__pub { border-color: #e2e8f0; color: #64748b; }
+#outdoorRideScreen .outd-light .outd-fav__pub.is-on { border-color: #00b894; color: #00a884; }
+#outdoorRideScreen .outd-light .outd-fav__del { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-fav__like { border-color: #e2e8f0; color: #334155; }
+#outdoorRideScreen .outd-light .outd-fav__like .outd-fav__heart { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-fav__like.is-on .outd-fav__heart { color: #e11d48; }
+#outdoorRideScreen .outd-light .outd-fav__likecnt { color: #e11d48; }
+#outdoorRideScreen .outd-light .outd-fav__dd { background: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-fav__dd i { border-color: #64748b; }
+#outdoorRideScreen .outd-light .outd-fav__dd.is-set { border-color: rgba(217, 119, 6, 0.6); color: #b45309; }
+#outdoorRideScreen .outd-light .outd-fav__dd.is-open { border-color: #d97706; }
+#outdoorRideScreen .outd-light .outd-fav__ddpop { background: #ffffff; border-color: #e5e7eb; box-shadow: 0 12px 28px rgba(15, 23, 42, 0.2); }
+#outdoorRideScreen .outd-light .outd-fav__dditem { color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-fav__dditem b { color: #d97706; }
+#outdoorRideScreen .outd-light .outd-fav__dditem:hover,
+#outdoorRideScreen .outd-light .outd-fav__dditem:active { background: #f1f5f9; }
+#outdoorRideScreen .outd-light .outd-fav__dditem.is-on { background: rgba(217, 119, 6, 0.08); color: #b45309; }
+#outdoorRideScreen .outd-light .outd-fav__filters select { background-color: #f1f5f9; border-color: #cbd5e1; color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-fav__pending { color: #b45309; }
+#outdoorRideScreen .outd-light .outd-fav__rowbusy { background: rgba(255, 255, 255, 0.72); }
+#outdoorRideScreen .outd-light .outd-stv-logo { filter: invert(1); } /* 흰 STELVIO 로고 → 흰 바탕에서 보이게 */
+/* 즐겨찾기 상세 팝업 */
+#outdoorRideScreen .outd-light .outd-favpop__title span,
+#outdoorRideScreen .outd-light .outd-favpop__rows dt { color: #64748b; }
+#outdoorRideScreen .outd-light .outd-favpop__rows dd { color: #334155; }
+#outdoorRideScreen .outd-light .outd-favpop__aff { color: #dc2626; }
+#outdoorRideScreen .outd-light .outd-favpop__likes { color: #e11d48; }
+#outdoorRideScreen .outd-light .outd-favpop__mode,
+#outdoorRideScreen .outd-light .outd-favpop__mode-label { color: #334155; }
+#outdoorRideScreen .outd-light .outd-favpop__mode-ico { background: #f8fafc; border-color: #cbd5e1; color: #334155; }
+#outdoorRideScreen .outd-light .outd-favpop__mode.is-on .outd-favpop__mode-ico { background: rgba(234, 88, 12, 0.12); border-color: #ea580c; color: #ea580c; }
+#outdoorRideScreen .outd-light .outd-favpop__mode.is-on .outd-favpop__mode-label { color: #ea580c; }
+#outdoorRideScreen .outd-light .outd-favpop__mode.is-disabled .outd-favpop__mode-ico { background: #f1f5f9; border-color: #e5e7eb; color: #cbd5e1; }
+#outdoorRideScreen .outd-light .outd-favpop__mode.is-disabled .outd-favpop__mode-label { color: #cbd5e1; }
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode { color: #94a3b8; }
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode.is-on { background: #ffffff; color: #0f172a; }
+#outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode.is-disabled { color: #d6dbe3; }
+/* 즐겨찾기 위치 선택 바(지도 누르기·장소 검색) */
+#outdoorRideScreen .outd-fav__pickbar.outd-light { background: rgba(255, 255, 255, 0.97); color: #0f172a; box-shadow: 0 6px 20px rgba(15, 23, 42, 0.25); }
+#outdoorRideScreen .outd-fav__pickbar.outd-light .outd-fav__pickrow button,
+#outdoorRideScreen .outd-fav__pickbar.outd-light [data-fav-pick-cancel] { border-color: #cbd5e1; color: #334155; }
+#outdoorRideScreen .outd-light .outd-fav__pickitem { color: #0f172a; border-top-color: #e5e7eb !important; }
+#outdoorRideScreen .outd-light .outd-fav__pickitem span,
+#outdoorRideScreen .outd-light .outd-fav__pickitem em,
+#outdoorRideScreen .outd-light .outd-fav__pickempty { color: #64748b; }

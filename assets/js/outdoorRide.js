@@ -2856,7 +2856,7 @@
     var screen = $(SCREEN_ID);
     el = document.createElement('div');
     el.id = 'outdRouteSheet';
-    el.className = 'coachm-picker outd-route';
+    el.className = 'coachm-picker outd-route outd-light'; // 2026-10-28: 밝은 바탕(가독성)
     el.style.display = 'none';
     el.innerHTML =
       '<div class="coachm-picker__sheet outd-route__sheet">' +
@@ -3192,7 +3192,7 @@
     if (el) return el;
     el = document.createElement('div');
     el.id = 'outdFavSheet';
-    el.className = 'coachm-picker outd-route outd-fav';
+    el.className = 'coachm-picker outd-route outd-fav outd-light'; // 2026-10-28: 밝은 바탕
     el.style.display = 'none';
     el.innerHTML =
       '<div class="coachm-picker__sheet outd-route__sheet">' +
@@ -3628,7 +3628,7 @@
     if (!el) {
       el = document.createElement('div');
       el.id = 'outdFavPop';
-      el.className = 'outd-favpop';
+      el.className = 'outd-favpop outd-light'; // 2026-10-28: 밝은 바탕
       $(SCREEN_ID).appendChild(el);
       el.addEventListener('click', function (e) {
         var t = e.target;
@@ -3795,7 +3795,7 @@
     if (!b && show) {
       b = document.createElement('div');
       b.id = 'outdFavPickBar';
-      b.className = 'outd-fav__pickbar';
+      b.className = 'outd-fav__pickbar outd-light'; // 2026-10-28: 밝은 바탕
       /* 2026-10-23: 지도에서 누르기 + 목적지 검색(장소·주소)으로도 위치 선택 */
       b.innerHTML =
         '<div class="outd-fav__pickrow"><span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" data-fav-pick-cancel>취소</button></div>' +
