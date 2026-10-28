@@ -1260,7 +1260,7 @@
 
   window.toggleOutdoorHeadingUp = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    startCompass(true);
+    if (motionPermSilent()) startCompass(true);
     st.headingUp = !st.headingUp;
     st.follow = true;
     applyRotation();
@@ -1676,6 +1676,15 @@
     if (st.speedKmh >= (st.speedKmh < 9 ? 1.5 : 4)) return; // 움직이는 중에는 GPS 진행 방향(freeHeading)
     steadyHeading(st.compassHd, 0.35);
   }
+  /**
+   * 아이폰 '동작 및 방향' 권한 팝업 없이 켤 수 있는지(2026-10-29)
+   *  안드로이드·데스크톱: 권한 요청 자체가 없음 / 새 아이폰 앱: 앱이 묻지 않고 허용(StelvioMotionAutoGrant)
+   *  그 밖(사파리·이전 아이폰 앱)은 기록 시작 때만 묻고, 현재 위치·방향 버튼에서는 묻지 않는다.
+   */
+  function motionPermSilent() {
+    var DOE = window.DeviceOrientationEvent;
+    return !(DOE && typeof DOE.requestPermission === 'function') || !!window.StelvioMotionAutoGrant;
+  }
   function startCompass(fromGesture) {
     if (st.compassOn || typeof window.DeviceOrientationEvent === 'undefined') return;
     var add = function () {
@@ -1752,7 +1761,7 @@
 
   window.recenterOutdoorMap = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    startCompass(true);
+    if (motionPermSilent()) startCompass(true);
     st.follow = true;
     st.autoZoomSet = null; // 속도 자동 확대 다시 켬
     st.headingUp = true;
@@ -5453,7 +5462,9 @@
    * @param {{ gpxUrl?: string, title?: string, rideId?: string }} [opts]
    */
   window.openOutdoorRide = function (opts) {
-    startCompass(false); // 안드로이드는 권한 없이 바로(아이폰은 기록 시작·내 위치 버튼 터치 때)
+    // 안드로이드는 권한 없이 바로, 새 아이폰 앱은 팝업 없이 허용됨(이전 아이폰 앱·사파리는 기록 시작 때)
+    startCompass(!!window.StelvioMotionAutoGrant);
+    if (window.StelvioMotionAutoGrant) startStepDetector(true);
     travelModeUserSet = false; // 길찾기 이동 수단은 다시 사용자 카테고리 기본값부터
     renderNavText(st.navTextOn); // 경로 안내 문구 표시 설정(기본 숨기기, 이번 사용 중 바꾼 값 유지)
     opts = opts || {};
