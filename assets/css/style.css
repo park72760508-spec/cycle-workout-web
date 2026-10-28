@@ -35519,3 +35519,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode { color: #64748b; }
 #outdoorRideScreen .outd-light .outd-route__mode.is-disabled,
 #outdoorRideScreen .outd-light .outd-favpop__modes .outd-route__mode.is-disabled { color: #cbd5e1; }
+
+/* 2026-10-28: 목적지 지도 선택 팝업 — 취소 → ✕ 아이콘 버튼 */
+#outdoorRideScreen .outd-fav__pickbar .outd-fav__pickrow .outd-dest__x { flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border: none; border-radius: 50%; background: #f1f5f9; color: #334155; font-size: 16px; line-height: 32px; text-align: center; }

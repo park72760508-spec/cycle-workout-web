@@ -3932,7 +3932,7 @@
     b.className = 'outd-fav__pickbar outd-dest outd-light';
     b.style.display = 'none';
     b.innerHTML =
-      '<div class="outd-fav__pickrow"><span>📍 지도를 눌러 목적지를 선택하세요</span><button type="button" data-dest-cancel>취소</button></div>' +
+      '<div class="outd-fav__pickrow"><span>📍 지도를 눌러 목적지를 선택하세요</span><button type="button" class="outd-dest__x" data-dest-cancel aria-label="닫기">✕</button></div>' +
       '<form class="outd-fav__picksearch" action="#" role="search"><input type="search" placeholder="또는 장소·주소 검색" autocomplete="off" enterkeyhint="search">' +
       '<button type="submit">검색</button></form>' +
       '<div class="outd-fav__pickresults" style="display:none"></div>' +
