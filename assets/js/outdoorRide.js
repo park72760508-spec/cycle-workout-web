@@ -2869,6 +2869,7 @@
       '<button type="button" class="coachm-picker__close" data-route-close aria-label="닫기">✕</button></div>' +
       '<form class="outd-route__search" id="outdRouteForm" action="#" role="search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search">' +
       '<button type="submit" class="outd-route__go">검색</button></form>' +
+      '<button type="button" class="outd-route__mappick" data-route-mappick>📍 지도에서 목적지 선택</button>' +
       '<div id="outdKakaoUsage" class="outd-kusage" style="display:none"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
       '<div class="outd-route__credit">경로: 카카오(자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' +
@@ -2876,6 +2877,7 @@
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
       if (e.target === el || e.target.closest('[data-route-close]')) { el.style.display = 'none'; return; }
+      if (e.target.closest('[data-route-mappick]')) { startDestPick(null); return; }
       var mb = e.target.closest && e.target.closest('[data-travel]');
       if (mb) {
         var m = mb.getAttribute('data-travel');
@@ -2963,7 +2965,7 @@
       item.children[0].textContent = p.name;
       item.children[1].textContent = p.sub || '';
       item.children[2].textContent = d != null ? (d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km') : '';
-      item.addEventListener('click', function () { chooseDestination(p); });
+      item.addEventListener('click', function () { startDestPick(p); }); // 2026-10-28: 지도에 📍 표시 후 '여기로 길찾기'
       box.appendChild(item);
     });
   }
@@ -3784,6 +3786,11 @@
       if (!down) return;
       var moved = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
       if (moved > 10 || Date.now() - down.t > 600) return; // 끌기·길게 누르기는 지도 이동
+      if (dest.picking) {
+        var dll = clientToLatLng(e.clientX, e.clientY);
+        if (dll) placeDestFlag(dll.lat, dll.lng, null);
+        return;
+      }
       if (!fav.picking) {
         var pid = favPinAt(e.clientX, e.clientY);
         if (pid) openFavPopup(pid);
@@ -3911,6 +3918,140 @@
     favPickBanner(true);
     loadKakaoMaps().catch(function () {}); // 행정구역 변환 미리 준비
   }
+  /* ---------- 길찾기 목적지 지도 선택(2026-10-28) — 즐겨찾기 등록 위치 고르기와 같은 방식 ----------
+   * 검색 결과를 누르거나 지도를 누르면 그 자리에 📍, 아래 바에 장소명·주소 + [여기로 길찾기]. 다른 곳을 누르면 📍 이동. */
+  var dest = { picking: false, flag: null, ll: null, name: '', sub: '', seq: 0 };
+  function destBar() {
+    var b = $('outdDestBar');
+    if (b) return b;
+    b = document.createElement('div');
+    b.id = 'outdDestBar';
+    b.className = 'outd-fav__pickbar outd-dest outd-light';
+    b.style.display = 'none';
+    b.innerHTML =
+      '<div class="outd-fav__pickrow"><span>📍 지도를 눌러 목적지를 선택하세요</span><button type="button" data-dest-cancel>취소</button></div>' +
+      '<form class="outd-fav__picksearch" action="#" role="search"><input type="search" placeholder="또는 장소·주소 검색" autocomplete="off" enterkeyhint="search">' +
+      '<button type="submit">검색</button></form>' +
+      '<div class="outd-fav__pickresults" style="display:none"></div>' +
+      '<div class="outd-dest__confirm" style="display:none"><div class="outd-dest__info"><b></b><span></span></div>' +
+      '<button type="button" class="outd-dest__go" data-dest-go>여기로 길찾기</button></div>';
+    var form = b.querySelector('form'), input = form.querySelector('input'), box = b.querySelector('.outd-fav__pickresults');
+    b.querySelector('[data-dest-cancel]').addEventListener('click', function (e) { e.stopPropagation(); cancelDestPick(true); });
+    b.querySelector('[data-dest-go]').addEventListener('click', function (e) { e.stopPropagation(); confirmDestPick(); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = input.value.trim();
+      if (!q) { try { input.focus(); } catch (err) {} return; }
+      try { input.blur(); } catch (err) {}
+      var seq = ++dest.seq;
+      box.style.display = 'block';
+      box.innerHTML = '<div class="outd-fav__pickempty">검색 중...</div>';
+      searchPlaces(q).then(function (list) {
+        if (seq !== dest.seq) return;
+        if (!list || !list.length) { box.innerHTML = '<div class="outd-fav__pickempty">검색 결과가 없습니다.</div>'; return; }
+        box.innerHTML = '';
+        list.slice(0, 15).forEach(function (pl) {
+          var it = document.createElement('button');
+          it.type = 'button';
+          it.className = 'outd-fav__pickitem';
+          var d = st.lastFix ? hav(st.lastFix.lat, st.lastFix.lng, pl.lat, pl.lng) / 1000 : null;
+          it.innerHTML = '<b></b><span></span><em></em>';
+          it.children[0].textContent = pl.name;
+          it.children[1].textContent = pl.sub || '';
+          it.children[2].textContent = d != null ? (d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km') : '';
+          it.addEventListener('click', function (ev) { ev.stopPropagation(); box.style.display = 'none'; destPickPlace(pl); });
+          box.appendChild(it);
+        });
+      }).catch(function () {
+        if (seq === dest.seq) box.innerHTML = '<div class="outd-fav__pickempty">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
+      });
+    });
+    // 바 안의 터치가 지도(끌기·📍 옮기기)로 전달되지 않게
+    ['pointerdown', 'pointerup', 'click', 'wheel'].forEach(function (ev) { b.addEventListener(ev, function (e) { e.stopPropagation(); }); });
+    var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+    (wrap || $(SCREEN_ID)).appendChild(b);
+    return b;
+  }
+  /** 목적지 고르기 시작. place(검색 결과)가 있으면 그 자리에 바로 📍 */
+  function startDestPick(place) {
+    var map = ensureMap();
+    if (!map) { toast('지도를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.', 'info'); return; }
+    if (fav.picking) cancelFavPick();
+    var sheet = $('outdRouteSheet');
+    if (sheet) sheet.style.display = 'none';
+    dest.picking = true;
+    st.follow = false;
+    st.userPanAt = Date.now() + 3600 * 1000;
+    bindFavPickTap();
+    var b = destBar();
+    b.style.display = 'flex';
+    b.querySelector('input').value = '';
+    var rb = b.querySelector('.outd-fav__pickresults');
+    rb.style.display = 'none'; rb.innerHTML = '';
+    b.querySelector('.outd-dest__confirm').style.display = 'none';
+    loadKakaoMaps().catch(function () {});
+    if (place) destPickPlace(place);
+  }
+  function destPickPlace(pl) {
+    var map = st.map || ensureMap();
+    var lat = Number(pl.lat), lng = Number(pl.lng);
+    try {
+      if (map) { map.setView([lat, lng], Math.max(map.getZoom() || 0, 16), { animate: false }); panLatLngToMapCenter(lat, lng); }
+    } catch (eMove) {}
+    placeDestFlag(lat, lng, pl);
+  }
+  function placeDestFlag(lat, lng, pl) {
+    var L = window.L;
+    dest.ll = { lat: lat, lng: lng };
+    dest.name = pl && pl.name ? String(pl.name) : '';
+    dest.sub = pl && pl.sub ? String(pl.sub) : '';
+    if (st.map && L) {
+      if (!dest.flag) {
+        dest.flag = L.marker([lat, lng], {
+          icon: L.divIcon({ className: '', html: '<div class="outd-fav__flag">📍</div>', iconSize: [34, 34], iconAnchor: [17, 32] }),
+          interactive: false,
+          zIndexOffset: 1200
+        }).addTo(st.map);
+      } else {
+        dest.flag.setLatLng([lat, lng]);
+      }
+    }
+    renderDestConfirm();
+    if (!dest.name) {
+      // 지도를 눌러 고른 곳 — 주소로 이름 채움
+      var my = dest.seq = dest.seq + 1;
+      reverseRegion(lat, lng).then(function (rg) {
+        if (my !== dest.seq || !dest.ll || dest.ll.lat !== lat || dest.ll.lng !== lng) return;
+        dest.sub = (rg && rg.address) || [rg && rg.sido, rg && rg.sigungu].filter(Boolean).join(' ');
+        renderDestConfirm();
+      });
+    }
+  }
+  function renderDestConfirm() {
+    var b = $('outdDestBar');
+    if (!b) return;
+    var c = b.querySelector('.outd-dest__confirm');
+    c.style.display = dest.ll ? 'flex' : 'none';
+    c.querySelector('b').textContent = dest.name || '선택한 위치';
+    c.querySelector('span').textContent = dest.sub || (dest.name ? '' : '주소를 찾는 중...');
+  }
+  function cancelDestPick(backToSheet) {
+    dest.picking = false;
+    dest.ll = null;
+    var b = $('outdDestBar');
+    if (b) b.style.display = 'none';
+    if (dest.flag && st.map) { st.map.removeLayer(dest.flag); dest.flag = null; }
+    st.userPanAt = Date.now();
+    if (backToSheet) { var sh = $('outdRouteSheet'); if (sh) sh.style.display = 'flex'; }
+  }
+  function confirmDestPick() {
+    if (!dest.ll) return;
+    var target = { name: dest.name || dest.sub || '선택한 위치', sub: dest.sub || '', lat: dest.ll.lat, lng: dest.ll.lng };
+    cancelDestPick(true);
+    renderTravelModes();
+    chooseDestination(target);
+  }
+
   function cancelFavPick() {
     fav.picking = false;
     fav.editId = null;
