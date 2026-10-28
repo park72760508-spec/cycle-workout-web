@@ -29967,7 +29967,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261027step"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261027step"></script>
   <script src="assets/js/outdoorWeather.js?v=20261028wx5"></script>
-  <script src="assets/js/outdoorRide.js?v=20261028destx"></script>
+  <script src="assets/js/outdoorRide.js?v=20261028batt"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36116,7 +36116,7 @@
       <!-- 2026-10-27: 세로 화면 속도계 오른쪽 위 — 지도 '크게 보기' 버튼과 같은 동작(속도계를 접고 지도를 크게) -->
       <!-- 2026-10-28: 배터리 절약 모드(속도계 왼쪽 위) — 화면만 검정, GPS·기록은 계속 -->
       <button type="button" id="outdSaverBtn" class="outd-saver-btn" onclick="enterOutdoorSaver(event)" aria-label="배터리 절약 모드(화면만 끄기, 기록은 계속)">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="16.5" height="10" rx="2.2" stroke="#ffffff" stroke-width="1.8"/><path d="M20.5 10.3v3.4" stroke="#ffffff" stroke-width="2"/><path d="M7.2 14.6c0-3 2.3-5 6.1-5 0 3.3-2 5.1-5.2 5.1M7.2 14.6l3.4-2.6" stroke="#4ade80" stroke-width="1.6"/></svg>
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="7" width="16.5" height="10" rx="2.2" stroke="#ffffff" stroke-width="1.8"/><path d="M20.5 10.3v3.4" stroke="#ffffff" stroke-width="2"/><rect x="4.5" y="9" width="3.4" height="6" rx="0.6" fill="#4ade80"/><rect x="9.1" y="9" width="3.4" height="6" rx="0.6" fill="#4ade80"/><rect x="13.7" y="9" width="3.4" height="6" rx="0.6" fill="#ffffff" fill-opacity="0.16"/></svg>
       </button>
       <button type="button" id="outdGaugeShrink" class="outd-gauge-shrink" onclick="toggleOutdoorExpand(event)" aria-label="속도계 접고 지도 크게 보기">
         <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
