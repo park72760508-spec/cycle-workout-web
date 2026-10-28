@@ -4453,12 +4453,26 @@
     ov = document.createElement('div');
     ov.id = 'outdSaver';
     ov.className = 'outd-saver';
-    ov.innerHTML = '<div class="outd-saver__hint"><b>배터리 절약 중</b><span>GPS 기록은 계속됩니다</span>' +
-      '<span class="outd-saver__how">화면을 길게 누르면 돌아옵니다</span></div>' +
+    // 2026-10-28: 안내는 흰색 메시지 팝업 — 확인을 누르면 닫히고 완전한 검정 화면만 남음
+    ov.innerHTML = '<div class="outd-saver__hint" role="dialog" aria-label="배터리 절약 모드 안내">' +
+      '<div class="outd-saver__title">🔋 배터리 절약 모드</div>' +
+      '<div class="outd-saver__desc">화면만 꺼진 것처럼 검게 유지하고<br><b>GPS 기록·음성 안내는 계속됩니다.</b></div>' +
+      '<div class="outd-saver__how"><div class="outd-saver__howtit">돌아오는 방법</div>' +
+      '<div>① 화면을 <b>1.5초 길게 누르기</b></div>' +
+      '<div>② <b>전원 버튼</b>으로 화면을 껐다 켜기</div></div>' +
+      '<button type="button" class="outd-saver__ok" data-saver-ok>확인</button></div>' +
       '<div class="outd-saver__hold"><i></i><span>계속 누르고 있으면 화면이 켜집니다</span></div>';
     document.body.appendChild(ov);
     var timer = null;
     var cancel = function () { if (timer) { clearTimeout(timer); timer = null; } ov.classList.remove('is-holding'); };
+    var hint = ov.querySelector('.outd-saver__hint');
+    // 팝업 안 터치는 길게 누르기(복귀)로 세지 않음
+    hint.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    ov.querySelector('[data-saver-ok]').addEventListener('click', function (e) {
+      e.stopPropagation();
+      clearTimeout(st.saverDimT);
+      ov.classList.add('is-dim');
+    });
     ov.addEventListener('pointerdown', function (e) {
       e.preventDefault();
       cancel();
@@ -4481,7 +4495,8 @@
     ov.classList.remove('is-holding', 'is-dim');
     ov.style.display = 'block';
     clearTimeout(st.saverDimT);
-    st.saverDimT = setTimeout(function () { ov.classList.add('is-dim'); }, 4000); // 안내 글자도 4초 뒤 사라져 완전한 검정
+    // 확인을 누르지 않고 주머니에 넣어도 흰 팝업이 계속 켜져 있지 않게 20초 뒤 자동으로 닫음
+    st.saverDimT = setTimeout(function () { ov.classList.add('is-dim'); }, 20000);
   };
   function exitSaver() {
     if (!st.saver) return;
