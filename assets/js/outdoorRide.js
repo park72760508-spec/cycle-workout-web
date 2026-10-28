@@ -3980,7 +3980,7 @@
       f.className = 'outd-fav__form';
       f.innerHTML =
         '<div class="outd-fav__formhead"><b>' + ICON_STAR_SM + ' <span data-form-title>즐겨찾기 등록</span></b><button type="button" class="coachm-picker__close" data-fav-form-close aria-label="닫기">✕</button></div>' +
-        '<p class="outd-fav__hint">다른 곳을 누르면 깃발 위치가 바뀝니다.</p>' +
+        '<p class="outd-fav__hint">다른 곳을 누르면 📍 위치가 바뀝니다.</p>' +
         '<div class="outd-fav__row2"><label>시도<input name="sido" type="text" maxlength="30" placeholder="시도"></label>' +
         '<label>구군<input name="sigungu" type="text" maxlength="30" placeholder="구군"></label></div>' +
         '<div class="outd-fav__addr"></div>' +
