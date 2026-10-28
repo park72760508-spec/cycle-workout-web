@@ -730,10 +730,21 @@
     var ab = window.AndroidBridge;
     return ab && typeof ab.startBackgroundLocation === 'function' && typeof ab.getBackgroundLocations === 'function' ? ab : null;
   }
+  /** 아이폰 앱(STELVIO iOS, 2026-10-28) — 위치는 앱이 window.stelvioNativeLocation 으로 직접 넣어 줌 */
+  function iosLocationBridge() {
+    var w = window.webkit;
+    return w && w.messageHandlers && w.messageHandlers.stelvioLocation ? w.messageHandlers.stelvioLocation : null;
+  }
   function syncNativeBgLocation() {
+    var on = st.status === 'running';
+    var ios = iosLocationBridge();
+    if (ios) {
+      if (on === !!st.nativeBgOn) return;
+      try { ios.postMessage({ cmd: on ? 'start' : 'stop' }); st.nativeBgOn = on; } catch (e) {}
+      return;
+    }
     var ab = nativeBridge();
     if (!ab) return;
-    var on = st.status === 'running';
     if (on === !!st.nativeBgOn) return;
     try {
       if (on) {
