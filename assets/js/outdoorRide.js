@@ -3996,7 +3996,7 @@
     var map = st.map || ensureMap();
     var lat = Number(pl.lat), lng = Number(pl.lng);
     try {
-      if (map) { map.setView([lat, lng], Math.max(map.getZoom() || 0, 16), { animate: false }); panLatLngToMapCenter(lat, lng); }
+      if (map) { map.setView([lat, lng], Math.max(map.getZoom() || 0, 16), { animate: false }); panLatLngToMapCenter(lat, lng, 0.7); } // 위쪽 바에 가리지 않게
     } catch (eMove) {}
     placeDestFlag(lat, lng, pl);
   }
