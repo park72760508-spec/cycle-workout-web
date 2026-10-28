@@ -46,7 +46,7 @@
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="/assets/js/vendor/firebasejs/10.14.1/firebase-storage-compat.js"></script>
-  <script src="assets/js/firebaseConfig.js"></script>
+  <script src="assets/js/firebaseConfig.js?v=20261029inapp"></script>
   <!-- 조기 자동 로그인 (2026-10-05): 저장된 자격증명이 있으면 페이지(2MB+) 파싱이 끝나기를 기다리지 않고
        지금 바로 authV9 비밀번호 인증 + users/{uid} REST 프리패치를 시작한다. 결과는 window.__stelvioEarlyAuth 에
        담아 두고, DOMContentLoaded 뒤 자동 재로그인(handlePhoneAuth)이 네트워크 없이 그대로 이어받는다.
@@ -180,6 +180,8 @@
       messagingSenderId: "000000000000",
       appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
     };
+      // 2026-10-29: 앱(WebView)에서는 로그인 보조 iframe 을 stelvio.ai.kr/__/auth/iframe 에서 열기(firebaseConfig.js 와 같은 이유)
+      if (window.StelvioInApp || window.ReactNativeWebView) firebaseConfig = Object.assign({}, firebaseConfig, { authDomain: 'stelvio.ai.kr' });
       var authV9 = null;
       var firestoreV9 = null;
       var firestoreMod = null;

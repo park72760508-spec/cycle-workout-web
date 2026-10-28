@@ -36,6 +36,18 @@ const firebaseConfig = {
     databaseURL: "https://stelvio-ai-default-rtdb.firebaseio.com"
 };
 
+/*
+ * 2026-10-29: 앱(WebView) 안에서 외부 브라우저로 빈 페이지가 열리던 문제 대응
+ *  원인: 아이폰 앱은 stelvio.ai.kr 밖 주소로의 이동을 사파리로 넘기는데, 페이지 안의 숨은 iframe 까지 같은 검사를 받았다.
+ *   ① Firebase 로그인 모듈(v8)이 아이폰에서 시작할 때 미리 여는 stelvio-ai.firebaseapp.com/__/auth/iframe
+ *   ② 실시간 데이터베이스가 처음 연결할 때 쓰는 롱폴링 iframe(s-gke-….firebaseio.com)
+ *  대응: ① authDomain 을 stelvio.ai.kr 로 — 같은 보조 페이지를 이 도메인(/__/auth/iframe/)에서 직접 제공
+ *        ② 실시간 데이터베이스는 웹소켓으로만 연결(iframe 을 만들지 않음)
+ *  앱 안에서만 적용(일반 브라우저는 그대로).
+ */
+var STELVIO_IN_APP_WEBVIEW = typeof window !== 'undefined' && !!(window.StelvioInApp || window.ReactNativeWebView);
+if (STELVIO_IN_APP_WEBVIEW) firebaseConfig.authDomain = 'stelvio.ai.kr';
+
 // 2. Firebase 초기화 (전역 변수 window.db에 저장해야 다른 파일들이 갖다 씁니다)
 let db; // db 변수 선언 (Realtime Database용)
 let auth; // auth 변수 선언 (Authentication용)
@@ -50,6 +62,9 @@ try {
     // Realtime Database (기존 코드 호환성 유지)
     window.db = firebase.database();
     db = window.db; // 호환성을 위해 db 변수에도 저장
+    if (STELVIO_IN_APP_WEBVIEW) {
+      try { window.db.INTERNAL.forceWebSockets(); } catch (eWs) { console.warn('[Firebase] forceWebSockets 실패:', eWs && eWs.message); }
+    }
     
     // Authentication 초기화
     auth = firebase.auth();
