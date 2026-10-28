@@ -1679,7 +1679,7 @@
   /**
    * 아이폰 '동작 및 방향' 권한 팝업 없이 켤 수 있는지(2026-10-29)
    *  안드로이드·데스크톱: 권한 요청 자체가 없음 / 새 아이폰 앱: 앱이 묻지 않고 허용(StelvioMotionAutoGrant)
-   *  그 밖(사파리·이전 아이폰 앱)은 기록 시작 때만 묻고, 현재 위치·방향 버튼에서는 묻지 않는다.
+   *  그 밖(사파리·이전 아이폰 앱)은 묻지 않는다 — 팝업을 띄우지 않고 걸음 감지·나침반 없이 동작.
    */
   function motionPermSilent() {
     var DOE = window.DeviceOrientationEvent;
@@ -4776,8 +4776,11 @@
       st.runSince = Date.now();
       st.status = 'running';
       syncNativeBgLocation();
-      startStepDetector(true); // 사용자 터치 안 — 아이폰 '동작 및 방향' 권한 요청
-      startCompass(true);
+      // 2026-10-29: '동작 및 방향' 권한 팝업은 어디서도 띄우지 않음 — 묻지 않고 켤 수 있을 때만(안드로이드·새 아이폰 앱).
+      //  사파리·이전 아이폰 앱은 걸음 감지·나침반 없이 GPS 만으로 기록(새 아이폰 앱은 앱 걸음 센서도 따로 들어옴)
+      var silent = motionPermSilent();
+      startStepDetector(silent);
+      if (silent) startCompass(true);
       gpsDebugStart();
       // 일시정지 동안 이동한 거리는 넣지 않도록 기준 위치를 지금으로
       st.lastTrackPt = st.lastFix ? [st.lastFix.lat, st.lastFix.lng, null, Date.now()] : st.lastTrackPt;
