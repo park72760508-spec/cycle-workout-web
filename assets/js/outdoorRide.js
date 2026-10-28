@@ -587,6 +587,8 @@
     if (!c) return;
     var lat = c.latitude, lng = c.longitude, acc = c.accuracy;
     var t = pos.timestamp || Date.now();
+    // 앱 백그라운드 위치(아래 stelvioNativeLocation)와 브라우저 GPS 가 겹쳐 들어와도 시간 순서대로 한 번만
+    if (st.lastFix && t <= st.lastFix.t) return;
     renderGps(acc);
     st.lastFixAt = Date.now();
     if (acc != null && acc <= 35) updateHeading(c, lat, lng);
@@ -643,6 +645,25 @@
        *        거리 = 마지막 기준점에서 10초가 지나거나 20m 이상 멀어졌을 때 그 직선 거리만 더함(GPS 흔들림이 쌓이지 않음).
        *  시뮬레이션: 5km/h 걷기 30분 — 평균 5.02~5.04km/h(실제 5.00), 자전거 커브 길 거리 오차 -1.7%
        */
+      /*
+       * 폴더블 폰을 접거나 화면이 꺼져 GPS 가 30초 넘게 끊겼다가 다시 들어온 경우(2026-10-28):
+       *  끊긴 동안 평균 속도가 이동(초속 0.6m 이상·30m 미만)이면 그 시간은 이동 시간, 직선 거리는 거리에 넣는다.
+       *  (실제 길보다 조금 짧게 잡힐 수 있음 — 앱 백그라운드 위치가 오면 이 보정 없이 정확히 기록됨)
+       */
+      if (accOk && prev && dt > 30) {
+        var gapFrom = Math.max(prev.t, st.runSince || 0);
+        var gapS = (t - gapFrom) / 1000;
+        var gapAvg = gapS > 0 ? d / gapS : 0;
+        if (gapS > 30 && gapAvg >= 0.6 && gapAvg < 30) {
+          st.movingMs = Math.min(st.movingMs + (t - gapFrom), elapsedNow());
+          var gan = st.distAnchor;
+          st.distanceM += gan ? hav(gan[1], gan[2], lat, lng) : d;
+          st.distAnchor = [t, lat, lng];
+        } else if (gapS > 30) {
+          st.distAnchor = [t, lat, lng]; // 멈춰 있었거나 위치가 튄 경우 — 거리 넣지 않음
+        }
+        st.mvHist = [];
+      }
       if (accOk) {
         var hist = st.mvHist || (st.mvHist = []);
         hist.push([t, lat, lng]);
@@ -697,6 +718,38 @@
     updateNavigation(lat, lng, t); // 맵매칭·길 방향(route-up) 먼저 정하고
     updateMeOnMap(lat, lng); // 그 방향 기준으로 지도 중심·내 위치 표시
   }
+
+  /*
+   * 앱 백그라운드 위치(2026-10-28) — 폴더블 폰을 접거나 화면이 꺼지면 웹 화면이 멈춰 GPS 도 멈춘다.
+   *  STELVIO 안드로이드 앱이 AndroidBridge.startBackgroundLocation() 을 지원하면(포그라운드 서비스) 기록 중에만 켜고,
+   *  앱은 위치를 window.stelvioNativeLocation(위치 하나 또는 배열, JSON 문자열도 가능)으로 넘긴다.
+   *  위치 형식: { lat, lng, acc, t(ms), speed(m/s, 선택), alt(선택), heading(선택) }
+   *  화면이 꺼져 웹이 멈춘 동안 모인 위치는 화면이 다시 켜질 때 배열로 한꺼번에 넘기면 된다.
+   */
+  function syncNativeBgLocation() {
+    var ab = window.AndroidBridge;
+    if (!ab) return;
+    var on = st.status === 'running';
+    if (on === !!st.nativeBgOn) return;
+    try {
+      if (on && typeof ab.startBackgroundLocation === 'function') { ab.startBackgroundLocation(); st.nativeBgOn = true; }
+      else if (!on && typeof ab.stopBackgroundLocation === 'function') { ab.stopBackgroundLocation(); st.nativeBgOn = false; }
+    } catch (e) {}
+  }
+  window.stelvioNativeLocation = function (data) {
+    try {
+      if (typeof data === 'string') data = JSON.parse(data);
+      var arr = Array.isArray(data) ? data : [data];
+      arr.filter(function (f) { return f && isFinite(f.lat) && isFinite(f.lng); })
+        .sort(function (a, b) { return (a.t || 0) - (b.t || 0); })
+        .forEach(function (f) {
+          onPosition({ timestamp: f.t || Date.now(), coords: {
+            latitude: +f.lat, longitude: +f.lng, accuracy: f.acc != null ? +f.acc : 20,
+            speed: f.speed != null ? +f.speed : null, altitude: f.alt != null ? +f.alt : null,
+            heading: f.heading != null ? +f.heading : null } });
+        });
+    } catch (e) {}
+  };
 
   function onPositionError(err) {
     renderGps(null);
@@ -4574,12 +4627,14 @@
       st.elapsedMs += Date.now() - st.runSince;
       st.runSince = 0;
       st.status = 'paused';
+      syncNativeBgLocation();
       toast('라이딩 일시정지', 'info');
     } else {
       if (!st.lastFix) toast('GPS 신호를 찾는 중입니다. 신호가 잡히면 거리가 기록됩니다.', 'info');
       if (!st.startedAt) st.startedAt = Date.now();
       st.runSince = Date.now();
       st.status = 'running';
+      syncNativeBgLocation();
       startStepDetector(true); // 사용자 터치 안 — 아이폰 '동작 및 방향' 권한 요청
       gpsDebugStart();
       // 일시정지 동안 이동한 거리는 넣지 않도록 기준 위치를 지금으로
@@ -5021,6 +5076,7 @@
   function resetRide() {
     gpsDebugEnd(); // 관리자 원본 기록: 이번 기록 묶음 마무리(다음 기록은 새 묶음)
     st.status = 'idle';
+    syncNativeBgLocation();
     st.elapsedMs = 0;
     st.runSince = 0;
     st.startedAt = 0;
@@ -5063,6 +5119,7 @@
       st.elapsedMs += Date.now() - st.runSince;
       st.runSince = 0;
       st.status = 'paused';
+      syncNativeBgLocation();
       renderToggle();
     }
     var el = elapsedNow();
