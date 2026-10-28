@@ -120,10 +120,55 @@
     handler = null; active = false; core = createCore();
   }
 
+  /*
+   * 앱 걸음 센서·활동 인식(2026-10-28, STELVIO 앱) — 들어오는 동안(5초 안) 웹 가속도 계산보다 우선.
+   *  안드로이드: { steps:[걸음 시각 ms], activity, conf } — 휴대폰 걸음 센서가 센 걸음을 같은 규칙성 판정에 넣음
+   *  아이폰:    { cadence(걸음/분), lastStepAt(ms), activity, conf } — CMPedometer 값 그대로
+   *  activity: walking·running·cycling·automotive·still (conf 0~100)
+   */
+  var nat = null, natCore = createCore();
+  function setNative(m) {
+    var now = Date.now();
+    nat = { at: now, activity: m.activity || '', conf: +m.conf || 0, cadence: +m.cadence || 0,
+      lastStepAt: +m.lastStepAt || 0, hasSteps: Array.isArray(m.steps) };
+    if (Array.isArray(m.steps)) {
+      var last = natCore.steps.length ? natCore.steps[natCore.steps.length - 1] : 0;
+      m.steps.forEach(function (t) { t = +t; if (t > last) { natCore.steps.push(t); last = t; } });
+      while (natCore.steps.length && now - natCore.steps[0] > KEEP_MS) natCore.steps.shift();
+      natCore.samples = 999;
+    }
+  }
+  function nativeState(now) {
+    if (!nat || now - nat.at > 5000) return null;
+    var act = nat.activity, sure = nat.conf >= 60;
+    // 자전거·차량으로 확실하면 걸음 판정을 쓰지 않음(노면 진동을 걸음으로 오인하지 않게)
+    if (sure && (act === 'cycling' || act === 'automotive')) {
+      natCore.walkSeenT = 0;
+      return { available: true, walkingNow: false, lastStepAgo: Infinity, cadence: 0, walkContext: false, activity: act, native: true };
+    }
+    var s;
+    if (nat.hasSteps) {
+      s = stateOf(natCore, now, true);
+    } else {
+      var ago = nat.lastStepAt ? now - nat.lastStepAt : Infinity;
+      var walking = nat.cadence >= 40 && ago < 2500;
+      if (walking) natCore.walkSeenT = now;
+      s = { available: true, walkingNow: walking, lastStepAgo: ago, cadence: walking ? nat.cadence : 0,
+        walkContext: natCore.walkSeenT > 0 && now - natCore.walkSeenT <= 60000 };
+    }
+    // 걷기·달리기로 확실하면 걷는 중, 정지로 확실하면 걸음이 끊긴 것으로
+    if (sure && (act === 'walking' || act === 'running') && s.lastStepAgo < 2500) { s.walkingNow = true; natCore.walkSeenT = now; s.walkContext = true; }
+    if (sure && act === 'still' && s.lastStepAgo > 1500) s.walkingNow = false;
+    s.activity = act;
+    s.native = true;
+    return s;
+  }
+
   root.OutdoorStepDetector = {
     start: start,
     stop: stop,
-    state: function () { return stateOf(core, Date.now(), active); },
+    setNative: setNative,
+    state: function () { var now = Date.now(); return nativeState(now) || stateOf(core, now, active); },
     stepTimes: function () { return core.steps.slice(); },
     // 시험용(node)
     _createCore: createCore, _feed: feed, _stateOf: stateOf

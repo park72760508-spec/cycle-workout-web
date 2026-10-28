@@ -624,8 +624,10 @@
     if (SF) {
       if (!st.spdF) st.spdF = SF.create();
       var motion = window.OutdoorStepDetector ? window.OutdoorStepDetector.state() : null; // 걸음 감지(2026-10-27)
+      // 앱 위치는 속도 정확도(speedAccuracy)가 함께 온다 — 오차가 초속 1.5m(5.4km/h)를 넘는 속도값은 믿지 않고 위치로 추정
+      var spdOk = c.speed != null && isFinite(c.speed) && c.speed >= 0 && !(c.speedAccuracy != null && c.speedAccuracy > 1.5);
       var kmh = SF.step(st.spdF, { lat: lat, lng: lng, acc: acc != null ? acc : 999, t: t,
-        speed: c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed : null }, motion);
+        speed: spdOk ? c.speed : null }, motion);
       st.speedKmh = Math.min(120, Math.max(0, kmh || 0));
       if (st.speedKmh < 0.5) st.speedKmh = 0;
       gpsDebugRecord(c, t, motion, still);
@@ -721,54 +723,75 @@
   }
 
   /*
-   * 앱 백그라운드 위치(2026-10-28, 안드로이드 앱 1.0.8+) — 폴더블 폰을 접거나 화면이 꺼지면 웹 화면이 멈춰 GPS 도 멈춘다.
-   *  기록 중에는 앱(포그라운드 서비스)이 GPS 를 계속 받아 모아 두고, 웹이 AndroidBridge.getBackgroundLocations(마지막 시각)로
-   *  1초마다(화면이 다시 켜지면 즉시) 가져온다. 앱 위치가 들어오는 동안 브라우저 GPS 는 쓰지 않음(같은 위치 두 번 방지).
-   *  window.stelvioNativeLocation(위치 또는 배열) 으로 앱이 직접 넣어도 된다.
+   * 앱 위치·움직임(2026-10-28, STELVIO 앱 안드로이드 1.0.8+ / 아이폰 새 버전)
+   *  - 루트맵이 보이는 동안: 앱 위치(안드로이드 구글 융합 위치, 아이폰 내비게이션 정밀 모드) + 속도 정확도 + 걸음 센서·활동 인식
+   *  - 기록 중: 폴더를 접거나 화면이 꺼져도 앱이 위치를 계속 모아 두고, 화면이 다시 켜지면 한꺼번에 반영
+   *  안드로이드: AndroidBridge.getBackgroundLocations(마지막 시각)/getMotionState() 를 0.25초마다 가져옴
+   *  아이폰: 앱이 window.stelvioNativeLocation / window.stelvioNativeMotion 으로 바로 넣어 줌
+   *  앱 위치가 들어오는 동안 브라우저 GPS 는 쓰지 않음(같은 위치 두 번 방지). 앱이 아니면 브라우저 GPS 그대로.
    */
   function nativeBridge() {
     var ab = window.AndroidBridge;
     return ab && typeof ab.startBackgroundLocation === 'function' && typeof ab.getBackgroundLocations === 'function' ? ab : null;
   }
-  /** 아이폰 앱(STELVIO iOS, 2026-10-28) — 위치는 앱이 window.stelvioNativeLocation 으로 직접 넣어 줌 */
   function iosLocationBridge() {
     var w = window.webkit;
     return w && w.messageHandlers && w.messageHandlers.stelvioLocation ? w.messageHandlers.stelvioLocation : null;
   }
+  /** 루트맵 화면이 보이는 동안 앱 위치 켜기/끄기 */
+  function setNativePreview(on) {
+    on = !!on;
+    if (st.nativePreview === on) return;
+    st.nativePreview = on;
+    var ios = iosLocationBridge();
+    if (ios) { try { ios.postMessage({ cmd: on ? 'preview-start' : 'preview-stop' }); } catch (e) {} return; }
+    var ab = nativeBridge();
+    if (!ab || typeof ab.startPreviewLocation !== 'function') return;
+    try { if (on) ab.startPreviewLocation(); else ab.stopPreviewLocation(); } catch (e) {}
+    syncNativePoll();
+  }
   function syncNativeBgLocation() {
     var on = st.status === 'running';
+    if (on === !!st.nativeBgOn) return;
     var ios = iosLocationBridge();
     if (ios) {
-      if (on === !!st.nativeBgOn) return;
       try { ios.postMessage({ cmd: on ? 'start' : 'stop' }); st.nativeBgOn = on; } catch (e) {}
       return;
     }
     var ab = nativeBridge();
     if (!ab) return;
-    if (on === !!st.nativeBgOn) return;
     try {
       if (on) {
+        if (typeof ab.requestMotionPermission === 'function' && !st.motionPermAsked) { st.motionPermAsked = true; ab.requestMotionPermission(); }
         st.nativeBgOn = ab.startBackgroundLocation() !== false;
-        if (st.nativeBgOn && !st.nativePollT) st.nativePollT = setInterval(pollNativeLocations, 1000);
       } else {
         pollNativeLocations(); // 멈추기 직전까지 모인 위치 반영
         ab.stopBackgroundLocation();
         st.nativeBgOn = false;
-        clearInterval(st.nativePollT); st.nativePollT = null;
       }
     } catch (e) {}
+    syncNativePoll();
+  }
+  function syncNativePoll() {
+    var want = !!nativeBridge() && (st.nativeBgOn || st.nativePreview);
+    if (want && !st.nativePollT) st.nativePollT = setInterval(pollNativeLocations, 250);
+    else if (!want && st.nativePollT) { clearInterval(st.nativePollT); st.nativePollT = null; }
   }
   function pollNativeLocations() {
     var ab = nativeBridge();
-    if (!ab || !st.nativeBgOn) return;
+    if (!ab || !(st.nativeBgOn || st.nativePreview) || document.hidden) return;
     try {
-      var since = st.lastFix ? st.lastFix.t : (st.runSince || Date.now()) - 5000;
+      var since = st.lastFix ? st.lastFix.t : Date.now() - 5000;
       var arr = JSON.parse(ab.getBackgroundLocations(String(since)) || '[]');
       if (arr.length) window.stelvioNativeLocation(arr);
+      if (typeof ab.getMotionState === 'function' && (!st.motionPolledAt || Date.now() - st.motionPolledAt >= 500)) {
+        st.motionPolledAt = Date.now();
+        window.stelvioNativeMotion(JSON.parse(ab.getMotionState() || '{}'));
+      }
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && st.nativeBgOn) pollNativeLocations();
+    if (!document.hidden && (st.nativeBgOn || st.nativePreview)) pollNativeLocations();
   });
   window.stelvioNativeLocation = function (data) {
     try {
@@ -783,15 +806,22 @@
         st.nativeLastAt = Date.now();
         onPosition({ timestamp: f.t || Date.now(), coords: {
           latitude: +f.lat, longitude: +f.lng, accuracy: f.acc != null ? +f.acc : 20,
-          speed: f.speed != null ? +f.speed : null, altitude: f.alt != null ? +f.alt : null,
-          heading: f.heading != null ? +f.heading : null } });
+          speed: f.speed != null ? +f.speed : null, speedAccuracy: f.speedAcc != null ? +f.speedAcc : null,
+          altitude: f.alt != null ? +f.alt : null, heading: f.heading != null ? +f.heading : null } });
       });
     } catch (e) {}
     st.batching = false;
   };
-  /** 브라우저 GPS — 앱 위치가 최근 5초 안에 들어오고 있으면 건너뜀 */
+  /** 앱 걸음 센서·활동 인식 → 걸음 감지기(웹 가속도 계산보다 우선) */
+  window.stelvioNativeMotion = function (m) {
+    try {
+      if (typeof m === 'string') m = JSON.parse(m);
+      if (m && window.OutdoorStepDetector && window.OutdoorStepDetector.setNative) window.OutdoorStepDetector.setNative(m);
+    } catch (e) {}
+  };
+  /** 브라우저 GPS — 앱 위치가 최근 3초 안에 들어오고 있으면 건너뜀 */
   function onBrowserPosition(pos) {
-    if (st.nativeBgOn && st.nativeLastAt && Date.now() - st.nativeLastAt < 5000) return;
+    if (st.nativeLastAt && Date.now() - st.nativeLastAt < 3000) return;
     onPosition(pos);
   }
 
@@ -1224,6 +1254,7 @@
 
   window.toggleOutdoorHeadingUp = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    startCompass(true);
     st.headingUp = !st.headingUp;
     st.follow = true;
     applyRotation();
@@ -1606,6 +1637,56 @@
     steadyHeading(target, 0.3);
   }
 
+  /*
+   * 나침반 방향(2026-10-28) — 멈춰 있거나 천천히 걸을 때도 내가 바라보는 방향으로 지도를 돌림(카카오맵 걷기처럼).
+   *  움직이는 중(걷기 1.5km/h · 자전거 4km/h 이상)에는 지금처럼 GPS 진행 방향을 쓰고, 코스·경로 위에서는 길 방향.
+   *  안드로이드: deviceorientationabsolute(북쪽 기준) / 아이폰: webkitCompassHeading(터치 안에서 권한 요청 필요)
+   */
+  function compassScreenAngle() {
+    var o = window.screen && window.screen.orientation;
+    if (o && typeof o.angle === 'number') return o.angle;
+    return typeof window.orientation === 'number' ? window.orientation : 0;
+  }
+  function onCompass(e) {
+    var hd = null;
+    if (e.webkitCompassHeading != null && isFinite(e.webkitCompassHeading)) {
+      if (e.webkitCompassAccuracy != null && (e.webkitCompassAccuracy < 0 || e.webkitCompassAccuracy > 40)) return; // 보정 필요 상태
+      hd = e.webkitCompassHeading;
+    } else if (e.absolute && e.alpha != null && isFinite(e.alpha)) {
+      hd = (360 - e.alpha) % 360;
+    }
+    if (hd == null) return;
+    hd = (hd + compassScreenAngle() + 360) % 360;
+    var now = Date.now();
+    st.compassHd = st.compassHd == null ? hd : (st.compassHd + angleDiff(st.compassHd, hd) * 0.2 + 360) % 360;
+    st.compassAt = now;
+    if (now - (st.compassAppliedAt || 0) < 200) return; // 초당 5번만 반영
+    st.compassAppliedAt = now;
+    applyCompassHeading();
+  }
+  function applyCompassHeading() {
+    if (st.compassHd == null || !isActive() || document.hidden || !st.headingUp || !st.follow) return;
+    if (st.course && st.onRoute) return;
+    if (st.speedKmh >= (st.speedKmh < 9 ? 1.5 : 4)) return; // 움직이는 중에는 GPS 진행 방향(freeHeading)
+    steadyHeading(st.compassHd, 0.35);
+  }
+  function startCompass(fromGesture) {
+    if (st.compassOn || typeof window.DeviceOrientationEvent === 'undefined') return;
+    var add = function () {
+      if (st.compassOn) return;
+      st.compassOn = true;
+      window.addEventListener('ondeviceorientationabsolute' in window ? 'deviceorientationabsolute' : 'deviceorientation', onCompass, { passive: true });
+    };
+    try {
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (!fromGesture) return;
+        DeviceOrientationEvent.requestPermission().then(function (r) { if (r === 'granted') add(); }, function () {});
+        return;
+      }
+    } catch (e) { return; }
+    add();
+  }
+
   function updateMeOnMap(lat, lng) {
     var snapped = snapToCourse(lat, lng);
     var along = null;
@@ -1665,6 +1746,7 @@
 
   window.recenterOutdoorMap = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    startCompass(true);
     st.follow = true;
     st.autoZoomSet = null; // 속도 자동 확대 다시 켬
     st.headingUp = true;
@@ -4680,6 +4762,7 @@
       st.status = 'running';
       syncNativeBgLocation();
       startStepDetector(true); // 사용자 터치 안 — 아이폰 '동작 및 방향' 권한 요청
+      startCompass(true);
       gpsDebugStart();
       // 일시정지 동안 이동한 거리는 넣지 않도록 기준 위치를 지금으로
       st.lastTrackPt = st.lastFix ? [st.lastFix.lat, st.lastFix.lng, null, Date.now()] : st.lastTrackPt;
@@ -5334,8 +5417,10 @@
     if (!el || typeof MutationObserver !== 'function' || el.__outdWatch) return;
     el.__outdWatch = true;
     var wasActive = isActive();
+    if (wasActive) setNativePreview(true);
     new MutationObserver(function () {
       var nowActive = isActive();
+      setNativePreview(nowActive); // 루트맵이 보이는 동안만 앱 위치(기록 중이면 화면을 떠나도 기록은 계속)
       if (nowActive) {
         setTimeout(fixMapSize, 50);
         setTimeout(fixMapSize, 400);
@@ -5362,6 +5447,7 @@
    * @param {{ gpxUrl?: string, title?: string, rideId?: string }} [opts]
    */
   window.openOutdoorRide = function (opts) {
+    startCompass(false); // 안드로이드는 권한 없이 바로(아이폰은 기록 시작·내 위치 버튼 터치 때)
     travelModeUserSet = false; // 길찾기 이동 수단은 다시 사용자 카테고리 기본값부터
     renderNavText(st.navTextOn); // 경로 안내 문구 표시 설정(기본 숨기기, 이번 사용 중 바꾼 값 유지)
     opts = opts || {};
