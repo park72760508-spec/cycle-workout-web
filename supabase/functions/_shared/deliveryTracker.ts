@@ -15,8 +15,14 @@
 
 export const DEFAULT_DELIVERY_TRACKER_BASE_URL = "https://apis.tracker.delivery";
 
-/** 배송 중 송장 재조회 최소 간격(외부 API rate limit·과호출 방지). */
-export const TRACKER_CACHE_TTL_MS = 30 * 60 * 1000;
+/**
+ * 배송 중 송장 재조회 최소 간격(외부 API rate limit·과호출 방지).
+ * 2026-10-29: 예약 작업 주기(30분)와 같은 30분으로 두면 앞 조회가 몇 초만 늦게 끝나도 다음 회차가 '29분 59초'로
+ *  건너뛰어져 실제로는 1시간마다 조회됐다(배송완료가 1시간 넘게 늦게 반영). 주기보다 조금 짧게 둔다.
+ *  예약 작업은 10분마다 — 배송 출발(오늘 도착 예정)은 10분마다, 그 밖의 배송 중은 30분마다 조회.
+ */
+export const TRACKER_CACHE_TTL_MS = 29 * 60 * 1000;
+export const TRACKER_OUT_FOR_DELIVERY_TTL_MS = 9 * 60 * 1000;
 
 /** 중고랜드 택배사 코드(판매자 선택값) → Delivery Tracker carrierId. */
 export const MARKET_TO_TRACKER_CARRIER: Record<string, string> = {
@@ -194,10 +200,11 @@ export async function trackShipment(courierCode: string, trackingNumber: string)
 }
 
 /**
- * 캐시 판단: 배달완료는 영구 확정(재조회 금지), 배송 중은 마지막 조회 후 30분 이내면 생략.
+ * 캐시 판단: 배달완료는 영구 확정(재조회 금지), 배송 중은 마지막 조회 후 29분(배송 출발은 9분) 이내면 생략.
  */
 export function shouldSkipTrackerCheck(status: string | null | undefined, checkedAt: string | null | undefined, now = Date.now()): boolean {
   if (status === "DELIVERED") return true;
   const t = checkedAt ? Date.parse(checkedAt) : NaN;
-  return Number.isFinite(t) && now - t < TRACKER_CACHE_TTL_MS;
+  const ttl = status === "OUT_FOR_DELIVERY" ? TRACKER_OUT_FOR_DELIVERY_TTL_MS : TRACKER_CACHE_TTL_MS;
+  return Number.isFinite(t) && now - t < ttl;
 }
