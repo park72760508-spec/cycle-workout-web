@@ -4699,7 +4699,8 @@
       '<div class="outd-saver__title">🔋 배터리 절약 모드</div>' +
       '<div class="outd-saver__desc">화면만 꺼진 것처럼 검게 유지하고<br><b>GPS 기록·음성 안내는 계속됩니다.</b></div>' +
       '<div class="outd-saver__how"><div class="outd-saver__howtit">돌아오는 방법</div>' +
-      '<div>화면을 <b>1.5초 길게 누르기</b></div></div>' +
+      '<div>화면을 <b>1.5초 길게 누르기</b></div>' +
+      '<div>화면을 <b>두 번 빠르게 누르기</b></div></div>' +
       '<button type="button" class="outd-saver__ok" data-saver-ok>확인</button></div>' +
       '<div class="outd-saver__hold"><i></i><span>계속 누르고 있으면 화면이 켜집니다</span></div>';
     document.body.appendChild(ov);
@@ -4713,8 +4714,21 @@
       clearTimeout(st.saverDimT);
       ov.classList.add('is-dim');
     });
+    /*
+     * 2026-10-30: 더블터치로도 돌아오기 — 0.35초 안에 거의 같은 자리(40px 안)를 두 번 눌렀을 때만.
+     *  주머니 속에서 옷감에 우연히 닿는 터치로 풀리지 않게 시간·거리 조건을 좁게 둔다.
+     */
+    var lastDown = null;
     ov.addEventListener('pointerdown', function (e) {
       e.preventDefault();
+      var now = Date.now();
+      if (lastDown && now - lastDown.t <= 350 && Math.abs(e.clientX - lastDown.x) <= 40 && Math.abs(e.clientY - lastDown.y) <= 40) {
+        lastDown = null;
+        cancel();
+        exitSaver();
+        return;
+      }
+      lastDown = { t: now, x: e.clientX, y: e.clientY };
       cancel();
       ov.classList.add('is-holding');
       timer = setTimeout(function () { timer = null; exitSaver(); }, 1500);
