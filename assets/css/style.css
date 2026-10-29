@@ -35311,16 +35311,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-gauge-ctrl .outd-float-btn img { width: 46%; height: 46%; }
 #outdoorRideScreen .outd-gauge-ctrl.is-running .outd-float-pulse { display: none; }
 #outdoorRideScreen .outd-gauge-ctrl.is-running .outd-float-btn--start { background: #ef4444; } /* 기록 중 빨간색 */
-/* 2026-10-30: 계기판 시작 버튼 — 녹색 펄스 대신 버튼 바탕이 신호등 초록 ↔ 흰색으로 0.8초 주기 깜빡임(시작 전·일시정지 중) */
+/* 2026-10-30: 계기판 시작 버튼 — 녹색 펄스 대신 버튼 바탕이 연두색 ↔ 흰색으로 1.2초 주기 깜빡임(시작 전·일시정지 중) */
 #outdoorRideScreen .outd-gauge-ctrl .outd-float-pulse { display: none; }
-#outdoorRideScreen .outd-gauge-ctrl:not(.is-running) .outd-float-btn--start { animation: outdStartBlink 0.8s ease-in-out infinite; }
+#outdoorRideScreen .outd-gauge-ctrl:not(.is-running) .outd-float-btn--start { animation: outdStartBlink 1.2s ease-in-out infinite; }
 @keyframes outdStartBlink {
-  0%, 40% { background: #22c55e; box-shadow: 0 0 14px rgba(34, 197, 94, 0.75), 0 4px 14px rgba(0, 0, 0, 0.45); }
+  0%, 40% { background: #a3e635; box-shadow: 0 0 14px rgba(163, 230, 53, 0.75), 0 4px 14px rgba(0, 0, 0, 0.45); }
   50%, 90% { background: #ffffff; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
-  100% { background: #22c55e; box-shadow: 0 0 14px rgba(34, 197, 94, 0.75), 0 4px 14px rgba(0, 0, 0, 0.45); }
+  100% { background: #a3e635; box-shadow: 0 0 14px rgba(163, 230, 53, 0.75), 0 4px 14px rgba(0, 0, 0, 0.45); }
 }
 @media (prefers-reduced-motion: reduce) {
-  #outdoorRideScreen .outd-gauge-ctrl:not(.is-running) .outd-float-btn--start { animation: none; background: #22c55e; }
+  #outdoorRideScreen .outd-gauge-ctrl:not(.is-running) .outd-float-btn--start { animation: none; background: #a3e635; }
 }
 
 /* 즐겨찾기 목록: 관리자 공개 전환·숨김 처리 중 — 그 줄 위에 같은 위치·높이로 녹색 원 스피너(2026-10-25) */

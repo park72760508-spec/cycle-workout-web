@@ -448,7 +448,7 @@
         else { glow.setAttribute('d', sweep.getAttribute('d')); if (glow.style.display === 'none') glow.style.display = ''; }
       }
     }
-    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1, true);
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1); // 정수만 가운데(2026-10-30 사용자 요청으로 원래대로)
     if (st.expanded) setText('outdExpSpeed', Math.max(0, st.numSpeed || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
     if (!settled) st.rafId = requestAnimationFrame(loop);
   }
@@ -5490,10 +5490,10 @@
   }
   function fixMapSize() {
     if (!isActive()) return;
-    // 현재 속도 숫자 가운데 정렬 다시(화면이 가려진 동안엔 글자 폭을 잴 수 없음)
+    // 현재 속도 소수 자리 위치 다시(화면이 가려진 동안엔 글자 폭을 잴 수 없음) — 정수는 가운데(x=100)
     var spdDec = $('outd-ui-speed-dec');
     if (spdDec) spdDec.__placed = false;
-    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed || 0), 1, true);
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed || 0), 1);
     placeStartPulse();
     placeGaugeCtrl();
     syncFavPinZoom(); // 화면 크기·방향이 바뀌면 즐겨찾기 핀 크기도 다시
