@@ -150,14 +150,15 @@
     if (nat.hasSteps) {
       s = stateOf(natCore, now, true);
     } else {
+      // 아이폰 걸음 센서(CMPedometer)는 1~3초마다 묶어서 알려 줌 — 4초 안에 걸음이 늘었으면 걷는 중
       var ago = nat.lastStepAt ? now - nat.lastStepAt : Infinity;
-      var walking = nat.cadence >= 40 && ago < 2500;
+      var walking = nat.cadence >= 40 && ago < 4000;
       if (walking) natCore.walkSeenT = now;
-      s = { available: true, walkingNow: walking, lastStepAgo: ago, cadence: walking ? nat.cadence : 0,
+      s = { available: true, walkingNow: walking, lastStepAgo: walking ? 0 : ago, cadence: walking ? nat.cadence : 0,
         walkContext: natCore.walkSeenT > 0 && now - natCore.walkSeenT <= 60000 };
     }
     // 걷기·달리기로 확실하면 걷는 중, 정지로 확실하면 걸음이 끊긴 것으로
-    if (sure && (act === 'walking' || act === 'running') && s.lastStepAgo < 2500) { s.walkingNow = true; natCore.walkSeenT = now; s.walkContext = true; }
+    if (sure && (act === 'walking' || act === 'running') && s.lastStepAgo < 4000) { s.walkingNow = true; natCore.walkSeenT = now; s.walkContext = true; }
     if (sure && act === 'still' && s.lastStepAgo > 1500) s.walkingNow = false;
     s.activity = act;
     s.native = true;
