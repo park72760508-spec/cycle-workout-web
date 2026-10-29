@@ -4066,7 +4066,7 @@
       b.className = 'outd-fav__pickbar outd-light'; // 2026-10-28: 밝은 바탕
       /* 2026-10-23: 지도에서 누르기 + 목적지 검색(장소·주소)으로도 위치 선택 */
       b.innerHTML =
-        '<div class="outd-fav__pickrow"><span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" data-fav-pick-cancel>취소</button></div>' +
+        '<div class="outd-fav__pickrow"><span>' + ICON_STAR_SM + ' 지도를 눌러 즐겨찾기 위치를 선택하세요</span><button type="button" class="outd-dest__x" data-fav-pick-cancel aria-label="닫기">✕</button></div>' +
         '<form class="outd-fav__picksearch" action="#" role="search"><input type="search" placeholder="또는 장소·주소 검색" autocomplete="off" enterkeyhint="search">' +
         '<button type="submit">검색</button></form>' +
         '<div class="outd-fav__pickresults" style="display:none"></div>';
