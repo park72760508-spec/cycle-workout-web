@@ -29969,7 +29969,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261029avg3"></script>
   <script src="assets/js/outdoorWeather.js?v=20261030wxlbl"></script>
-  <script src="assets/js/outdoorRide.js?v=20261030dbltap"></script>
+  <script src="assets/js/outdoorRide.js?v=20261030btnin"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36178,19 +36178,19 @@
           </g>
           </g>
           <g>
-            <!-- 2026-10-30: 시작·종료 버튼을 양쪽 끝으로(현재 속도 숫자와 겹치지 않게, 화면 가운데(x=97) 기준 좌우 대칭) — 실제 버튼은 이 원 위치에 놓임(placeGaugeCtrl) -->
+            <!-- 2026-10-30: 시작·종료 버튼을 양쪽 끝으로(현재 속도 숫자와 겹치지 않게, 화면 가운데(x=97) 기준 좌우 대칭, 버튼 반지름만큼 안쪽 — 현재 속도 숫자는 정수+소수 전체를 가운데 정렬) — 실제 버튼은 이 원 위치에 놓임(placeGaugeCtrl) -->
             <!-- 시작 전(·일시정지) 시작 버튼 녹색 펄스 — 내 위치 표시와 같은 퍼지는 원, 시작하면 숨김(renderToggle) -->
             <!-- 2026-10-24 발열: 시작 버튼 녹색 펄스는 SVG 애니메이션(매 프레임 다시 계산) 대신 아래 HTML(#outdStartPulseHtml, GPU 처리) -->
             <g id="outdStartPulseWrap" class="pulse-active" pointer-events="none" aria-hidden="true"></g>
             <g class="svg-btn-group" onclick="toggleOutdoorRide()">
-              <circle id="outdToggleCircle" class="svg-neon-circle" cx="14" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
-              <image id="outdToggleImg" class="svg-btn-icon" x="6" y="204" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
-              <circle class="svg-btn-hit-area" cx="14" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+              <circle id="outdToggleCircle" class="svg-neon-circle" cx="30" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image id="outdToggleImg" class="svg-btn-icon" x="22" y="204" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
+              <circle class="svg-btn-hit-area" cx="30" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
             </g>
             <g class="svg-btn-group" onclick="finishOutdoorRide()">
-              <circle class="svg-neon-circle" cx="180" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
-              <image class="svg-btn-icon" x="172" y="204" width="16" height="16" href="assets/img/stop0.png" />
-              <circle class="svg-btn-hit-area" cx="180" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+              <circle class="svg-neon-circle" cx="164" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image class="svg-btn-icon" x="156" y="204" width="16" height="16" href="assets/img/stop0.png" />
+              <circle class="svg-btn-hit-area" cx="164" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
             </g>
           </g>
         </svg>

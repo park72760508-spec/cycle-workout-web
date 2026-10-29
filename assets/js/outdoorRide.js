@@ -282,7 +282,8 @@
   }
 
   /** 정수 부분은 가운데(text-anchor middle), 소수점 이하는 정수 오른쪽 끝에 작게 붙인다 */
-  function setSplitNumber(intId, decId, value, decimals) {
+  /** @param {boolean} [centerAll] true 면 정수+소수 전체를 가운데(x=100)에 — 현재 속도(양옆 시작·종료 버튼과 겹치지 않게, 2026-10-30) */
+  function setSplitNumber(intId, decId, value, decimals, centerAll) {
     var intEl = $(intId);
     var decEl = $(decId);
     if (!intEl || !decEl) return;
@@ -303,7 +304,20 @@
         try { w = intEl.getComputedTextLength(); } catch (e) {}
         if (w > 0) wc[ip] = w;
       }
-      if (w > 0) {
+      if (w > 0 && centerAll) {
+        var dc = decEl.__wCache || (decEl.__wCache = {});
+        var dw = dc[dp];
+        if (dw == null) {
+          dw = 0;
+          try { dw = decEl.getComputedTextLength(); } catch (e2) {}
+          if (dw > 0 || !dp) dc[dp] = dw;
+        }
+        var cx = intEl.__cx != null ? intEl.__cx : (intEl.__cx = Number(intEl.getAttribute('x')) || 100);
+        var ix = cx - (w + 1 + dw) / 2 + w / 2; // 정수 가운데 x(text-anchor middle)
+        intEl.setAttribute('x', ix.toFixed(1));
+        decEl.setAttribute('x', (ix + w / 2 + 1).toFixed(1));
+        decEl.__placed = true;
+      } else if (w > 0) {
         decEl.setAttribute('x', (Number(intEl.getAttribute('x')) + w / 2 + 1).toFixed(1));
         decEl.__placed = true;
       }
@@ -434,7 +448,7 @@
         else { glow.setAttribute('d', sweep.getAttribute('d')); if (glow.style.display === 'none') glow.style.display = ''; }
       }
     }
-    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1);
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1, true);
     if (st.expanded) setText('outdExpSpeed', Math.max(0, st.numSpeed || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
     if (!settled) st.rafId = requestAnimationFrame(loop);
   }
