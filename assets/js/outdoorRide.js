@@ -5487,6 +5487,8 @@
       var nowActive = isActive();
       setNativePreview(nowActive); // 루트맵이 보이는 동안만 앱 위치(기록 중이면 화면을 떠나도 기록은 계속)
       if (nowActive) {
+        // 날씨 카드: 화면이 가려져 있을 때 그려졌으면 폭을 못 재므로 보일 때 다시 맞춤(좁은 기종 둘째 줄)
+        setTimeout(function () { if (window.OutdoorWeather && window.OutdoorWeather.fit) window.OutdoorWeather.fit(); }, 60);
         setTimeout(fixMapSize, 50);
         setTimeout(fixMapSize, 400);
         // 다른 화면에서 루트맵으로 돌아온 순간 — 즐겨찾기 새로 읽기(지도가 준비된 뒤)

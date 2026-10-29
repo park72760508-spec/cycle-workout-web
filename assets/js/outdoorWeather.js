@@ -128,7 +128,26 @@
     }
     box.innerHTML = head + body;
     box.setAttribute('aria-label', '오늘의 날씨 ' + place);
+    fitHead(box);
   }
+
+  /*
+   * 2026-10-29: 화면 폭이 좁은 기종(갤럭시 S 기본형·플립 등 360px)에서도 미세·초미세·자외선 항목명을 항상 표시.
+   *  예전엔 360px 이하에서 항목명을 숨겨 상태(좋음·보통)만 보였다. 이제 한 줄에 다 안 들어가면
+   *  세 항목을 둘째 줄로 내린다(위치·날씨·접기 버튼은 첫 줄 그대로).
+   */
+  function fitHead(box) {
+    box = box || el();
+    if (!box) return;
+    box.classList.remove('outd-wx--wrap');
+    var head = box.querySelector('.outd-wx__head');
+    if (head && head.clientWidth > 0 && head.scrollWidth > head.clientWidth + 1) box.classList.add('outd-wx--wrap');
+  }
+  var fitT = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(fitT);
+    fitT = setTimeout(function () { fitHead(); }, 120);
+  });
 
   function fetchWx() {
     if (!S.region || S.wxBusy) return;
@@ -199,5 +218,5 @@
   /** 루트맵을 열 때 — 기본(접힌 상태)으로 시작 */
   function resetView() { S.collapsed = true; render(); }
 
-  window.OutdoorWeather = { update: update, render: render, toggle: toggle, resetView: resetView };
+  window.OutdoorWeather = { update: update, render: render, toggle: toggle, resetView: resetView, fit: fitHead };
 })();

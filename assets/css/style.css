@@ -35362,9 +35362,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen #outdWeather ~ #outdNav[style*="flex"] { top: 8px; }
 #outdoorRideScreen:not(.outd-navtext-off) .outd-map-wrap:has(#outdNav[style*="flex"]) .outd-wx { top: 66px; }
 #outdoorRideScreen.outd-expanded .outd-wx { display: none; }
-@media (max-width: 360px) {
-  #outdoorRideScreen .outd-wx__pill b { display: none; }
+/* 2026-10-29: 좁은 화면(380px 이하)은 간격·여백만 줄이고 항목명(미세·초미세·자외선)은 항상 표시.
+   그래도 넘치면(긴 지역명·'매우나쁨' 등) 세 항목을 둘째 줄로(outdoorWeather.js fitHead) */
+@media (max-width: 380px) {
+  #outdoorRideScreen .outd-wx { padding: 7px 8px 8px; }
+  #outdoorRideScreen .outd-wx__head { gap: 6px; }
+  #outdoorRideScreen .outd-wx__pills { gap: 3px; }
+  #outdoorRideScreen .outd-wx__pill { padding: 2px 5px; gap: 2px; }
 }
+#outdoorRideScreen .outd-wx--wrap .outd-wx__head { flex-wrap: wrap; row-gap: 6px; }
+#outdoorRideScreen .outd-wx--wrap .outd-wx__chev { margin-left: auto; }
+#outdoorRideScreen .outd-wx--wrap .outd-wx__pills { order: 3; flex: 1 0 100%; margin-left: 0; justify-content: flex-start; }
 
 /* ===== 2026-10-28: 루트맵 ☰ 메뉴 '기록 보기' 펼침(라이딩 / 러닝·걷기) ===== */
 #outdoorRideScreen .outd-records-item .outd-records-chev {
