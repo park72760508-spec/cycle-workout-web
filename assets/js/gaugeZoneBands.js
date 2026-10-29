@@ -15,7 +15,9 @@
   var CX = 100;
   var CY = 140;
   var R = 80;
-  var BAND_OPACITY = 0.45;
+  // 2026-10-30: 존 색 30% 더 연하게 — 기본 0.45 → 0.315, 현재 존 강조 1 → 0.7
+  var BAND_OPACITY = 0.315;
+  var ACTIVE_OPACITY = 0.7;
   var ZONE_BAND_WIDTH = 12; // 존 띠 두께(고정)
   var TARGET_ARC_WIDTH = ZONE_BAND_WIDTH * 0.6; // 목표값·존 상한 원호 두께 = 존 띠의 60%(7.2) — 바깥·안쪽 2.4씩 존 색상 노출(2026-10-18)
   var TARGET_UNDERLAY_COLOR = '#333'; // 목표 원호 아래 바탕(회색 배경과 동일) — 존 색과 섞이지 않게
@@ -156,7 +158,7 @@
     var kids = bands.children;
     for (var i = 0; i < kids.length; i++) {
       var z = Number(kids[i].getAttribute('data-zone'));
-      var op = String(z === idx ? 1 : BAND_OPACITY);
+      var op = String(z === idx ? ACTIVE_OPACITY : BAND_OPACITY);
       kids[i].setAttribute(kids[i].getAttribute('fill') === 'none' ? 'stroke-opacity' : 'fill-opacity', op);
     }
   }
