@@ -35322,7 +35322,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   /* 2026-10-28: 아래 '코스맵을 선택하면…' 안내와 같은 반투명 형식, 색은 남색 톤 */
   border: 1px solid rgba(147, 170, 255, 0.18);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
-  background: rgba(16, 28, 72, 0.66);
+  background: rgba(16, 28, 72, 0.86); /* 2026-10-30: 0.66 → 0.86 — 지도 위에서 글자가 더 선명하게 */
   font-size: 12px; line-height: 1.2; user-select: none;
 }
 #outdoorRideScreen .outd-wx__head { display: flex; align-items: center; gap: 8px; min-width: 0; }
@@ -35334,9 +35334,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-wx__pills { margin-left: auto; display: flex; gap: 4px; min-width: 0; }
 #outdoorRideScreen .outd-wx__pill {
   display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px; border-radius: 999px; white-space: nowrap;
-  background: rgba(0, 0, 0, 0.22); font-size: 10.5px; font-weight: 700;
+  background: rgba(0, 0, 0, 0.3); font-size: 10.5px; font-weight: 700;
 }
-#outdoorRideScreen .outd-wx__pill b { font-weight: 600; opacity: 0.82; }
+#outdoorRideScreen .outd-wx__pill b { font-weight: 600; opacity: 0.9; }
 #outdoorRideScreen .outd-wx__dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; display: inline-block; }
 /* 미세먼지(환경부 색): 좋음 파랑 · 보통 초록 · 나쁨 주황 · 매우나쁨 빨강 / 자외선(기상청): 낮음 초록 · 보통 노랑 · 높음 주황 · 매우높음 빨강 · 위험 보라 */
 #outdoorRideScreen .outd-wx__pill--g1 .outd-wx__dot { background: #60a5fa; }
