@@ -36178,19 +36178,19 @@
           </g>
           </g>
           <g>
-            <!-- 2026-10-30: 시작·종료 버튼을 양쪽 끝으로(현재 속도 숫자와 겹치지 않게, 화면 가운데(x=97) 기준 좌우 대칭, 버튼 반지름만큼 안쪽 — 현재 속도 숫자는 정수+소수 전체를 가운데 정렬) — 실제 버튼은 이 원 위치에 놓임(placeGaugeCtrl) -->
+            <!-- 2026-10-30: 시작·종료 버튼을 양쪽 끝으로(현재 속도 숫자와 겹치지 않게, 계기판 중심(x=100) 기준 좌우 대칭, 버튼 반지름만큼 안쪽 — 현재 속도 숫자는 정수+소수 전체를 가운데 정렬) — 실제 버튼은 이 원 위치에 놓임(placeGaugeCtrl) -->
             <!-- 시작 전(·일시정지) 시작 버튼 녹색 펄스 — 내 위치 표시와 같은 퍼지는 원, 시작하면 숨김(renderToggle) -->
             <!-- 2026-10-24 발열: 시작 버튼 녹색 펄스는 SVG 애니메이션(매 프레임 다시 계산) 대신 아래 HTML(#outdStartPulseHtml, GPU 처리) -->
             <g id="outdStartPulseWrap" class="pulse-active" pointer-events="none" aria-hidden="true"></g>
             <g class="svg-btn-group" onclick="toggleOutdoorRide()">
-              <circle id="outdToggleCircle" class="svg-neon-circle" cx="30" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
-              <image id="outdToggleImg" class="svg-btn-icon" x="22" y="204" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
-              <circle class="svg-btn-hit-area" cx="30" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+              <circle id="outdToggleCircle" class="svg-neon-circle" cx="33" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image id="outdToggleImg" class="svg-btn-icon" x="25" y="204" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
+              <circle class="svg-btn-hit-area" cx="33" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
             </g>
             <g class="svg-btn-group" onclick="finishOutdoorRide()">
-              <circle class="svg-neon-circle" cx="164" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
-              <image class="svg-btn-icon" x="156" y="204" width="16" height="16" href="assets/img/stop0.png" />
-              <circle class="svg-btn-hit-area" cx="164" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+              <circle class="svg-neon-circle" cx="167" cy="212" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image class="svg-btn-icon" x="159" y="204" width="16" height="16" href="assets/img/stop0.png" />
+              <circle class="svg-btn-hit-area" cx="167" cy="212" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
             </g>
           </g>
         </svg>
