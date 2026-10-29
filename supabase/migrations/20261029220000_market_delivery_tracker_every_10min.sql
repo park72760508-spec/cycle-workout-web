@@ -7,3 +7,21 @@ SELECT cron.alter_job(
   (SELECT jobid FROM cron.job WHERE jobname = 'market-check-delivery-tracker'),
   schedule := '*/10 * * * *'
 );
+
+-- 응답 대기 30초(pg_net 기본 5초) — 함수가 새로 켜질 때·송장 여러 건 조회 시 5초를 넘어 '시간 초과'로 기록되던 것 방지
+SELECT cron.alter_job(
+  (SELECT jobid FROM cron.job WHERE jobname = 'market-check-delivery-tracker'),
+  command := $cmd$
+  SELECT net.http_post(
+    url := 'https://eacrwhtbdqanaxpicqsm.supabase.co/functions/v1/market-check-delivery-status',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-cron-secret', (
+        SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'market_cron_auth_token' LIMIT 1
+      )
+    ),
+    body := '{"mode":"tracker"}'::jsonb,
+    timeout_milliseconds := 30000
+  );
+  $cmd$
+);
