@@ -77,12 +77,20 @@
   var WALK_MAX_V = 2.0;  // m/s(≈7.2km/h) 미만에서만 걸음 정보를 쓴다(자전거 노면 진동 오판 방지)
   var STRIDE_M = 0.7;    // 걸음 수만 있을 때 보폭 가정(m)
 
-  /** 걸음 정보로 본 판단: 'walk'(걷는 중) | 'stopped'(걷다가 멈춤) | null(판단 안 함) */
-  function motionVerdict(s, motion) {
+  /*
+   * 걸음 정보로 본 판단: 'walk'(걷는 중) | 'stopped'(걷다가 멈춤) | null(판단 안 함)
+   * 2026-10-29 실측(아이폰·플립 걷기 로그): GPS 도플러 속도가 4~6km/h 인데도 걸음 신호가 1.8초 끊기면 '멈춤'으로 보고
+   *  즉시 0 을 표시 → 걷는 중 0 깜빡임의 주원인. 이제 걸음 끊김은 GPS 도 느릴 때(최근 3초 도플러 2.2km/h 미만·없음)만 멈춤.
+   */
+  var STEP_STOP_GPS_V = 0.6; // m/s(≈2.2km/h)
+  function gpsSaysMoving(s, now) {
+    return s.lastDev != null && s.lastDevT && now - s.lastDevT < 3000 && s.lastDev >= STEP_STOP_GPS_V;
+  }
+  function motionVerdict(s, motion, now) {
     if (!motion || !motion.available) return null;
     if (s.v > WALK_MAX_V) return null;
     if (motion.walkingNow) return 'walk';
-    if (motion.walkContext && motion.lastStepAgo >= 1800) return 'stopped';
+    if (motion.walkContext && motion.lastStepAgo >= 1800 && !gpsSaysMoving(s, now || Date.now())) return 'stopped';
     return null;
   }
 
@@ -92,14 +100,16 @@
    */
   function motionTick(s, motion) {
     if (!s.moving) return false;
-    if (motionVerdict(s, motion) !== 'stopped') return false;
+    if (motionVerdict(s, motion, Date.now()) !== 'stopped') return false;
     s.moving = false; s.goN = 0; s.v = 0; s.P = 1; s.zs = [];
     return true;
   }
 
   function step(s, fix, motion) {
     var t = fix.t, acc = fix.acc != null ? fix.acc : 999;
-    var mv = motionVerdict(s, motion);
+    var dev0 = fix.speed != null && isFinite(fix.speed) && fix.speed >= 0 && acc <= ACC_DEV_OK ? fix.speed : null;
+    if (dev0 != null) { s.lastDev = dev0; s.lastDevT = t; } // 걸음 끊김 판정에 이번 GPS 속도도 반영
+    var mv = motionVerdict(s, motion, t);
     if (acc <= ACC_POS_OK) {
       s.hist.push({ t: t, lat: fix.lat, lng: fix.lng, acc: acc });
       while (s.hist.length && t - s.hist[0].t > HIST_MS) s.hist.shift();

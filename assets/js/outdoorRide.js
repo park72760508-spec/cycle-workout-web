@@ -330,13 +330,53 @@
     // GPS 신호가 5초 넘게 끊기면 속도 0 으로
     if (Date.now() - st.lastFixAt > 5000 && st.speedKmh !== 0) {
       st.speedKmh = 0;
+      noteSpeed(0);
       kickLoop();
     }
+    var prevShown = st.shownKmh;
+    updateShown(); // 순간 0 이 1.2초 넘게 이어지면 0 으로
+    if (prevShown !== st.shownKmh) kickLoop();
     deadReckon(); // GPS 끊김(터널 등) 추정 이동
   }
 
   /* 배터리·발열 최적화(2026-10-19): 바늘 애니메이션은 초당 최대 30번, 목표 속도에 도달하면 멈추고
      새 GPS 값이 오면(kickLoop) 다시 시작. 화면이 가려져 있으면(document.hidden) 그리지 않는다. */
+  /*
+   * 표시 속도(2026-10-29) — 파워의 '3초 평균 파워'처럼 최근 몇 초 평균을 현재 속도로 표시.
+   *  - 창 길이: 10km/h 미만(걷기·달리기·저속) 3초, 그 이상(자전거) 2초 — 빠른 속도에서는 반응이 늦어 보이지 않게
+   *  - 순간 0 은 평균에 넣지 않고 1.2초 넘게 이어질 때만 0(신호등 정지 등) — 걷는 중 0 깜빡임 방지
+   *  - 멈췄다가 다시 출발하면 평균을 새로 시작(0 이 섞여 출발 속도가 늦게 오르지 않게)
+   *  거리·이동 시간·최고 속도 계산은 그대로 원래 속도(st.speedKmh)를 쓴다. 화면 표시(바늘·숫자)만 이 값.
+   */
+  var SHOWN_ZERO_MS = 1200;
+  function noteSpeed(kmh) {
+    var now = Date.now(), h = st.spdWin || (st.spdWin = []);
+    if (kmh > 0) {
+      if (!st.shownKmh) h.length = 0; // 정지 → 출발: 새로 시작
+      st.zeroSince = 0;
+    } else if (!st.zeroSince) {
+      st.zeroSince = now;
+    }
+    h.push([now, kmh]);
+    while (h.length > 1 && now - h[1][0] > 4000) h.shift();
+    updateShown(now);
+  }
+  function updateShown(now) {
+    now = now || Date.now();
+    var h = st.spdWin || [];
+    if (!h.length || (st.zeroSince && now - st.zeroSince >= SHOWN_ZERO_MS)) { st.shownKmh = 0; if (h.length) h.length = 0; return; }
+    var win = (st.shownKmh || 0) >= 10 ? 2000 : 3000, sum = 0, wsum = 0;
+    for (var i = 0; i < h.length; i++) {
+      if (!(h[i][1] > 0)) continue; // 확인 안 된 순간 0 은 빼고
+      var t0 = Math.max(h[i][0], now - win), t1 = i + 1 < h.length ? h[i + 1][0] : now;
+      if (i === h.length - 1) t1 = Math.max(t1, t0 + 1); // 방금 들어온 값도 반영
+      if (t1 <= t0) continue;
+      sum += h[i][1] * (t1 - t0); wsum += t1 - t0;
+    }
+    if (wsum > 0) st.shownKmh = sum / wsum;
+  }
+  function shownSpeed() { return st.shownKmh != null ? st.shownKmh : st.speedKmh; }
+
   var FRAME_MS = 33;
   function kickLoop() {
     if (st.saver) return; // 배터리 절약 화면 중에는 속도계 애니메이션 멈춤
@@ -350,21 +390,22 @@
       return;
     }
     st.lastFrameTs = ts;
-    var diff = st.speedKmh - st.displaySpeed;
+    var tgt = shownSpeed(); // 3초(자전거 2초) 평균 표시 속도
+    var diff = tgt - st.displaySpeed;
     var needleSettled = Math.abs(diff) <= 0.05;
     // 2026-10-27: 이동 중에는 약 0.5초에 걸쳐 미끄러지듯(1초 간격 GPS 사이를 이어 줌), 0 으로 멈출 때는 빠르게
     var dtF = st.prevFrameTs ? Math.min(200, Math.max(16, ts - st.prevFrameTs)) : FRAME_MS;
     st.prevFrameTs = ts;
-    var needleK = st.speedKmh === 0 ? 0.25 : 1 - Math.exp(-dtF / 450);
-    st.displaySpeed = needleSettled ? st.speedKmh : st.displaySpeed + diff * needleK;
+    var needleK = tgt === 0 ? 0.25 : 1 - Math.exp(-dtF / 450);
+    st.displaySpeed = needleSettled ? tgt : st.displaySpeed + diff * needleK;
     /*
      * 속도 숫자(2026-10-23): 45 → 41 처럼 바뀔 때 45, 44, 43, 42, 41 이 빠짐없이 보이게 숫자만 따로 센다.
      * 한 프레임(약 1/30초)에 최대 1km/h 만 움직여 정수가 건너뛰지 않고, 변화가 작으면(7.5km/h 이하) 0.5씩 더 천천히.
      */
-    if (st.numSpeed == null) st.numSpeed = st.speedKmh;
-    var nd = st.speedKmh - st.numSpeed;
+    if (st.numSpeed == null) st.numSpeed = tgt;
+    var nd = tgt - st.numSpeed;
     var numSettled = Math.abs(nd) <= 0.05;
-    if (numSettled) st.numSpeed = st.speedKmh;
+    if (numSettled) st.numSpeed = tgt;
     else {
       var step = Math.min(1, Math.max(0.5, Math.abs(nd) / 15));
       st.numSpeed += Math.abs(nd) <= step ? nd : (nd > 0 ? step : -step);
@@ -630,11 +671,13 @@
         speed: spdOk ? c.speed : null }, motion);
       st.speedKmh = Math.min(120, Math.max(0, kmh || 0));
       if (st.speedKmh < 0.5) st.speedKmh = 0;
+      noteSpeed(st.speedKmh);
       gpsDebugRecord(c, t, motion, still);
     } else {
       // 추정기 파일을 못 읽은 경우(구버전 캐시 등) — 기기 속도만 간단히
       var spd0 = accOk && c.speed != null && isFinite(c.speed) && c.speed >= 0 ? c.speed * 3.6 : 0;
       st.speedKmh = still || spd0 < 1 ? 0 : Math.min(120, spd0);
+      noteSpeed(st.speedKmh);
     }
     kickLoop();
 
@@ -850,14 +893,14 @@
     st.motionTimer = setInterval(function () {
       var SF = window.OutdoorSpeedFilter, D = window.OutdoorStepDetector;
       if (!SF || !D || !st.spdF || !SF.motionTick) return;
-      if (SF.motionTick(st.spdF, D.state()) && st.speedKmh !== 0) { st.speedKmh = 0; kickLoop(); }
+      if (SF.motionTick(st.spdF, D.state()) && st.speedKmh !== 0) { st.speedKmh = 0; noteSpeed(0); kickLoop(); }
     }, 300);
   }
 
   /* ---------- 원본 GPS 기록(관리자 전용, 2026-10-27) — 속도 로직을 실제 데이터로 맞추기 위함 ----------
    * 기록 중(running)인 관리자만. 1초마다 [시각, 위도, 경도, 정확도, 도플러속도, 고도, 방향, 표시속도, 이동중,
    * 걷는중, 분당걸음, 마지막걸음경과ms, 실내정지판정] 을 모아 1분마다·종료 시 fn_save_outdoor_gps_debug 로 올린다. */
-  var DBG_FIELDS = ['t', 'lat', 'lng', 'acc', 'speed_ms', 'alt', 'heading', 'out_kmh', 'moving', 'walking', 'cadence', 'last_step_ago_ms', 'still'];
+  var DBG_FIELDS = ['t', 'lat', 'lng', 'acc', 'speed_ms', 'alt', 'heading', 'out_kmh', 'moving', 'walking', 'cadence', 'last_step_ago_ms', 'still', 'shown_kmh', 'speed_acc'];
   function gpsDebugRecord(c, t, motion, still) {
     var d = st.dbg;
     if (!d || st.status !== 'running') return;
@@ -865,7 +908,8 @@
     d.buf.push([t, r1(c.latitude, 1e7), r1(c.longitude, 1e7), r1(c.accuracy, 10), r1(c.speed, 100), r1(c.altitude, 10), r1(c.heading, 1),
       r1(st.speedKmh, 10), st.spdF && st.spdF.moving ? 1 : 0, motion && motion.walkingNow ? 1 : 0,
       motion && motion.cadence ? Math.round(motion.cadence) : 0,
-      motion && isFinite(motion.lastStepAgo) ? Math.min(99999, Math.round(motion.lastStepAgo)) : null, still ? 1 : 0]);
+      motion && isFinite(motion.lastStepAgo) ? Math.min(99999, Math.round(motion.lastStepAgo)) : null, still ? 1 : 0,
+      r1(st.shownKmh, 10), r1(c.speedAccuracy, 100)]);
     if (d.buf.length >= 1500) gpsDebugFlush();
   }
   function gpsDebugFlush() {
