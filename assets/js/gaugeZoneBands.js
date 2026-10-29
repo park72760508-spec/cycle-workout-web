@@ -15,8 +15,7 @@
   var CX = 100;
   var CY = 140;
   var R = 80;
-  // 2026-10-30: 존 띠 뒤에 흰 띠를 깔아 바탕 검정이 비치지 않게 하고, 존 색은 흰색 위 50%(절반 연하게).
-  // 지금 파워가 있는 존 강조는 그대로 1(진하게)
+  // 2026-10-30: 존 색 50%(흰 바탕 깔기는 제거 — 회색 배경 위에 그대로). 지금 파워가 있는 존 강조는 그대로 1(진하게)
   var BAND_OPACITY = 0.5;
   var ACTIVE_OPACITY = 1;
   var ZONE_BAND_WIDTH = 12; // 존 띠 두께(고정)
@@ -73,24 +72,6 @@
       g.appendChild(cap);
     });
     return g;
-  }
-
-  /** 존 띠와 같은 모양의 흰 띠(존 띠 바로 뒤) — 연한 존 색 뒤로 검정 바탕이 비치지 않게 */
-  function buildWhiteUnder(bands) {
-    var w = bands.cloneNode(true);
-    w.setAttribute('class', 'stelvio-gauge-zone-white');
-    var kids = w.children;
-    for (var i = 0; i < kids.length; i++) {
-      kids[i].removeAttribute('data-zone');
-      if (kids[i].getAttribute('fill') === 'none') {
-        kids[i].setAttribute('stroke', '#ffffff');
-        kids[i].setAttribute('stroke-opacity', '1');
-      } else {
-        kids[i].setAttribute('fill', '#ffffff');
-        kids[i].setAttribute('fill-opacity', '1');
-      }
-    }
-    return w;
   }
 
   function isGaugeBg(path) {
@@ -297,7 +278,6 @@
       if (svg.getAttribute && svg.getAttribute('data-no-zone-bands')) continue; // 속도계(아웃도어 라이딩) 등 파워 존이 아닌 계기판
       var bands = buildBands(bg.namespaceURI || 'http://www.w3.org/2000/svg');
       bg.parentNode.insertBefore(bands, bg.nextSibling);
-      bg.parentNode.insertBefore(buildWhiteUnder(bands), bands);
       if (svg.ownerSVGElement == null) {
         watchSvg(svg);
         watchNeedle(svg, bands);
