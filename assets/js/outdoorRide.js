@@ -900,7 +900,7 @@
   /* ---------- 원본 GPS 기록(관리자 전용, 2026-10-27) — 속도 로직을 실제 데이터로 맞추기 위함 ----------
    * 기록 중(running)인 관리자만. 1초마다 [시각, 위도, 경도, 정확도, 도플러속도, 고도, 방향, 표시속도, 이동중,
    * 걷는중, 분당걸음, 마지막걸음경과ms, 실내정지판정] 을 모아 1분마다·종료 시 fn_save_outdoor_gps_debug 로 올린다. */
-  var DBG_FIELDS = ['t', 'lat', 'lng', 'acc', 'speed_ms', 'alt', 'heading', 'out_kmh', 'moving', 'walking', 'cadence', 'last_step_ago_ms', 'still', 'shown_kmh', 'speed_acc'];
+  var DBG_FIELDS = ['t', 'lat', 'lng', 'acc', 'speed_ms', 'alt', 'heading', 'out_kmh', 'moving', 'walking', 'cadence', 'last_step_ago_ms', 'still', 'shown_kmh', 'speed_acc', 'src', 'motion_src', 'activity'];
   function gpsDebugRecord(c, t, motion, still) {
     var d = st.dbg;
     if (!d || st.status !== 'running') return;
@@ -909,7 +909,10 @@
       r1(st.speedKmh, 10), st.spdF && st.spdF.moving ? 1 : 0, motion && motion.walkingNow ? 1 : 0,
       motion && motion.cadence ? Math.round(motion.cadence) : 0,
       motion && isFinite(motion.lastStepAgo) ? Math.min(99999, Math.round(motion.lastStepAgo)) : null, still ? 1 : 0,
-      r1(st.shownKmh, 10), r1(c.speedAccuracy, 100)]);
+      r1(st.shownKmh, 10), r1(c.speedAccuracy, 100),
+      // 위치 출처(앱/브라우저)·걸음 출처(앱 걸음 센서/웹 가속도)·앱 운동 인식 — 앱 적용 후 실측 조정용(2026-10-29)
+      st.nativeLastAt && Date.now() - st.nativeLastAt < 3000 ? 'app' : 'web',
+      motion ? (motion.native ? 'app' : 'web') : null, motion && motion.activity ? motion.activity : null]);
     if (d.buf.length >= 1500) gpsDebugFlush();
   }
   function gpsDebugFlush() {
