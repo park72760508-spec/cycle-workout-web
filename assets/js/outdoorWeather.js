@@ -50,12 +50,18 @@
   function pm25Grade(v) { return v == null ? null : v <= 15 ? ['좋음', 'g1'] : v <= 35 ? ['보통', 'g2'] : v <= 75 ? ['나쁨', 'g3'] : ['매우나쁨', 'g4']; }
   function uvGrade(v) { return v == null ? null : v < 3 ? ['낮음', 'u1'] : v < 6 ? ['보통', 'u2'] : v < 8 ? ['높음', 'u3'] : v < 11 ? ['매우높음', 'u4'] : ['위험', 'u5']; }
 
-  /** 지금 시각에 가장 가까운 예보 칸 */
+  /**
+   * 지금 시각이 들어 있는 예보 칸(2026-10-30): 칸 h 는 h시 ~ 다음 칸 전까지(예: 10시 칸 = 10:00~11:59).
+   * 5시대는 첫 칸(6시), 18~19시대는 마지막 칸(18시). 현재 기온도 이 칸 온도로 표시해 시간대별 온도와 맞춘다.
+   */
   function nowSlot() {
     if (!S.wx || !S.wx.length) return null;
-    var h = kstNow().getHours() + kstNow().getMinutes() / 60, best = null, bd = 99;
+    var h = kstNow().getHours() + kstNow().getMinutes() / 60;
     if (h < 5 || h >= 20) return null; // 밤에는 예보 칸(6~18시)을 '지금 날씨'로 보이지 않게
-    S.wx.forEach(function (x) { if (x && x.tempC != null && Math.abs(x.hour - h) < bd) { bd = Math.abs(x.hour - h); best = x; } });
+    var slotH = HOURS[0];
+    HOURS.forEach(function (x) { if (x <= h) slotH = x; });
+    var best = null;
+    S.wx.forEach(function (x) { if (x && x.hour === slotH && x.tempC != null) best = x; });
     return best;
   }
   /**
@@ -100,8 +106,8 @@
     var rep = representative();
     var now = rep ? '<span class="outd-wx__now" title="오늘의 대표 날씨: ' + rep.label + '">' + rep.icon +
       (rep.pop != null ? '<span class="outd-wx__pop">' + rep.pop + '%</span>' : '') + '</span>' : '';
-    // 현재 기온(Open-Meteo 현재값, 없으면 지금 시각 예보 칸)
-    var tNow = S.tempNow != null ? S.tempNow : (s && s.tempC != null ? s.tempC : null);
+    // 현재 기온 = 지금 시각이 들어 있는 시간대 칸의 온도(시간대별 온도와 같게). 밤 등 칸이 없을 때만 Open-Meteo 현재값
+    var tNow = s && s.tempC != null ? s.tempC : S.tempNow;
     if (tNow != null) now += '<span class="outd-wx__tnow">' + Math.round(tNow) + '°</span>';
     var place = S.label ? esc(S.label) : '위치 확인 중';
     var aq = S.aq || {};
