@@ -316,7 +316,7 @@
         var ix = cx - (w + 1 + dw) / 2 + w / 2; // 정수 가운데 x(text-anchor middle)
         intEl.setAttribute('x', ix.toFixed(1));
         decEl.setAttribute('x', (ix + w / 2 + 1).toFixed(1));
-        decEl.__placed = true;
+        decEl.__placed = dw > 0 || !dp; // 화면이 가려져 소수 폭을 못 쟀으면 다음에 다시
       } else if (w > 0) {
         decEl.setAttribute('x', (Number(intEl.getAttribute('x')) + w / 2 + 1).toFixed(1));
         decEl.__placed = true;
@@ -5490,6 +5490,10 @@
   }
   function fixMapSize() {
     if (!isActive()) return;
+    // 현재 속도 숫자 가운데 정렬 다시(화면이 가려진 동안엔 글자 폭을 잴 수 없음)
+    var spdDec = $('outd-ui-speed-dec');
+    if (spdDec) spdDec.__placed = false;
+    setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed || 0), 1, true);
     placeStartPulse();
     placeGaugeCtrl();
     syncFavPinZoom(); // 화면 크기·방향이 바뀌면 즐겨찾기 핀 크기도 다시
