@@ -3265,7 +3265,7 @@
       '<button type="button" class="outd-route__mappick" data-route-mappick>📍 지도에서 목적지 선택</button>' +
       '<div id="outdKakaoUsage" class="outd-kusage" style="display:none"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
-      '<div class="outd-route__credit" style="display:none">경로: 카카오(자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' + // 관리자에게만(2026-10-28)
+      '<div class="outd-route__credit" style="display:none">경로: 카카오(오토바이·자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' + // 관리자에게만(2026-10-28)
       '</div>';
     screen.appendChild(el);
     el.addEventListener('click', function (e) {
