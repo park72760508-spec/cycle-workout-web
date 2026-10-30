@@ -35765,3 +35765,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child small {
   font-family: "Noto Sans KR", Pretendard, sans-serif; font-weight: 400; font-size: calc(8.4px * var(--outd-gs, 1.7)); bottom: 0.25em;
 }
+/* ===== 2026-10-31 방향 안내 표지판: 지도 위쪽 왼쪽(날씨 카드 바로 아래 = 크게 보기의 현재 속도 줄 왼쪽) — top 은 JS(placeExpStats) ===== */
+#outdoorRideScreen .outd-turn-big,
+#outdoorRideScreen.outd-expanded .outd-turn-big { left: 8px; right: auto; bottom: auto !important; margin: 0; transform-origin: left top; }
+/* 크게 보기: 가운데 현재 속도 숫자와 겹치지 않게 조금 작게 */
+#outdoorRideScreen.outd-expanded .outd-turn-big { gap: 6px; padding: 5px 10px 5px 5px; border-radius: 14px; }
+#outdoorRideScreen.outd-expanded .outd-turn-big__arrow { width: 56px; height: 56px; }
+#outdoorRideScreen.outd-expanded .outd-turn-big__dist { font-size: 23px; }
+#outdoorRideScreen.outd-expanded .outd-turn-big__word { font-size: 13px; }
+/* 표지판이 위로 올라가 아래 목적지 안내 카드는 원래 자리 */
+#outdoorRideScreen:not(.outd-expanded):has(#outdTurnBig[style*="flex"]) .outd-map-empty.is-dest { bottom: 10px; }

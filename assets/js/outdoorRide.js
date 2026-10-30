@@ -767,11 +767,19 @@
     var stats = $('outdExpStats');
     if (!stats) return;
     var wx = $('outdWeather');
-    if (!st.expanded || !wx || !wx.offsetHeight) { stats.style.removeProperty('top'); return; }
-    var top = Math.round(wx.offsetTop + wx.offsetHeight + 6) + 'px';
+    var top = wx && wx.offsetHeight ? Math.round(wx.offsetTop + wx.offsetHeight + 6) + 'px' : '';
+    // 2026-10-31: 방향 안내 표지판도 같은 줄(날씨 카드 아래 왼쪽, 크게 보기에선 현재 속도 줄 왼쪽)
+    var tb = $('outdTurnBig');
+    if (tb) {
+      if (top && tb.style.getPropertyValue('top') !== top) tb.style.setProperty('top', top, 'important');
+      else if (!top) tb.style.removeProperty('top');
+    }
+    if (!st.expanded || !top) { stats.style.removeProperty('top'); return; }
     if (stats.style.getPropertyValue('top') !== top) stats.style.setProperty('top', top, 'important');
   }
   window.__outdPlaceExpStats = placeExpStats;
+  // 길안내 문구 바가 나타나거나 사라지면 날씨 카드 위치가 바뀌므로 표지판 자리도 주기적으로 맞춤(화면이 보일 때만)
+  setInterval(function () { if (!document.hidden && isActive()) placeExpStats(); }, 1500);
   function watchExpStats(on) {
     clearInterval(st.expStatsT);
     st.expStatsT = null;
@@ -2288,7 +2296,7 @@
     var distEl = el.querySelector('.outd-turn-big__dist');
     if (distEl.textContent !== dist) distEl.textContent = dist;
     el.classList.toggle('is-near', dm <= nearM);
-    el.style.display = 'flex';
+    if (el.style.display !== 'flex') { el.style.display = 'flex'; placeExpStats(); }
     // 카드 진입 1회·바로 앞(속도 기준 약 5초 전, 걷기 15m) 1회: 진동 + 알림음 + 음성
     var word = turn.text || turnWord(turn.delta);
     if (!st.turnBuzz.far) {
