@@ -35683,3 +35683,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-map-empty__eta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #outdoorRideScreen .outd-map-empty__dest b { color: #ffffff; font-weight: 800; }
 #outdoorRideScreen .outd-map-empty__eta { color: #34d399; font-weight: 700; }
+/* 회전 안내 표지판(왼쪽 아래)이 떠 있으면 목적지 안내 카드는 그 위로(겹침 방지) */
+#outdoorRideScreen:not(.outd-expanded):has(#outdTurnBig[style*="flex"]) .outd-map-empty.is-dest { bottom: 116px; }
