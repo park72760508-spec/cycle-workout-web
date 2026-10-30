@@ -579,7 +579,7 @@
       }
     }
     setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1); // 정수만 가운데(2026-10-30 사용자 요청으로 원래대로)
-    if (st.expanded) setText('outdExpSpeed', Math.max(0, st.numSpeed || 0).toFixed(1)); // 지도 크게 보기 위쪽 속도
+    if (st.expanded) setExpSpeed(st.numSpeed); // 지도 크게 보기 위쪽 속도
     if (!settled) st.rafId = requestAnimationFrame(loop);
   }
 
@@ -831,9 +831,25 @@
     else applyStat3(v);
   })();
 
+  /** 지도 크게 보기 현재 속도 — 속도계와 같은 형식(큰 정수 + 작은 소수 한 자리) */
+  function setExpSpeed(v) {
+    var p = Math.max(0, Number(v) || 0).toFixed(1).split('.');
+    setText('outdExpSpeed', p[0]);
+    setText('outdExpSpeedDec', '.' + p[1]);
+  }
+  /** 속도계 글자 배율(SVG 48 = 화면 몇 px) — 지도 위 속도 글자를 속도계와 같은 크기로(크게 보기에선 속도계가 숨겨져 미리 잼) */
+  function measureGaugeScale() {
+    var sp = $('outd-ui-speed'), screen = $(SCREEN_ID);
+    if (!sp || !screen || !sp.getScreenCTM) return;
+    var m = sp.getScreenCTM();
+    if (m && m.a > 0.3) screen.style.setProperty('--outd-gs', String(Math.round(m.a * 1000) / 1000));
+  }
+
   window.toggleOutdoorExpand = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    if (!st.expanded) measureGaugeScale();
     st.expanded = !st.expanded;
+    applyStat3(st.expanded ? 'dist' : 'elev'); // 2026-10-31: 크게 보기 = 이동 거리, 원래 화면 = 누적 고도
     watchExpStats(st.expanded);
     var screen = $(SCREEN_ID);
     if (screen) screen.classList.toggle('outd-expanded', st.expanded);
@@ -843,7 +859,7 @@
       btn.setAttribute('aria-label', st.expanded ? '지도 원래 크기로' : '지도 크게 보기');
     }
     renderToggle();
-    setText('outdExpSpeed', Math.max(0, st.numSpeed != null ? st.numSpeed : st.speedKmh || 0).toFixed(1));
+    setExpSpeed(st.numSpeed != null ? st.numSpeed : st.speedKmh);
     setText('outdExpDist', (st.distanceM / 1000).toFixed(2));
     // 지도 크기가 바뀌었으니 다시 계산하고 내 위치 기준으로 다시 맞춤
     [40, 320].forEach(function (ms) {
