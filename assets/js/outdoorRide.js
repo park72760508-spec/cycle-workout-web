@@ -2206,12 +2206,23 @@
     // 이탈 판정: 기준 거리 밖이 일정 시간(자전거 3초·걷기 5초) 이어질 때만(순간 GPS 튐·교차로 회전은 이탈 아님).
     // 아주 멀면(기준 2배) 바로 이탈. GPS 정확도가 나쁘면(>50m) 판정 보류.
     var badFix = st.lastFix && st.lastFix.acc > 50;
-    if (m.d > P.offM && !badFix) {
+    /*
+     * 2026-10-30 잘못 꺾음 빠른 판정(티맵·카카오내비 방식): 경로선에서 조금(자전거 18m·걷기 12m) 벗어났는데
+     * 실제 진행 방향이 경로 방향과 70° 넘게 다르고 충분히 빠르게 움직이면(자전거 8·걷기 3 km/h) 1.5초 만에 이탈 확정.
+     * (맞게 꺾은 경우는 다음 구간에 바로 붙어 거리가 작으므로 해당 없음)
+     */
+    var wrongDir = false;
+    if (!badFix && m.seg > 0 && st.heading != null && st.speedKmh >= (P.walk ? 3 : 8) && m.d > (P.walk ? 12 : 18)) {
+      var a0 = c.latlngs[m.seg - 1], a1 = c.latlngs[m.seg];
+      if (a0 && a1) wrongDir = Math.abs(angleDiff(bearing(a0[0], a0[1], a1[0], a1[1]), st.heading)) > 70;
+    }
+    if ((m.d > P.offM || wrongDir) && !badFix) {
       if (!st.offSince) st.offSince = now;
-    } else if (m.d <= P.offM) {
+    } else if (m.d <= P.offM && !wrongDir) {
       st.offSince = 0;
     }
-    var offCourse = !!st.offSince && (now - st.offSince >= P.offHoldMs || m.d > P.offM * 2);
+    var holdMs = wrongDir && m.d <= P.offM ? 1500 : P.offHoldMs;
+    var offCourse = !!st.offSince && (now - st.offSince >= holdMs || m.d > P.offM * 2);
     // 경로 고정(Route Lock, 2026-10-21 티맵·카카오 방식): ±15m 안에 들어오면 고정하고, 이탈이 확정되기 전까지는
     // GPS 가 흔들려도 내 위치를 항상 코스선 중심(진행 거리 위 점)에 표시. 이탈 확정 시에만 실제 GPS 위치로.
     if (offCourse) st.navLocked = false;
@@ -2232,7 +2243,9 @@
       hideTurnBig();
       // 코스로 돌아가는 방향·거리(가민 Off Course 안내)
       var toCourse = bearing(lat, lng, m.lat, m.lng);
-      setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + navDistM(m.d) + 'm');
+      // 길찾기 경로는 이탈 확정 2초 후 자동 재탐색 — 남은 초를 함께 보여 줌
+      var rrLeft = c.isRoute && st.offRouteSince && !st.rerouting ? Math.ceil((REROUTE_DELAY_MS - (now - st.offRouteSince)) / 1000) : 0;
+      if (!st.rerouting) setText('outdNavText', (c.isRoute ? '경로를 벗어났습니다 · ' : '코스를 벗어났습니다 · ') + navDistM(m.d) + 'm' + (rrLeft > 0 ? ' · ' + rrLeft + '초 후 재탐색' : ''));
       if (!st.offCued && st.speedKmh >= (P.walk ? 1.5 : 3)) { st.offCued = true; cue('off', c.isRoute ? '경로를 벗어났습니다' : '코스를 벗어났습니다'); }
       maybeReroute();
       if (arrow) arrow.style.transform = 'rotate(' + Math.round(toCourse) + 'deg)';
@@ -3084,15 +3097,27 @@
   }
 
   /*
-   * 경로 이탈 재탐색(2026-10-20) — 자전거 내비(가민·코무트 방식) 기준
-   *  1) 판정: GPS 정확도에 맞춘 허용 거리 밖 + 실제 이동 중(3 km/h↑) + 경로에서 점점 멀어지거나 80m 이상 → 약 6초 유지 시 이탈
-   *     (경로 옆에서 쉬거나 교차로를 도는 순간은 재탐색하지 않음)
-   *  2) 원래 선택한 방식(자전거도로 우선 / 최단 거리) 그대로, 현재 진행 방향으로 출발하는 경로(heading)
-   *  3) 후보 두 개 비교: ① 원래 경로 앞쪽(약 200m 앞)으로 합류 후 목적지 ② 목적지까지 새 경로
+   * 경로 이탈 재탐색(2026-10-20, 2026-10-30 티맵·카카오내비 방식으로 빠르게)
+   *  1) 판정(updateNavigation): GPS 정확도에 맞춘 허용 거리 밖이 자전거 3초·걷기 5초 이어지거나,
+   *     잘못 꺾음(진행 방향이 경로와 70°↑ 차이)이면 1.5초, 아주 멀면(허용 거리 2배) 바로 이탈 확정.
+   *  2) 이탈 확정 후 2초(REROUTE_DELAY_MS) 뒤 재탐색 — 그 사이 경로로 돌아오면 취소.
+   *     멈춰 있으면(휴식·신호 대기) 재탐색 안 함. 경로 쪽으로 빠르게 되돌아오는 중(10m 이상 가까워짐)이면 기다림.
+   *  3) 원래 선택한 방식 그대로, 현재 진행 방향으로 출발하는 경로(heading — 바로 유턴 안내 방지)
+   *  4) 후보 두 개 비교: ① 원래 경로 앞쪽(자전거 200m·걷기 100m 앞)으로 합류 후 목적지 ② 목적지까지 새 경로
    *     → ①이 ②보다 15% 이내로 길면 ①(고른 경로 유지), 아니면 ②
-   *  4) 간격: 첫 재탐색 6초, 연속이면 15초 → 30초. 목적지 150m 안에서는 재탐색 안 함.
+   *  5) 연속 재탐색 간격: 첫 번째 바로, 2분 안에 반복되면 10초 → 20초(골목을 헤맬 때 재탐색이 쏟아지지 않게).
+   *     목적지 150m 안에서는 재탐색 안 함. 결과가 오기 전에 경로로 돌아왔으면 새 경로를 쓰지 않음.
    */
-  var REROUTE_STEPS_MS = [0, 15000, 30000];
+  var REROUTE_DELAY_MS = 2000;
+  var REROUTE_STEPS_MS = [0, 10000, 20000];
+  /** GPS 가 뜸해도(1초 넘게 안 올 때) 2초가 지나면 재탐색되게 한 번 더 확인 */
+  function scheduleRerouteCheck() {
+    if (st.rerouteTimer) return;
+    st.rerouteTimer = setTimeout(function () {
+      st.rerouteTimer = null;
+      if (st.offSince && st.course && st.course.isRoute) maybeReroute();
+    }, REROUTE_DELAY_MS + 100);
+  }
   function maybeReroute() {
     var c = st.course;
     if (!c || !c.isRoute || !st.lastFix || st.rerouting) return;
@@ -3105,10 +3130,12 @@
     if (!st.offRouteSince) {
       st.offRouteSince = now;
       st.offRouteStartDist = r.dist;
+      scheduleRerouteCheck();
       return;
     }
-    var gettingFarther = r.dist > (st.offRouteStartDist || 0) + 5 || r.dist > 80;
-    if (now - st.offRouteSince < 6000 || !gettingFarther) return;
+    if (now - st.offRouteSince < REROUTE_DELAY_MS) { scheduleRerouteCheck(); return; }
+    // 경로 쪽으로 되돌아오는 중이면(이탈 시점보다 10m 넘게 가까워짐) 조금 더 지켜봄
+    if (r.dist < (st.offRouteStartDist || 0) - 10) { st.offRouteStartDist = r.dist; return; }
     // 연속 재탐색 간격(2분 안에 반복되면 점점 길게)
     if (now - (st.lastRerouteAt || 0) > 120000) st.rerouteCount = 0;
     var wait = REROUTE_STEPS_MS[Math.min(st.rerouteCount || 0, REROUTE_STEPS_MS.length - 1)];
@@ -3141,6 +3168,8 @@
         how = rj ? '원래 경로로 합류' : '새 경로';
       }
       if (!pick) throw new Error('no route');
+      if (st.course !== c) return; // 그사이 경로를 지우거나 바꿈
+      if (!st.offSince) { setText('outdNavText', '경로로 돌아왔습니다'); return; } // 결과가 오기 전에 경로로 돌아옴
       // 재탐색 안내를 먼저 말하고, 이어서 새 경로의 첫 회전 안내(useRouteAsCourse → showTurnBig)가 뒤따르게
       cue('reroute', '경로를 다시 안내합니다');
       useRouteAsCourse(pick, c.dest);
