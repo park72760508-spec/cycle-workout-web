@@ -2613,9 +2613,11 @@
     function part(label, api) {
       var n = Number(kakaoUsage[api]) || 0;
       var out = kakaoUsage[api + '_exhausted'] || n >= lim;
-      return '<span class="outd-kusage__item' + (out ? ' is-out' : n >= lim * 0.8 ? ' is-warn' : '') + '">' + label + ' <b>' + n.toLocaleString('ko-KR') + '</b>/' + lim.toLocaleString('ko-KR') + '</span>';
+      // 2026-10-30: 한도는 1k 처럼 짧게(예: 오토바이 1/1k)
+      var limTxt = lim >= 1000 && lim % 1000 === 0 ? (lim / 1000) + 'k' : lim.toLocaleString('ko-KR');
+      return '<span class="outd-kusage__item' + (out ? ' is-out' : n >= lim * 0.8 ? ' is-warn' : '') + '">' + label + ' <b>' + n.toLocaleString('ko-KR') + '</b>/' + limTxt + '</span>';
     }
-    el.innerHTML = '<span class="outd-kusage__title">카카오 경로 오늘 무료 사용량</span>' + part('자전거', 'bicycle') + part('걷기', 'walk') + part('오토바이', 'car');
+    el.innerHTML = '<span class="outd-kusage__title">카카오 경로 사용량</span>' + part('오토바이', 'car') + part('자전거', 'bicycle') + part('걷기', 'walk');
     el.style.display = '';
   }
 
