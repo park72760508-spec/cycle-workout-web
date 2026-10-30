@@ -299,9 +299,65 @@
     walk: '<span class="outd-route__walk-ico" aria-hidden="true"></span>'
   };
   function gaugeTravel() {
+    // 사용자가 고른 이동 수단(길찾기 탭·속도계 아이콘 팝업)이 우선, 아니면 안내 중인 경로의 수단
+    if (travelModeUserSet && travelMode) return travelMode;
     var rm = st.course && st.course.isRoute && st.course.routeMode;
     if (rm) return /^moto/.test(rm) ? 'moto' : /^walk/.test(rm) ? 'walk' : 'bike';
     return travelMode || 'bike';
+  }
+  /*
+   * 2026-10-30: 속도계 이동 수단 아이콘을 누르면 오토바이·자전거·걷기 선택 팝업.
+   * 고르면 길찾기 탭도 같은 수단으로 바뀌고, 길찾기 경로를 안내 중이면 같은 목적지로 새 수단 경로 후보를 길찾기 화면에 보여 줌.
+   */
+  var GAUGE_MODE_LIST = [['moto', '오토바이'], ['bike', '자전거'], ['walk', '걷기']];
+  window.openOutdoorTravelPicker = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var screen = $(SCREEN_ID);
+    if (!screen) return;
+    var el = $('outdTravelPick');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdTravelPick';
+      el.className = 'outd-tpick';
+      el.setAttribute('role', 'dialog');
+      el.setAttribute('aria-label', '이동 수단 선택');
+      el.innerHTML = '<div class="outd-tpick__card"><div class="outd-tpick__head"><b>이동 수단 선택</b>' +
+        '<button type="button" class="outd-dest__x" data-tpick-close aria-label="닫기">✕</button></div>' +
+        '<div class="outd-tpick__list">' + GAUGE_MODE_LIST.map(function (x) {
+          return '<button type="button" class="outd-tpick__btn" data-tpick="' + x[0] + '"><span class="outd-tpick__ico">' +
+            GAUGE_MODE_ICONS[x[0]] + '</span><span class="outd-tpick__lbl">' + x[1] + '</span></button>';
+        }).join('') + '</div><div class="outd-tpick__hint">길찾기 중이면 같은 목적지로 새 경로를 고를 수 있습니다</div></div>';
+      screen.appendChild(el);
+      el.addEventListener('click', function (ev) {
+        if (ev.target === el || ev.target.closest('[data-tpick-close]')) { el.style.display = 'none'; return; }
+        var b = ev.target.closest('[data-tpick]');
+        if (!b) return;
+        el.style.display = 'none';
+        selectTravelFromGauge(b.getAttribute('data-tpick'));
+      });
+    }
+    var cur = gaugeTravel();
+    Array.prototype.forEach.call(el.querySelectorAll('[data-tpick]'), function (b) {
+      var on = b.getAttribute('data-tpick') === cur;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    el.style.display = 'flex';
+  };
+  function selectTravelFromGauge(m) {
+    var c = st.course;
+    var routeTravel = c && c.isRoute && c.routeMode ? (/^moto/.test(c.routeMode) ? 'moto' : /^walk/.test(c.routeMode) ? 'walk' : 'bike') : null;
+    travelMode = m;
+    travelModeUserSet = true;
+    renderTravelModes(); // 길찾기 탭 + 속도계 아이콘
+    var dest = c && c.isRoute && c.dest ? c.dest : null;
+    if (dest && routeTravel !== m) {
+      // 안내 중인 경로가 있으면 같은 목적지로 새 이동 수단 경로 후보를 길찾기 화면에서 고르게
+      window.openOutdoorRouteSearch({ noFocus: true });
+      chooseDestination({ lat: dest.lat, lng: dest.lng, name: dest.name || '목적지', sub: dest.sub || '' });
+    } else {
+      toast('이동 수단: ' + ({ moto: '오토바이', bike: '자전거', walk: '걷기' }[m] || ''), 'info');
+    }
   }
   function syncGaugeMode() {
     var m = gaugeTravel();

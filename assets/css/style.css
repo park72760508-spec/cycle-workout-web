@@ -35570,7 +35570,23 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-fav__pickbar .outd-fav__pickrow .outd-dest__x { flex: 0 0 auto; width: 32px; height: 32px; padding: 0; border: none; border-radius: 50%; background: #f1f5f9; color: #334155; font-size: 16px; line-height: 32px; text-align: center; }
 
 /* 2026-10-30: 속도계 이동 거리 'km' 위 이동 수단 아이콘(흰색) */
-#outdoorRideScreen .outd-gauge-mode { width: 100%; height: 100%; color: #ffffff; display: flex; align-items: center; justify-content: center; }
+#outdoorRideScreen .outd-gauge-mode { width: 100%; height: 100%; color: #ffffff; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 #outdoorRideScreen .outd-gauge-mode svg,
 #outdoorRideScreen .outd-gauge-mode .outd-route__moto-ico,
-#outdoorRideScreen .outd-gauge-mode .outd-route__walk-ico { width: 100%; height: 100%; display: block; color: #ffffff; }
+#outdoorRideScreen .outd-gauge-mode .outd-route__walk-ico { width: 13px; height: 13px; display: block; color: #ffffff; flex-shrink: 0; }
+#outdoorRideScreen .outd-gauge-mode:active { opacity: 0.6; }
+/* 이동 수단 선택 팝업(속도계 아이콘) */
+#outdoorRideScreen .outd-tpick { position: fixed; inset: 0; z-index: 10070; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); padding: 16px; }
+#outdoorRideScreen .outd-tpick__card { width: 100%; max-width: 340px; background: #ffffff; color: #0f172a; border-radius: 18px; padding: 14px 14px 12px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); }
+#outdoorRideScreen .outd-tpick__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 16px; }
+#outdoorRideScreen .outd-tpick__list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+#outdoorRideScreen .outd-tpick__btn { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 4px 12px; border-radius: 14px; border: 2px solid #e2e8f0; background: #f8fafc; color: #334155; cursor: pointer; font: inherit; }
+#outdoorRideScreen .outd-tpick__ico { width: 56px; height: 56px; border-radius: 50%; background: #1e293b; color: #ffffff; display: flex; align-items: center; justify-content: center; }
+#outdoorRideScreen .outd-tpick__ico svg,
+#outdoorRideScreen .outd-tpick__ico .outd-route__moto-ico,
+#outdoorRideScreen .outd-tpick__ico .outd-route__walk-ico { width: 34px; height: 34px; color: #ffffff; }
+#outdoorRideScreen .outd-tpick__lbl { font-size: 15px; font-weight: 800; }
+#outdoorRideScreen .outd-tpick__btn.is-on { border-color: #00b894; background: #e6faf5; color: #047857; }
+#outdoorRideScreen .outd-tpick__btn.is-on .outd-tpick__ico { background: #00b894; }
+#outdoorRideScreen .outd-tpick__btn:active { transform: scale(0.96); }
+#outdoorRideScreen .outd-tpick__hint { margin-top: 10px; font-size: 11.5px; color: #64748b; text-align: center; }
