@@ -1,7 +1,8 @@
 /**
  * 루트맵 오늘의 날씨 카드 (2026-10-28)
  *  - 지역: 현재 위치 → 시도·구군(루트맵 reverseRegion: 카카오 → OSM)
- *  - 날씨: 라이딩 모임과 같은 getOpenRidingDepartureWeather(기상청 단기예보, 6~18시 2시간 간격)
+ *  - 날씨: 라이딩 모임과 같은 getOpenRidingDepartureWeather(기상청 단기예보, 2시간 간격)
+ *    2026-10-31: hours=all 로 오늘·내일 0~22시를 받아, 지금 시간대부터 24시간(12칸)을 좌우 스크롤로 표시
  *  - 미세먼지(PM10)·초미세먼지(PM2.5)·자외선: Open-Meteo Air Quality(현재값) → 환경부·기상청 등급
  *  - 첫 줄: 구·군 + 오늘의 대표 날씨(비·눈이면 최고 강수확률) + 미세·초미세·자외선, 바탕은 반투명 남색
  * 조회는 지역이 바뀌거나(3km 이상 이동) 30분이 지났을 때만 다시 한다.
@@ -10,14 +11,14 @@
   'use strict';
   var WX_URL = 'https://asia-northeast3-stelvio-ai.cloudfunctions.net/getOpenRidingDepartureWeather';
   var AQ_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
-  var HOURS = [6, 8, 10, 12, 14, 16, 18];
+  var HOURS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
   var REFRESH_MS = 30 * 60 * 1000;
   var MOVE_M = 3000;
   var NOW_URL = 'https://api.open-meteo.com/v1/forecast'; // 현재 기온(2026-10-28)
 
   var S = {
     region: '', label: '', regionLL: null, regionAt: 0, regionBusy: false,
-    wx: null, wxAt: 0, wxBusy: false, wxErr: false,
+    wx: null, wx2: null, wxDate: '', wxAt: 0, wxBusy: false, wxErr: false,
     aq: null, aqLL: null, aqAt: 0, aqBusy: false,
     tempNow: null,
     collapsed: true // 기본은 접힌 상태(루트맵을 열 때마다 접힘으로 시작)
@@ -54,25 +55,37 @@
    * 지금 시각이 들어 있는 예보 칸(2026-10-30): 칸 h 는 h시 ~ 다음 칸 전까지(예: 10시 칸 = 10:00~11:59).
    * 5시대는 첫 칸(6시), 18~19시대는 마지막 칸(18시). 현재 기온도 이 칸 온도로 표시해 시간대별 온도와 맞춘다.
    */
+  function kstYmdOffset(days) {
+    var k = kstNow(); k.setDate(k.getDate() + days);
+    return k.getFullYear() + '-' + String(k.getMonth() + 1).padStart(2, '0') + '-' + String(k.getDate()).padStart(2, '0');
+  }
+  function curSlotHour() { return Math.floor(kstNow().getHours() / 2) * 2; }
+  function findHour(list, h) {
+    var it = null;
+    (list || []).forEach(function (x) { if (x && x.hour === h) it = x; });
+    return it;
+  }
+  /** 지금 시간대부터 24시간: 오늘 지금~22시, 이어서 내일 0시~지금 직전 */
+  function slots() {
+    var cur = curSlotHour(), out = [];
+    HOURS.forEach(function (h) { if (h >= cur) out.push({ hour: h, it: findHour(S.wx, h), tomorrow: false }); });
+    HOURS.forEach(function (h) { if (h < cur) out.push({ hour: h, it: findHour(S.wx2, h), tomorrow: true }); });
+    return out;
+  }
+  /** 지금 시각이 들어 있는 2시간 칸(현재 기온도 이 칸 온도로 표시해 시간대별 온도와 맞춘다) */
   function nowSlot() {
-    if (!S.wx || !S.wx.length) return null;
-    var h = kstNow().getHours() + kstNow().getMinutes() / 60;
-    if (h < 5 || h >= 20) return null; // 밤에는 예보 칸(6~18시)을 '지금 날씨'로 보이지 않게
-    var slotH = HOURS[0];
-    HOURS.forEach(function (x) { if (x <= h) slotH = x; });
-    var best = null;
-    S.wx.forEach(function (x) { if (x && x.hour === slotH && x.tempC != null) best = x; });
-    return best;
+    var it = findHour(S.wx, curSlotHour());
+    return it && it.tempC != null ? it : null;
   }
   /**
-   * 오늘의 대표 날씨(낮 6~18시 예보 기준, 2026-10-28):
+   * 대표 날씨(2026-10-31: 지금부터 24시간 예보 기준, 예전엔 오늘 낮 6~18시):
    *  비·눈 예보가 한 번이라도 있으면 🌧️/🌨️ + 그날 최고 강수확률, 아니면 가장 많은 하늘 상태(같으면 더 흐린 쪽).
    *  비가 없어도 강수확률 30% 이상이면 % 표시.
    */
   function representative() {
     if (!S.wx || !S.wx.length) return null;
     var cnt = [0, 0, 0], rain = 0, maxPop = null;
-    S.wx.forEach(function (x) {
+    slots().map(function (c) { return c.it; }).forEach(function (x) {
       if (!x || (x.tempC == null && !x.icon)) return;
       if (x.pop != null && isFinite(x.pop)) maxPop = maxPop == null ? x.pop : Math.max(maxPop, x.pop);
       var pty = Number(x.pty || 0), sky = Number(x.sky || 0), ic = String(x.icon || '');
@@ -122,10 +135,13 @@
     var body = '';
     if (!S.collapsed) {
       if (S.wx && S.wx.length) {
-        var curH = s ? s.hour : -1;
-        body = '<div class="outd-wx__hours">' + HOURS.map(function (h) {
-          var it = null; S.wx.forEach(function (x) { if (x && x.hour === h) it = x; });
-          return '<div class="outd-wx__cell' + (h === curH ? ' is-now' : '') + '"><span class="outd-wx__h">' + h + '시</span>' +
+        var firstTomorrow = true;
+        body = '<div class="outd-wx__hours">' + slots().map(function (c, idx) {
+          var it = c.it, h = c.hour;
+          var lbl = idx === 0 ? '지금' : h + '시';
+          if (c.tomorrow && firstTomorrow) { firstTomorrow = false; lbl = '<b class="outd-wx__day">내일</b> ' + lbl; }
+          return '<div class="outd-wx__cell' + (idx === 0 ? ' is-now' : '') + (c.tomorrow ? ' is-tmr' : '') + '">' +
+            '<span class="outd-wx__h">' + lbl + '</span>' +
             // 2026-10-28: 시간 아래에 날씨 아이콘과 온도를 한 줄로 붙여서
             '<span class="outd-wx__wt"><span class="outd-wx__i">' + (it && it.icon ? it.icon : '–') + '</span>' +
             '<span class="outd-wx__t">' + (it && it.tempC != null ? Math.round(it.tempC) + '°' : '-') + '</span></span></div>';
@@ -134,7 +150,12 @@
         body = '<div class="outd-wx__msg">' + (S.wxErr ? '날씨 정보를 불러올 수 없습니다' : S.region ? '날씨 불러오는 중…' : '현재 위치를 확인하고 있습니다') + '</div>';
       }
     }
+    var oldH = box.querySelector('.outd-wx__hours');
+    var keepX = oldH && box.getAttribute('data-slot') === String(curSlotHour()) ? oldH.scrollLeft : 0;
     box.innerHTML = head + body;
+    box.setAttribute('data-slot', String(curSlotHour()));
+    var newH = box.querySelector('.outd-wx__hours');
+    if (newH && keepX) newH.scrollLeft = keepX;
     box.setAttribute('aria-label', '오늘의 날씨 ' + place);
     fitHead(box);
   }
@@ -157,18 +178,22 @@
     fitT = setTimeout(function () { fitHead(); }, 120);
   });
 
+  function fetchDay(ymd) {
+    var q = new URLSearchParams({ region: S.region, date: ymd, hours: 'all' });
+    return fetch(WX_URL + '?' + q.toString(), { method: 'GET', mode: 'cors' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { return d && d.success && Array.isArray(d.hours) ? d.hours : null; }, function () { return null; });
+  }
   function fetchWx() {
     if (!S.region || S.wxBusy) return;
     S.wxBusy = true;
-    var q = new URLSearchParams({ region: S.region, date: kstYmd() });
-    fetch(WX_URL + '?' + q.toString(), { method: 'GET', mode: 'cors' })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        S.wxBusy = false; S.wxAt = Date.now();
-        if (d && d.success && Array.isArray(d.hours) && d.hours.length) { S.wx = d.hours; S.wxErr = false; }
-        else { S.wxErr = !S.wx; }
-        render();
-      }, function () { S.wxBusy = false; S.wxAt = Date.now(); S.wxErr = !S.wx; render(); });
+    var today = kstYmd();
+    Promise.all([fetchDay(today), fetchDay(kstYmdOffset(1))]).then(function (r) {
+      S.wxBusy = false; S.wxAt = Date.now();
+      if (r[0] && r[0].length) { S.wx = r[0]; S.wx2 = r[1] || null; S.wxDate = today; S.wxErr = false; }
+      else { S.wxErr = !S.wx; }
+      render();
+    });
   }
 
   function fetchAq(lat, lng) {
@@ -212,10 +237,13 @@
         if (changed || Date.now() - S.wxAt > REFRESH_MS) fetchWx();
         render();
       }, function () { S.regionBusy = false; S.regionAt = Date.now(); });
-    } else if (S.region && now - S.wxAt > REFRESH_MS) {
+    } else if (S.region && (now - S.wxAt > REFRESH_MS || (S.wxDate && S.wxDate !== kstYmd()))) {
       fetchWx();
     }
     if (!S.aq || dist(S.aqLL, ll) > MOVE_M || now - S.aqAt > REFRESH_MS) fetchAq(lat, lng);
+    // 2시간 칸이 바뀌면(예: 19:59 → 20:00) 첫 칸을 새 시간대로
+    var b = el();
+    if (b && S.wx && b.getAttribute('data-slot') !== String(curSlotHour())) render();
   }
 
   function toggle(e) {

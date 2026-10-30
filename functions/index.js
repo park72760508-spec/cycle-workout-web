@@ -11682,7 +11682,8 @@ exports.getOpenRidingDepartureWeather = onRequest(
         region,
         date,
         serviceKey,
-        admin.firestore()
+        admin.firestore(),
+        { allHours: String(req.query.hours || "") === "all" } // 루트맵 날씨 카드: 0~22시
       );
       res.status(result.success ? 200 : 400).json(result);
     } catch (e) {

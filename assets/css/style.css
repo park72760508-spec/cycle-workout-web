@@ -35668,3 +35668,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-size: 14px; font-weight: 700; cursor: pointer;
 }
 #outdoorRideScreen .outd-crs__garmin:active { transform: scale(0.98); }
+/* 2026-10-31 루트맵 날씨: 지금부터 24시간(2시간 간격 12칸) 좌우 스크롤 — 첫 칸 = 지금 시간대 */
+#outdoorRideScreen .outd-wx__hours {
+  justify-content: flex-start; gap: 4px; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; overscroll-behavior-x: contain; touch-action: pan-x; scroll-snap-type: x proximity;
+}
+#outdoorRideScreen .outd-wx__hours::-webkit-scrollbar { display: none; }
+#outdoorRideScreen .outd-wx__cell { flex: 0 0 auto; min-width: 46px; padding: 3px 4px; position: relative; scroll-snap-align: start; }
+#outdoorRideScreen .outd-wx__day { color: #fde68a; font-weight: 800; }
+#outdoorRideScreen .outd-wx__cell.is-tmr:has(.outd-wx__day) { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.35); border-radius: 0 9px 9px 0; }

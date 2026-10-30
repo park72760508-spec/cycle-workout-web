@@ -9,6 +9,8 @@ const { KOREA_REGION_WEATHER_COORDS } = require("./koreaRegionWeatherCoords");
 const KMA_BASE_URL = "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst";
 const KMA_BASE_TIMES = ["0200", "0500", "0800", "1100", "1400", "1700", "2000", "2300"];
 const TARGET_HOURS = [6, 8, 10, 12, 14, 16, 18];
+/** 루트맵 날씨 카드(2026-10-31): 하루 전체 2시간 간격 */
+const ALL_HOURS = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22];
 /** 기상청 발표 주기(3시간)와 동일하게 캐시 — 같은 모임을 여러 명이 봐도 API 호출 1회로 절감 */
 const CACHE_TTL_MS = 3 * 60 * 60 * 1000;
 
@@ -175,7 +177,8 @@ function wmoIconAndLabel(code) {
  * Open-Meteo는 위경도를 그대로 받아 격자 변환이 필요 없고, API 키 없이 무료로 시간별
  * 예보(최대 16일)를 제공한다 — KMA가 실패했을 때의 폴백 소스.
  */
-async function fetchOpenMeteoHours(lat, lon, targetYmd) {
+async function fetchOpenMeteoHours(lat, lon, targetYmd, targetHours) {
+  const HOURS = targetHours || TARGET_HOURS;
   const url =
     "https://api.open-meteo.com/v1/forecast" +
     "?latitude=" + encodeURIComponent(lat) +
@@ -209,7 +212,7 @@ async function fetchOpenMeteoHours(lat, lon, targetYmd) {
     byHour[hh] = { tempC: temps ? Number(temps[i]) : null, code: codes ? codes[i] : null, pop: pops && pops[i] != null ? Number(pops[i]) : null };
   });
 
-  return TARGET_HOURS.map((h) => {
+  return HOURS.map((h) => {
     const row = byHour[h];
     if (!row) return { hour: h, tempC: null, sky: null, pty: null, icon: null, label: null };
     const meta = wmoIconAndLabel(row.code);
@@ -231,7 +234,9 @@ async function fetchOpenMeteoHours(lat, lon, targetYmd) {
  * @param {string} serviceKey 기상청 단기예보 조회서비스 서비스키(공공데이터포털)
  * @param {FirebaseFirestore.Firestore} [db] 제공 시 3시간 TTL Firestore 캐시 사용
  */
-async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db) {
+async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db, opts) {
+  const allHours = !!(opts && opts.allHours);
+  const HOURS = allHours ? ALL_HOURS : TARGET_HOURS;
   const grid = resolveRegionGrid(regionStr);
   if (!grid) {
     return { success: false, error: "unsupported_region" };
@@ -247,7 +252,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     return { success: true, region: grid.region, date: targetYmd, hours: [], note: "지난 일정" };
   }
 
-  const cacheKey = grid.nx + "_" + grid.ny + "_" + targetCompact + "_v2"; // v2: 강수확률(pop) 포함
+  const cacheKey = grid.nx + "_" + grid.ny + "_" + targetCompact + "_v2" + (allHours ? "_all" : ""); // v2: 강수확률(pop) 포함
   const cacheRef = db ? db.collection("weather_forecast_cache").doc(cacheKey) : null;
   if (cacheRef) {
     try {
@@ -307,7 +312,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
     };
 
     const usedFcstKeys = new Set();
-    const kmaHours = TARGET_HOURS.map((h) => {
+    const kmaHours = HOURS.map((h) => {
       const { row, key } = nearestRow(h);
       if (!row) return { hour: h, tempC: null, sky: null, pty: null, pop: null, icon: null, label: null };
       usedFcstKeys.add(key);
@@ -343,7 +348,7 @@ async function getDepartureWeatherForRegion(regionStr, targetYmd, serviceKey, db
   // "날씨 정보를 불러올 수 없습니다"가 뜨는 상황을 최대한 피한다.
   if (!hours) {
     try {
-      hours = await fetchOpenMeteoHours(grid.lat, grid.lon, targetYmd);
+      hours = await fetchOpenMeteoHours(grid.lat, grid.lon, targetYmd, HOURS);
       source = "open-meteo";
     } catch (eOpenMeteo) {
       console.warn("[kmaWeatherService] Open-Meteo 폴백도 실패:", eOpenMeteo && eOpenMeteo.message);
