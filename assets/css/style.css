@@ -35660,3 +35660,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-crs .coachm-picker__head { gap: 8px; }
 #outdoorRideScreen .outd-crs .coachm-picker__head > span:first-child { flex-shrink: 0; }
 #outdoorRideScreen .outd-crs .outd-fav__dd { max-width: 100px; }
+/* 2026-10-31 즐겨찾기 코스 → 가민 속도계로 보내기 */
+#outdoorRideScreen .outd-crs__prev { margin-bottom: 8px; }
+#outdoorRideScreen .outd-crs__acts { padding: 0 14px 12px; }
+#outdoorRideScreen .outd-crs__garmin {
+  width: 100%; height: 40px; border-radius: 10px; border: 1px solid #0f172a; background: #0f172a; color: #fff;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+}
+#outdoorRideScreen .outd-crs__garmin:active { transform: scale(0.98); }

@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light only" />
+  <meta name="robots" content="noindex" />
+  <title>가민으로 코스 보내기 – STELVIO</title>
+  <!--
+    루트맵 즐겨찾기 코스 → 가민 속도계(2026-10-31)
+    앱(WebView)은 파일 공유를 못 하므로 이 페이지를 휴대폰 기본 브라우저로 열어
+    공유 창(가민 커넥트 선택) 또는 GPX 파일 저장을 한다.
+    ?u=<GPX 주소(firebasestorage)>&n=<코스 이름>
+  -->
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Pretendard", "Noto Sans KR", -apple-system, sans-serif;
+      background: #f1f5f9; color: #0f172a; min-height: 100dvh;
+      padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+    }
+    .card { max-width: 480px; margin: 0 auto; background: #fff; border-radius: 18px; padding: 22px 18px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }
+    .brand { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; color: #00a884; }
+    h1 { font-size: 20px; margin: 6px 0 4px; line-height: 1.35; word-break: keep-all; }
+    .meta { font-size: 14px; color: #64748b; margin: 0 0 18px; }
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; height: 52px; border: 0; border-radius: 14px;
+      font-size: 16px; font-weight: 800; cursor: pointer; margin-bottom: 10px; font-family: inherit;
+    }
+    .btn--main { background: #00b894; color: #fff; }
+    .btn--sub { background: #f1f5f9; color: #0f172a; border: 1px solid #e2e8f0; }
+    .btn:disabled { opacity: 0.5; }
+    .msg { font-size: 13px; color: #b45309; min-height: 18px; margin: 4px 0 8px; text-align: center; }
+    .msg.is-ok { color: #00a884; }
+    h2 { font-size: 15px; margin: 22px 0 8px; }
+    ol { margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.65; color: #334155; }
+    ol b { color: #0f172a; }
+    .note { font-size: 12px; color: #94a3b8; margin-top: 14px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">STELVIO · 루트맵 코스</div>
+    <h1 id="title">코스를 불러오는 중...</h1>
+    <p class="meta" id="meta"></p>
+    <button type="button" class="btn btn--main" id="shareBtn" disabled>⌚ 가민 커넥트로 보내기</button>
+    <button type="button" class="btn btn--sub" id="saveBtn" disabled>⬇ GPX 파일 저장</button>
+    <div class="msg" id="msg"></div>
+
+    <h2>가민 속도계에 넣는 방법</h2>
+    <ol>
+      <li><b>가민 커넥트로 보내기</b>를 누르고 공유 목록에서 <b>Connect</b>(가민 커넥트) 앱을 고릅니다.</li>
+      <li>가민 커넥트에서 코스를 가져온 뒤 <b>기기로 보내기</b>를 누릅니다.</li>
+      <li>속도계 동기화가 끝나면 <b>코스(내비게이션) &gt; 코스</b>에서 선택해 안내를 시작합니다.</li>
+    </ol>
+    <h2>공유 목록에 가민 커넥트가 없으면</h2>
+    <ol>
+      <li><b>GPX 파일 저장</b>으로 휴대폰에 파일을 저장합니다.</li>
+      <li>PC에서 <b>connect.garmin.com</b> 접속 → 교육 및 계획 &gt; <b>코스</b> &gt; <b>가져오기</b>로 GPX를 올립니다.</li>
+      <li>코스 화면에서 <b>기기로 보내기</b>를 누르고 속도계를 동기화합니다.</li>
+    </ol>
+    <p class="note">코스 파일은 STELVIO 사용자가 등록한 GPX입니다. 실제 도로 상황과 다를 수 있으니 안전에 유의하세요.</p>
+  </div>
+  <script>
+    (function () {
+      var q = new URLSearchParams(location.search);
+      var url = String(q.get('u') || '');
+      var name = String(q.get('n') || '').trim().slice(0, 60) || 'STELVIO 코스';
+      var $ = function (id) { return document.getElementById(id); };
+      var msg = function (t, ok) { $('msg').textContent = t || ''; $('msg').className = 'msg' + (ok ? ' is-ok' : ''); };
+      var file = null;
+      $('title').textContent = name;
+      document.title = name + ' – 가민으로 코스 보내기';
+
+      var okHost = false;
+      try { okHost = new URL(url).hostname === 'firebasestorage.googleapis.com'; } catch (e) {}
+      if (!okHost) { $('title').textContent = '코스 주소가 올바르지 않습니다'; return; }
+
+      function esc(s) { return s.replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[c]; }); }
+      /** 가민 커넥트에 보이는 코스 이름을 목록 제목으로 맞춤(<trk><name>) */
+      function withName(txt) {
+        var n = '<name>' + esc(name) + '</name>';
+        if (/<trk>\s*<name>[\s\S]*?<\/name>/.test(txt)) return txt.replace(/(<trk>\s*)<name>[\s\S]*?<\/name>/, '$1' + n);
+        if (/<trk>/.test(txt)) return txt.replace(/<trk>/, '<trk>' + n);
+        return txt;
+      }
+      function distKm(txt) {
+        var re = /<(?:trkpt|rtept)\b[^>]*?\blat=["']([-\d.]+)["'][^>]*?\blon=["']([-\d.]+)["']|<(?:trkpt|rtept)\b[^>]*?\blon=["']([-\d.]+)["'][^>]*?\blat=["']([-\d.]+)["']/g;
+        var m, prev = null, d = 0, R = 6371;
+        while ((m = re.exec(txt))) {
+          var la = parseFloat(m[1] || m[4]), lo = parseFloat(m[2] || m[3]);
+          if (prev) {
+            var dl = (la - prev[0]) * Math.PI / 180, dn = (lo - prev[1]) * Math.PI / 180;
+            var a = Math.sin(dl / 2) * Math.sin(dl / 2) + Math.cos(prev[0] * Math.PI / 180) * Math.cos(la * Math.PI / 180) * Math.sin(dn / 2) * Math.sin(dn / 2);
+            d += 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          }
+          prev = [la, lo];
+        }
+        return d;
+      }
+      var fname = (name.replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '') || 'stelvio_course') + '.gpx';
+
+      fetch(url, { cache: 'force-cache' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.text();
+      }).then(function (txt) {
+        if (!/<(trkpt|rtept)\b/.test(txt)) throw new Error('코스 포인트가 없습니다');
+        var out = withName(txt);
+        var km = distKm(out);
+        $('meta').textContent = (km > 0 ? km.toFixed(1) + ' km · ' : '') + 'GPX 코스';
+        file = new File([out], fname, { type: 'application/gpx+xml' });
+        $('shareBtn').disabled = false;
+        $('saveBtn').disabled = false;
+      }).catch(function (e) {
+        $('title').textContent = '코스 파일을 불러오지 못했습니다';
+        msg(e && e.message ? e.message : '');
+      });
+
+      function save() {
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(file);
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+        msg('GPX 파일을 저장했습니다 · ' + fname, true);
+      }
+      $('saveBtn').addEventListener('click', function () { if (file) save(); });
+      $('shareBtn').addEventListener('click', function () {
+        if (!file) return;
+        var data = { files: [file], title: name };
+        if (navigator.canShare && navigator.canShare(data)) {
+          navigator.share(data).then(function () {
+            msg('가민 커넥트에서 코스를 가져온 뒤 기기로 보내기를 눌러 주세요.', true);
+          }, function (e) {
+            if (e && e.name === 'AbortError') return;
+            msg('공유하지 못했습니다. GPX 파일 저장을 이용해 주세요.');
+          });
+        } else {
+          save();
+          msg('이 브라우저는 파일 공유를 지원하지 않아 GPX 파일로 저장했습니다.');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

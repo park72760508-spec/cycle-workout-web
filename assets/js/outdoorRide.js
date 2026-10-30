@@ -5012,7 +5012,8 @@
       }
       if (open) {
         html += '<button type="button" class="outd-crs__prev" data-crs-use="' + k + '" aria-label="이 코스로 안내">' +
-          '<div class="outd-crs__prevmap"></div><span class="outd-crs__prevhint">코스맵을 누르면 이 코스로 안내합니다</span></button>';
+          '<div class="outd-crs__prevmap"></div><span class="outd-crs__prevhint">코스맵을 누르면 이 코스로 안내합니다</span></button>' +
+          '<div class="outd-crs__acts"><button type="button" class="outd-crs__garmin" data-crs-garmin="' + k + '">⌚ 가민 속도계로 보내기</button></div>';
       }
       return html + '</div>';
     }).join('');
@@ -5040,6 +5041,22 @@
     }).catch(function (e) {
       if (box.isConnected) box.innerHTML = '<div class="outd-crs__prevmsg">코스맵을 불러오지 못했습니다' + (e && e.message ? '<br><small>' + escHtml(e.message) + '</small>' : '') + '</div>';
     });
+  }
+  /**
+   * 가민 속도계로 보내기(2026-10-31): 앱(WebView)은 파일 공유가 안 되므로 garmin-course.html 을 휴대폰 기본 브라우저로 열어
+   *  공유 창(가민 커넥트 선택) 또는 GPX 저장. 일반 브라우저는 새 탭으로 같은 페이지.
+   */
+  function crsSendToGarmin(it) {
+    var base = /^https?:$/.test(location.protocol) ? location.origin : 'https://stelvio.ai.kr';
+    var url = base + '/garmin-course.html?u=' + encodeURIComponent(it.url) + '&n=' + encodeURIComponent(it.title || '');
+    var rn = window.ReactNativeWebView;
+    if (rn && typeof rn.postMessage === 'function') {
+      try { rn.postMessage(JSON.stringify({ type: 'OPEN_EXTERNAL_URL', url: url })); } catch (e) {}
+      toast('브라우저에서 가민 커넥트로 보내기 화면을 엽니다', 'info');
+      return;
+    }
+    var w = window.open(url, '_blank', 'noopener');
+    if (!w) location.href = url;
   }
   function crsSave(it, fields) {
     var body = { gpx_url: it.url, ride_id: it.rideId || '', title: fields.title, description: fields.desc, is_public: fields.pub };
@@ -5122,6 +5139,11 @@
           window.closeOutdoorCoursePicker();
           toast('코스를 불러왔습니다 · ' + (st.course.totalM / 1000).toFixed(1) + ' km', 'success');
         }).catch(function (e) { toast('코스맵을 불러오지 못했습니다: ' + ((e && e.message) || e), 'error'); });
+        return;
+      }
+      if ((b = t.closest('[data-crs-garmin]'))) {
+        var gi = crsFind(b.getAttribute('data-crs-garmin'));
+        if (gi) crsSendToGarmin(gi);
         return;
       }
       if ((b = t.closest('[data-crs-pub]'))) {
