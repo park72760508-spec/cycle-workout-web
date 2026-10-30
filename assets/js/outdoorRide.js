@@ -467,6 +467,7 @@
     var avg = avgSpeedKmh();
     setText('outd-ui-avg', (isFinite(avg) ? avg : 0).toFixed(1));
     setText('outd-ui-elev', Math.round(st.elevGainM));
+    setText('outd-ui-dist3', (st.distanceM / 1000).toFixed(2)); // 하단 세 번째 칸을 '이동 거리'로 골랐을 때
     // 남은 거리: 코스맵(피니쉬)·길찾기(목적지)까지. 코스가 없으면(자유 라이딩) --
     if (!st.course) setText('outd-ui-remain', '--');
     // GPS 신호가 5초 넘게 끊기면 속도 0 으로
@@ -782,6 +783,53 @@
     }
     placeExpStats();
   }
+
+  /*
+   * 하단 세 번째 칸(2026-10-31): 라벨 옆 ⌄ 를 누르면 [누적 고도 / 이동 거리] 목록 → 고른 항목을 표시(기기에 기억)
+   */
+  var STAT3_KEY = 'stelvio_outd_stat3';
+  function applyStat3(v) {
+    var box = $('outdStat3');
+    if (!box) return;
+    v = v === 'dist' ? 'dist' : 'elev';
+    box.setAttribute('data-show', v);
+    setText('outdStat3Label', v === 'dist' ? '이동 거리' : '누적 고도');
+    Array.prototype.forEach.call(box.querySelectorAll('[data-stat3]'), function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-stat3') === v);
+      b.setAttribute('aria-selected', b.getAttribute('data-stat3') === v ? 'true' : 'false');
+    });
+  }
+  function closeStat3() {
+    var pop = $('outdStat3Pop'), box = $('outdStat3');
+    if (pop) pop.hidden = true;
+    if (box) { box.classList.remove('is-open'); var b = box.querySelector('.outd-stat3__btn'); if (b) b.setAttribute('aria-expanded', 'false'); }
+  }
+  window.toggleOutdoorStat3 = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var pop = $('outdStat3Pop'), box = $('outdStat3');
+    if (!pop || !box) return;
+    if (!pop.hidden) { closeStat3(); return; }
+    pop.hidden = false;
+    box.classList.add('is-open');
+    var b = box.querySelector('.outd-stat3__btn');
+    if (b) b.setAttribute('aria-expanded', 'true');
+  };
+  window.setOutdoorStat3 = function (v, e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    applyStat3(v);
+    try { localStorage.setItem(STAT3_KEY, v); } catch (eS) {}
+    closeStat3();
+  };
+  document.addEventListener('click', function (e) {
+    var box = $('outdStat3');
+    if (box && box.classList.contains('is-open') && !box.contains(e.target)) closeStat3();
+  });
+  (function () {
+    var v = 'elev';
+    try { v = localStorage.getItem(STAT3_KEY) || 'elev'; } catch (e) {}
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { applyStat3(v); });
+    else applyStat3(v);
+  })();
 
   window.toggleOutdoorExpand = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();

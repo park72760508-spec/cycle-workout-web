@@ -35712,3 +35712,41 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #outdoorRideScreen .outd-route-reset-btn { bottom: 158px; }
   #outdoorRideScreen .outd-overview-btn { bottom: 110px; }
 }
+/* ===== 2026-10-31 하단 세 번째 칸: ⌄ 로 누적 고도 / 이동 거리 선택 ===== */
+#outdoorRideScreen .outd-stat3 { position: relative; }
+#outdoorRideScreen .outd-stat3__btn {
+  display: inline-flex; align-items: center; gap: 5px; background: none; border: 0; padding: 0 4px; cursor: pointer; font-family: inherit;
+}
+#outdoorRideScreen .outd-stat3__chev {
+  width: 6px; height: 6px; border-right: 2px solid #aaa; border-bottom: 2px solid #aaa; transform: rotate(45deg); margin-top: -3px; transition: transform 0.15s ease;
+}
+#outdoorRideScreen .outd-stat3.is-open .outd-stat3__chev { transform: rotate(-135deg); margin-top: 3px; }
+#outdoorRideScreen .outd-stat3[data-show="elev"] .outd-stat3__v--dist,
+#outdoorRideScreen .outd-stat3[data-show="dist"] .outd-stat3__v--elev { display: none; }
+#outdoorRideScreen .outd-stat3__pop {
+  position: absolute; right: 6px; bottom: calc(100% + 6px); z-index: 900; min-width: 128px; padding: 5px;
+  background: #1c1c1c; border: 1px solid #333; border-radius: 12px; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.55);
+}
+#outdoorRideScreen .outd-stat3__pop[hidden] { display: none; }
+#outdoorRideScreen .outd-stat3__pop button {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 11px 12px;
+  border: 0; border-radius: 8px; background: transparent; color: #e2e8f0; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+#outdoorRideScreen .outd-stat3__pop button:active { background: #2a2a2a; }
+#outdoorRideScreen .outd-stat3__pop button b { visibility: hidden; color: #00d4aa; }
+#outdoorRideScreen .outd-stat3__pop button.is-on { color: #00d4aa; font-weight: 800; background: rgba(0, 212, 170, 0.1); }
+#outdoorRideScreen .outd-stat3__pop button.is-on b { visibility: visible; }
+
+/* ===== 2026-10-31 지도 크게 보기: 현재 속도만 "0.0 km/h" 글자로(검정 글씨 + 흰 테두리, 20% 크게) — 날씨 카드 아래 같은 줄 ===== */
+#outdoorRideScreen.outd-expanded .outd-exp-stats {
+  justify-content: flex-start; background: none; padding: 6px 4px; border-radius: 0;
+}
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item + .outd-exp-stats__item,
+#outdoorRideScreen.outd-expanded .outd-exp-stats__label { display: none; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item b,
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item small {
+  color: #0f172a;
+  text-shadow: 2px 0 0 #fff, -2px 0 0 #fff, 0 2px 0 #fff, 0 -2px 0 #fff, 1.5px 1.5px 0 #fff, -1.5px 1.5px 0 #fff, 1.5px -1.5px 0 #fff, -1.5px -1.5px 0 #fff, 0 0 6px rgba(255, 255, 255, 0.9);
+}
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item b { font-size: 31px; font-weight: 900; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item small { font-size: 14px; font-weight: 800; }
