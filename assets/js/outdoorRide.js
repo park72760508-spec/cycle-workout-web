@@ -995,6 +995,9 @@
       zoomControl: false,
       attributionControl: false, // 출처 표시는 회전판 밖(.outd-attrib)에 고정
       fadeAnimation: false,
+      // 2026-10-30: 키보드 조작 끔 — 지도를 누를 때 Leaflet 이 지도에 포커스를 주면, 지도 칸보다 큰 회전판 때문에
+      // 브라우저가 지도 칸을 스크롤해 날씨 카드가 위로 사라지고 오른쪽·시작/종료 버튼이 위로 밀렸다
+      keyboard: false,
       touchZoom: 'center',
       scrollWheelZoom: 'center',
       doubleClickZoom: 'center'
@@ -5488,8 +5491,31 @@
     });
     ctrl.classList.add('is-placed');
   }
+  /*
+   * 2026-10-30: 루트맵 칸은 스크롤되면 안 됨(overflow:hidden 이어도 포커스·입력창 때문에 브라우저가 몰래 스크롤함).
+   * 스크롤되면 날씨 카드가 위로 사라지고 오른쪽 버튼·시작/종료 버튼이 위로 밀려 보임 → 스크롤되는 즉시 제자리로.
+   */
+  var NO_SCROLL_SEL = '#' + SCREEN_ID + ', #' + SCREEN_ID + ' .outd-map-section, #' + SCREEN_ID + ' .outd-map-wrap, #' +
+    SCREEN_ID + ' .mobile-main-content, #' + SCREEN_ID + ' .mobile-gauge-segment-wrap, #' + SCREEN_ID + ' .mobile-gauge-container';
+  function resetLayoutScroll(el) {
+    if (el && (el.scrollTop || el.scrollLeft)) { el.scrollTop = 0; el.scrollLeft = 0; }
+  }
+  function resetAllLayoutScroll() {
+    var list = document.querySelectorAll(NO_SCROLL_SEL);
+    for (var i = 0; i < list.length; i++) resetLayoutScroll(list[i]);
+  }
+  function watchLayoutScroll() {
+    var screen = $(SCREEN_ID);
+    if (!screen || screen.__outdNoScroll) return;
+    screen.__outdNoScroll = true;
+    screen.addEventListener('scroll', function (e) {
+      var t = e.target;
+      if (t && t.nodeType === 1 && t.matches && t.matches(NO_SCROLL_SEL)) resetLayoutScroll(t);
+    }, true);
+  }
   function fixMapSize() {
     if (!isActive()) return;
+    resetAllLayoutScroll();
     // 현재 속도 소수 자리 위치 다시(화면이 가려진 동안엔 글자 폭을 잴 수 없음) — 정수는 가운데(x=100)
     var spdDec = $('outd-ui-speed-dec');
     if (spdDec) spdDec.__placed = false;
@@ -5513,6 +5539,7 @@
     var el = $(SCREEN_ID);
     if (!el || typeof MutationObserver !== 'function' || el.__outdWatch) return;
     el.__outdWatch = true;
+    watchLayoutScroll();
     var wasActive = isActive();
     if (wasActive) setNativePreview(true);
     new MutationObserver(function () {

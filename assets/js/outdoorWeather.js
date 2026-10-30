@@ -93,9 +93,11 @@
     return { icon: icon, label: label, pop: showPop ? Math.round(maxPop) : null };
   }
 
+  /** 2026-10-30: 등급 글자 없이 이름 + 색 점만(등급은 길게 누르기·읽어주기용 title/aria 에) */
   function pill(name, g, valTxt) {
-    if (!g) return '<span class="outd-wx__pill"><b>' + name + '</b><i class="outd-wx__dot"></i>-</span>';
-    return '<span class="outd-wx__pill outd-wx__pill--' + g[1] + '" title="' + esc(name + ' ' + valTxt) + '"><b>' + name + '</b><i class="outd-wx__dot"></i>' + g[0] + '</span>';
+    if (!g) return '<span class="outd-wx__pill" title="' + name + ' 정보 없음" aria-label="' + name + ' 정보 없음"><b>' + name + '</b><i class="outd-wx__dot"></i></span>';
+    var t = esc(name + ' ' + g[0] + (valTxt ? ' (' + valTxt + ')' : ''));
+    return '<span class="outd-wx__pill outd-wx__pill--' + g[1] + '" title="' + t + '" aria-label="' + t + '"><b>' + name + '</b><i class="outd-wx__dot"></i></span>';
   }
 
   function render() {
