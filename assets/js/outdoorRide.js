@@ -991,6 +991,8 @@
     var L = window.L;
     sizeRotLayer();
     // 확대·축소는 항상 지도 가운데(=회전 중심) 기준 — 회전한 지도에서도 손가락 확대가 어긋나지 않게
+    // 지도 위 표시(내 위치·즐겨찾기 핀 등)도 눌렀을 때 포커스를 받지 않게(포커스 → 지도 칸 스크롤 원인)
+    if (L.Marker && L.Marker.mergeOptions) L.Marker.mergeOptions({ keyboard: false });
     st.map = L.map('outdMap', {
       zoomControl: false,
       attributionControl: false, // 출처 표시는 회전판 밖(.outd-attrib)에 고정
