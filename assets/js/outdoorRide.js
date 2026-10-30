@@ -444,9 +444,12 @@
     var rem = st.remainM != null ? st.remainM : c.totalM;
     var avg = avgSpeedKmh();
     if (!(avg >= 1) || st.distanceM < 300) avg = ETA_DEFAULT_KMH[c.routeMode] || 18;
-    var eta = new Date(Date.now() + (rem / 1000) / avg * 3600000);
+    var durMin = Math.max(1, Math.round((rem / 1000) / avg * 60));
+    var eta = new Date(Date.now() + durMin * 60000);
+    // 소요 시간: 60분 미만 '약 35분', 이상 '약 1시간 20분'
+    var durTxt = durMin < 60 ? durMin + '분' : Math.floor(durMin / 60) + '시간' + (durMin % 60 ? ' ' + (durMin % 60) + '분' : '');
     var html = '<span class="outd-map-empty__dest"><b>' + escHtml(c.dest.name || '목적지') + '</b> 경로로 안내합니다</span>' +
-      '<span class="outd-map-empty__eta">도착 예정 시간 : ' + eta.getHours() + '시 ' + String(eta.getMinutes()).padStart(2, '0') + '분</span>';
+      '<span class="outd-map-empty__eta">도착 예정 시간 : ' + eta.getHours() + '시 ' + String(eta.getMinutes()).padStart(2, '0') + '분(약 ' + durTxt + ')</span>';
     if (empty.__destHtml !== html) { empty.innerHTML = html; empty.__destHtml = html; }
     empty.classList.add('is-dest');
     if (empty.style.display === 'none') empty.style.display = '';
