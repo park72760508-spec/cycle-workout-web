@@ -293,6 +293,15 @@
    * 이동 거리 'km' 위에 지금 이동 수단 아이콘(흰색: 오토바이·자전거·걷기).
    * 이동 수단 = 안내 중인 길찾기 경로의 수단, 경로가 없으면 길찾기에서 고른 탭.
    */
+  /*
+   * 속도계 안 아이콘은 순수 SVG(2026-10-30): foreignObject(HTML)는 휴대폰 WebView 에서 위치가 어긋나
+   * ('20' 눈금 근처로 이동) — 자전거는 선, 오토바이·걷기는 이미지 + 흰색 필터(#outdWhiteFilter)
+   */
+  var GAUGE_SVG_ICONS = {
+    bike: '<svg x="93.5" y="72.5" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>',
+    moto: '<image x="92.5" y="71.5" width="15" height="15" href="assets/img/motorcycle.svg?v=20261022" preserveAspectRatio="xMidYMid meet" filter="url(#outdWhiteFilter)"/>',
+    walk: '<image x="93.5" y="72.5" width="13" height="13" href="assets/img/walking.svg?v=20261024" preserveAspectRatio="xMidYMid meet" filter="url(#outdWhiteFilter)"/>'
+  };
   var GAUGE_MODE_ICONS = {
     bike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>',
     moto: '<span class="outd-route__moto-ico" aria-hidden="true"></span>',
@@ -367,8 +376,9 @@
     var ico = $('outdGaugeModeIco');
     if (ico && ico.__mode !== m) {
       ico.__mode = m;
-      ico.innerHTML = GAUGE_MODE_ICONS[m] || '';
-      ico.setAttribute('aria-label', { moto: '오토바이', bike: '자전거', walk: '걷기' }[m] || '');
+      ico.innerHTML = GAUGE_SVG_ICONS[m] || '';
+      var hit = $('outdGaugeModeHit');
+      if (hit) hit.setAttribute('aria-label', '이동 수단: ' + ({ moto: '오토바이', bike: '자전거', walk: '걷기' }[m] || '') + ' · 눌러서 바꾸기');
     }
   }
 
@@ -3359,7 +3369,8 @@
       item.children[0].textContent = p.name;
       item.children[1].textContent = p.sub || '';
       item.children[2].textContent = d != null ? (d < 1 ? Math.round(d * 1000) + ' m' : d.toFixed(1) + ' km') : '';
-      item.addEventListener('click', function () { startDestPick(p); }); // 2026-10-28: 지도에 📍 표시 후 '여기로 길찾기'
+      // 2026-10-30: 검색 결과를 누르면 바로 경로 후보(카카오 경로) — '지도를 눌러 목적지 선택' 화면은 지도에서 직접 고를 때만
+      item.addEventListener('click', function () { chooseDestination(p); });
       box.appendChild(item);
     });
   }

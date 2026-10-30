@@ -29970,7 +29970,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261029avg3"></script>
   <script src="assets/js/outdoorWeather.js?v=20261030dots"></script>
-  <script src="assets/js/outdoorRide.js?v=20261030tpick2"></script>
+  <script src="assets/js/outdoorRide.js?v=20261030svgico"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36166,8 +36166,10 @@
           <g id="outd-gauge-ticks"></g>
           <g id="outd-gauge-labels"></g>
           <text x="100" y="93" text-anchor="middle" fill="#888" font-size="6">km</text>
-          <!-- 2026-10-30: 이동 수단 아이콘(흰색) — 눈금 아래 끝(y 70)과 'km'(위 끝 약 88) 사이 가운데. 누르면 이동 수단 선택 팝업(누르는 영역은 아이콘보다 넓게) -->
-          <foreignObject x="84" y="70.5" width="32" height="17"><div xmlns="http://www.w3.org/1999/xhtml" id="outdGaugeModeIco" class="outd-gauge-mode" role="button" tabindex="0" aria-label="이동 수단 선택" onclick="openOutdoorTravelPicker(event)"></div></foreignObject>
+          <!-- 2026-10-30: 이동 수단 아이콘(흰색, 순수 SVG) — 눈금 아래 끝(y 70)과 'km'(위 끝 약 88) 사이 가운데. 누르면 이동 수단 선택 팝업(누르는 영역 rect 는 아이콘보다 넓게) -->
+          <filter id="outdWhiteFilter" x="0" y="0" width="1" height="1" color-interpolation-filters="sRGB"><feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter>
+          <g id="outdGaugeModeIco" pointer-events="none"></g>
+          <rect id="outdGaugeModeHit" x="84" y="70.5" width="32" height="17" fill="transparent" pointer-events="all" role="button" tabindex="0" aria-label="이동 수단 선택" style="cursor: pointer;" onclick="openOutdoorTravelPicker(event)"/>
           <!-- 이동 거리: 정수는 가운데, 소수점 이하는 작게(outdoorRide.js setSplitNumber) -->
           <text id="outd-ui-distance" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
           <text id="outd-ui-distance-dec" x="108" y="120" text-anchor="start" fill="#ff8c00" font-size="14" font-weight="bold">.00</text>
