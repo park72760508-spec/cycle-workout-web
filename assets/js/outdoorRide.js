@@ -2212,9 +2212,10 @@
      * (맞게 꺾은 경우는 다음 구간에 바로 붙어 거리가 작으므로 해당 없음)
      */
     var wrongDir = false;
-    if (!badFix && m.seg > 0 && st.heading != null && st.speedKmh >= (P.walk ? 3 : 8) && m.d > (P.walk ? 12 : 18)) {
+    // 진행 방향은 실제 GPS 이동 방향(st.moveHeading) — st.heading 은 지도 회전값이라 경로 위에서는 경로 방향과 같음
+    if (!badFix && m.seg > 0 && st.moveHeading != null && st.speedKmh >= (P.walk ? 3 : 8) && m.d > (P.walk ? 12 : 18)) {
       var a0 = c.latlngs[m.seg - 1], a1 = c.latlngs[m.seg];
-      if (a0 && a1) wrongDir = Math.abs(angleDiff(bearing(a0[0], a0[1], a1[0], a1[1]), st.heading)) > 70;
+      if (a0 && a1) wrongDir = Math.abs(angleDiff(bearing(a0[0], a0[1], a1[0], a1[1]), st.moveHeading)) > 70;
     }
     if ((m.d > P.offM || wrongDir) && !badFix) {
       if (!st.offSince) st.offSince = now;
@@ -3147,7 +3148,9 @@
 
     var mode = c.routeMode || 'bike';
     var from = { lat: fix.lat, lng: fix.lng };
-    var heading = st.heading != null && st.speedKmh >= 5 ? st.heading : null;
+    // 지금 실제로 가는 방향(GPS 이동 방향)으로 출발하는 경로 — 지도 회전값(st.heading)은 경로 방향일 수 있어 쓰지 않음
+    var hd0 = st.moveHeading != null ? st.moveHeading : st.heading;
+    var heading = hd0 != null && st.speedKmh >= 5 ? hd0 : null;
     // 합류 지점: 마지막으로 경로 위에 있던 곳에서 약 200m 앞(남은 경로가 짧으면 목적지)
     var baseAlong = st.lastOnRouteAlong != null ? st.lastOnRouteAlong : (r.idx > 0 ? c.cum[r.idx] : 0);
     var rejoinAt = baseAlong + (navIsWalk() ? 100 : 200);
