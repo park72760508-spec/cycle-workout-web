@@ -432,8 +432,31 @@
     return isFinite(v) ? v : 0;
   }
 
+  /*
+   * 목적지 안내 카드(2026-10-31): 길찾기로 목적지를 고르면 아래 안내 카드에
+   *  "○○ 경로로 안내합니다" + "도착 예정 시간 : 18시 20분"(지금 + 남은 거리 ÷ 평균 속도).
+   *  아직 평균 속도가 없으면(기록 전·출발 직후) 이동 수단별 보통 속도로 계산.
+   */
+  var ETA_DEFAULT_KMH = { walk: 4.5, walkShort: 4.5, walkBack: 4.5, moto: 35, motoShort: 35, motoBack: 35 };
+  function renderDestCard() {
+    var empty = $('outdMapEmpty'), c = st.course;
+    if (!empty || !(c && c.isRoute && c.dest)) return;
+    var rem = st.remainM != null ? st.remainM : c.totalM;
+    var avg = avgSpeedKmh();
+    if (!(avg >= 1) || st.distanceM < 300) avg = ETA_DEFAULT_KMH[c.routeMode] || 18;
+    var eta = new Date(Date.now() + (rem / 1000) / avg * 3600000);
+    var html = '<span class="outd-map-empty__dest"><b>' + escHtml(c.dest.name || '목적지') + '</b> 경로로 안내합니다</span>' +
+      '<span class="outd-map-empty__eta">도착 예정 시간 : ' + eta.getHours() + '시 ' + String(eta.getMinutes()).padStart(2, '0') + '분</span>';
+    if (empty.__destHtml !== html) { empty.innerHTML = html; empty.__destHtml = html; }
+    empty.classList.add('is-dest');
+    if (empty.style.display === 'none') empty.style.display = '';
+  }
+  // 기록 전(1초 타이머가 없을 때)에도 시간이 흐르면 도착 예정 시간이 바뀌게
+  setInterval(function () { if (st.course && st.course.isRoute && !st.timer) renderDestCard(); }, 20000);
+
   function renderStats() {
     syncGaugeMode(); // 이동 수단 아이콘·오토바이 눈금(경로 선택·해제 직후에도)
+    renderDestCard();
     var el = elapsedNow();
     setText('outd-main-timer', fmtHms(el));
     setSplitNumber('outd-ui-distance', 'outd-ui-distance-dec', st.distanceM / 1000, 2);
@@ -621,6 +644,8 @@
     var empty = $('outdMapEmpty');
     if (empty) {
       empty.innerHTML = '코스맵을 선택하면 경로를 안내합니다<br><small>☰ &gt; 코스맵 선택 · 길찾기</small>';
+      empty.classList.remove('is-dest');
+      empty.__destHtml = '';
       empty.style.display = st.status === 'running' ? 'none' : '';
     }
     updateRerouteBtn();
@@ -2016,7 +2041,13 @@
     if (st.trail) st.trail.bringToFront();
     if (!st.lastFix) map.fitBounds(L.latLngBounds(st.course.latlngs), { padding: [16, 16] });
     var empty = $('outdMapEmpty');
-    if (empty) empty.style.display = 'none';
+    st.remainM = null;
+    if (empty) {
+      empty.style.display = 'none';
+      empty.classList.remove('is-dest');
+      empty.__destHtml = '';
+    }
+    renderDestCard(); // 길찾기 목적지면 '○○ 경로로 안내합니다 · 도착 예정 시간'
     var nav = $('outdNav');
     if (nav) nav.style.display = 'flex';
     setText('outdNavText', st.course.title ? st.course.title : '코스를 따라 이동하세요');
@@ -2328,6 +2359,7 @@
       here = filterAlong(m.along, t || now);
     }
     var remainM = Math.max(0, c.totalM - here);
+    st.remainM = remainM;
     setText('outdNavRemain', '남은 ' + (remainM / 1000).toFixed(1) + ' km');
     setText('outd-ui-remain', (remainM / 1000).toFixed(remainM < 10000 ? 2 : 1));
     if (nav) nav.classList.toggle('is-off', offCourse);
@@ -5357,6 +5389,8 @@
     var empty = $('outdMapEmpty');
     if (empty) {
       empty.innerHTML = '라이딩 기록 · 현재 위치 기준으로 기록합니다<br><small>시작 버튼을 누르면 기록이 시작됩니다</small>';
+      empty.classList.remove('is-dest');
+      empty.__destHtml = '';
       empty.style.display = '';
     }
     st.follow = true;

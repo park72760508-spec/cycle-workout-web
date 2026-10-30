@@ -35677,3 +35677,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-wx__cell { flex: 0 0 auto; min-width: 46px; padding: 3px 4px; position: relative; scroll-snap-align: start; }
 #outdoorRideScreen .outd-wx__day { color: #fde68a; font-weight: 800; }
 #outdoorRideScreen .outd-wx__cell.is-tmr:has(.outd-wx__day) { box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.35); border-radius: 0 9px 9px 0; }
+/* 2026-10-31 목적지 안내 카드: "○○ 경로로 안내합니다" + 도착 예정 시간(맑은 녹색, 같은 글자 크기) */
+#outdoorRideScreen .outd-map-empty.is-dest { max-width: calc(100% - 120px); }
+#outdoorRideScreen .outd-map-empty__dest,
+#outdoorRideScreen .outd-map-empty__eta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-map-empty__dest b { color: #ffffff; font-weight: 800; }
+#outdoorRideScreen .outd-map-empty__eta { color: #34d399; font-weight: 700; }
