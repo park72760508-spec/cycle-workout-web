@@ -4770,7 +4770,7 @@
       '<button type="button" class="outd-gpx-src__btn" data-src="folder"><span class="outd-gpx-src__ico">📁</span>' +
       '<span><b>코스 폴더에서 선택</b><small>내 기기에서 GPX 파일을 직접 선택합니다</small></span></button>' +
       '<button type="button" class="outd-gpx-src__btn" data-src="fav"><span class="outd-gpx-src__ico">⭐</span>' +
-      '<span><b>즐겨찾기 코스에서 선택</b><small>내가 만든 모임의 코스 GPX를 다시 사용합니다</small></span></button>' +
+      '<span><b>즐겨찾기 코스에서 선택</b><small>공개 코스 또는 내가 만든 모임의 코스 GPX를 사용합니다</small></span></button>' +
       '<button type="button" class="outd-gpx-src__cancel" data-src="cancel">취소</button>' +
       '<input type="file" accept=".gpx,application/gpx+xml" class="outd-gpx-src__file" hidden>' +
       '</div>';
@@ -4802,48 +4802,266 @@
       openFavoriteCourses();
     });
   };
-  /** 즐겨찾기 코스(내가 만든 모임의 GPX) 목록 */
+  /*
+   * 즐겨찾기 코스(2026-10-31): [공개 코스] 다른 사용자가 공개한 코스 · [내 즐겨찾기] 내가 만든 모임의 GPX 코스
+   *  제목을 누르면 아래에 미리보기 코스맵 → 미리보기를 누르면 그 코스로 안내.
+   *  내 즐겨찾기: 공개/비공개 배지(누르면 바뀜) · 수정(제목·경로 설명). 저장은 Supabase RPC fn_route_course_*.
+   *  공개 중복 방지: 서버가 GPX 경로 모양(균등 50점)·총거리·시작/끝점으로 이미 공개된 코스와 비교해 막는다.
+   */
+  var crs = { tab: 'public', mine: null, pub: null, shares: {}, open: null, edit: null, gpx: {}, prevMap: null, seq: 0, bound: false };
+
+  function crsKm(m) { return m > 0 ? (m / 1000).toFixed(1) + ' km' : ''; }
+  /** GPX 글자 받기(같은 주소는 한 번만) */
+  function crsGpx(url) {
+    if (crs.gpx[url]) return crs.gpx[url];
+    crs.gpx[url] = fetch(url, { cache: 'force-cache' }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.text();
+    }).then(function (txt) {
+      var ll = parseCourseGpx(txt);
+      if (ll.length < 2) throw new Error('코스 포인트가 없습니다.');
+      return { txt: txt, ll: ll };
+    });
+    crs.gpx[url].catch(function () { delete crs.gpx[url]; });
+    return crs.gpx[url];
+  }
+  /** 경로 모양 비교용 — 누적거리 기준 균등 50점 [lat,lng] + 총거리(m) */
+  function crsSig(ll) {
+    var cum = [0], i;
+    for (i = 1; i < ll.length; i++) cum.push(cum[i - 1] + hav(ll[i - 1][0], ll[i - 1][1], ll[i][0], ll[i][1]));
+    var total = cum[cum.length - 1], out = [], j = 0;
+    for (var k = 0; k < 50; k++) {
+      var target = total * k / 49;
+      while (j < cum.length - 2 && cum[j + 1] < target) j++;
+      var seg = cum[j + 1] - cum[j], t = seg > 0 ? Math.min(1, Math.max(0, (target - cum[j]) / seg)) : 0;
+      var a = ll[j], b = ll[Math.min(j + 1, ll.length - 1)];
+      out.push([Math.round((a[0] + (b[0] - a[0]) * t) * 1e6) / 1e6, Math.round((a[1] + (b[1] - a[1]) * t) * 1e6) / 1e6]);
+    }
+    return { sig: out, distance_m: Math.round(total) };
+  }
+  /** 내 즐겨찾기 목록 = 내 모임 GPX 코스 + 내가 붙인 제목·설명·공개 */
+  function crsMineItems() {
+    return (crs.mine || []).map(function (c) {
+      var s = crs.shares[c.gpxUrl] || null;
+      return {
+        key: 'm:' + c.gpxUrl, url: c.gpxUrl, rideId: c.id || '', mine: true,
+        title: (s && s.title) || c.title || c.name || '코스',
+        desc: (s && s.description) || '',
+        pub: !!(s && s.is_public),
+        km: Number(c.distanceKm || c.distance_km || 0) * 1000 || (s && s.distance_m) || 0
+      };
+    });
+  }
+  function crsPubItems() {
+    return (crs.pub || []).map(function (s) {
+      return { key: 'p:' + s.id, url: s.gpx_url, mine: !!s.is_mine, title: s.title, desc: s.description || '', pub: true, km: s.distance_m || 0, owner: s.owner_name || '' };
+    });
+  }
+  function crsFind(key) {
+    var all = crsMineItems().concat(crsPubItems());
+    for (var i = 0; i < all.length; i++) if (all[i].key === key) return all[i];
+    return null;
+  }
+  function crsDropPreview() {
+    if (crs.prevMap) { try { crs.prevMap.remove(); } catch (e) {} crs.prevMap = null; }
+  }
+  function renderCourseList() {
+    var list = $('outdCoursePickerList');
+    if (!list) return;
+    crsDropPreview();
+    document.querySelectorAll('#outdCoursePicker [data-crs-tab]').forEach(function (b) {
+      b.classList.toggle('is-on', b.getAttribute('data-crs-tab') === crs.tab);
+    });
+    var items = crs.tab === 'mine' ? (crs.mine ? crsMineItems() : null) : (crs.pub ? crsPubItems() : null);
+    if (!items) { list.innerHTML = '<div class="coachm-picker__empty">코스맵을 불러오는 중...</div>'; return; }
+    if (!items.length) {
+      list.innerHTML = crs.tab === 'mine'
+        ? '<div class="coachm-picker__empty">저장된 코스맵이 없습니다.<br>라이딩 모임에서 GPX 코스를 등록하면 여기에 표시됩니다.</div>'
+        : '<div class="coachm-picker__empty">공개된 코스가 없습니다.<br>내 즐겨찾기에서 코스를 공개로 바꾸면 여기에 표시됩니다.</div>';
+      return;
+    }
+    list.innerHTML = items.map(function (it) {
+      var k = escHtml(it.key), open = crs.open === it.key, edit = crs.edit === it.key;
+      var side = '<span class="outd-crs__km">' + escHtml(crsKm(it.km)) + '</span>';
+      if (crs.tab === 'mine') {
+        side += '<button type="button" class="outd-crs__pub' + (it.pub ? ' is-on' : '') + '" data-crs-pub="' + k + '" aria-pressed="' + it.pub + '">' + (it.pub ? '공개' : '비공개') + '</button>' +
+          '<button type="button" class="outd-crs__edit" data-crs-edit="' + k + '">수정</button>';
+      }
+      var meta = crs.tab === 'public' && it.owner ? '<span class="outd-crs__owner">' + escHtml(it.owner) + (it.mine ? ' · 내 코스' : '') + '</span>' : '';
+      var html = '<div class="outd-crs__item' + (open ? ' is-open' : '') + '" data-crs-key="' + k + '">' +
+        '<div class="outd-crs__row"><button type="button" class="outd-crs__title" data-crs-open="' + k + '">' +
+        '<b>' + escHtml(it.title) + '</b>' + (it.desc ? '<small class="outd-crs__desc">' + escHtml(it.desc) + '</small>' : '') + meta +
+        '</button>' + side + '</div>';
+      if (edit) {
+        html += '<div class="outd-crs__form">' +
+          '<label>제목<input type="text" maxlength="40" data-crs-in="title" value="' + escHtml(it.title) + '"></label>' +
+          '<label>경로 설명<textarea maxlength="300" rows="3" data-crs-in="desc" placeholder="예: 한강 자전거길 따라 반포→잠실 왕복, 중간 편의점 2곳">' + escHtml(it.desc) + '</textarea></label>' +
+          '<div class="outd-crs__formbtns"><button type="button" class="outd-crs__cancel" data-crs-cancel>취소</button>' +
+          '<button type="button" class="outd-crs__save" data-crs-save="' + k + '">저장</button></div></div>';
+      }
+      if (open) {
+        html += '<button type="button" class="outd-crs__prev" data-crs-use="' + k + '" aria-label="이 코스로 안내">' +
+          '<div class="outd-crs__prevmap"></div><span class="outd-crs__prevhint">코스맵을 누르면 이 코스로 안내합니다</span></button>';
+      }
+      return html + '</div>';
+    }).join('');
+    if (crs.open) {
+      var it = crsFind(crs.open);
+      var box = list.querySelector('.outd-crs__item.is-open .outd-crs__prevmap');
+      if (it && box) crsDrawPreview(box, it);
+    }
+  }
+  function crsDrawPreview(box, it) {
+    box.innerHTML = '<div class="outd-crs__prevmsg">코스맵을 불러오는 중...</div>';
+    var key = it.key;
+    crsGpx(it.url).then(function (g) {
+      if (crs.open !== key || !box.isConnected || typeof L === 'undefined') return;
+      box.innerHTML = '';
+      crsDropPreview();
+      var m = L.map(box, { zoomControl: false, attributionControl: false, dragging: false, touchZoom: false, scrollWheelZoom: false,
+        doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(m);
+      var line = L.polyline(g.ll, { color: '#e11d48', weight: 4, opacity: 0.9, interactive: false }).addTo(m);
+      L.circleMarker(g.ll[0], { radius: 6, color: '#fff', weight: 2, fillColor: '#00b894', fillOpacity: 1, interactive: false }).addTo(m);
+      L.circleMarker(g.ll[g.ll.length - 1], { radius: 6, color: '#fff', weight: 2, fillColor: '#111827', fillOpacity: 1, interactive: false }).addTo(m);
+      m.fitBounds(line.getBounds(), { padding: [14, 14] });
+      crs.prevMap = m;
+    }).catch(function (e) {
+      if (box.isConnected) box.innerHTML = '<div class="outd-crs__prevmsg">코스맵을 불러오지 못했습니다' + (e && e.message ? '<br><small>' + escHtml(e.message) + '</small>' : '') + '</div>';
+    });
+  }
+  function crsSave(it, fields) {
+    var body = { gpx_url: it.url, ride_id: it.rideId || '', title: fields.title, description: fields.desc, is_public: fields.pub };
+    var need = fields.pub ? crsGpx(it.url).then(function (g) { var s = crsSig(g.ll); body.sig = s.sig; body.distance_m = s.distance_m; }) : Promise.resolve();
+    return need.then(function () { return favRpc('fn_route_course_save', { p: body }); }).then(function (r) {
+      if (!r || !r.success) throw new Error((r && r.error) || '저장하지 못했습니다.');
+      crs.shares[it.url] = Object.assign({}, crs.shares[it.url] || {}, { gpx_url: it.url, title: fields.title, description: fields.desc, is_public: fields.pub });
+      crs.pub = null;
+      loadCoursePublic();
+      return r;
+    });
+  }
+  function loadCoursePublic() {
+    var seq = crs.seq;
+    return favRpc('fn_route_course_list', { p_scope: 'public' }).then(function (r) {
+      if (seq !== crs.seq) return;
+      crs.pub = (r && r.items) || [];
+      if (crs.tab === 'public') renderCourseList();
+    }).catch(function () {
+      if (seq !== crs.seq) return;
+      crs.pub = crs.pub || [];
+      if (crs.tab === 'public') renderCourseList();
+    });
+  }
+  function loadCourseMine(uid) {
+    var seq = crs.seq;
+    var ready = window.openRidingReadClient && typeof window.openRidingReadClient.fetchMyGpxCoursesRouted === 'function'
+      ? Promise.resolve(window.openRidingReadClient)
+      : import('/assets/js/openRiding/openRidingReadClient.js?v=routing-ls-20260928').then(function () { return window.openRidingReadClient; });
+    var courses = ready.then(function (client) {
+      if (!client || typeof client.fetchMyGpxCoursesRouted !== 'function') throw new Error('no client');
+      return client.fetchMyGpxCoursesRouted(uid, 'CYCLE');
+    });
+    var shares = favRpc('fn_route_course_list', { p_scope: 'mine' }).then(function (r) { return (r && r.items) || []; }, function () { return []; });
+    return Promise.all([courses, shares]).then(function (res) {
+      if (seq !== crs.seq) return;
+      crs.shares = {};
+      res[1].forEach(function (s) { crs.shares[s.gpx_url] = s; });
+      crs.mine = Array.isArray(res[0]) ? res[0].filter(function (c) { return c && c.gpxUrl; }) : [];
+      if (crs.tab === 'mine') renderCourseList();
+    }).catch(function () {
+      if (seq !== crs.seq) return;
+      crs.mine = crs.mine || [];
+      if (crs.tab === 'mine') {
+        var list = $('outdCoursePickerList');
+        if (list) list.innerHTML = '<div class="coachm-picker__empty">코스맵 목록을 불러오지 못했습니다.</div>';
+      }
+    });
+  }
+  function bindCoursePicker(picker) {
+    if (crs.bound) return;
+    crs.bound = true;
+    picker.addEventListener('click', function (ev) {
+      var t = ev.target;
+      if (!t || !t.closest) return;
+      var b;
+      if ((b = t.closest('[data-crs-tab]'))) {
+        crs.tab = b.getAttribute('data-crs-tab'); crs.open = null; crs.edit = null; renderCourseList(); return;
+      }
+      if ((b = t.closest('[data-crs-open]'))) {
+        var k = b.getAttribute('data-crs-open');
+        crs.open = crs.open === k ? null : k;
+        renderCourseList(); return;
+      }
+      if ((b = t.closest('[data-crs-use]'))) {
+        var u = crsFind(b.getAttribute('data-crs-use'));
+        if (!u) return;
+        crsGpx(u.url).then(function (g) {
+          useCourseGpxText(g.txt, u.title);
+          window.closeOutdoorCoursePicker();
+          toast('코스를 불러왔습니다 · ' + (st.course.totalM / 1000).toFixed(1) + ' km', 'success');
+        }).catch(function (e) { toast('코스맵을 불러오지 못했습니다: ' + ((e && e.message) || e), 'error'); });
+        return;
+      }
+      if ((b = t.closest('[data-crs-pub]'))) {
+        var p = crsFind(b.getAttribute('data-crs-pub'));
+        if (!p || b.disabled) return;
+        b.disabled = true;
+        b.textContent = '...';
+        crsSave(p, { title: p.title, desc: p.desc, pub: !p.pub }).then(function () {
+          toast(p.pub ? '비공개로 바꿨습니다' : '공개 코스로 등록했습니다 · 다른 사용자도 이 코스를 사용할 수 있습니다', 'success');
+        }, function (e) {
+          toast((e && e.message) || '저장하지 못했습니다.', 'error');
+        }).then(renderCourseList);
+        return;
+      }
+      if ((b = t.closest('[data-crs-edit]'))) {
+        var ek = b.getAttribute('data-crs-edit');
+        crs.edit = crs.edit === ek ? null : ek;
+        renderCourseList();
+        var inp = picker.querySelector('[data-crs-in=title]');
+        if (inp) inp.focus();
+        return;
+      }
+      if (t.closest('[data-crs-cancel]')) { crs.edit = null; renderCourseList(); return; }
+      if ((b = t.closest('[data-crs-save]'))) {
+        var s = crsFind(b.getAttribute('data-crs-save'));
+        var form = b.closest('.outd-crs__form');
+        if (!s || !form || b.disabled) return;
+        var title = String(form.querySelector('[data-crs-in=title]').value || '').trim();
+        var desc = String(form.querySelector('[data-crs-in=desc]').value || '').trim();
+        if (!title) { toast('제목을 입력해 주세요.', 'error'); return; }
+        b.disabled = true;
+        b.textContent = '저장 중...';
+        crsSave(s, { title: title, desc: desc, pub: s.pub }).then(function () {
+          crs.edit = null;
+          toast('코스 정보를 저장했습니다', 'success');
+          renderCourseList();
+        }, function (e) {
+          b.disabled = false;
+          b.textContent = '저장';
+          toast((e && e.message) || '저장하지 못했습니다.', 'error');
+        });
+      }
+    });
+  }
   function openFavoriteCourses() {
     var picker = $('outdCoursePicker');
     var list = $('outdCoursePickerList');
     if (!picker || !list) return;
+    bindCoursePicker(picker);
     picker.style.display = 'flex';
-    list.innerHTML = '<div class="coachm-picker__empty">코스맵을 불러오는 중...</div>';
     var uid = currentUid();
     if (!uid) {
       list.innerHTML = '<div class="coachm-picker__empty">로그인 후 이용할 수 있습니다.</div>';
       return;
     }
-    // 오픈라이딩 화면을 거치지 않고 바로 들어오면 읽기 모듈이 아직 없음 → 같은 주소(버전)로 불러온 뒤 사용
-    var ready = window.openRidingReadClient && typeof window.openRidingReadClient.fetchMyGpxCoursesRouted === 'function'
-      ? Promise.resolve(window.openRidingReadClient)
-      : import('/assets/js/openRiding/openRidingReadClient.js?v=routing-ls-20260928').then(function () { return window.openRidingReadClient; });
-    ready.then(function (client) {
-      if (!client || typeof client.fetchMyGpxCoursesRouted !== 'function') throw new Error('no client');
-      return client.fetchMyGpxCoursesRouted(uid, 'CYCLE');
-    }).then(function (courses) {
-      courses = Array.isArray(courses) ? courses.filter(function (c) { return c && c.gpxUrl; }) : [];
-      if (!courses.length) {
-        list.innerHTML = '<div class="coachm-picker__empty">저장된 코스맵이 없습니다.<br>라이딩 모임에서 GPX 코스를 등록하면 여기에 표시됩니다.</div>';
-        return;
-      }
-      list.innerHTML = '';
-      courses.forEach(function (c) {
-        var item = document.createElement('div');
-        item.className = 'coachm-picker__item';
-        var km = Number(c.distanceKm || c.distance_km || 0);
-        item.innerHTML = '<span class="coachm-picker__item-title"></span><span class="coachm-picker__item-min"></span>';
-        item.firstChild.textContent = c.title || c.name || '코스';
-        item.lastChild.textContent = km > 0 ? km.toFixed(1) + ' km' : '';
-        item.addEventListener('click', function () {
-          window.closeOutdoorCoursePicker();
-          loadCourseFromUrl(c.gpxUrl, c.title || c.name || '');
-        });
-        list.appendChild(item);
-      });
-    }).catch(function () {
-      list.innerHTML = '<div class="coachm-picker__empty">코스맵 목록을 불러오지 못했습니다.</div>';
-    });
+    crs.seq++;
+    crs.open = null;
+    crs.edit = null;
+    renderCourseList();
+    loadCoursePublic();
+    loadCourseMine(uid);
   }
   /** 자유 라이딩: 코스맵 없이 현재 위치 기준으로 기록(코스 안내·회전 안내 끄기) */
   /*
@@ -4980,6 +5198,7 @@
   window.closeOutdoorCoursePicker = function () {
     var picker = $('outdCoursePicker');
     if (picker) picker.style.display = 'none';
+    crsDropPreview();
   };
 
   /* ---------- 시작 · 일시정지 · 종료 ---------- */
