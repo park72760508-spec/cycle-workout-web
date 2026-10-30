@@ -35602,3 +35602,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen #outdRouteSheet .outd-route__mode svg,
 #outdoorRideScreen #outdRouteSheet .outd-route__mode .outd-route__moto-ico,
 #outdoorRideScreen #outdRouteSheet .outd-route__mode .outd-route__walk-ico { width: 23px; height: 23px; color: #ffffff; }
+#outdoorRideScreen #outdRouteSheet .outd-route__mode .outd-route__moto-ico { width: 29px; height: 29px; }
