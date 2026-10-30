@@ -35655,3 +35655,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-crs__cancel { background: #f1f5f9; color: #475569; }
 #outdoorRideScreen .outd-crs__save { background: #00b894; color: #fff; }
 #outdoorRideScreen .outd-crs__save:disabled { opacity: 0.6; }
+/* 2026-10-31 즐겨찾기 코스 시도·구군(출발지) 필터 — 장소 즐겨찾기와 같은 펼침 목록 */
+#outdoorRideScreen .outd-crs .coachm-picker__sheet { position: relative; }
+#outdoorRideScreen .outd-crs .coachm-picker__head { gap: 8px; }
+#outdoorRideScreen .outd-crs .coachm-picker__head > span:first-child { flex-shrink: 0; }
+#outdoorRideScreen .outd-crs .outd-fav__dd { max-width: 100px; }

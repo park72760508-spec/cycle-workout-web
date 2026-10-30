@@ -4808,7 +4808,103 @@
    *  내 즐겨찾기: 공개/비공개 배지(누르면 바뀜) · 수정(제목·경로 설명). 저장은 Supabase RPC fn_route_course_*.
    *  공개 중복 방지: 서버가 GPX 경로 모양(균등 50점)·총거리·시작/끝점으로 이미 공개된 코스와 비교해 막는다.
    */
-  var crs = { tab: 'public', mine: null, pub: null, shares: {}, open: null, edit: null, gpx: {}, prevMap: null, seq: 0, bound: false };
+  var crs = { tab: 'public', mine: null, pub: null, shares: {}, open: null, edit: null, gpx: {}, prevMap: null, seq: 0, bound: false,
+    filter: { sido: '', sigungu: '' }, region: null, regionBusy: {} };
+
+  /*
+   * 출발지 지역(2026-10-31): 코스 첫 점 → 시도·구군(reverseRegion). 한 번 알아낸 값은 기기에 저장(GPX 주소별)해
+   *  다음부터는 GPX를 다시 받지 않음. 공개 코스는 서버에 저장된 출발지 지역을 우선 사용.
+   */
+  var CRS_REGION_KEY = 'stelvio_course_start_region_v1';
+  function crsRegionStore() {
+    if (crs.region) return crs.region;
+    try { crs.region = JSON.parse(localStorage.getItem(CRS_REGION_KEY) || '{}') || {}; } catch (e) { crs.region = {}; }
+    return crs.region;
+  }
+  function crsRegionOf(url, sido, sigungu) {
+    if (sido) return { sido: sido, sigungu: sigungu || '' };
+    return crsRegionStore()[url] || null;
+  }
+  var crsRegionT = null;
+  function crsEnsureRegions(items) {
+    var store = crsRegionStore();
+    var todo = items.filter(function (it) { return !it.region && !store[it.url] && !crs.regionBusy[it.url]; });
+    var i = 0;
+    function next() {
+      if (i >= todo.length) return Promise.resolve();
+      var it = todo[i++];
+      crs.regionBusy[it.url] = 1;
+      return crsGpx(it.url).then(function (g) {
+        return reverseRegion(g.ll[0][0], g.ll[0][1]);
+      }).then(function (rg) {
+        if (rg && rg.sido) {
+          store[it.url] = { sido: rg.sido, sigungu: rg.sigungu || '' };
+          try { localStorage.setItem(CRS_REGION_KEY, JSON.stringify(store)); } catch (e) {}
+          clearTimeout(crsRegionT);
+          crsRegionT = setTimeout(function () {
+            var pk = $('outdCoursePicker');
+            if (pk && pk.style.display === 'flex' && !crs.edit) renderCourseList(); else renderCourseFilters();
+          }, 250);
+        }
+      }, function () {}).then(next);
+    }
+    next(); next(); // 동시에 2개씩
+  }
+  function crsMatchFilter(it) {
+    if (!crs.filter.sido) return true;
+    if (!it.region || it.region.sido !== crs.filter.sido) return false;
+    return !crs.filter.sigungu || it.region.sigungu === crs.filter.sigungu;
+  }
+  /** 시도·구군 선택 상자 — 두 탭의 코스 출발지에 있는 지역만, 구군은 고른 시도 안에서 */
+  function renderCourseFilters() {
+    var b1 = document.querySelector('#outdCoursePicker [data-crs-dd=sido]');
+    var b2 = document.querySelector('#outdCoursePicker [data-crs-dd=sigungu]');
+    if (!b1 || !b2) return;
+    var sidos = {}, sggs = {};
+    crsMineItems().concat(crsPubItems()).forEach(function (it) {
+      if (!it.region) return;
+      sidos[it.region.sido] = 1;
+      if (it.region.sido === crs.filter.sido && it.region.sigungu) sggs[it.region.sigungu] = 1;
+    });
+    if (crs.filter.sido) sidos[crs.filter.sido] = 1;
+    if (crs.filter.sigungu) sggs[crs.filter.sigungu] = 1;
+    crs.ddOpts = { sido: Object.keys(sidos).sort(), sigungu: Object.keys(sggs).sort() };
+    b1.querySelector('.outd-fav__dd-label').textContent = crs.filter.sido || '시도 전체';
+    b2.querySelector('.outd-fav__dd-label').textContent = crs.filter.sigungu || '구군 전체';
+    b1.classList.toggle('is-set', !!crs.filter.sido);
+    b2.classList.toggle('is-set', !!crs.filter.sigungu);
+    b2.disabled = !crs.filter.sido;
+  }
+  function closeCourseDd() {
+    var pop = document.querySelector('#outdCoursePicker .outd-fav__ddpop');
+    if (pop) pop.remove();
+    Array.prototype.forEach.call(document.querySelectorAll('#outdCoursePicker [data-crs-dd]'), function (b) { b.classList.remove('is-open'); });
+  }
+  function toggleCourseDd(kind, btn) {
+    var sheet = document.querySelector('#outdCoursePicker .coachm-picker__sheet');
+    var open = document.querySelector('#outdCoursePicker .outd-fav__ddpop');
+    var wasSame = open && open.getAttribute('data-kind') === kind;
+    closeCourseDd();
+    if (wasSame || !sheet) return;
+    var opts = (crs.ddOpts && crs.ddOpts[kind]) || [];
+    var cur = kind === 'sido' ? crs.filter.sido : crs.filter.sigungu;
+    var pop = document.createElement('div');
+    pop.className = 'outd-fav__ddpop';
+    pop.setAttribute('role', 'listbox');
+    pop.setAttribute('data-kind', kind);
+    pop.innerHTML = [''].concat(opts).map(function (v) {
+      var label = v || (kind === 'sido' ? '시도 전체' : '구군 전체');
+      return '<button type="button" class="outd-fav__dditem' + (v === (cur || '') ? ' is-on' : '') + '" role="option" data-crs-dd-kind="' + kind + '" data-crs-dd-v="' + escHtml(v) + '">' +
+        '<span>' + escHtml(label) + '</span><b aria-hidden="true">✓</b></button>';
+    }).join('');
+    sheet.appendChild(pop);
+    var sr = sheet.getBoundingClientRect(), br = btn.getBoundingClientRect();
+    pop.style.top = (br.bottom - sr.top + 6) + 'px';
+    var w = Math.max(br.width, 150);
+    pop.style.left = Math.max(8, Math.min(br.left - sr.left, sr.width - w - 8)) + 'px';
+    pop.style.minWidth = w + 'px';
+    btn.classList.add('is-open');
+  }
 
   function crsKm(m) { return m > 0 ? (m / 1000).toFixed(1) + ' km' : ''; }
   /** GPX 글자 받기(같은 주소는 한 번만) */
@@ -4848,13 +4944,15 @@
         title: (s && s.title) || c.title || c.name || '코스',
         desc: (s && s.description) || '',
         pub: !!(s && s.is_public),
-        km: Number(c.distanceKm || c.distance_km || 0) * 1000 || (s && s.distance_m) || 0
+        km: Number(c.distanceKm || c.distance_km || 0) * 1000 || (s && s.distance_m) || 0,
+        region: crsRegionOf(c.gpxUrl, s && s.start_sido, s && s.start_sigungu)
       };
     });
   }
   function crsPubItems() {
     return (crs.pub || []).map(function (s) {
-      return { key: 'p:' + s.id, url: s.gpx_url, mine: !!s.is_mine, title: s.title, desc: s.description || '', pub: true, km: s.distance_m || 0, owner: s.owner_name || '' };
+      return { key: 'p:' + s.id, url: s.gpx_url, mine: !!s.is_mine, title: s.title, desc: s.description || '', pub: true, km: s.distance_m || 0, owner: s.owner_name || '',
+        region: crsRegionOf(s.gpx_url, s.start_sido, s.start_sigungu) };
     });
   }
   function crsFind(key) {
@@ -4872,8 +4970,18 @@
     document.querySelectorAll('#outdCoursePicker [data-crs-tab]').forEach(function (b) {
       b.classList.toggle('is-on', b.getAttribute('data-crs-tab') === crs.tab);
     });
+    closeCourseDd();
+    renderCourseFilters();
     var items = crs.tab === 'mine' ? (crs.mine ? crsMineItems() : null) : (crs.pub ? crsPubItems() : null);
     if (!items) { list.innerHTML = '<div class="coachm-picker__empty">코스맵을 불러오는 중...</div>'; return; }
+    crsEnsureRegions(items);
+    var total = items.length;
+    items = items.filter(crsMatchFilter);
+    if (total && !items.length) {
+      list.innerHTML = '<div class="coachm-picker__empty">' + escHtml([crs.filter.sido, crs.filter.sigungu].filter(Boolean).join(' ')) +
+        '에서 출발하는 코스가 없습니다.' + (crs.tab === 'mine' && Object.keys(crs.regionBusy).length ? '<br><small>출발지 지역을 확인하는 중...</small>' : '') + '</div>';
+      return;
+    }
     if (!items.length) {
       list.innerHTML = crs.tab === 'mine'
         ? '<div class="coachm-picker__empty">저장된 코스맵이 없습니다.<br>라이딩 모임에서 GPX 코스를 등록하면 여기에 표시됩니다.</div>'
@@ -4887,7 +4995,10 @@
         side += '<button type="button" class="outd-crs__pub' + (it.pub ? ' is-on' : '') + '" data-crs-pub="' + k + '" aria-pressed="' + it.pub + '">' + (it.pub ? '공개' : '비공개') + '</button>' +
           '<button type="button" class="outd-crs__edit" data-crs-edit="' + k + '">수정</button>';
       }
-      var meta = crs.tab === 'public' && it.owner ? '<span class="outd-crs__owner">' + escHtml(it.owner) + (it.mine ? ' · 내 코스' : '') + '</span>' : '';
+      var metaParts = [];
+      if (it.region) metaParts.push('출발 ' + [it.region.sido, it.region.sigungu].filter(Boolean).join(' '));
+      if (crs.tab === 'public' && it.owner) metaParts.push(it.owner + (it.mine ? ' · 내 코스' : ''));
+      var meta = metaParts.length ? '<span class="outd-crs__owner">' + escHtml(metaParts.join(' · ')) + '</span>' : '';
       var html = '<div class="outd-crs__item' + (open ? ' is-open' : '') + '" data-crs-key="' + k + '">' +
         '<div class="outd-crs__row"><button type="button" class="outd-crs__title" data-crs-open="' + k + '">' +
         '<b>' + escHtml(it.title) + '</b>' + (it.desc ? '<small class="outd-crs__desc">' + escHtml(it.desc) + '</small>' : '') + meta +
@@ -4932,10 +5043,12 @@
   }
   function crsSave(it, fields) {
     var body = { gpx_url: it.url, ride_id: it.rideId || '', title: fields.title, description: fields.desc, is_public: fields.pub };
+    if (it.region) { body.start_sido = it.region.sido; body.start_sigungu = it.region.sigungu || ''; }
     var need = fields.pub ? crsGpx(it.url).then(function (g) { var s = crsSig(g.ll); body.sig = s.sig; body.distance_m = s.distance_m; }) : Promise.resolve();
     return need.then(function () { return favRpc('fn_route_course_save', { p: body }); }).then(function (r) {
       if (!r || !r.success) throw new Error((r && r.error) || '저장하지 못했습니다.');
-      crs.shares[it.url] = Object.assign({}, crs.shares[it.url] || {}, { gpx_url: it.url, title: fields.title, description: fields.desc, is_public: fields.pub });
+      crs.shares[it.url] = Object.assign({}, crs.shares[it.url] || {}, { gpx_url: it.url, title: fields.title, description: fields.desc, is_public: fields.pub,
+        start_sido: it.region ? it.region.sido : null, start_sigungu: it.region ? it.region.sigungu : null });
       crs.pub = null;
       loadCoursePublic();
       return r;
@@ -4985,6 +5098,14 @@
       var t = ev.target;
       if (!t || !t.closest) return;
       var b;
+      if ((b = t.closest('[data-crs-dd-v]'))) {
+        var kind = b.getAttribute('data-crs-dd-kind'), v = b.getAttribute('data-crs-dd-v');
+        if (kind === 'sido') { crs.filter.sido = v; crs.filter.sigungu = ''; } else crs.filter.sigungu = v;
+        crs.open = null; crs.edit = null;
+        renderCourseList(); return;
+      }
+      if ((b = t.closest('[data-crs-dd]'))) { if (!b.disabled) toggleCourseDd(b.getAttribute('data-crs-dd'), b); return; }
+      if (!t.closest('.outd-fav__ddpop')) closeCourseDd();
       if ((b = t.closest('[data-crs-tab]'))) {
         crs.tab = b.getAttribute('data-crs-tab'); crs.open = null; crs.edit = null; renderCourseList(); return;
       }
