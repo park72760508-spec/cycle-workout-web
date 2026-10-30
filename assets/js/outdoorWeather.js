@@ -138,7 +138,7 @@
         var firstTomorrow = true;
         body = '<div class="outd-wx__hours">' + slots().map(function (c, idx) {
           var it = c.it, h = c.hour;
-          var lbl = idx === 0 ? '지금' : h + '시';
+          var lbl = h + '시';
           if (c.tomorrow && firstTomorrow) { firstTomorrow = false; lbl = '<b class="outd-wx__day">내일</b> ' + lbl; }
           return '<div class="outd-wx__cell' + (idx === 0 ? ' is-now' : '') + (c.tomorrow ? ' is-tmr' : '') + '">' +
             '<span class="outd-wx__h">' + lbl + '</span>' +
