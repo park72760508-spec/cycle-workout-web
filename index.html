@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261031eta2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261031btns" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29970,7 +29970,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261029avg3"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261031eta3"></script>
+  <script src="assets/js/outdoorRide.js?v=20261031btns"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36095,7 +36095,11 @@
         </button>
         <!-- 2026-10-27: 오른쪽 버튼 '길찾기'(즐겨찾기 아래) — 예전 안내 문구 버튼 자리. 안내 문구 표시는 ☰ 메뉴로 옮김 -->
         <button type="button" id="outdRouteBtn" class="outd-route-btn" onclick="openOutdoorRouteSearch(event)" aria-label="길찾기">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-6-5.6-6-10.5A6 6 0 0 1 18 10.5C18 15.4 12 21 12 21z"/><circle cx="12" cy="10.5" r="2.2"/></svg>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+        </button>
+        <!-- 2026-10-31: 전체 경로 보기(목적지·코스가 있을 때만, 화면 확대/축소 위) — 아이콘은 ☰ 코스맵 선택과 같음 -->
+        <button type="button" id="outdOverviewBtn" class="outd-overview-btn" onclick="overviewOutdoorRoute(event)" aria-label="전체 경로 보기" style="display: none;">
+          <img src="assets/img/route.svg" alt="" width="22" height="22" style="filter: brightness(0) invert(1);">
         </button>
         <!-- 2026-10-21: 지도 크게 보기(속도계 자리까지 지도 확장) / 원래대로 -->
         <button type="button" id="outdExpand" class="outd-expand" onclick="toggleOutdoorExpand(event)" aria-label="지도 크게 보기" aria-pressed="false">

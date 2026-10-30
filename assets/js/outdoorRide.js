@@ -621,7 +621,36 @@
     if (b) b.style.display = on ? 'flex' : 'none';
     var r = $('outdRouteResetBtn');
     if (r) r.style.display = on ? 'flex' : 'none';
+    // 전체 경로 보기: 길찾기 목적지·코스맵이 있을 때
+    var ov = $('outdOverviewBtn');
+    if (ov) ov.style.display = st.course && st.course.latlngs && st.course.latlngs.length > 1 ? 'flex' : 'none';
   }
+  /*
+   * 전체 경로 보기(2026-10-31): 북쪽 위로 돌리고 지도 칸 안에 경로 전체(내 위치 포함)가 들어오게.
+   *  지도판(회전용)은 지도 칸보다 크므로 그 차이만큼 여백을 더한다. 내 위치 버튼·진행 버튼을 누르면 따라가기로 돌아가고,
+   *  기록 중이면 손대지 않고 30초가 지나면 자동으로 돌아감(그때 진행 방향 회전도 원래대로).
+   */
+  window.overviewOutdoorRoute = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    var c = st.course, map = st.map;
+    if (!c || !map || !c.latlngs || c.latlngs.length < 2) return;
+    var b = L.latLngBounds(c.latlngs);
+    if (st.mePos) b.extend(st.mePos);
+    else if (st.lastFix) b.extend([st.lastFix.lat, st.lastFix.lng]);
+    st.follow = false;
+    st.userPanAt = Date.now() + 20000;
+    if (st.overviewHU == null) st.overviewHU = st.headingUp;
+    st.headingUp = false;
+    applyRotation();
+    var wrap = document.querySelector('#' + SCREEN_ID + ' .outd-map-wrap');
+    var size = map.getSize();
+    var ww = wrap ? wrap.clientWidth : size.x, wh = wrap ? wrap.clientHeight : size.y;
+    var dx = Math.max(0, (size.x - ww) / 2), dy = Math.max(0, (size.y - wh) / 2);
+    var wx = $('outdWeather');
+    var topPad = wx && wx.offsetHeight ? wx.offsetTop + wx.offsetHeight + 12 : 24;
+    map.fitBounds(b, { paddingTopLeft: [dx + 56, dy + topPad], paddingBottomRight: [dx + 56, dy + 60], animate: true });
+    toast('전체 경로를 보여줍니다 · 내 위치 버튼을 누르면 돌아갑니다', 'info');
+  };
   /* 길찾기 초기화(2026-10-22): 입력한 검색어·결과·목적지와 지도 위 경로 안내 코스를 지운다(기록은 그대로) */
   window.resetOutdoorRoute = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
@@ -1480,11 +1509,13 @@
     if (st.follow || st.status !== 'running') return;
     if (Date.now() - (st.userPanAt || 0) < FOLLOW_RESUME_MS) return;
     st.follow = true;
+    if (st.overviewHU != null) { st.headingUp = st.overviewHU; st.overviewHU = null; applyRotation(); }
   }
 
   window.toggleOutdoorHeadingUp = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (motionPermSilent()) startCompass(true);
+    st.overviewHU = null;
     st.headingUp = !st.headingUp;
     st.follow = true;
     applyRotation();
@@ -1988,6 +2019,7 @@
     if (motionPermSilent()) startCompass(true);
     st.follow = true;
     st.autoZoomSet = null; // 속도 자동 확대 다시 켬
+    st.overviewHU = null;
     st.headingUp = true;
     applyRotation();
     if (st.map && st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, Math.max(st.map.getZoom(), 16));

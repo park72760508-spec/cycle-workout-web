@@ -35685,3 +35685,30 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-map-empty__eta { color: #34d399; font-weight: 700; }
 /* 회전 안내 표지판(왼쪽 아래)이 떠 있으면 목적지 안내 카드는 그 위로(겹침 방지) */
 #outdoorRideScreen:not(.outd-expanded):has(#outdTurnBig[style*="flex"]) .outd-map-empty.is-dest { bottom: 116px; }
+/* ===== 2026-10-31 루트맵 버튼 재배치 =====
+   오른쪽(아래→위): 내 위치 · 진행 · 화면 확대/축소 · 전체 경로 보기(경로 있을 때)
+   왼쪽(아래→위): 길찾기(돋보기) · 즐겨찾기 · 경로 재탐색 · 길찾기 초기화 — 오른쪽과 같은 높이 */
+#outdoorRideScreen .outd-route-btn { left: 8px; right: auto; bottom: 8px; }
+#outdoorRideScreen .outd-fav-btn { left: 8px; right: auto; bottom: 56px; }
+#outdoorRideScreen .outd-reroute-btn { left: 8px; right: auto; bottom: 110px; }
+#outdoorRideScreen .outd-route-reset-btn { left: 8px; right: auto; bottom: 158px; }
+#outdoorRideScreen .outd-overview-btn {
+  position: absolute; right: 8px; bottom: 158px; z-index: 600;
+  width: 40px; height: 40px; border: 0; border-radius: 12px; padding: 0;
+  background: rgba(17, 24, 39, 0.85); align-items: center; justify-content: center; cursor: pointer;
+}
+#outdoorRideScreen .outd-overview-btn:active { transform: scale(0.94); }
+/* 상단 경로 안내 바: 초기화 버튼이 왼쪽 아래로 옮겨 가 오른쪽을 비울 필요 없음 */
+#outdoorRideScreen:has(#outdRouteResetBtn[style*="flex"]) .outd-nav { right: 8px !important; }
+/* 회전 안내 표지판은 왼쪽 버튼 줄 옆으로(버튼을 가리지 않게) */
+#outdoorRideScreen .outd-turn-big,
+#outdoorRideScreen.outd-expanded .outd-turn-big { left: 56px; }
+/* 지도 크게 보기: 아래 가운데 시작/종료 버튼과 겹치지 않게 왼쪽 버튼 줄을 위로 */
+#outdoorRideScreen.outd-expanded .outd-route-btn { bottom: 8px; }
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-route-btn { bottom: 8px; }
+  #outdoorRideScreen .outd-fav-btn { bottom: 56px; }
+  #outdoorRideScreen .outd-reroute-btn { bottom: 110px; }
+  #outdoorRideScreen .outd-route-reset-btn { bottom: 158px; }
+  #outdoorRideScreen .outd-overview-btn { bottom: 110px; }
+}
