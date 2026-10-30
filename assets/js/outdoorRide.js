@@ -289,7 +289,7 @@
     }
   }
   /*
-   * 2026-10-30: 이동 수단에 맞춘 계기판 — 오토바이 경로 안내 중이면 눈금 ×3(0~180km/h),
+   * 2026-10-30: 이동 수단에 맞춘 계기판 — 오토바이면 눈금 ×3(0~180km/h),
    * 이동 거리 'km' 위에 지금 이동 수단 아이콘(흰색: 오토바이·자전거·걷기).
    * 이동 수단 = 안내 중인 길찾기 경로의 수단, 경로가 없으면 길찾기에서 고른 탭.
    */
@@ -370,8 +370,8 @@
   }
   function syncGaugeMode() {
     var m = gaugeTravel();
-    var routeMoto = !!(st.course && st.course.isRoute && /^moto/.test(st.course.routeMode || ''));
-    var max = routeMoto ? 180 : 60;
+    // 2026-10-30: 눈금은 지금 이동 수단(속도계 아이콘·길찾기 탭에서 고른 수단, 없으면 안내 중 경로) 기준 — 오토바이 ×3(0~180), 자전거·걷기 0~60
+    var max = m === 'moto' ? 180 : 60;
     if (max !== GAUGE_MAX_KMH) { GAUGE_MAX_KMH = max; renderGaugeLabels(); }
     var ico = $('outdGaugeModeIco');
     if (ico && ico.__mode !== m) {
