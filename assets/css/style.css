@@ -35750,3 +35750,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item b { font-size: 31px; font-weight: 900; }
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item small { font-size: 14px; font-weight: 800; }
+/* 2026-10-31 지도 크게 보기 현재 속도: 숫자(0.0)를 가로 가운데, 단위는 숫자 오른쪽에 붙여(가운데 계산에서 빠지게) 연한 회색 */
+#outdoorRideScreen.outd-expanded .outd-exp-stats { justify-content: center; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child { position: relative; display: block; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child small {
+  position: absolute; left: 100%; bottom: 0.3em; margin-left: 4px; white-space: nowrap;
+  color: #9ca3af; text-shadow: 0 0 3px rgba(0, 0, 0, 0.45), 0 0 1px rgba(0, 0, 0, 0.6);
+}
