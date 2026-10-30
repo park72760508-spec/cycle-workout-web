@@ -2488,10 +2488,14 @@
     bike: { api: 'bicycle', mode: 'BIKE_ONLY' },
     short: { api: 'bicycle', mode: 'SHORTEST' },
     walk: { api: 'walk', mode: 'BROAD_FIRST' },
-    walkShort: { api: 'walk', mode: 'SHORTEST' }
+    walkShort: { api: 'walk', mode: 'SHORTEST' },
+    // 2026-10-30 오토바이: 카카오 자동차 길찾기(이륜차 + 자동차전용도로 회피) — 도로 추천 = 추천, 최단 거리 = 거리 우선.
+    // '이면도로 우선'은 카카오에 같은 옵션이 없어 기존 방식(STELVIO L2)
+    moto: { api: 'car', mode: 'RECOMMEND' },
+    motoShort: { api: 'car', mode: 'DISTANCE' }
   };
   var kakaoUsage = null;
-  var kakaoOff = { bicycle: '', walk: '' }; // 오늘 한도 초과·서버 없음 → 그날은 바로 기본 경로
+  var kakaoOff = { bicycle: '', walk: '', car: '' }; // 오늘 한도 초과·서버 없음 → 그날은 바로 기본 경로
   function kakaoDay() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); }
   function fetchKakaoRoute(from, to, mode) {
     var km = KAKAO_MODE[mode];
@@ -2563,7 +2567,7 @@
   function spliceKakao(base, bi, from, routeMode, heading) {
     bi = Math.max(0, Math.min(base.latlngs.length - 2, bi));
     var to = { lat: base.latlngs[bi][0], lng: base.latlngs[bi][1] };
-    var rawMode = routeMode === 'walk' || routeMode === 'walkShort' ? 'walkShort' : 'short';
+    var rawMode = routeMode === 'walk' || routeMode === 'walkShort' ? 'walkShort' : /^moto/.test(routeMode || '') ? 'motoShort' : 'short';
     var gap = hav(from.lat, from.lng, to.lat, to.lng);
     if (gap < 25) return Promise.resolve(joinKakao(base, bi, [[from.lat, from.lng], [to.lat, to.lng]], [], gap / 1000, routeMode));
     return fetchValhallaRouteRaw(from, to, rawMode, { heading: heading }).then(function (conn) {
@@ -2611,7 +2615,7 @@
       var out = kakaoUsage[api + '_exhausted'] || n >= lim;
       return '<span class="outd-kusage__item' + (out ? ' is-out' : n >= lim * 0.8 ? ' is-warn' : '') + '">' + label + ' <b>' + n.toLocaleString('ko-KR') + '</b>/' + lim.toLocaleString('ko-KR') + '</span>';
     }
-    el.innerHTML = '<span class="outd-kusage__title">카카오 경로 오늘 무료 사용량</span>' + part('자전거', 'bicycle') + part('걷기', 'walk');
+    el.innerHTML = '<span class="outd-kusage__title">카카오 경로 오늘 무료 사용량</span>' + part('자전거', 'bicycle') + part('걷기', 'walk') + part('오토바이', 'car');
     el.style.display = '';
   }
 

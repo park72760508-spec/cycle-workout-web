@@ -1,6 +1,7 @@
-// 루트맵 카카오 도보·자전거 길찾기 중계(2026-10-24)
+// 루트맵 카카오 도보·자전거·오토바이 길찾기 중계(2026-10-24, 오토바이 2026-10-30)
 //
 // 앱 → (STELVIO 커스텀 JWT) → 이 함수 → 카카오 REST API(dapi.kakao.com/v2/routing/{bicycle|walk})
+//                                     오토바이(api='car') → apis-navi.kakaomobility.com/v1/directions(car_type=7 이륜차, avoid=motorway)
 //  - 카카오 REST 키는 Vault('kakao_rest_api_key')에만 있다(브라우저에 노출하지 않음).
 //  - 오늘(한국 날짜) 같은 목적지·같은 방식으로 저장된 경로가 있고 출발지가 그 경로 근처면 그 경로를 쓴다(카카오 호출 없음).
 //  - 무료 한도(API별 하루 1,000건, 한국 날짜)를 우리 쪽에서 세어 넘으면 호출하지 않는다 → 앱은 기본 경로(Valhalla)로 전환.
@@ -14,6 +15,8 @@ const DAILY_LIMIT = 1000;
 const MODES: Record<string, string[]> = {
   bicycle: ["BIKE_ONLY", "SHORTEST", "ACCESSIBLE"],
   walk: ["BROAD_FIRST", "SHORTEST", "ACCESSIBLE"],
+  // 2026-10-30 오토바이: 카카오모빌리티 자동차 길찾기(apis-navi) + 이륜차(car_type=7) + 자동차전용도로 회피(avoid=motorway)
+  car: ["RECOMMEND", "DISTANCE", "TIME"],
 };
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -29,7 +32,7 @@ const grid = (v: number, step: number) => (Math.round(v / step) * step).toFixed(
 async function usageOf(admin: ReturnType<typeof createClient>) {
   const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
   const { data } = await admin.from("kakao_route_usage").select("api,calls,exhausted").eq("day", day);
-  const u: Record<string, unknown> = { limit: DAILY_LIMIT, bicycle: 0, walk: 0 };
+  const u: Record<string, unknown> = { limit: DAILY_LIMIT, bicycle: 0, walk: 0, car: 0 };
   (data || []).forEach((r: { api: string; calls: number; exhausted: boolean }) => {
     u[r.api] = r.calls;
     if (r.exhausted) u[r.api + "_exhausted"] = true;
@@ -67,7 +70,7 @@ Deno.serve(async (req) => {
 
   // 1) 오늘 같은 목적지(약 30m 안)·같은 방식으로 저장된 경로 중, 지금 출발지가 경로 근처(자전거 500m·걷기 250m)인 것
   //    → 카카오를 부르지 않고 그 경로를 돌려준다. reuse.idx = 출발지에서 가장 가까운 경로 점(앱이 거기까지 짧게 연결)
-  const near = api === "walk" ? 250 : 500;
+  const near = api === "walk" ? 250 : 500; // 자전거·오토바이 500m
   const { data: cands } = await admin.from("kakao_route_cache").select("route")
     .eq("api", api).eq("mode", mode).eq("day", day)
     .gte("ex", ex - 0.0004).lte("ex", ex + 0.0004).gte("ey", ey - 0.0003).lte("ey", ey + 0.0003)
@@ -93,6 +96,73 @@ Deno.serve(async (req) => {
   }
   const { data: restKey } = await admin.rpc("get_kakao_rest_api_key");
   if (!restKey) return json({ success: false, error: "카카오 키가 설정되지 않았습니다." }, 500);
+
+  if (api === "car") {
+    // 오토바이: 자동차 길찾기에 이륜차 차종 + 자동차전용도로(고속도로·도시고속화도로 등) 회피를 함께 지정
+    const cq = new URLSearchParams({
+      origin: `${sx},${sy}`, destination: `${ex},${ey}`, priority: mode,
+      car_type: "7", avoid: "motorway", summary: "false", alternatives: "false",
+    });
+    let cd: Record<string, any> | null = null;
+    let cStatus = 0;
+    try {
+      const res = await fetch(`https://apis-navi.kakaomobility.com/v1/directions?${cq}`, {
+        headers: { Authorization: `KakaoAK ${restKey}` },
+        signal: AbortSignal.timeout(12000),
+      });
+      cStatus = res.status;
+      cd = await res.json().catch(() => null);
+    } catch (e) {
+      return json({ success: false, error: "카카오 응답 없음: " + String((e as Error).message || e), usage: await usageOf(admin) });
+    }
+    if (cStatus === 429 || (cd && /limit|quota|exceed/i.test(String(cd.msg || cd.message || "")))) {
+      await admin.rpc("kakao_route_mark", { p_api: api, p_cache_hit: false, p_exhausted: true });
+      return json({ success: false, code: "QUOTA", error: "카카오 무료 사용량 초과", usage: await usageOf(admin) });
+    }
+    const r0 = cd && Array.isArray(cd.routes) ? cd.routes[0] : null;
+    if (!r0 || r0.result_code !== 0) {
+      return json({ success: false, code: "KAKAO_" + String((r0 && r0.result_code) ?? (cd && cd.code) ?? cStatus), error: "카카오 경로 없음", usage: await usageOf(admin) });
+    }
+    const cpts: number[][] = [];
+    const csteps: { i: number; g: string; d: number }[] = [];
+    let dist = 0, time = 0;
+    for (const sec of r0.sections || []) {
+      dist += Number(sec.distance) || 0;
+      time += Number(sec.duration) || 0;
+      for (const road of sec.roads || []) {
+        const v: number[] = road.vertexes || [];
+        for (let k = 0; k + 1 < v.length; k += 2) {
+          const ll = [r6(v[k + 1]), r6(v[k])];
+          const last = cpts[cpts.length - 1];
+          if (last && last[0] === ll[0] && last[1] === ll[1]) continue;
+          cpts.push(ll);
+        }
+      }
+    }
+    // 안내 지점(x,y) → 경로 좌표 번호(앞으로만 찾아 가장 가까운 점)
+    let from = 0;
+    const kx2 = 111320 * Math.cos((sy * Math.PI) / 180), ky2 = 110540;
+    for (const sec of r0.sections || []) {
+      for (const g of sec.guides || []) {
+        const t = Number(g.type);
+        if (t === 100 || t === 101 || t === 300 || t === 301) continue; // 출발·도착·경유지
+        let bi = from, bd = Infinity;
+        for (let i = from; i < cpts.length; i++) {
+          const dx = (cpts[i][1] - Number(g.x)) * kx2, dy = (cpts[i][0] - Number(g.y)) * ky2;
+          const dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; bi = i; }
+          if (bd < 4 && dd > 250000) break; // 2m 안을 찾았고 500m 넘게 멀어지면 그만
+        }
+        from = bi;
+        csteps.push({ i: bi, g: String(g.guidance || ""), d: Number(g.distance) || 0 });
+      }
+    }
+    if (cpts.length < 2) return json({ success: false, error: "카카오 경로 좌표 없음", usage: await usageOf(admin) });
+    csteps.unshift({ i: 0, g: "출발", d: 0 });
+    const croute = { pts: cpts, steps: csteps, dist, time };
+    await admin.from("kakao_route_cache").upsert({ key, api, mode, day, sx, sy, ex, ey, route: croute, created_at: new Date().toISOString() });
+    return json({ success: true, cached: false, route: croute, usage: await usageOf(admin) });
+  }
 
   const qs = new URLSearchParams({
     start_x: String(sx), start_y: String(sy), end_x: String(ex), end_y: String(ey), route_mode: mode,
