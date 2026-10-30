@@ -158,6 +158,7 @@
     if (newH && keepX) newH.scrollLeft = keepX;
     box.setAttribute('aria-label', '오늘의 날씨 ' + place);
     fitHead(box);
+    if (typeof window.__outdPlaceExpStats === 'function') window.__outdPlaceExpStats(); // 지도 크게 보기: 속도·거리 표시를 카드 아래로
   }
 
   /*

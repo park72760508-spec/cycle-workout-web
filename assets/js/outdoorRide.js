@@ -701,9 +701,35 @@
     return { along: st.mo ? st.mo.along : null, v: st.mo ? st.mo.v : null, pos: st.mePos ? st.mePos.slice() : null, locked: !!st.navLocked, follow: !!st.follow, zooming: !!st.mapZooming, zoom: st.map ? st.map.getZoom() : null, turnZoomed: !!st.turnZoomed };
   };
 
+  /*
+   * 2026-10-31: 지도 크게 보기에서도 날씨 카드는 그대로(접힘/펼침 상태 유지),
+   *  속도·이동 거리 표시는 날씨 카드 바로 아래. 카드 높이(접기·펼치기·두 줄)·위치(길안내 문구 아래)가 바뀌면 따라 내려감.
+   */
+  function placeExpStats() {
+    var stats = $('outdExpStats');
+    if (!stats) return;
+    var wx = $('outdWeather');
+    if (!st.expanded || !wx || !wx.offsetHeight) { stats.style.removeProperty('top'); return; }
+    var top = Math.round(wx.offsetTop + wx.offsetHeight + 6) + 'px';
+    if (stats.style.getPropertyValue('top') !== top) stats.style.setProperty('top', top, 'important');
+  }
+  window.__outdPlaceExpStats = placeExpStats;
+  function watchExpStats(on) {
+    clearInterval(st.expStatsT);
+    st.expStatsT = null;
+    if (on) st.expStatsT = setInterval(placeExpStats, 1000); // 길안내 문구가 나타나거나 사라질 때(카드 위치 변경)
+    var wx = $('outdWeather');
+    if (on && wx && window.ResizeObserver && !st.expStatsRO) {
+      st.expStatsRO = new ResizeObserver(function () { placeExpStats(); });
+      st.expStatsRO.observe(wx);
+    }
+    placeExpStats();
+  }
+
   window.toggleOutdoorExpand = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     st.expanded = !st.expanded;
+    watchExpStats(st.expanded);
     var screen = $(SCREEN_ID);
     if (screen) screen.classList.toggle('outd-expanded', st.expanded);
     var btn = $('outdExpand');
