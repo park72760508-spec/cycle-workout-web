@@ -35590,3 +35590,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-tpick__btn.is-on .outd-tpick__ico { background: #00b894; }
 #outdoorRideScreen .outd-tpick__btn:active { transform: scale(0.96); }
 #outdoorRideScreen .outd-tpick__hint { margin-top: 10px; font-size: 11.5px; color: #64748b; text-align: center; }
+
+/* 2026-10-30: 길찾기 화면 이동 수단 탭 = 이동 수단 선택 팝업과 같은 둥근 원(선택 녹색 #00b894 / 나머지 검정 원 + 흰 아이콘) */
+#outdoorRideScreen #outdRouteSheet .outd-route__modes { background: none; padding: 0; gap: 8px; margin-left: 10px; vertical-align: middle; }
+#outdoorRideScreen #outdRouteSheet .outd-route__mode {
+  width: 38px; height: 38px; border-radius: 50%; background: #1e293b; color: #ffffff; box-shadow: none;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+#outdoorRideScreen #outdRouteSheet .outd-route__mode.is-on { background: #00b894; color: #ffffff; box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.25); }
+#outdoorRideScreen #outdRouteSheet .outd-route__mode:active { transform: scale(0.93); }
+#outdoorRideScreen #outdRouteSheet .outd-route__mode svg,
+#outdoorRideScreen #outdRouteSheet .outd-route__mode .outd-route__moto-ico,
+#outdoorRideScreen #outdRouteSheet .outd-route__mode .outd-route__walk-ico { width: 23px; height: 23px; color: #ffffff; }
