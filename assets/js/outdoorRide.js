@@ -264,20 +264,55 @@
       ln.setAttribute('stroke-width', major ? '2.5' : '1.5');
       ticks.appendChild(ln);
     }
-    // 숫자: 0km/h, 10, 20, 30, 40, 50, 60 (원 바깥, 다른 계기판과 같은 반지름 98)
+    renderGaugeLabels();
+  }
+  /** 숫자: 0km/h, 10 … 60 (오토바이 경로 안내 중에는 ×3 → 0 … 180). 원 바깥, 다른 계기판과 같은 반지름 98 */
+  function renderGaugeLabels() {
+    var labels = $('outd-gauge-labels');
+    if (!labels) return;
+    var ns = 'http://www.w3.org/2000/svg';
+    var cx = 100, cy = 140, step = GAUGE_MAX_KMH / 6;
+    labels.textContent = '';
     for (var i = 0; i <= 6; i++) {
-      var val = i * 10;
+      var val = Math.round(i * step);
       var ang = Math.PI + (i / 6) * Math.PI;
       var t = document.createElementNS(ns, 'text');
       t.setAttribute('x', cx + 98 * Math.cos(ang));
       t.setAttribute('y', cy + 98 * Math.sin(ang));
       t.setAttribute('text-anchor', 'middle');
       t.setAttribute('dominant-baseline', 'middle');
-      t.setAttribute('fill', val === 30 ? '#ef4444' : '#ffffff'); // 30 km/h 는 빨간색
+      t.setAttribute('fill', i === 3 ? '#ef4444' : '#ffffff'); // 가운데 눈금(30 / 오토바이 90)은 빨간색
       t.setAttribute('font-size', '10');
       t.setAttribute('font-weight', '600');
       t.textContent = val === 0 ? '0km/h' : String(val);
       labels.appendChild(t);
+    }
+  }
+  /*
+   * 2026-10-30: 이동 수단에 맞춘 계기판 — 오토바이 경로 안내 중이면 눈금 ×3(0~180km/h),
+   * 이동 거리 'km' 위에 지금 이동 수단 아이콘(흰색: 오토바이·자전거·걷기).
+   * 이동 수단 = 안내 중인 길찾기 경로의 수단, 경로가 없으면 길찾기에서 고른 탭.
+   */
+  var GAUGE_MODE_ICONS = {
+    bike: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5.5" cy="17" r="3.5"/><circle cx="18.5" cy="17" r="3.5"/><path d="M5.5 17l4-8h6l3 8"/><path d="M9.5 9l3 8h2"/><path d="M14 6h2.5l1 3"/><path d="M8 6h3"/></svg>',
+    moto: '<span class="outd-route__moto-ico" aria-hidden="true"></span>',
+    walk: '<span class="outd-route__walk-ico" aria-hidden="true"></span>'
+  };
+  function gaugeTravel() {
+    var rm = st.course && st.course.isRoute && st.course.routeMode;
+    if (rm) return /^moto/.test(rm) ? 'moto' : /^walk/.test(rm) ? 'walk' : 'bike';
+    return travelMode || 'bike';
+  }
+  function syncGaugeMode() {
+    var m = gaugeTravel();
+    var routeMoto = !!(st.course && st.course.isRoute && /^moto/.test(st.course.routeMode || ''));
+    var max = routeMoto ? 180 : 60;
+    if (max !== GAUGE_MAX_KMH) { GAUGE_MAX_KMH = max; renderGaugeLabels(); }
+    var ico = $('outdGaugeModeIco');
+    if (ico && ico.__mode !== m) {
+      ico.__mode = m;
+      ico.innerHTML = GAUGE_MODE_ICONS[m] || '';
+      ico.setAttribute('aria-label', { moto: '오토바이', bike: '자전거', walk: '걷기' }[m] || '');
     }
   }
 
@@ -332,6 +367,7 @@
   }
 
   function renderStats() {
+    syncGaugeMode(); // 이동 수단 아이콘·오토바이 눈금(경로 선택·해제 직후에도)
     var el = elapsedNow();
     setText('outd-main-timer', fmtHms(el));
     setSplitNumber('outd-ui-distance', 'outd-ui-distance-dec', st.distanceM / 1000, 2);
@@ -425,6 +461,7 @@
       st.numSpeed += Math.abs(nd) <= step ? nd : (nd > 0 ? step : -step);
     }
     var settled = needleSettled && numSettled;
+    syncGaugeMode();
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
@@ -502,6 +539,7 @@
     st.course = null;
     st.courseIdx = 0;
     resetMatch();
+    syncGaugeMode();
     st.onRoute = false;
     st.offRouteSince = 0;
     st.offCued = false;
@@ -3024,6 +3062,7 @@
     st.course = course;
     st.courseIdx = 0;
     resetMatch();
+    syncGaugeMode();
     st.offRouteSince = 0;
     st.lastOnRouteIdx = null;
     drawCourse();
@@ -3168,6 +3207,7 @@
   }
 
   function renderTravelModes() {
+    syncGaugeMode();
     var sheet = $('outdRouteSheet');
     if (!sheet) return;
     Array.prototype.forEach.call(sheet.querySelectorAll('[data-travel]'), function (b) {
@@ -4822,6 +4862,7 @@
     st.course = null;
     st.courseIdx = 0;
     resetMatch();
+    syncGaugeMode();
     st.onRoute = false;
     updateRerouteBtn();
     if (st.courseLayer && st.map) { st.map.removeLayer(st.courseLayer); st.courseLayer = null; }
