@@ -816,8 +816,7 @@
   };
   window.setOutdoorStat3 = function (v, e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    applyStat3(v);
-    try { localStorage.setItem(STAT3_KEY, v); } catch (eS) {}
+    applyStat3(v); // 2026-10-31: 저장하지 않음 — 크게 보기/원래 화면 전환 때 이동 거리/누적 고도로 다시 맞춤
     closeStat3();
   };
   document.addEventListener('click', function (e) {
@@ -825,8 +824,8 @@
     if (box && box.classList.contains('is-open') && !box.contains(e.target)) closeStat3();
   });
   (function () {
-    var v = 'elev';
-    try { v = localStorage.getItem(STAT3_KEY) || 'elev'; } catch (e) {}
+    try { localStorage.removeItem(STAT3_KEY); } catch (e) {}
+    var v = st.expanded ? 'dist' : 'elev';
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { applyStat3(v); });
     else applyStat3(v);
   })();
