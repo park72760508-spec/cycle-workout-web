@@ -35830,3 +35830,21 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media screen and (orientation: landscape) {
   #outdoorRideScreen .outd-route-reset-btn.is-solo { bottom: 110px; }
 }
+
+/* 2026-11-01: 친구 초대 안내 '10명 달성' 칸 — 내 초대 실적 + 신청하기 */
+.launch-notice-feature__text { flex: 1; min-width: 0; }
+.launch-notice-goal { flex-shrink: 0; display: flex; flex-direction: column; align-items: stretch; gap: 5px; width: 84px; }
+.launch-notice-goal[hidden] { display: none; }
+.launch-notice-goal__count { font-size: 11.5px; color: #64748b; text-align: center; white-space: nowrap; }
+.launch-notice-goal__count b { font-size: 16px; font-weight: 800; color: #5b21b6; }
+.launch-notice-goal__bar { display: block; height: 5px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.launch-notice-goal__bar i { display: block; height: 100%; width: 0; border-radius: inherit; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.4s ease; }
+.launch-notice-goal__btn {
+  height: 30px; padding: 0 8px; border: 0; border-radius: 9px; font-family: inherit;
+  font-size: 12.5px; font-weight: 800; color: #fff; cursor: pointer;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 3px 10px rgba(118, 75, 162, 0.3);
+}
+.launch-notice-goal__btn:disabled { background: #e2e8f0; color: #94a3b8; box-shadow: none; cursor: default; }
+.launch-notice-goal__btn:not(:disabled):active { transform: translateY(1px); }
+.launch-notice-goal.is-done .launch-notice-goal__count b { color: #16a34a; }
+.launch-notice-feature:has(.launch-notice-goal.is-done) { border-color: rgba(118, 75, 162, 0.35); background: #faf5ff; }

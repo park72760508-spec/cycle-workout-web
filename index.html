@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261101rst" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261101goal" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -4645,7 +4645,13 @@
           </div>
           <div class="launch-notice-feature">
             <svg class="launch-notice-feature__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 12 20 22 4 22 4 12"></polyline><rect x="2" y="7" width="20" height="5"></rect><line x1="12" y1="22" x2="12" y2="7"></line><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"></path><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"></path></svg>
-            <span class="launch-notice-feature__text"><strong>10명 달성</strong><br/>설정 &gt; 내 프로필에서 기념품 신청</span>
+            <span class="launch-notice-feature__text"><strong>10명 달성</strong><br/>달성하면 바로 기념품 신청</span>
+            <!-- 2026-11-01: 내 초대 실적 + 신청하기(10명 달성 시 활성) -->
+            <div class="launch-notice-goal" id="launchNoticeGoal" hidden>
+              <span class="launch-notice-goal__count"><b id="launchNoticeGoalNum">0</b> / 10명</span>
+              <span class="launch-notice-goal__bar" aria-hidden="true"><i id="launchNoticeGoalBar"></i></span>
+              <button type="button" class="launch-notice-goal__btn" id="launchNoticeGoalBtn" disabled>신청하기</button>
+            </div>
           </div>
         </div>
         <div class="launch-notice-referral__cta-box">
@@ -4792,6 +4798,7 @@
           modal.classList.remove('hidden');
           setupLaunchNoticeSlider();
           fillMyReferralCode();
+          fillMyReferralGoal();
           requestAnimationFrame(function () {
             modal.classList.add('launch-notice-modal--visible');
           });
@@ -4834,6 +4841,35 @@
         for (var d = 0; d < dots.length; d++) {
           (function (n) { dots[n].addEventListener('click', function () { go(n); }); })(d);
         }
+      }
+      /* 2026-11-01: '10명 달성' 칸 — 내 초대 실적과 신청하기(달성 시 활성, 누르면 안내 창을 닫고 기념품 신청 화면) */
+      function fillMyReferralGoal(tries) {
+        tries = tries || 0;
+        var box = document.getElementById('launchNoticeGoal');
+        if (!box) return;
+        var retry = function () { if (tries < 10) setTimeout(function () { fillMyReferralGoal(tries + 1); }, 700); };
+        if (!window.stelvioReferral || !window.stelvioReferral.getMyReferralStatus) { retry(); return; } // 모듈 로드 전
+        window.stelvioReferral.getMyReferralStatus().then(function (r) {
+          if (!r) { retry(); return; } // 로그인 확인 전
+          var num = document.getElementById('launchNoticeGoalNum');
+          var bar = document.getElementById('launchNoticeGoalBar');
+          var btn = document.getElementById('launchNoticeGoalBtn');
+          if (num) num.textContent = String(r.count);
+          if (bar) bar.style.width = Math.min(100, Math.round(r.count / r.goal * 100)) + '%';
+          box.classList.toggle('is-done', r.done);
+          if (btn) {
+            btn.disabled = !r.done;
+            btn.textContent = r.shipped ? '배송 처리' : r.applied ? '신청 내역' : '신청하기';
+            btn.title = r.done ? '' : '친구 ' + r.goal + '명 가입 시 신청할 수 있습니다';
+            btn.onclick = function (ev) {
+              if (ev) ev.stopPropagation();
+              if (!r.done) return;
+              window.closeLaunchNoticeModal();
+              setTimeout(function () { window.stelvioReferral.openGiftRequestModal(r.uid); }, 240);
+            };
+          }
+          box.hidden = false;
+        }).catch(function () {});
       }
       function fillMyReferralCode() {
         var el = document.getElementById('launchNoticeMyReferralCode');
@@ -9418,7 +9454,7 @@
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutManager.js?v=cardbars-20261018"></script>
 <!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
-<script type="module" src="assets/js/referral/stelvioReferral.js?v=20261020kakao"></script>
+<script type="module" src="assets/js/referral/stelvioReferral.js?v=20261101goal"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>

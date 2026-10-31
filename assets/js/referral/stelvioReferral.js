@@ -372,6 +372,21 @@ export async function shareInvite() {
   toast(ok ? '초대 링크와 추천인 코드를 복사했습니다. 카카오톡 대화방에 붙여넣어 보내 주세요.' : '추천인 코드: ' + code + '\n' + url, ok ? 'success' : 'info');
 }
 
+/** 내 초대 실적·기념품 신청 상태 (2026-11-01 이벤트 안내 팝업 '10명 달성' 칸) */
+export async function getMyReferralStatus(uidArg) {
+  const uid = uidArg || currentUid();
+  if (!uid) return null;
+  const count = await countMyReferrals(uid);
+  let applied = false;
+  let shipped = false;
+  if (count >= REFERRAL_GOAL) {
+    const myReq = await getMyGiftRequest(uid).catch(() => null);
+    applied = !!myReq;
+    shipped = !!myReq && myReq.status === 'SHIPPED';
+  }
+  return { uid, count, goal: REFERRAL_GOAL, done: count >= REFERRAL_GOAL, applied, shipped };
+}
+
 /** 프로필 카드 아바타 줄 아래 — 추천인 코드·카운트·기념품 신청 */
 export async function hydrateProfileReferralRow(uid) {
   const els = document.querySelectorAll('[data-stelvio-referral-row="' + uid + '"]');
@@ -1214,6 +1229,7 @@ window.stelvioReferral = {
   countMyReferrals,
   shareInvite,
   hydrateProfileReferralRow,
+  getMyReferralStatus,
   openGiftRequestModal,
   getMyGiftRequest,
   renderAdminGiftRequests,
