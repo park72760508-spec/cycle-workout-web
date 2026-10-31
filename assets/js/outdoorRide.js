@@ -4063,7 +4063,7 @@
           '<span class="outd-fav__heart">' + (it.liked ? '♥' : '♡') + '</span><b>' + favLikeText(it.like_count) + '</b></button>';
       } else {
         right = (it.is_public ? '<span class="outd-fav__likecnt">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
-          '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기">' + (it.is_public
+          '<button type="button" class="outd-fav__pub' + (it.is_public ? ' is-on' : '') + (fav.pubBusy && fav.pubBusy[it.id] ? ' is-busy' : '') + '" data-fav-pub="' + it.id + '" aria-label="공개 여부 바꾸기"' + (fav.pubBusy && fav.pubBusy[it.id] ? ' aria-busy="true"' : '') + '>' + (it.is_public
             ? (it.public_status === 'pending' || it.public_status === 'hidden'
               ? '⏳ 공개 대기 중'
               : '<img class="outd-stv-logo" src="assets/img/stelvio_w.png" alt=""> 공개') // 2026-10-25: 흰색 STELVIO 로고
@@ -4144,17 +4144,31 @@
       btn.disabled = false;
     }).then(function () { btn.__busy = false; favRowBusy(id, false); });
   }
+  /* 2026-11-01: 공개/비공개 전환 중에는 그 버튼에 녹색 원 스피너 — 버튼마다 따로(여러 개 동시 가능).
+   * 목록이 다시 그려져도 유지되도록 상태는 id 기준 fav.pubBusy 에 둔다. */
+  function setFavPubBusy(id, on) {
+    fav.pubBusy = fav.pubBusy || {};
+    if (on) fav.pubBusy[id] = true; else delete fav.pubBusy[id];
+    var b = document.querySelector('#outdFavList [data-fav-pub="' + id + '"]');
+    if (!b) return;
+    b.classList.toggle('is-busy', !!on);
+    if (on) b.setAttribute('aria-busy', 'true'); else b.removeAttribute('aria-busy');
+  }
   function toggleFavPublic(id, btn) {
     var it = null;
     (fav.items.mine || []).forEach(function (x) { if (x.id === id) it = x; });
-    if (!it || btn.__busy) return;
-    btn.__busy = true;
+    if (!it || (fav.pubBusy && fav.pubBusy[id])) return;
+    setFavPubBusy(id, true);
     var next = !it.is_public;
     favRpc('fn_route_fav_save', { p: {
       id: it.id, category: it.category, name: it.name, sido: it.sido || '', sigungu: it.sigungu || '',
       address: it.address || '', lat: Number(it.lat), lng: Number(it.lng), is_public: next
     } }).then(function () {
       it.is_public = next;
+      if (!next) it.public_status = null;
+      else if (favIsAdmin()) it.public_status = 'admin';
+      else if (!it.public_status) it.public_status = 'pending';
+      setFavPubBusy(id, false);
       fav.items.public = null; // 공개 장소 목록은 다시 불러옴(두 탭에 함께 보이게)
       renderFavList();
       refreshFavMarkers(); // 공개 상태(관리자 즉시·일반 대기)도 다시 받아 표시
@@ -4162,8 +4176,9 @@
         : favIsAdmin() ? '공개로 바꿨습니다 · 공개 장소 목록에도 보입니다'
           : FAV_PUBLIC_PENDING_MSG, 'info');
     }).catch(function (err) {
+      setFavPubBusy(id, false);
       toast(err && err.message ? err.message : '바꾸지 못했습니다.', 'error');
-    }).then(function () { btn.__busy = false; });
+    });
   }
 
   /* --- 지도 위 즐겨찾기 핀(2026-10-23): 내 즐겨찾기(금색) + 다른 사용자 공개 장소(분홍) ---
