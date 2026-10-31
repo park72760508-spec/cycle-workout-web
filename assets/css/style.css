@@ -35848,3 +35848,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .launch-notice-goal__btn:not(:disabled):active { transform: translateY(1px); }
 .launch-notice-goal.is-done .launch-notice-goal__count b { color: #16a34a; }
 .launch-notice-feature:has(.launch-notice-goal.is-done) { border-color: rgba(118, 75, 162, 0.35); background: #faf5ff; }
+
+/* 2026-11-01: 친구 초대하기 버튼 — 선물 카드와 안내 블록 사이 */
+.launch-notice-referral__invite--top { margin: 0 0 12px; }
