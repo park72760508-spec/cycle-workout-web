@@ -35790,3 +35790,28 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
 }
 #outdoorRideScreen .outd-zoomlv svg { filter: drop-shadow(0 0 1.5px #fff); }
+
+/* 2026-10-31: 줌 13 미만 겹친 핀 묶음 — 대표 핀 오른쪽 위 원형 숫자 배지(지도 회전과 무관하게 똑바로) */
+#outdoorRideScreen .outd-favpin__cnt {
+  position: absolute; left: 9px; top: -54px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box;
+  border-radius: 10px; background: #1d4ed8; color: #fff; border: 2px solid #fff;
+  font: 800 11px/16px "Noto Sans KR", sans-serif; font-style: normal; text-align: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.45); pointer-events: none;
+}
+/* 겹친 즐겨찾기 목록(팝업 위쪽) — 라디오로 선택, 많으면 목록만 스크롤 */
+#outdoorRideScreen .outd-favpop__grouphd { font-size: 12px; font-weight: 700; color: #64748b; margin: 0 0 -4px; }
+#outdoorRideScreen .outd-favpop__group {
+  max-height: 168px; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  border: 1px solid #e2e8f0; border-radius: 12px; flex: none;
+}
+#outdoorRideScreen .outd-favpop__gi {
+  display: flex; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; font-size: 14px; color: #0f172a;
+  border-bottom: 1px solid #f1f5f9; -webkit-tap-highlight-color: transparent;
+}
+#outdoorRideScreen .outd-favpop__gi:last-child { border-bottom: 0; }
+#outdoorRideScreen .outd-favpop__gi.is-on { background: #eff6ff; }
+#outdoorRideScreen .outd-favpop__gi input { margin: 0; width: 17px; height: 17px; accent-color: #2563eb; flex: none; pointer-events: none; }
+#outdoorRideScreen .outd-favpop__gicat { flex: none; font-size: 15px; line-height: 1; }
+#outdoorRideScreen .outd-favpop__giname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+#outdoorRideScreen .outd-favpop__gi.is-on .outd-favpop__giname { font-weight: 800; }
+#outdoorRideScreen .outd-favpop__gi em { flex: none; font-style: normal; font-size: 12px; color: #e11d48; }

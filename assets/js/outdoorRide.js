@@ -1370,13 +1370,29 @@
     // 최종 크기도 최소 1/2 아래로는 줄이지 않음
     var sc = Math.round(Math.max(0.5, favPinScaleForZoom(z) * favPinScaleForScreen()) * 1000) / 1000;
     if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
-    // 2026-10-31: 핀이 1/2 크기까지 줄어든 축소 단계면 주요 장소만(좋아요 5개 이상·제휴사) — 단계가 바뀔 때만 다시 그림
-    if (fav.layer && favSparseZoom(z) !== fav.sparse) renderFavMarkers();
+    // 2026-10-31: 줌 13 미만은 겹치는 핀을 대표 핀 1개로 묶음 — 줌마다 겹침이 달라지므로 다시 그림(13 이상으로 돌아올 때도 한 번)
+    if (fav.layer && (z < FAV_CLUSTER_BELOW || fav.clustered)) renderFavMarkers();
   }
-  /** 줌 10 이하(핀 최소 1/2 크기) = 지도를 덮지 않게 주요 장소만 표시 */
-  function favSparseZoom(z) { return z > 0 && favPinScaleForZoom(z) <= 0.5; }
-  function favIsMajor(it) {
-    return Number(it.like_count) >= 5 || !!it.affiliate_id || !!it.affiliate_name || Number(it.affiliate_discount) > 0;
+  var FAV_CLUSTER_BELOW = 13;
+  /** 묶음 대표: 제휴사 > 좋아요 많은 순 > 내 장소 */
+  function favRepScore(it) {
+    return (Number(it.affiliate_discount) > 0 || it.affiliate_name ? 1e6 : 0) + (Number(it.like_count) || 0) * 10 + (it.is_mine ? 1 : 0);
+  }
+  /** 화면에서 핀끼리 겹치면(핀 지름 × 현재 핀 크기 이내) 한 묶음으로 — [[대표, ...나머지], ...] */
+  function favClusterItems(items, map) {
+    var sc = st.__pinScale != null ? st.__pinScale : 1;
+    var gap = 40 * sc, gap2 = gap * gap;
+    var pts = items.map(function (it) { return { it: it, p: map.latLngToLayerPoint([Number(it.lat), Number(it.lng)]) }; });
+    pts.sort(function (a, b) { return favRepScore(b.it) - favRepScore(a.it); });
+    var groups = [];
+    pts.forEach(function (x) {
+      for (var i = 0; i < groups.length; i++) {
+        var g = groups[i], dx = g.p.x - x.p.x, dy = g.p.y - x.p.y;
+        if (dx * dx + dy * dy <= gap2) { g.items.push(x.it); return; }
+      }
+      groups.push({ p: x.p, items: [x.it] });
+    });
+    return groups.map(function (g) { return g.items; });
   }
   function applyFavPinUnrotate(force) {
     var d = st.dispRot || 0;
@@ -4167,9 +4183,13 @@
       bindFavPickTap();
     }
     fav.layer.clearLayers();
-    fav.sparse = favSparseZoom(map.getZoom());
-    favAllItems().forEach(function (it) {
-      if (fav.sparse && !favIsMajor(it)) return;
+    var all = favAllItems();
+    fav.clustered = map.getZoom() < FAV_CLUSTER_BELOW;
+    var groups = fav.clustered ? favClusterItems(all, map) : all.map(function (it) { return [it]; });
+    fav.groups = {};
+    groups.forEach(function (g) {
+      var it = g[0];
+      if (g.length > 1) fav.groups[it.id] = g.map(function (x) { return x.id; });
       var c = favCat(it.category);
       var kind = it.is_mine ? 'mine' : 'pub';
       var html = '<div class="outd-favpin outd-favpin--' + kind + (it.admin_hidden ? ' is-admin-hidden' : '') + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
@@ -4178,7 +4198,8 @@
           ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 36) + '</i>'
           : '') + '</div>' + // 2026-10-24: 공개 장소 STELVIO 로고 배지 제거(제휴 할인율 배지만)
         (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
-        '<span class="outd-favpin__name">' + escHtml(it.name) + '</span></div></div>';
+        (g.length > 1 ? '<i class="outd-favpin__cnt">' + g.length + '</i>' : '') +
+        '<span class="outd-favpin__name">' + escHtml(it.name) + (g.length > 1 ? ' 외 ' + (g.length - 1) : '') + '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
         interactive: false,
@@ -4220,7 +4241,7 @@
         ' aria-label="' + m.l + (ok[m.k] ? '' : ' (거리가 멀어 선택 불가)') + '"' + (ok[m.k] ? '' : ' aria-disabled="true"') + '>' + icon[m.k] + '</button>';
     }).join('') + '</span>';
   }
-  function openFavPopup(id) {
+  function openFavPopup(id, groupIds) {
     var it = null;
     favAllItems().forEach(function (x) { if (x.id === id) it = x; });
     if (!it) return;
@@ -4259,9 +4280,34 @@
         var lk = t.closest('[data-pop-like]');
         if (lk) {
           var fid = lk.getAttribute('data-pop-like');
-          toggleFavLike(fid, lk, function () { openFavPopup(fid); });
+          toggleFavLike(fid, lk, function () { openFavPopup(fid, el.__group); });
+          return;
+        }
+        // 2026-10-31: 겹친 핀 목록에서 라디오로 고르면 아래 정보·목적지가 그 장소로
+        var pick = t.closest('[data-pop-pick]');
+        if (pick) {
+          var pid = pick.getAttribute('data-pop-pick');
+          if (pid !== el.__id) openFavPopup(pid, el.__group);
         }
       });
+    }
+    var prevList = el.querySelector('.outd-favpop__group');
+    var keepScroll = prevList && el.__group === groupIds ? prevList.scrollTop : 0;
+    el.__group = groupIds && groupIds.length > 1 ? groupIds : null;
+    el.__id = id;
+    var groupHtml = '';
+    if (el.__group) {
+      groupHtml = '<div class="outd-favpop__grouphd">이 위치의 즐겨찾기 ' + el.__group.length + '곳</div>' +
+        '<div class="outd-favpop__group" role="radiogroup" aria-label="겹친 즐겨찾기">' + el.__group.map(function (gid) {
+          var g = findFav(gid);
+          if (!g) return '';
+          var on = gid === id;
+          return '<label class="outd-favpop__gi' + (on ? ' is-on' : '') + '" data-pop-pick="' + gid + '">' +
+            '<input type="radio" name="outdFavPopPick"' + (on ? ' checked' : '') + '>' +
+            '<span class="outd-favpop__gicat">' + favCat(g.category).e + '</span>' +
+            '<span class="outd-favpop__giname">' + escHtml(g.name) + '</span>' +
+            (g.is_public ? '<em>♥ ' + favLikeText(g.like_count) + '</em>' : '') + '</label>';
+        }).join('') + '</div>';
     }
     var region = [it.sido, it.sigungu].filter(Boolean).join(' ');
     var rows = [];
@@ -4284,11 +4330,15 @@
       (it.affiliate_name ? '<span class="outd-favpop__aff">제휴 · ' + escHtml(it.affiliate_name) + '</span>' : '') +
       '<span>' + c.l + ' · ' + (it.is_mine ? (it.is_public ? (it.public_status === 'pending' || it.public_status === 'hidden' ? '내 장소 · 공개 대기중' : '내 장소 · 공개') : '내 장소 · 비공개') : '공개 장소') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
+      groupHtml +
       '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' +
       '<div class="outd-favpop__likerow">' + (likeHtml || '<span></span>') + favPopModesHtml(it, el) + '</div>' +
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
       '<button type="button" class="outd-fav__save" data-pop-go="' + it.id + '">목적지로 안내</button></div>' +
       '</div>';
+    var gl = el.querySelector('.outd-favpop__group');
+    if (gl && keepScroll) gl.scrollTop = keepScroll;
+    if (el.style.display === 'flex' && keepScroll !== undefined && prevList && el.__group) return; // 목록에서 바꿔 고른 경우: 위치·열림 시각 유지
     el.classList.remove('is-bottom');
     el.__openedAt = Date.now();
     el.style.display = 'flex';
@@ -4389,7 +4439,7 @@
       }
       if (!fav.picking) {
         var pid = favPinAt(e.clientX, e.clientY);
-        if (pid) openFavPopup(pid);
+        if (pid) openFavPopup(pid, fav.groups && fav.groups[pid]);
         return;
       }
       var ll = clientToLatLng(e.clientX, e.clientY);
