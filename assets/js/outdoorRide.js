@@ -802,6 +802,7 @@
     v = v === 'dist' ? 'dist' : 'elev';
     box.setAttribute('data-show', v);
     setText('outdStat3Label', v === 'dist' ? '이동 거리' : '누적 고도');
+    setText('outdStat3Unit', v === 'dist' ? 'km' : 'm');
     Array.prototype.forEach.call(box.querySelectorAll('[data-stat3]'), function (b) {
       b.classList.toggle('is-on', b.getAttribute('data-stat3') === v);
       b.setAttribute('aria-selected', b.getAttribute('data-stat3') === v ? 'true' : 'false');

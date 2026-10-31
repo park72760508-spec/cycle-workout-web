@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261031turn" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261031unit" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29970,7 +29970,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261029avg3"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261031turn"></script>
+  <script src="assets/js/outdoorRide.js?v=20261031unit"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36221,18 +36221,18 @@
 
     <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 7.5px 0; border-top: 1px solid #333;">
       <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">평균 속도</div>
-        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="outd-ui-avg">0.0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">평균 속도<small class="outd-stat-unit">km/h</small></div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="outd-ui-avg">0.0</span></div>
       </div>
       <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">남은 거리</div>
-        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="outd-ui-remain">--</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km</span></div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">남은 거리<small class="outd-stat-unit">km</small></div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="outd-ui-remain">--</span></div>
       </div>
       <!-- 2026-10-31: 세 번째 칸은 ⌄ 를 눌러 누적 고도 / 이동 거리 중 선택(기기에 기억) -->
       <div class="mobile-stat-box outd-stat3" id="outdStat3" data-show="elev" style="text-align: center;">
-        <button type="button" class="mobile-stat-label outd-stat3__btn" onclick="toggleOutdoorStat3(event)" aria-haspopup="listbox" aria-expanded="false" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;"><span id="outdStat3Label">누적 고도</span><i class="outd-stat3__chev" aria-hidden="true"></i></button>
-        <div class="mobile-stat-value outd-stat3__v outd-stat3__v--elev" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="outd-ui-elev">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">m</span></div>
-        <div class="mobile-stat-value outd-stat3__v outd-stat3__v--dist" style="font-size: 1.8em; font-weight: bold; color: #38bdf8;"><span id="outd-ui-dist3">0.00</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km</span></div>
+        <button type="button" class="mobile-stat-label outd-stat3__btn" onclick="toggleOutdoorStat3(event)" aria-haspopup="listbox" aria-expanded="false" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;"><span id="outdStat3Label">누적 고도</span><small class="outd-stat-unit" id="outdStat3Unit">m</small><i class="outd-stat3__chev" aria-hidden="true"></i></button>
+        <div class="mobile-stat-value outd-stat3__v outd-stat3__v--elev" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="outd-ui-elev">0</span></div>
+        <div class="mobile-stat-value outd-stat3__v outd-stat3__v--dist" style="font-size: 1.8em; font-weight: bold; color: #38bdf8;"><span id="outd-ui-dist3">0.00</span></div>
         <div class="outd-stat3__pop" id="outdStat3Pop" role="listbox" hidden>
           <button type="button" role="option" data-stat3="elev" onclick="setOutdoorStat3('elev', event)">누적 고도<b aria-hidden="true">✓</b></button>
           <button type="button" role="option" data-stat3="dist" onclick="setOutdoorStat3('dist', event)">이동 거리<b aria-hidden="true">✓</b></button>

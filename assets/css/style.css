@@ -35775,3 +35775,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen.outd-expanded .outd-turn-big__word { font-size: 13px; }
 /* 표지판이 위로 올라가 아래 목적지 안내 카드는 원래 자리 */
 #outdoorRideScreen:not(.outd-expanded):has(#outdTurnBig[style*="flex"]) .outd-map-empty.is-dest { bottom: 10px; }
+/* 2026-10-31 하단 정보: 단위는 항목명 옆에 아주 작게, 값은 숫자만 */
+#outdoorRideScreen .mobile-stats-footer .outd-stat-unit { font-size: 0.75em; color: #666; margin-left: 3px; font-weight: 400; }
