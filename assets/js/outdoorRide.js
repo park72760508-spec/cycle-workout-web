@@ -473,6 +473,7 @@
     // GPS 신호가 5초 넘게 끊기면 속도 0 으로
     if (Date.now() - st.lastFixAt > 5000 && st.speedKmh !== 0) {
       st.speedKmh = 0;
+      if (st.spdF) { st.spdF.moving = false; st.spdF.v = 0; st.spdF.a = 0; }
       noteSpeed(0);
       kickLoop();
     }
@@ -504,8 +505,16 @@
     while (h.length > 1 && now - h[1][0] > 4000) h.shift();
     updateShown(now);
   }
+  /** 2026-10-31: 자전거·오토바이 표시 속도 — 속도 추정기가 계산(일정 주행 2초 평균, 가속·감속은 지연 없이). 걷기는 null */
+  function vehicleShown(now) {
+    var SF = window.OutdoorSpeedFilter;
+    if (!SF || !SF.display || !st.spdF) return null;
+    return SF.display(st.spdF, now || Date.now());
+  }
   function updateShown(now) {
     now = now || Date.now();
+    var vs = vehicleShown(now);
+    if (vs != null) { st.shownKmh = vs; return; }
     var h = st.spdWin || [];
     if (!h.length || (st.zeroSince && now - st.zeroSince >= SHOWN_ZERO_MS)) { st.shownKmh = 0; if (h.length) h.length = 0; return; }
     var win = (st.shownKmh || 0) >= 10 ? 2000 : 3000, sum = 0, wsum = 0;
@@ -518,7 +527,16 @@
     }
     if (wsum > 0) st.shownKmh = sum / wsum;
   }
-  function shownSpeed() { return st.shownKmh != null ? st.shownKmh : st.speedKmh; }
+  function shownSpeed() {
+    var vs = vehicleShown();
+    if (vs != null) return (st.shownKmh = vs);
+    return st.shownKmh != null ? st.shownKmh : st.speedKmh;
+  }
+  /** 가속·감속 중엔 다음 GPS 가 올 때까지(최대 1초) 표시 속도가 계속 변하므로 애니메이션을 멈추지 않음 */
+  function shownRamping() {
+    var f = st.spdF;
+    return !!(f && f.mode !== 'walk' && f.moving && Math.abs(f.a || 0) >= 0.35 && Date.now() - (f.fixAt || 0) < 1000);
+  }
 
   var FRAME_MS = 33;
   function kickLoop() {
@@ -553,7 +571,7 @@
       var step = Math.min(1, Math.max(0.5, Math.abs(nd) / 15));
       st.numSpeed += Math.abs(nd) <= step ? nd : (nd > 0 ? step : -step);
     }
-    var settled = needleSettled && numSettled;
+    var settled = needleSettled && numSettled && !shownRamping();
     syncGaugeMode();
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
@@ -950,9 +968,12 @@
       if (!st.spdF) st.spdF = SF.create();
       var motion = window.OutdoorStepDetector ? window.OutdoorStepDetector.state() : null; // 걸음 감지(2026-10-27)
       // 앱 위치는 속도 정확도(speedAccuracy)가 함께 온다 — 오차가 초속 1.5m(5.4km/h)를 넘는 속도값은 믿지 않고 위치로 추정
-      var spdOk = c.speed != null && isFinite(c.speed) && c.speed >= 0 && !(c.speedAccuracy != null && c.speedAccuracy > 1.5);
+      // 2026-10-31: 자전거·오토바이는 속도 정확도가 나빠도 버리지 않고 가중치만 낮춤(정지·출발 지연의 주원인이었음) — 걷기는 예전대로
+      st.spdF.mode = navIsWalk() ? 'walk' : (travelMode === 'moto' ? 'moto' : 'bike');
+      var vehicle = st.spdF.mode !== 'walk';
+      var spdOk = c.speed != null && isFinite(c.speed) && c.speed >= 0 && (vehicle || !(c.speedAccuracy != null && c.speedAccuracy > 1.5));
       var kmh = SF.step(st.spdF, { lat: lat, lng: lng, acc: acc != null ? acc : 999, t: t,
-        speed: spdOk ? c.speed : null }, motion);
+        speed: spdOk ? c.speed : null, speedAcc: c.speedAccuracy != null ? c.speedAccuracy : null }, motion);
       st.speedKmh = Math.min(120, Math.max(0, kmh || 0));
       if (st.speedKmh < 0.5) st.speedKmh = 0;
       noteSpeed(st.speedKmh);

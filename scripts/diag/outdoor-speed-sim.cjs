@@ -14,7 +14,7 @@ function run(name, profile, acc, devSigma, devAvail, walking) {
   const motionAt = (f, tt) => walking ? { available: true, walkingNow: f.isWalk && f.walkSeenT === f.t, lastStepAgo: tt - f.lastStepT, cadence: f.isWalk ? 110 : 0, walkContext: tt - f.walkSeenT <= 60000 } : null;
   const res = {};
   for (const useM of [false, true]) {
-    const s = F.create(); let zero = 0, mov = 0, err = 0, fake = 0, st = 0, lag = [], since = null, prev = 0, jerk = 0;
+    const s = F.create(); if (/자전거/.test(name)) s.mode = 'bike'; let zero = 0, mov = 0, err = 0, fake = 0, st = 0, lag = [], since = null, prev = 0, jerk = 0;
     fix.forEach((f, i) => {
       if (useM) { const m = motionAt(fix[Math.max(0, i - 1)], f.t - 500); if (F.motionTick(s, m)) {} }
       const k = F.step(s, f, useM ? motionAt(f, f.t) : null); const out = k < 0.5 ? 0 : k;

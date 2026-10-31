@@ -66,7 +66,7 @@
   }
 
   function create() {
-    return { v: 0, P: 4, t: 0, moving: false, goN: 0, hist: [], zs: [] };
+    return { v: 0, a: 0, P: 4, P00: 1, P01: 0, P11: 1, t: 0, moving: false, goN: 0, hist: [], zs: [], mode: null };
   }
 
   /**
@@ -99,13 +99,13 @@
    * @returns {boolean} 이번에 정지로 바뀌었으면 true
    */
   function motionTick(s, motion) {
-    if (!s.moving) return false;
+    if (!s.moving || (s.mode && s.mode !== 'walk')) return false; // 걸음 끊김 정지는 걷기만
     if (motionVerdict(s, motion, Date.now()) !== 'stopped') return false;
     s.moving = false; s.goN = 0; s.v = 0; s.P = 1; s.zs = [];
     return true;
   }
 
-  function step(s, fix, motion) {
+  function stepLegacy(s, fix, motion) {
     var t = fix.t, acc = fix.acc != null ? fix.acc : 999;
     var dev0 = fix.speed != null && isFinite(fix.speed) && fix.speed >= 0 && acc <= ACC_DEV_OK ? fix.speed : null;
     if (dev0 != null) { s.lastDev = dev0; s.lastDevT = t; } // 걸음 끊김 판정에 이번 GPS 속도도 반영
@@ -177,6 +177,116 @@
     return s.v * 3.6;
   }
 
-  root.OutdoorSpeedFilter = { create: create, step: step, motionTick: motionTick };
+
+  /*
+   * 자전거·오토바이 속도(2026-10-31) — 출발·정지 반응을 상용 내비 수준으로.
+   * 실측(아이폰 자전거 101분): 정지·출발 같은 저속 구간에서 iOS 가 속도 정확도(speedAccuracy)를 1.6~4.0 으로 크게 보내
+   * 예전엔 '믿지 않음'으로 버리고 8초 위치 회귀로 넘어가 정지 후 0 까지 5~7초, 출발 후 속도가 3~5초 늦게 올랐다.
+   * 실제 도플러 값은 그 구간에서도 매끄럽고 정확했다 → 버리지 않고 정확도만큼 가중치만 낮춘다.
+   *  1) 속도·가속도 2상태 칼만 필터(등가속 모델): 가속·감속 중에도 뒤처지지 않음(1상태 필터의 램프 지연 제거)
+   *  2) 정지: 도플러 0.3m/s 이하 1번, 또는 감속 추세상 1초 안에 멈출 것이 확실하면 바로 0(지연 없는 정지 판정)
+   *  3) 출발: 도플러 1.0m/s 이상 1번(또는 0.5m/s 이상 2번 연속)이면 바로 출발, 그 값부터 표시
+   *  4) 튀는 값: 이동 중 1초 만에 물리적으로 불가능한 급감속(정지된 이전 위치 재전송 등)은 한 번 무시, 다음 값이 같으면 인정
+   *  5) 화면 표시(display): 일정 속도 주행은 2초 평균(지금처럼 안정적), 가속·감속 중엔 필터값 + 다음 GPS 까지 가속도로 이어 그림
+   */
+  var V_STOP = 0.3;      // m/s(≈1.1km/h) 이하 도플러 1번 → 정지
+  var V_GO = 1.0;        // m/s(≈3.6km/h) 이상 1번 → 출발
+  var V_GO2 = 0.5;       // m/s(≈1.8km/h) 이상 2번 연속 → 출발
+  var JERK = 2.5;        // 가속도 변화 허용(m/s³) — 클수록 빠르게 따라감
+  var MAX_DECEL = 3.5;   // m/s² — 자전거·오토바이 급제동 한계(이보다 큰 1초 급감속은 한 번 보류)
+
+  function kfPredict(s, dt) {
+    // x = [v, a], F = [[1, dt], [0, 1]], Q = 저크 백색잡음
+    s.v += s.a * dt;
+    var p00 = s.P00 + dt * (2 * s.P01 + dt * s.P11), p01 = s.P01 + dt * s.P11, p11 = s.P11;
+    var q = JERK * JERK;
+    s.P00 = p00 + q * dt * dt * dt * dt * dt / 20;
+    s.P01 = p01 + q * dt * dt * dt * dt / 8;
+    s.P11 = p11 + q * dt * dt * dt / 3;
+  }
+  function kfUpdate(s, z, R) {
+    var S = s.P00 + R, k0 = s.P00 / S, k1 = s.P01 / S, y = z - s.v;
+    s.v += k0 * y; s.a += k1 * y;
+    var p00 = (1 - k0) * s.P00, p01 = (1 - k0) * s.P01, p11 = s.P11 - k1 * s.P01;
+    s.P00 = p00; s.P01 = p01; s.P11 = p11;
+    if (s.v < 0) { s.v = 0; if (s.a < 0) s.a = 0; }
+  }
+  function vStop(s) { s.moving = false; s.v = 0; s.a = 0; s.goN = 0; s.lowHold = 0; s.zs = []; return 0; }
+  function vGo(s, z, t) {
+    s.moving = true; s.v = z; s.a = 0; s.P00 = 0.3; s.P01 = 0; s.P11 = 1.5; s.goAt = t; s.lowHold = 0;
+    return z * 3.6;
+  }
+
+  function stepVehicle(s, fix) {
+    var t = fix.t, acc = fix.acc != null ? fix.acc : 999;
+    if (acc <= ACC_POS_OK) {
+      s.hist.push({ t: t, lat: fix.lat, lng: fix.lng, acc: acc });
+      while (s.hist.length && t - s.hist[0].t > HIST_MS) s.hist.shift();
+    }
+    var dt = s.t ? Math.min(5, Math.max(0.2, (t - s.t) / 1000)) : 1;
+    s.t = t;
+    s.fixAt = t;
+    var z = fix.speed != null && isFinite(fix.speed) && fix.speed >= 0 && acc <= 50 ? fix.speed : null;
+    var R;
+    if (z != null) {
+      s.lastDevT = t;
+      var sa = fix.speedAcc != null && isFinite(fix.speedAcc) && fix.speedAcc > 0 ? fix.speedAcc : 0.6 + 0.02 * acc;
+      // iOS 저속 정확도 값(3.7~4.0)은 매우 보수적 — 그대로 쓰면 반응이 둔해져 상한을 둠
+      sa = Math.min(1.6, Math.max(0.35, sa));
+      R = sa * sa * 0.5 + (acc > 25 ? 0.3 : 0);
+    } else {
+      // 속도값이 잠깐 빠짐 → 3초까지는 가속도로 이어 감(값을 그대로 붙잡지 않음)
+      if (s.lastDevT && t - s.lastDevT < 3000) {
+        if (s.moving) { kfPredict(s, dt); if (s.v <= V_STOP) return vStop(s); }
+        return s.moving ? s.v * 3.6 : 0;
+      }
+      var rg = acc <= ACC_POS_OK ? regressionSpeed(s.hist, t) : null;
+      if (!rg) return s.moving ? s.v * 3.6 : 0;
+      z = Math.max(0, rg.v - 0.5 * rg.sigma);
+      R = Math.max(0.1, rg.sigma * rg.sigma * 2);
+      if (looksStill(s.hist, t)) z = 0;
+    }
+
+    if (!s.moving) {
+      s.goN = z >= V_GO2 ? s.goN + 1 : 0;
+      if ((z >= V_GO && acc <= 25) || s.goN >= 2) return vGo(s, z, t);
+      return 0;
+    }
+
+    var vPrev = s.v;
+    kfPredict(s, dt);
+    // 튀는 값: 1초 만에 급제동 한계보다 크게 떨어짐 → 한 번 보류(다음 값도 낮으면 그때 반영)
+    if (z < vPrev - MAX_DECEL * dt - 0.5 && !s.lowHold) { s.lowHold = 1; return s.v * 3.6; }
+    s.lowHold = 0;
+    if (z <= V_STOP) return vStop(s);
+    kfUpdate(s, z, R);
+    // 감속 추세상 1초 안에 멈춤이 확실(도플러 1m/s 미만 + 감속 중) → 기다리지 않고 0
+    if (z < 1.0 && s.a < -0.6 && s.v + s.a * 1.0 <= 0.25) return vStop(s);
+    return s.v * 3.6;
+  }
+
+  /**
+   * 화면에 보일 속도(km/h) — now 시각 기준. 일정 주행은 최근 2초 평균, 가속·감속 중엔 필터값을 다음 GPS 까지 가속도로 이어 그림(최대 1초).
+   * 걷기는 null(기존 3초 평균 표시 사용).
+   */
+  function display(s, now) {
+    if (s.mode === 'walk' || s.v == null) return null;
+    if (!s.moving) { s.dh = []; return 0; }
+    var h = s.dh || (s.dh = []);
+    if (!h.length || h[h.length - 1][0] !== s.fixAt) h.push([s.fixAt, s.v]);
+    while (h.length && now - h[0][0] > 2000) h.shift();
+    var age = Math.min(1, Math.max(0, (now - s.fixAt) / 1000));
+    if (Math.abs(s.a) >= 0.35 || now - (s.goAt || 0) < 2500) return Math.max(0, (s.v + s.a * age)) * 3.6;
+    var sum = 0;
+    for (var i = 0; i < h.length; i++) sum += h[i][1];
+    return Math.max(0, sum / h.length) * 3.6;
+  }
+
+  function step(s, fix, motion) {
+    if (s.mode && s.mode !== 'walk') return stepVehicle(s, fix);
+    return stepLegacy(s, fix, motion);
+  }
+
+  root.OutdoorSpeedFilter = { create: create, step: step, motionTick: motionTick, display: display };
   if (typeof module !== 'undefined' && module.exports) module.exports = root.OutdoorSpeedFilter;
 })(typeof window !== 'undefined' ? window : globalThis);
