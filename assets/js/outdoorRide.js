@@ -1356,6 +1356,13 @@
     // 최종 크기도 최소 1/2 아래로는 줄이지 않음
     var sc = Math.round(Math.max(0.5, favPinScaleForZoom(z) * favPinScaleForScreen()) * 1000) / 1000;
     if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
+    // 2026-10-31: 핀이 1/2 크기까지 줄어든 축소 단계면 주요 장소만(좋아요 5개 이상·제휴사) — 단계가 바뀔 때만 다시 그림
+    if (fav.layer && favSparseZoom(z) !== fav.sparse) renderFavMarkers();
+  }
+  /** 줌 10 이하(핀 최소 1/2 크기) = 지도를 덮지 않게 주요 장소만 표시 */
+  function favSparseZoom(z) { return z > 0 && favPinScaleForZoom(z) <= 0.5; }
+  function favIsMajor(it) {
+    return Number(it.like_count) >= 5 || !!it.affiliate_id || !!it.affiliate_name || Number(it.affiliate_discount) > 0;
   }
   function applyFavPinUnrotate(force) {
     var d = st.dispRot || 0;
@@ -4146,7 +4153,9 @@
       bindFavPickTap();
     }
     fav.layer.clearLayers();
+    fav.sparse = favSparseZoom(map.getZoom());
     favAllItems().forEach(function (it) {
+      if (fav.sparse && !favIsMajor(it)) return;
       var c = favCat(it.category);
       var kind = it.is_mine ? 'mine' : 'pub';
       var html = '<div class="outd-favpin outd-favpin--' + kind + (it.admin_hidden ? ' is-admin-hidden' : '') + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
