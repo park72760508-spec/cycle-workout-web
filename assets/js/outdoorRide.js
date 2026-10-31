@@ -638,8 +638,14 @@
     var b = $('outdRerouteBtn');
     var on = !!(st.course && st.course.isRoute && st.course.dest);
     if (b) b.style.display = on ? 'flex' : 'none';
+    // 경로 삭제: 길찾기 경로 + 코스맵 선택 경로(2026-11-01) 모두
     var r = $('outdRouteResetBtn');
-    if (r) r.style.display = on ? 'flex' : 'none';
+    var hasPath = !!(st.course && st.course.latlngs && st.course.latlngs.length > 1);
+    if (r) {
+      r.style.display = hasPath ? 'flex' : 'none';
+      r.classList.toggle('is-solo', hasPath && !on);
+      r.setAttribute('aria-label', st.course && st.course.isRoute ? '길찾기 경로 삭제' : '코스맵 경로 삭제');
+    }
     // 전체 경로 보기: 길찾기 목적지·코스맵이 있을 때
     var ov = $('outdOverviewBtn');
     if (ov) ov.style.display = st.course && st.course.latlngs && st.course.latlngs.length > 1 ? 'flex' : 'none';
@@ -673,8 +679,9 @@
   /* 길찾기 초기화(2026-10-22): 입력한 검색어·결과·목적지와 지도 위 경로 안내 코스를 지운다(기록은 그대로) */
   window.resetOutdoorRoute = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
-    if (!(st.course && st.course.isRoute)) return;
-    if (st.status === 'running' && !window.confirm('길찾기 경로 안내를 지울까요?\n(지금까지의 기록은 그대로 이어집니다)')) return;
+    if (!st.course) return;
+    var wasRoute = !!st.course.isRoute; // 2026-11-01: 코스맵 경로도 지움
+    if (st.status === 'running' && !window.confirm((wasRoute ? '길찾기 경로 안내를' : '코스맵 경로 안내를') + ' 지울까요?\n(지금까지의 기록은 그대로 이어집니다)')) return;
     hideTurnBig();
     st.course = null;
     st.courseIdx = 0;
@@ -703,7 +710,7 @@
     renderStats();
     st.follow = true;
     if (st.lastFix) followUser(st.lastFix.lat, st.lastFix.lng, st.map ? st.map.getZoom() : 16);
-    toast('길찾기를 초기화했습니다', 'info');
+    toast(wasRoute ? '길찾기를 초기화했습니다' : '코스맵 경로를 지웠습니다', 'info');
   };
   window.rerouteOutdoorNow = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();

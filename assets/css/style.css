@@ -35824,3 +35824,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   border-radius: 50%; border: 2px solid rgba(0, 184, 148, 0.25); border-top-color: #00b894;
   animation: outdRerouteSpin 0.8s linear infinite; box-sizing: border-box;
 }
+
+/* 2026-11-01: 코스맵 경로(재탐색 버튼 없음)일 때 경로 삭제 버튼을 재탐색 자리로 내림 */
+#outdoorRideScreen .outd-route-reset-btn.is-solo { bottom: 110px; }
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-route-reset-btn.is-solo { bottom: 110px; }
+}

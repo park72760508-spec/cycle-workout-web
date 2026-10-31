@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261101pub" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261101rst" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -29970,7 +29970,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261101pub"></script>
+  <script src="assets/js/outdoorRide.js?v=20261101rst"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36088,7 +36088,7 @@
           <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true"><path d="M12 3.6l2.5 5.1 5.6.8-4.05 3.95.96 5.57L12 16.4l-5.01 2.62.96-5.57L3.9 9.5l5.6-.8z"/></svg>
         </button>
         <!-- 2026-10-22: 길찾기 초기화(검색어·목적지·경로 코스 지우기) — 길찾기 안내 중에만, 오른쪽 버튼 줄 맨 위 -->
-        <button type="button" id="outdRouteResetBtn" class="outd-reroute-btn outd-route-reset-btn" onclick="resetOutdoorRoute(event)" aria-label="길찾기 초기화" style="display: none;">
+        <button type="button" id="outdRouteResetBtn" class="outd-reroute-btn outd-route-reset-btn" onclick="resetOutdoorRoute(event)" aria-label="경로 삭제" style="display: none;">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/><path d="M10 10.5v6M14 10.5v6"/></svg>
         </button>
         <!-- 2026-10-22: 경로 재탐색(현재 위치 → 설정된 목적지, 같은 이동 수단·경로 방식) — 길찾기 안내 중에만 표시 -->
