@@ -1391,10 +1391,10 @@
     // 최종 크기도 최소 1/2 아래로는 줄이지 않음
     var sc = Math.round(Math.max(0.5, favPinScaleForZoom(z) * favPinScaleForScreen()) * 1000) / 1000;
     if (sc !== st.__pinScale) { st.__pinScale = sc; applyFavPinUnrotate(true); }
-    // 2026-10-31: 줌 13 미만은 겹치는 핀을 대표 핀 1개로 묶음 — 줌마다 겹침이 달라지므로 다시 그림(13 이상으로 돌아올 때도 한 번)
+    // 2026-10-31: 줌 13 이하(표시 숫자 기준)는 겹치는 핀을 대표 핀 1개로 묶음 — 줌마다 겹침이 달라지므로 다시 그림(14 이상으로 돌아올 때도 한 번)
     if (fav.layer && (z < FAV_CLUSTER_BELOW || fav.clustered)) renderFavMarkers();
   }
-  var FAV_CLUSTER_BELOW = 13;
+  var FAV_CLUSTER_BELOW = 13.5; // 줌 13 이하부터 겹침 표시(표시 숫자는 반올림값)
   /** 묶음 대표: 제휴사 > 좋아요 많은 순 > 내 장소 */
   function favRepScore(it) {
     return (Number(it.affiliate_discount) > 0 || it.affiliate_name ? 1e6 : 0) + (Number(it.like_count) || 0) * 10 + (it.is_mine ? 1 : 0);
