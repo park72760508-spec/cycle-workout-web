@@ -35780,3 +35780,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-10-31 하단 세 칸 제목·값 수평 맞춤: 세 번째 칸 제목(⌄ 버튼)을 글자 줄 밖의 블록으로 — 다른 칸 제목과 같은 높이 */
 #outdoorRideScreen .mobile-stats-footer .mobile-stat-label { display: flex; align-items: center; justify-content: center; height: 19.2px; line-height: 19.2px; }
 #outdoorRideScreen .outd-stat3__btn { display: flex; width: 100%; padding: 0; margin: 0 0 2.5px; }
+
+/* 2026-10-31: 지도 크기(줌 단계) — 날씨 카드 아래 오른쪽, 얇은 글씨의 참고용 표시(top 은 outdoorRide.js placeExpStats) */
+#outdoorRideScreen .outd-zoomlv {
+  position: absolute; top: 60px; right: 10px; z-index: 590; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: "Noto Sans KR", sans-serif; font-size: 11px; font-weight: 300; line-height: 1;
+  color: #334155; opacity: 0.85;
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff;
+}
+#outdoorRideScreen .outd-zoomlv svg { filter: drop-shadow(0 0 1.5px #fff); }

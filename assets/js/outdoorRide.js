@@ -774,10 +774,21 @@
       if (top && tb.style.getPropertyValue('top') !== top) tb.style.setProperty('top', top, 'important');
       else if (!top) tb.style.removeProperty('top');
     }
+    var zl = $('outdZoomLv');
+    if (zl) {
+      if (top && zl.style.top !== top) zl.style.top = top;
+      zl.style.visibility = top ? '' : 'hidden';
+    }
     if (!st.expanded || !top) { stats.style.removeProperty('top'); return; }
     if (stats.style.getPropertyValue('top') !== top) stats.style.setProperty('top', top, 'important');
   }
   window.__outdPlaceExpStats = placeExpStats;
+  function updateZoomLv() {
+    var n = $('outdZoomLvNum');
+    if (!n || !st.map) return;
+    var z = Math.round(st.map.getZoom());
+    if (n.textContent !== String(z)) n.textContent = z;
+  }
   // 길안내 문구 바가 나타나거나 사라지면 날씨 카드 위치가 바뀌므로 표지판 자리도 주기적으로 맞춤(화면이 보일 때만)
   setInterval(function () { if (!document.hidden && isActive()) placeExpStats(); }, 1500);
   function watchExpStats(on) {
@@ -1279,6 +1290,9 @@
       st.zoomGuard = setTimeout(function () { if (st.mapZooming) { st.mapZooming = false; cameraFrame(); } }, 1000);
     });
     st.map.on('zoomend', function () { st.mapZooming = false; cameraFrame(); });
+    // 2026-10-31: 날씨 카드 아래 지도 크기(줌 단계) 참고 표시
+    st.map.on('zoomend', updateZoomLv);
+    updateZoomLv();
     // 자유 라이딩 지나온 길(2026-10-21): 진한 녹색(속도계 원호 녹색 계열의 가장 진한 색), 코스 안내선과 같은 굵기(10). 코스·길찾기 중에는 그리지 않음
     st.trail = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', smoothFactor: 0.5, interactive: false }).addTo(st.map);
     st.trailTip = L.polyline([], { color: '#15803d', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round', interactive: false }).addTo(st.map);
