@@ -7487,8 +7487,9 @@ body:has(#trainingDetailModal:not(.hidden)) {
 }
 /* 이전 대비 오버레이 톤 약화 후 → 구분 위해 약 30% 더 어둡게(이미지 filter만) */
 .stelvio-heptagon-tier-legend__img-wrap--dim .stelvio-heptagon-tier-legend__img {
-  opacity: 0.74;
-  filter: grayscale(24%) brightness(0.865) saturate(0.76);
+  /* 2026-11-01 본인 등급만 활성: 나머지는 흐린 회색톤 */
+  opacity: 0.3;
+  filter: grayscale(1);
 }
 .stelvio-heptagon-tier-legend__cap--focus {
   color: #334155;

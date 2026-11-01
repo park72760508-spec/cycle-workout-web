@@ -5009,7 +5009,7 @@
                 return (
                   <div
                     key={'leg-img-' + tLegendId}
-                    className="stelvio-heptagon-tier-legend__img-wrap stelvio-heptagon-tier-legend__img-wrap--focus flex items-end justify-center w-full pt-0.5"
+                    className={'stelvio-heptagon-tier-legend__img-wrap ' + (barTierIdForBar && tLegendId !== barTierIdForBar ? 'stelvio-heptagon-tier-legend__img-wrap--dim' : 'stelvio-heptagon-tier-legend__img-wrap--focus') + ' flex items-end justify-center w-full pt-0.5'}
                   >
                     <img
                       src={tierBadgeImageSrc(tLegendId)}
