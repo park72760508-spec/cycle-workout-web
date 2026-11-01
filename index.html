@@ -26263,10 +26263,18 @@
       }
       textEl.innerHTML = msg;
 
-      /* GC탭 전용: 펼쳐보기 토글 버튼 표시 제어 */
+      /* GC탭·평속탭: 펼쳐보기 토글 버튼 표시 제어 (평속 = 평속 헵타곤, 2026-11-01) */
       var heroToggleRow = document.getElementById('stelvioHeroExpandToggleRow');
       if (heroToggleRow) {
-        if (stelvioIsGcRankingMode()) {
+        var heroExpandKindNow = stelvioHeroExpandKind();
+        var heroExpandAreaNow = document.getElementById('stelvioHeroExpandArea');
+        if (heroExpandKindNow && heroExpandAreaNow && heroExpandAreaNow._heroExpandKind && heroExpandAreaNow._heroExpandKind !== heroExpandKindNow &&
+            heroExpandAreaNow.classList.contains('stelvio-hero-expand-area--open')) {
+          /* GC ↔ 평속 탭 이동 시 열린 헵타곤을 해당 탭 것으로 다시 그림 */
+          stelvioHeroExpandToggle();
+          stelvioHeroExpandToggle();
+        }
+        if (heroExpandKindNow) {
           heroToggleRow.classList.remove('hidden');
         } else {
           heroToggleRow.classList.add('hidden');
@@ -26289,7 +26297,14 @@
       }
     }
 
-    /** GC탭 히어로카드 펼쳐보기/접어보기 토글 */
+    /** 히어로카드 펼쳐보기 대상: 'gc' | 'speed'(평속 탭) | null */
+    function stelvioHeroExpandKind() {
+      if (stelvioIsGcRankingMode()) return 'gc';
+      if (typeof stelvioIsAvgSpeedRanking === 'function' && stelvioIsAvgSpeedRanking()) return 'speed';
+      return null;
+    }
+
+    /** GC탭·평속탭 히어로카드 펼쳐보기/접어보기 토글 */
     function stelvioHeroExpandToggle() {
       if (typeof stelvioTryRestoreRankingByCategoryFromPinned === 'function') {
         stelvioTryRestoreRankingByCategoryFromPinned();
@@ -26317,6 +26332,25 @@
         expandArea.classList.add('stelvio-hero-expand-area--open');
         if (expandBtnIcon) expandBtnIcon.textContent = '−';
         if (expandBtnLabel) expandBtnLabel.textContent = '접어보기';
+        expandArea._heroExpandKind = stelvioHeroExpandKind();
+        /* 평속 탭: StelvioSpeedHeptagonCard 마운트 */
+        if (expandArea._heroExpandKind === 'speed') {
+          if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof window.StelvioSpeedHeptagonCard === 'function') {
+            var spdProfile = window.currentUser || (function() {
+              try { return JSON.parse(localStorage.getItem('currentUser') || 'null'); } catch(e) { return null; }
+            })();
+            var spdEl = React.createElement(window.StelvioSpeedHeptagonCard, { userProfile: spdProfile });
+            if (ReactDOM.createRoot) {
+              if (!expandArea._heptagonReactRoot) {
+                expandArea._heptagonReactRoot = ReactDOM.createRoot(expandArea);
+              }
+              expandArea._heptagonReactRoot.render(spdEl);
+            } else {
+              ReactDOM.render(spdEl, expandArea);
+            }
+          }
+          return;
+        }
         /* StelvioOctagonRanksCard 마운트 */
         if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && typeof window.StelvioOctagonRanksCard === 'function') {
           var userProfile = window.currentUser || (function() {
@@ -45398,7 +45432,8 @@ Output Format (JSON Only - 반드시 유효한 JSON 형식으로 응답):
   <script src="assets/js/dashboard/components/DailyQuickStats.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script defer src="assets/js/stelvio/stelvioGcDisplayWindow.js"></script>
   <script defer src="assets/js/dashboard/stelvioHeptagonRankLog.js"></script>
-  <script src="assets/js/dashboard/components/StelvioOctagonRanksCard.jsx?v=20260924gcAxisWeight1" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/dashboard/components/StelvioOctagonRanksCard.jsx?v=20261101spdhept" type="text/babel" data-presets="stelvio-react-classic"></script>
+  <script src="assets/js/dashboard/components/StelvioSpeedHeptagonCard.jsx?v=20261101spdhept" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/components/DashboardDetailTabs.jsx?v=20260906trainingBalance" type="text/babel" data-presets="stelvio-react-classic"></script>
   <script src="assets/js/dashboard/PerformanceDashboard.jsx" type="text/babel" data-presets="stelvio-react-classic"></script>
   <!-- RUN Dashboard (러닝 분석) -->

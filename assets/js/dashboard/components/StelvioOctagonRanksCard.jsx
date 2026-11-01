@@ -5062,4 +5062,31 @@
   }
 
   window.StelvioOctagonRanksCard = StelvioOctagonRanksCard;
+
+  /* 평속 헵타곤(StelvioSpeedHeptagonCard.jsx)이 GC 헵타곤과 같은 디자인·로직을 쓰도록 공유 */
+  window.StelvioHeptagonShared = {
+    AXES: AXES,
+    GC_AXIS_WEIGHTS: GC_AXIS_WEIGHTS,
+    GENDER_OPTIONS: GENDER_OPTIONS,
+    CATEGORY_OPTIONS: CATEGORY_OPTIONS,
+    HEPTAGON_CARD_TIER_LEGEND_IDS: HEPTAGON_CARD_TIER_LEGEND_IDS,
+    labelForGender: labelForGender,
+    labelForCategory: labelForCategory,
+    categoryValueMatchingUserAge: categoryValueMatchingUserAge,
+    isUserInCohortForFilter: isUserInCohortForFilter,
+    heptagonUseNeffNPlusOne: heptagonUseNeffNPlusOne,
+    heptagonLevelPercentForRankN: heptagonLevelPercentForRankN,
+    heptagonBoardTierIdFromLevelPercent: heptagonBoardTierIdFromLevelPercent,
+    heptagonTierIdToGradeLetter: heptagonTierIdToGradeLetter,
+    tierLevelDisplayName: tierLevelDisplayName,
+    tierBadgeImageSrc: tierBadgeImageSrc,
+    stelvioNeighborNameParts: stelvioNeighborNameParts,
+    axisAngle: axisAngle,
+    radarPolygonPoints: radarPolygonPoints,
+    pathFromPoints: pathFromPoints,
+    OctagonTierCenterOverlay: OctagonTierCenterOverlay,
+    OctagonTierLevelPillSidebar: OctagonTierLevelPillSidebar,
+    LevelProgressBar: LevelProgressBar,
+    HeptagonTierHorizontalGradientBar: HeptagonTierHorizontalGradientBar
+  };
 })();
