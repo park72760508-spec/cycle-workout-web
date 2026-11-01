@@ -36133,3 +36133,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothCoachMobileScreen .coachm-rank-item__score {
   text-align: right; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fbbf24;
 }
+/* 휴대폰 Coach 순위 목록: 현재 달성도를 색 배지 안에 숫자로(민트 ≥98.5% / 주황 미만) */
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok,
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under {
+  justify-self: end;
+  min-width: 46px;
+  padding: 3px 6px;
+  border-radius: 999px;
+  text-align: center;
+  font-size: 12px;
+  color: #ffffff;
+  line-height: 1.2;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok { background: #00d4aa; color: #04342b; box-shadow: 0 0 8px rgba(0, 212, 170, 0.55); }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under { background: #ff8c00; color: #ffffff; box-shadow: 0 0 8px rgba(255, 140, 0, 0.5); }
