@@ -173,7 +173,7 @@
     if (flags & 0x0020 && arr.length >= off + 4) {
       var cumulativeCrankRevolutions = dv.getUint16(off, true); off += 2;
       var lastCrankEventTime = dv.getUint16(off, true); off += 2;
-      var deviceKey = (global.connectedDevices && global.connectedDevices.trainer) ? 'trainer' : 'powerMeter';
+      var deviceKey = 'powerMeter'; // 파워미터 데이터(스마트로라와 함께 연결돼도 파워미터 기준)
       var lastData = _lastCrankDataBridge[deviceKey];
       if (lastData && lastCrankEventTime !== lastData.lastCrankEventTime) {
         var timeDiff = lastCrankEventTime - lastData.lastCrankEventTime;
@@ -473,7 +473,7 @@
 
   /** 사용자 수동 연결 버튼 클릭 시 호출: 자동 연결 즉시 중단 후 수동 검색(Device Settings)으로 유도 */
   function abortAutoConnect() {
-    stopAutoConnectSession(false); // 수동 연결로 넘어가면 10분 연결 대기도 끝냄
+    pauseAutoConnectSession(); // 수동 연결로 넘어가면 자동 연결은 1분 쉼
     if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) return;
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] AUTO_CONNECT aborted by user');
@@ -488,11 +488,11 @@
    * 훈련 화면 진입 시 앱에 자동 연결 요청. (앱 WebView 전용 — 웹 전용에서는 표시/요청 없음)
    * - 진입 시 즉시 '연결중' 표시(낙관적). ReactNativeWebView가 없으면 재시도(100,300,600,1000,2000ms).
    */
-  function sendRequestAutoConnect(onlyType) {
+  function sendRequestAutoConnect(onlyType, quiet) {
     if (!isAppEnvironmentNow()) return;
     _autoConnectRetryCount = 0;
     global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
-    setConnectButtonConnectingLabel(true);
+    if (!quiet) setConnectButtonConnectingLabel(true); // quiet: 스마트로라·속도계 등 백그라운드 시도는 '연결 중' 표시 없이
     if (_autoConnectTimeoutId != null) clearTimeout(_autoConnectTimeoutId);
     _autoConnectTimeoutId = setTimeout(function () {
       _autoConnectTimeoutId = null;
@@ -576,13 +576,19 @@
    */
   var AUTO_CONNECT_WINDOW_MS = 10 * 60 * 1000;
   var AUTO_CONNECT_RESEND_MS = 20000;
-  /* 기기별 번갈아 시도(2026-11-01): 안드로이드 앱은 기기를 순서대로 연결하며 심박계가 없으면 시간 제한 없이 기다려
-   * 파워미터를 시도하지 못했다(심박계를 두고 온 경우 파워미터도 연결 안 됨).
-   * → 한 번에 기기 1대만 요청하고, 30초 안에 연결되지 않으면 그 시도를 취소(ABORT)한 뒤 다음 기기로.
-   *   심박계 → 파워미터(또는 스마트로라) → 심박계 … 순서로 10분 동안 반복. 연결된 기기는 건너뜀.
-   *   (연결 후 서비스 확인·센서 준비에 약 7초가 걸리므로 시도 시간은 30초) */
+  /*
+   * 기기별 번갈아 연결(2026-11-01, 안드로이드·아이폰 공통 — 순서는 웹이 정하고 앱은 요청받은 1대만 연결)
+   *  - 저장된 기기(심박계·파워미터·스마트로라·속도계)만, 종류마다 따로 연결(파워미터와 스마트로라도 둘 다)
+   *  - 한 번에 1대만 요청 → 30초 안에 연결 안 되면 취소(ABORT) 후 다음 기기. 안드로이드는 없는 기기를 시간 제한 없이
+   *    기다려 다음 기기를 못 하던 문제(심박계를 두고 오면 파워미터도 연결 안 됨) 해결.
+   *    (연결 후 서비스 확인·센서 준비에 약 7초 → 시도 시간 30초)
+   *  - 훈련 화면 진입 후 10분: 저장된 모든 기기 시도('연결 대기 중 · N분' 표시는 심박계·파워미터가 남았을 때만)
+   *  - 10분 이후에도 화면에 있는 동안: 간헐적으로 켜는 스마트로라·속도계, 그리고 이번에 연결됐다가 끊긴 기기는 계속 시도(표시 없음)
+   */
   var AUTO_CONNECT_ATTEMPT_MS = 30000;
-  var AUTO_CONNECT_TYPE_KEY = { hr: 'heartRate', power: 'powerMeter', trainer: 'trainer' };
+  var AUTO_CONNECT_ORDER = ['hr', 'power', 'trainer', 'speed'];
+  var AUTO_CONNECT_TYPE_KEY = { hr: 'heartRate', power: 'powerMeter', trainer: 'trainer', speed: 'speed' };
+  var AUTO_CONNECT_INTERMITTENT = { trainer: true, speed: true };
   var _acSession = null;
   function savedTrainingDevices() {
     try {
@@ -591,25 +597,14 @@
       return v && typeof v === 'object' ? v : {};
     } catch (e) { return {}; }
   }
-  /** 목표: 심박계 + (파워미터 또는 스마트로라). 저장된 기기 목록이 있으면 저장된 종류만 기준 */
-  function autoConnectGoalMet() {
+  /** 연결해야 할(저장됐고 아직 연결 안 된) 기기 종류 — 10분이 지나면 간헐 기기·끊긴 기기만 */
+  function pendingAutoConnectTypes(sess, inWindow) {
     var c = global.connectedDevices || {};
     var sv = savedTrainingDevices();
-    var known = !!(sv.hr || sv.power || sv.trainer);
-    var needHr = known ? !!sv.hr : true;
-    var needPw = known ? !!(sv.power || sv.trainer) : true;
-    return (!needHr || !!c.heartRate) && (!needPw || !!(c.powerMeter || c.trainer));
-  }
-  /** 아직 연결할 기기 종류(순서: 심박계 → 파워미터 → 스마트로라). 파워미터·스마트로라 중 하나가 연결되면 둘 다 충족 */
-  function pendingAutoConnectTypes() {
-    var c = global.connectedDevices || {};
-    var sv = savedTrainingDevices();
-    var out = [];
-    if (sv.hr && !c.heartRate) out.push('hr');
-    var pwOk = !!(c.powerMeter || c.trainer);
-    if (!pwOk && sv.power) out.push('power');
-    if (!pwOk && sv.trainer) out.push('trainer');
-    return out;
+    return AUTO_CONNECT_ORDER.filter(function (t) {
+      if (!sv[t] || c[AUTO_CONNECT_TYPE_KEY[t]]) return false;
+      return inWindow || AUTO_CONNECT_INTERMITTENT[t] || !!(sess && sess.seen[t]);
+    });
   }
   function setAutoConnectWaitingLabel(text) {
     ['mobileBluetoothConnectBtn', 'trainingScreenBluetoothConnectBtn'].forEach(function (id) {
@@ -622,10 +617,18 @@
     if (!sess) return;
     _acSession = null;
     if (sess.timer) clearInterval(sess.timer);
-    if (abortPending) {
+    if (abortPending && sess.cur) {
       try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
       if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
     }
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('');
+  }
+  /** 수동 연결(연결 버튼)로 넘어가면 지금 시도만 멈추고 1분 쉼(그 뒤 다시 자동 연결) */
+  function pauseAutoConnectSession() {
+    var sess = _acSession;
+    if (!sess) return;
+    sess.cur = null;
+    sess.pauseUntil = Date.now() + 60000;
     if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('');
   }
   function tickAutoConnectSession() {
@@ -633,51 +636,53 @@
     if (!sess) return;
     var now = Date.now();
     var active = getActiveScreenId();
-    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(false); return; }
-    if (autoConnectGoalMet()) { stopAutoConnectSession(false); return; }
+    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(true); return; }
+    var c = global.connectedDevices || {};
+    AUTO_CONNECT_ORDER.forEach(function (t) { if (c[AUTO_CONNECT_TYPE_KEY[t]]) sess.seen[t] = true; });
     var left = AUTO_CONNECT_WINDOW_MS - (now - sess.start);
-    if (left <= 0) {
-      if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 연결 대기 10분 종료');
-      stopAutoConnectSession(true);
-      return;
-    }
-    var pending = pendingAutoConnectTypes();
-    if (!pending.length) {
-      // 저장된 기기 목록을 웹에서 알 수 없음(앱에만 저장) → 예전처럼 전체 요청을 20초 간격으로
-      if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
-      if (!global[AUTO_CONNECT_IN_PROGRESS_KEY] && now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) {
-        sess.lastSent = now;
-        sendRequestAutoConnect();
+    var inWindow = left > 0;
+    var sv = savedTrainingDevices();
+    var knownSaved = AUTO_CONNECT_ORDER.some(function (t) { return !!sv[t]; });
+    if (!knownSaved) {
+      // 저장된 기기 목록을 웹에서 알 수 없음(앱에만 저장) → 10분 동안 전체 요청을 20초 간격으로
+      if (!inWindow) { stopAutoConnectSession(false); return; }
+      if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
+        setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
+        if (now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) { sess.lastSent = now; sendRequestAutoConnect(); }
       }
       return;
     }
+    if (now < (sess.pauseUntil || 0)) return;
+    var pending = pendingAutoConnectTypes(sess, inWindow);
+    var mainLeft = inWindow && pending.some(function (t) { return !AUTO_CONNECT_INTERMITTENT[t]; });
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel(mainLeft ? '연결 대기 중 · ' + Math.ceil(left / 60000) + '분' : '');
     if (sess.cur) {
-      var key = AUTO_CONNECT_TYPE_KEY[sess.cur];
-      var c = global.connectedDevices || {};
-      var done = !!c[key] || pending.indexOf(sess.cur) < 0;
-      if (done) { sess.cur = null; sess.nextAt = now + 1000; }
-      else if (now - sess.curAt >= AUTO_CONNECT_ATTEMPT_MS) {
-        // 이 기기는 아직 연결 준비가 안 됨 → 시도 취소 후 다음 기기
+      if (c[AUTO_CONNECT_TYPE_KEY[sess.cur]]) { sess.cur = null; sess.nextAt = now + 1000; }
+      else if (now - sess.curAt >= AUTO_CONNECT_ATTEMPT_MS || pending.indexOf(sess.cur) < 0) {
+        // 이 기기는 아직 연결 준비가 안 됨(꺼져 있음) → 시도 취소 후 다음 기기
         try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
         if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
         sess.cur = null;
         sess.nextAt = now + 1500;
       } else return;
     }
-    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
-    if (now < (sess.nextAt || 0)) return;
-    // 번갈아: 직전에 시도한 종류의 다음 것부터
-    var idx = sess.lastType ? pending.indexOf(sess.lastType) : -1;
-    var type = pending[(idx + 1) % pending.length];
-    if (idx < 0 && sess.lastType) type = pending[0];
+    if (!pending.length || now < (sess.nextAt || 0)) return;
+    var idx = sess.lastType ? AUTO_CONNECT_ORDER.indexOf(sess.lastType) : -1;
+    var type = null;
+    for (var k = 1; k <= AUTO_CONNECT_ORDER.length; k++) {
+      var cand = AUTO_CONNECT_ORDER[(idx + k) % AUTO_CONNECT_ORDER.length];
+      if (pending.indexOf(cand) >= 0) { type = cand; break; }
+    }
+    if (!type) return;
     sess.cur = type; sess.curAt = now; sess.lastType = type; sess.lastSent = now;
-    sendRequestAutoConnect(type);
+    sess.quiet = !(inWindow && !AUTO_CONNECT_INTERMITTENT[type]);
+    sendRequestAutoConnect(type, sess.quiet);
   }
-  /** 훈련 화면 진입 시 호출 — 첫 요청 + 10분 연결 대기 시작 */
+  /** 훈련 화면 진입 시 호출 — 첫 요청 + 연결 대기 시작 */
   function startAutoConnectSession() {
-    stopAutoConnectSession(false);
+    stopAutoConnectSession(true);
     if (!isAppEnvironmentNow()) { sendRequestAutoConnect(); return; }
-    _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0 };
+    _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {} };
     tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
     if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
@@ -737,6 +742,8 @@
     if (key === 'powerMeter' || key === 'trainer') {
       if (!global.connectedDevices.powerMeter && !global.connectedDevices.trainer) {
         global[POWER_CADENCE_SOURCE_KEY] = null;
+      } else if (key === 'powerMeter' && global.connectedDevices.trainer) {
+        global[POWER_CADENCE_SOURCE_KEY] = 'trainer'; // 파워미터가 끊기면 스마트로라 값으로
       }
     }
     if (!global._stelvioDisconnectedTypes) global._stelvioDisconnectedTypes = {};
@@ -873,14 +880,18 @@
     if (btnTr) btnTr.addEventListener('click', function () { setPowerCadenceSource('trainer'); });
   }
 
+  /* 2026-11-01: 파워미터와 스마트로라가 함께 연결되면 묻지 않고 파워미터의 파워·케이던스를 사용(먼저 스마트로라로 정해져 있었어도) */
   function tryShowPowerSourceSelectPopup() {
     if (!global.connectedDevices) return;
     var pm = global.connectedDevices.powerMeter;
     var tr = global.connectedDevices.trainer;
     if (!pm || !tr) return;
-    if (global[POWER_CADENCE_SOURCE_KEY] != null) return;
-    bindPowerSourceSelectPopup();
-    openPowerSourceSelectPopup();
+    if (global[POWER_CADENCE_SOURCE_KEY] !== 'powerMeter') {
+      global[POWER_CADENCE_SOURCE_KEY] = 'powerMeter';
+      if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 파워미터+스마트로라 연결 → 파워/케이던스: 파워미터');
+    }
+    closePowerSourceSelectPopup();
+    applyLiveDataToScreen();
   }
 
   function onPowerUpdate(e) {
@@ -903,10 +914,11 @@
 
   /** 앱이 파싱한 값을 보낼 때: detail = { power?, cadence?, speed? } → liveData 반영 */
   function applyTrainerUpdateSimple(detail) {
-    if (global[POWER_CADENCE_SOURCE_KEY] === 'powerMeter') return;
+    // 파워미터 우선이면 스마트로라의 파워·케이던스는 쓰지 않고 속도만 반영
+    var pmFirst = global[POWER_CADENCE_SOURCE_KEY] === 'powerMeter';
     if (!global.liveData) global.liveData = { power: 0, heartRate: 0, cadence: 0, targetPower: 0 };
     var changed = false;
-    if (detail.power != null && !Number.isNaN(Number(detail.power))) {
+    if (!pmFirst && detail.power != null && !Number.isNaN(Number(detail.power))) {
       var p = Math.round(Number(detail.power));
       if (p >= 0 && p <= 2000) {
         global.liveData.power = p;
@@ -916,7 +928,7 @@
         changed = true;
       }
     }
-    if (detail.cadence != null && !Number.isNaN(Number(detail.cadence))) {
+    if (!pmFirst && detail.cadence != null && !Number.isNaN(Number(detail.cadence))) {
       var c = Math.round(Number(detail.cadence));
       if (c >= 0 && c <= 250) {
         global.liveData.cadence = c;
@@ -1008,7 +1020,7 @@
     var state = e && e.detail && e.detail.state;
     if (state === 'connecting') {
       global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
-      setConnectButtonConnectingLabel(true);
+      if (!(_acSession && _acSession.cur && _acSession.quiet)) setConnectButtonConnectingLabel(true); // 백그라운드 시도는 표시 없음
       if (typeof console !== 'undefined' && console.log) {
         console.log('[trainingDashboardBridge] stelvio-auto-connect-state: connecting');
       }
@@ -1072,7 +1084,7 @@
   }
 
   function teardownTrainingDashboardBridge() {
-    stopAutoConnectSession(false);
+    stopAutoConnectSession(true);
     if (typeof global.removeEventListener === 'function') {
       if (autoConnectStateHandlerRef !== null) {
         global.removeEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
