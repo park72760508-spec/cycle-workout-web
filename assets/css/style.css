@@ -36099,3 +36099,37 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #coachRaceBoard .crb-row, #coachRaceBoard.crb { transition: none; }
   #coachRaceBoard .crb__live-dot, #coachRaceBoard .crb-row--up, #coachRaceBoard .crb-row--down { animation: none; }
 }
+
+/* 휴대폰 Coach 연결 메뉴 — 실시간 순위 목록(2026-11-02, PC 레이스 전광판과 같은 점수) */
+#bluetoothCoachMobileScreen .coachm-rank-head,
+#bluetoothCoachMobileScreen .coachm-rank-item {
+  display: grid;
+  grid-template-columns: 30px 1fr 52px 50px;
+  align-items: center;
+  column-gap: 8px;
+}
+#bluetoothCoachMobileScreen .coachm-rank-head {
+  padding: 6px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #8b95a5;
+}
+#bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(n+3) { text-align: right; }
+#bluetoothCoachMobileScreen .coachm-rank-item__rank {
+  width: 24px; height: 24px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+  background: rgba(255, 255, 255, 0.1); color: #e5e7eb;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item--top1 .coachm-rank-item__rank { background: linear-gradient(135deg, #fde047, #ca8a04); color: #1c1917; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top2 .coachm-rank-item__rank { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #0f172a; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top3 .coachm-rank-item__rank { background: linear-gradient(135deg, #fdba74, #b45309); color: #1c1917; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach {
+  text-align: right; font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok { color: #00d4aa; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under { color: #ff8c00; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--none { color: #6b7280; }
+#bluetoothCoachMobileScreen .coachm-rank-item__score {
+  text-align: right; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: #fbbf24;
+}

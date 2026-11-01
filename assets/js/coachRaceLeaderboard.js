@@ -140,14 +140,20 @@
     if (!cs) return null;
     var w = cs.currentWorkout;
     var segments = (w && Array.isArray(w.segments)) ? w.segments : [];
-    var key = sessionId() + '|' + (w ? (w.id || w.workoutId || w.title || w.name || '') : '');
+    // 휴대폰 Coach: 워크아웃을 고르지 않은 기기는 방의 Firebase 계획·상태 사용
+    var ext = null;
+    try { ext = typeof window.__coachmRaceSource === 'function' ? window.__coachmRaceSource() : null; } catch (e) { ext = null; }
+    var useExt = !segments.length && ext && Array.isArray(ext.plan) && ext.plan.length;
+    if (useExt) segments = ext.plan;
+    var es = (ext && ext.status) || null;
+    var key = sessionId() + '|' + (w && !useExt ? (w.id || w.workoutId || w.title || w.name || '') : 'plan' + segments.length);
     if (!S || S.key !== key) S = loadState(key);
 
-    var st = cs.trainingState;
+    var st = (useExt && es && es.state) || cs.trainingState;
     var active = st === 'running' || st === 'paused';
-    var elapsed = num(cs.totalElapsedTime);
-    var idx = num(cs.currentSegmentIndex) | 0;
-    var segEl = num(cs.segmentElapsedTime);
+    var elapsed = useExt && es && es.elapsedTime != null ? num(es.elapsedTime) : num(cs.totalElapsedTime);
+    var idx = (useExt && es && typeof es.segmentIndex === 'number' ? es.segmentIndex : num(cs.currentSegmentIndex)) | 0;
+    var segEl = useExt && es && es.segmentElapsedSec != null ? num(es.segmentElapsedSec) : num(cs.segmentElapsedTime);
     var now = Date.now();
 
     if (active) {
@@ -204,7 +210,7 @@
           if (active) total += sc.pts * progress;
         }
       }
-      return { uid: uid, name: u.name, total: total, liveAch: liveAch, wkg: u.ftp > 0 && u.weight > 0 ? u.ftp / u.weight : null };
+      return { uid: uid, track: u.track, name: u.name, total: total, liveAch: liveAch, wkg: u.ftp > 0 && u.weight > 0 ? u.ftp / u.weight : null };
     });
     rows.sort(function (a, b) {
       return (b.total - a.total) || ((b.liveAch || 0) - (a.liveAch || 0)) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
@@ -342,11 +348,23 @@
     } else if (empty) empty.remove();
   }
 
+  var MOBILE_SCREEN_ID = 'bluetoothCoachMobileScreen';
+  window.coachRaceBoardLatest = function () { return window.__coachRaceLatest || null; };
   function tick() {
+    if (document.hidden) return;
     var scr = $(SCREEN_ID);
-    if (!scr || !scr.classList.contains('active') || document.hidden) return;
+    var pcOn = !!(scr && scr.classList.contains('active'));
+    var mob = $(MOBILE_SCREEN_ID);
+    var mobOn = !!(mob && (mob.classList.contains('active') || (mob.offsetParent !== null && getComputedStyle(mob).display !== 'none')));
+    if (!pcOn && !mobOn) return;
+    if (!pcOn) {
+      // 휴대폰 Coach: 집계만(연결 메뉴의 순위 목록이 사용)
+      try { window.__coachRaceLatest = compute(); } catch (e) {}
+      return;
+    }
     try {
-      render(compute());
+      window.__coachRaceLatest = compute();
+      render(window.__coachRaceLatest);
       // 상단 시간·워크아웃 그래프를 가리지 않도록 속도계 영역 시작 높이에 맞춤
       var grid = $('bluetoothCoachPowerMeterGrid');
       var root = $('coachRaceBoard');

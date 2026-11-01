@@ -559,8 +559,17 @@
   function slotListSignature() {
     var pms = powerMeters();
     var sel = selectedPm();
-    return pms.length + '|' + (sel ? sel.id : '') + '|' + pms.map(function (p) { return p && p.userName ? p.userName : ''; }).join(',');
+    var race = raceLatest();
+    var rs = race ? race.rows.map(function (r) {
+      return r.uid + ':' + r.total.toFixed(1) + ':' + (r.liveAch == null ? '' : Math.round(r.liveAch * 100));
+    }).join(',') + '|' + race.curExcluded + race.state : '';
+    return pms.length + '|' + (sel ? sel.id : '') + '|' + pms.map(function (p) { return p && p.userName ? p.userName : ''; }).join(',') + '|' + rs;
   }
+  /** 실시간 레이스 순위(coachRaceLeaderboard.js 집계 — PC 전광판과 같은 점수) */
+  function raceLatest() {
+    try { return typeof window.coachRaceBoardLatest === 'function' ? window.coachRaceBoardLatest() : null; } catch (e) { return null; }
+  }
+  window.__coachmRaceSource = function () { return { plan: st.fbPlan, status: st.fbStatus }; };
 
   function renderSlotList() {
     var list = $('coachmSlotList');
@@ -572,17 +581,27 @@
       list.innerHTML = '<div class="coachm-slot-item coachm-slot-item--empty"><span class="coachm-slot-item__name">슬롯 정보를 불러오는 중...</span></div>';
       return;
     }
-    list.innerHTML = pms.map(function (pm) {
-      var has = !!pm.userName;
-      return '<div class="coachm-slot-item' + (has ? '' : ' coachm-slot-item--empty') +
-        (sel && String(sel.id) === String(pm.id) ? ' selected' : '') + '" data-track="' + escapeText(pm.id) + '">' +
-        // 슬롯에 사용자가 접속해 있으면 번호와 같은 색(민트), 비어 있으면 회색
-        '<span class="coachm-slot-item__dot' + (has ? ' on' : '') + '"></span>' +
-        '<span class="coachm-slot-item__no">' + escapeText(pm.id) + '</span>' +
-        '<span class="coachm-slot-item__name">' + (has ? escapeText(pm.userName) : '-') + '</span>' +
-        (has ? '<span class="coachm-slot-item__ach coachm-slot-item__ach--' + achievementClass(pm) + '" title="세그먼트 달성도"></span>' : '') +
-        '</div>';
-    }).join('');
+    /* 2026-11-02 슬롯 번호 목록 → 실시간 순위 목록(순위 · 이름 · 현재 세그먼트 달성도 · 누적 점수), 누르면 그 사용자 선택 */
+    var race = raceLatest();
+    var rows = race && race.rows ? race.rows : [];
+    if (!rows.length) {
+      list.innerHTML = '<div class="coachm-slot-item coachm-slot-item--empty"><span class="coachm-slot-item__name">접속한 참가자가 없습니다</span></div>';
+      return;
+    }
+    list.innerHTML = '<div class="coachm-rank-head"><span>순위</span><span>이름</span><span>현재</span><span>점수</span></div>' +
+      rows.map(function (r) {
+        var a = r.liveAch;
+        var excl = race.curExcluded || race.state === 'idle';
+        var achCls = excl || a == null ? 'none' : a >= 0.985 ? 'ok' : 'under';
+        var achTxt = race.curExcluded ? '제외' : excl || a == null ? '—' : Math.round(a * 100) + '%';
+        return '<div class="coachm-slot-item coachm-rank-item' + (r.rank <= 3 ? ' coachm-rank-item--top' + r.rank : '') +
+          (sel && String(sel.id) === String(r.track) ? ' selected' : '') + '" data-track="' + escapeText(r.track) + '">' +
+          '<span class="coachm-rank-item__rank">' + r.rank + '</span>' +
+          '<span class="coachm-slot-item__name">' + escapeText(r.name) + '</span>' +
+          '<span class="coachm-rank-item__ach coachm-rank-item__ach--' + achCls + '">' + achTxt + '</span>' +
+          '<span class="coachm-rank-item__score">' + r.total.toFixed(1) + '</span>' +
+          '</div>';
+      }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.coachm-slot-item[data-track]'), function (row) {
       row.addEventListener('click', function (e) {
         e.stopPropagation();
