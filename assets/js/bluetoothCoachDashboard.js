@@ -4612,3 +4612,26 @@ console.log('[Bluetooth Coach] 노출된 함수 확인:', {
     
     console.log('⚡ [Self-Starter] 자동 감지 센서 활성화됨 (1초 간격 모니터링)');
 })();
+
+/**
+ * Coach PC 슬롯 비우기(2026-11-01) — STELVIO 확인 팝업 후 이 Live Training Session 의 모든 슬롯 사용자 제거
+ * (휴대폰 Coach 「슬롯 비우기」와 같은 clearAllBluetoothTracksData: users 삭제, 트랙 수 유지)
+ */
+function confirmCoachPcClearSlots() {
+  const sid = typeof getBluetoothCoachSessionId === 'function' ? getBluetoothCoachSessionId()
+    : (window.SESSION_ID || window.currentTrainingRoomId);
+  const run = function () {
+    if (typeof window.clearAllBluetoothTracksData !== 'function') {
+      if (typeof window.showToast === 'function') window.showToast('슬롯 비우기 기능을 불러오지 못했습니다.', 'error');
+      return;
+    }
+    window.clearAllBluetoothTracksData({ skipConfirm: true, roomId: sid });
+  };
+  const msg = '정말 슬롯을 비우시겠습니까?';
+  if (typeof window.showStelvioExitConfirmPopup === 'function') {
+    window.showStelvioExitConfirmPopup(run, { message: msg, cancelText: '취소', okText: '확인' });
+  } else if (window.confirm(msg)) {
+    run();
+  }
+}
+if (typeof window !== 'undefined') window.confirmCoachPcClearSlots = confirmCoachPcClearSlots;

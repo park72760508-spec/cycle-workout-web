@@ -35869,3 +35869,22 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   opacity: 0.32;
   transition: opacity 0.25s ease;
 }
+
+/* Coach PC 슬롯 비우기 원형 버튼 — 워크아웃 선택 버튼 바로 왼쪽, 같은 원형 디자인 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.slot-clear {
+  margin-right: -6px; /* 워크아웃 선택 버튼에 붙여 배치(간격 6px) */
+  border-color: rgba(0, 212, 170, 0.3);
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: rgba(255, 255, 255, 0.9);
+}
+#bluetoothTrainingCoachScreen .enhanced-control-btn.slot-clear svg {
+  transition: transform 0.45s ease;
+}
+#bluetoothTrainingCoachScreen .enhanced-control-btn.slot-clear:hover:not(:disabled) {
+  border-color: rgba(0, 212, 170, 0.6);
+  box-shadow: 0 8px 25px rgba(0, 212, 170, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  color: #00d4aa;
+}
+#bluetoothTrainingCoachScreen .enhanced-control-btn.slot-clear:hover:not(:disabled) svg {
+  transform: rotate(180deg);
+}
