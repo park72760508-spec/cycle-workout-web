@@ -645,44 +645,152 @@
     var knownSaved = AUTO_CONNECT_ORDER.some(function (t) { return !!sv[t]; });
     if (!knownSaved) {
       // 저장된 기기 목록을 웹에서 알 수 없음(앱에만 저장) → 10분 동안 전체 요청을 20초 간격으로
-      if (!inWindow) { stopAutoConnectSession(false); return; }
+      // 끊긴 기기가 있으면 10분이 지나도 계속(연결되면 목록에서 제외)
+      Object.keys(sess.drop).forEach(function (t) { if (c[AUTO_CONNECT_TYPE_KEY[t]]) delete sess.drop[t]; });
+      var dropAny = Object.keys(sess.drop);
+      if (!inWindow && !dropAny.length) { stopAutoConnectSession(false); return; }
       if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
-        setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
+        setAutoConnectWaitingLabel(dropAny.length
+          ? '재연결 대기 · ' + dropAny.map(function (t) { return RECONNECT_LABEL[t]; }).join('·')
+          : '연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
         if (now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) { sess.lastSent = now; sendRequestAutoConnect(); }
       }
       return;
     }
     if (now < (sess.pauseUntil || 0)) return;
     var pending = pendingAutoConnectTypes(sess, inWindow);
-    var mainLeft = inWindow && pending.some(function (t) { return !AUTO_CONNECT_INTERMITTENT[t]; });
-    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel(mainLeft ? '연결 대기 중 · ' + Math.ceil(left / 60000) + '분' : '');
+    // 훈련 중 끊긴 기기(재연결 대상) 정리: 다시 연결됐거나 저장 목록에서 빠지면 제외
+    Object.keys(sess.drop).forEach(function (t) {
+      if (c[AUTO_CONNECT_TYPE_KEY[t]] || !sv[t]) delete sess.drop[t];
+    });
+    var dropMain = AUTO_CONNECT_ORDER.filter(function (t) { return sess.drop[t] && !AUTO_CONNECT_INTERMITTENT[t]; });
+    var mainLeft = inWindow && pending.some(function (t) { return !AUTO_CONNECT_INTERMITTENT[t] && !sess.drop[t]; });
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) {
+      setAutoConnectWaitingLabel(
+        dropMain.length ? '재연결 대기 · ' + dropMain.map(function (t) { return RECONNECT_LABEL[t]; }).join('·')
+          : mainLeft ? '연결 대기 중 · ' + Math.ceil(left / 60000) + '분' : ''
+      );
+    }
     if (sess.cur) {
+      var curDrop = sess.drop[sess.cur];
       if (c[AUTO_CONNECT_TYPE_KEY[sess.cur]]) { sess.cur = null; sess.nextAt = now + 1000; }
-      else if (now - sess.curAt >= AUTO_CONNECT_ATTEMPT_MS || pending.indexOf(sess.cur) < 0) {
+      else if (now - sess.curAt >= (curDrop ? RECONNECT_ATTEMPT_MS : AUTO_CONNECT_ATTEMPT_MS) || pending.indexOf(sess.cur) < 0) {
         // 이 기기는 아직 연결 준비가 안 됨(꺼져 있음) → 시도 취소 후 다음 기기
         try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
         if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+        if (curDrop) {
+          // 끊긴 기기 재시도 간격: 2 → 5 → 10 → 15초(이후 15초 유지)
+          curDrop.nextAt = now + RECONNECT_GAPS_MS[Math.min(curDrop.tries, RECONNECT_GAPS_MS.length - 1)];
+          curDrop.tries++;
+        }
         sess.cur = null;
         sess.nextAt = now + 1500;
       } else return;
     }
     if (!pending.length || now < (sess.nextAt || 0)) return;
-    var idx = sess.lastType ? AUTO_CONNECT_ORDER.indexOf(sess.lastType) : -1;
+    // ① 훈련 중 끊긴 기기 우선(심박계 → 파워미터 → 스마트로라 → 속도계, 재시도 간격이 된 것만)
     var type = null;
-    for (var k = 1; k <= AUTO_CONNECT_ORDER.length; k++) {
-      var cand = AUTO_CONNECT_ORDER[(idx + k) % AUTO_CONNECT_ORDER.length];
-      if (pending.indexOf(cand) >= 0) { type = cand; break; }
+    for (var d = 0; d < AUTO_CONNECT_ORDER.length; d++) {
+      var dt = AUTO_CONNECT_ORDER[d];
+      if (sess.drop[dt] && pending.indexOf(dt) >= 0 && now >= sess.drop[dt].nextAt && dt !== sess.lastDropType) { type = dt; break; }
+    }
+    if (!type) {
+      for (var d2 = 0; d2 < AUTO_CONNECT_ORDER.length; d2++) {
+        var dt2 = AUTO_CONNECT_ORDER[d2];
+        if (sess.drop[dt2] && pending.indexOf(dt2) >= 0 && now >= sess.drop[dt2].nextAt) { type = dt2; break; }
+      }
+    }
+    // ② 그 외 기기는 번갈아(끊긴 기기는 재시도 간격 동안 건너뜀). 끊긴 기기 차례가 20초 안에 오면 기다림
+    var dropSoon = Object.keys(sess.drop).some(function (t) { return pending.indexOf(t) >= 0 && sess.drop[t].nextAt - now < 20000; });
+    if (!type && !dropSoon) {
+      var idx = sess.lastType ? AUTO_CONNECT_ORDER.indexOf(sess.lastType) : -1;
+      for (var k = 1; k <= AUTO_CONNECT_ORDER.length; k++) {
+        var cand = AUTO_CONNECT_ORDER[(idx + k) % AUTO_CONNECT_ORDER.length];
+        if (pending.indexOf(cand) >= 0 && !sess.drop[cand]) { type = cand; break; }
+      }
     }
     if (!type) return;
     sess.cur = type; sess.curAt = now; sess.lastType = type; sess.lastSent = now;
-    sess.quiet = !(inWindow && !AUTO_CONNECT_INTERMITTENT[type]);
+    sess.lastDropType = sess.drop[type] ? type : null;
+    sess.quiet = !!sess.drop[type] || !(inWindow && !AUTO_CONNECT_INTERMITTENT[type]);
     sendRequestAutoConnect(type, sess.quiet);
+  }
+
+  /*
+   * 2026-11-01 훈련 중 끊긴 기기 재연결(휴식 중 기기 전원 꺼짐 → 훈련 재개 시 자동 복구)
+   *  - 끊김 즉시 재연결 대상으로 등록 → 다른 기기보다 먼저, 2→5→10→15초 간격으로 계속 재시도(훈련 화면에 있는 동안, 시간 제한 없음)
+   *  - 휴대폰 화면이 다시 켜지거나 앱으로 돌아오면(휴식 후 복귀) · 훈련 화면을 터치하면(재개 버튼 등) 기다리지 않고 즉시 재시도
+   *  - 10분 연결 대기가 끝난 뒤에 끊겨도 재연결 세션을 다시 열어 동작
+   */
+  var RECONNECT_GAPS_MS = [2000, 5000, 10000, 15000];
+  /** 끊긴 기기 한 번 시도 시간(연결 + 센서 준비 약 7초 포함) — 여러 대가 끊겨도 빨리 돌아가도록 25초 */
+  var RECONNECT_ATTEMPT_MS = 25000;
+  var RECONNECT_LABEL = { hr: '심박계', power: '파워미터', trainer: '스마트로라', speed: '속도계' };
+  var KEY_TO_AC_TYPE = { heartRate: 'hr', powerMeter: 'power', trainer: 'trainer', speed: 'speed' };
+  function ensureReconnectSession() {
+    if (_acSession) return _acSession;
+    // 10분 연결 대기는 이미 지난 것으로 보고(표시 없음) 재연결만 수행
+    _acSession = { start: Date.now() - AUTO_CONNECT_WINDOW_MS - 1, lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null,
+      nextAt: 0, pauseUntil: 0, seen: {}, drop: {}, lastDropType: null };
+    _acSession.timer = setInterval(tickAutoConnectSession, 2000);
+    return _acSession;
+  }
+  function onTrainingDeviceDropped(key) {
+    var t = KEY_TO_AC_TYPE[key];
+    if (!t || !isAppEnvironmentNow()) return;
+    var active = getActiveScreenId();
+    if (!active || !isTargetScreen(active)) return;
+    var sess = ensureReconnectSession();
+    sess.seen[t] = true;
+    sess.drop[t] = { at: Date.now(), tries: 0, nextAt: Date.now() };
+    // 연결 안 된 다른 기기(꺼진 속도계 등)를 기다리는 중이면 양보
+    if (sess.cur && !sess.drop[sess.cur]) {
+      try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+      if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+      sess.cur = null;
+    }
+    sess.nextAt = Math.min(sess.nextAt || 0, Date.now() + 500);
+    setTimeout(tickAutoConnectSession, 600);
+  }
+  var _lastReconnectKickAt = 0;
+  /** 휴식 후 복귀 신호 → 끊긴 기기 즉시 재시도 */
+  function kickReconnectNow(reason) {
+    var sess = _acSession;
+    if (!sess || !Object.keys(sess.drop).length) return;
+    var now = Date.now();
+    if (now - _lastReconnectKickAt < 8000) return;
+    _lastReconnectKickAt = now;
+    Object.keys(sess.drop).forEach(function (t) { sess.drop[t].nextAt = now; sess.drop[t].tries = 0; });
+    sess.pauseUntil = 0;
+    sess.lastSent = 0;
+    if (sess.cur && !sess.drop[sess.cur]) {
+      try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+      if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+      sess.cur = null;
+    }
+    sess.nextAt = 0;
+    if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 재연결 즉시 시도:', reason, Object.keys(sess.drop).join(','));
+    tickAutoConnectSession();
+  }
+  function installReconnectResumeHooks() {
+    if (global._stelvioReconnectHooks || typeof document === 'undefined') return;
+    global._stelvioReconnectHooks = true;
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') kickReconnectNow('visible');
+    });
+    global.addEventListener('pageshow', function () { kickReconnectNow('pageshow'); });
+    global.addEventListener('focus', function () { kickReconnectNow('focus'); });
+    document.addEventListener('pointerdown', function () {
+      var active = getActiveScreenId();
+      if (active && isTargetScreen(active)) kickReconnectNow('touch');
+    }, true);
   }
   /** 훈련 화면 진입 시 호출 — 첫 요청 + 연결 대기 시작 */
   function startAutoConnectSession() {
     stopAutoConnectSession(true);
     if (!isAppEnvironmentNow()) { sendRequestAutoConnect(); return; }
-    _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {} };
+    installReconnectResumeHooks();
+    _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {}, drop: {}, lastDropType: null };
     tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
     if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
@@ -748,6 +856,7 @@
     }
     if (!global._stelvioDisconnectedTypes) global._stelvioDisconnectedTypes = {};
     global._stelvioDisconnectedTypes[key] = Date.now();
+    try { onTrainingDeviceDropped(key); } catch (eDrop) {}
     setDeviceErrorUI(String(deviceType));
     if (typeof global.updateMobileBluetoothConnectionStatus === 'function') {
       global.updateMobileBluetoothConnectionStatus();

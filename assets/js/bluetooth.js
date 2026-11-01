@@ -1497,40 +1497,140 @@ function handleDisconnect(type, device) {
   }
 }
 
-// 웹 환경 전용: 지수 백오프(1s→2s→4s→8s)로 끊김 후 자동 재연결. requestDevice 호출 없음(사용자 제스처 불필요).
+// 웹 환경 전용 끊김 후 자동 재연결(requestDevice 없음 = 사용자 터치 불필요)
+// 2026-11-01 휴식 중 기기 전원이 꺼졌다 켜지는 경우 대응:
+//  - 1→2→4→8초 후, 훈련 화면에 있는 동안은 15초 간격으로 최대 30분 계속 시도(훈련 화면 밖이면 기존처럼 4회 후 중단)
+//  - 크롬 watchAdvertisements 지원 시 기기 광고(전원 켜짐)를 감지하는 즉시 연결
+//  - 화면이 다시 켜지거나 훈련 화면을 터치하면 기다리지 않고 즉시 시도
 var WEB_RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000];
+var WEB_RECONNECT_STEADY_MS = 15000;
+var WEB_RECONNECT_MAX_MS = 30 * 60 * 1000;
+var _webReconnect = {};
+function isOnTrainingScreenForReconnect() {
+  try {
+    var B = window.StelvioTrainingDashboardBridge;
+    var ids = (B && B.TARGET_SCREENS) || ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen'];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el && (el.classList.contains('active') || (el.offsetParent !== null && getComputedStyle(el).display !== 'none'))) return true;
+    }
+    return /bluetoothIndividual|individual/i.test(location.pathname);
+  } catch (e) { return false; }
+}
+function stopWebReconnect(deviceType) {
+  var st = _webReconnect[deviceType];
+  if (!st) return;
+  if (st.timer) clearTimeout(st.timer);
+  if (st.adAbort) { try { st.adAbort.abort(); } catch (e) {} }
+  delete _webReconnect[deviceType];
+  if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
+}
+function webReconnectFailNotice(deviceType, keepTrying) {
+  var msg = keepTrying
+    ? '기기 연결이 끊겼습니다. 기기 전원이 켜지면 자동으로 다시 연결합니다.'
+    : '기기를 찾을 수 없습니다. 스마트로라(또는 센서)의 전원을 확인하고 수동으로 다시 연결해 주세요.';
+  try {
+    if (typeof showToast === 'function') showToast(msg);
+    else if (!keepTrying) alert(msg);
+  } catch (e) {}
+  if (!keepTrying) {
+    try {
+      window.dispatchEvent(new CustomEvent('bleReconnectFailed', { detail: { message: '기기 전원 및 연결 상태를 확인해 주세요.', deviceType: deviceType } }));
+    } catch (evErr) {}
+  }
+}
+/** 크롬 watchAdvertisements: 기기가 다시 광고(전원 켜짐)하면 바로 연결 시도 */
+function watchWebDeviceAdvertisement(deviceType, deviceId) {
+  var st = _webReconnect[deviceType];
+  if (!st || st.adAbort || !navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+  navigator.bluetooth.getDevices().then(function (list) {
+    var dev = (list || []).find(function (d) { return String(d.id) === String(deviceId); });
+    if (!dev || typeof dev.watchAdvertisements !== 'function' || !_webReconnect[deviceType]) return;
+    var ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    st.adAbort = ac;
+    dev.addEventListener('advertisementreceived', function onAd() {
+      dev.removeEventListener('advertisementreceived', onAd);
+      if (st.adAbort) { try { st.adAbort.abort(); } catch (e) {} st.adAbort = null; }
+      runWebReconnectAttemptNow(deviceType, 'advertisement');
+    });
+    dev.watchAdvertisements(ac ? { signal: ac.signal } : undefined).catch(function () { st.adAbort = null; });
+  }).catch(function () {});
+}
+function runWebReconnectAttemptNow(deviceType, reason) {
+  var st = _webReconnect[deviceType];
+  if (!st || st.busy) return;
+  if (st.timer) { clearTimeout(st.timer); st.timer = null; }
+  console.log('[bluetooth] 재연결 즉시 시도', deviceType, reason || '');
+  doWebReconnectAttempt(deviceType);
+}
+function doWebReconnectAttempt(deviceType) {
+  var st = _webReconnect[deviceType];
+  if (!st) return;
+  if (window.connectedDevices && window.connectedDevices[deviceType]) { stopWebReconnect(deviceType); return; }
+  var connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (window.connectToSavedDeviceById || null);
+  if (!connectById) { stopWebReconnect(deviceType); return; }
+  st.busy = true;
+  reconnectToSavedDevice(st.deviceId, deviceType).then(function (result) {
+    st.busy = false;
+    if (result && result.device && result.server) {
+      stopWebReconnect(deviceType);
+      connectById(st.deviceId, deviceType).catch(function () {});
+    } else {
+      scheduleWebReconnectWithBackoff(deviceType, st.deviceId, st.attempt + 1);
+    }
+  }).catch(function () {
+    st.busy = false;
+    scheduleWebReconnectWithBackoff(deviceType, st.deviceId, st.attempt + 1);
+  });
+}
 function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
   if (!isWebEnvironment() || isAppEnvironment()) return;
   var connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (window.connectToSavedDeviceById || null);
   if (!connectById) return;
-  if (attemptIndex >= WEB_RECONNECT_BACKOFF_MS.length) {
-    if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
+  var st = _webReconnect[deviceType];
+  if (!st || attemptIndex === 0) {
+    if (st) stopWebReconnect(deviceType);
+    st = _webReconnect[deviceType] = { deviceId: deviceId, attempt: 0, startedAt: Date.now(), timer: null, busy: false, adAbort: null, noticed: false };
+    if (!window._stelvioReconnectScheduled) window._stelvioReconnectScheduled = {};
+    window._stelvioReconnectScheduled[deviceType] = true;
+    installWebReconnectResumeHooks();
+  }
+  st.attempt = attemptIndex;
+  var delay;
+  if (attemptIndex < WEB_RECONNECT_BACKOFF_MS.length) {
+    delay = WEB_RECONNECT_BACKOFF_MS[attemptIndex];
+  } else if (isOnTrainingScreenForReconnect() && Date.now() - st.startedAt < WEB_RECONNECT_MAX_MS) {
+    // 훈련 화면: 휴식 후 기기를 다시 켤 때까지 계속 시도
+    if (!st.noticed) { st.noticed = true; webReconnectFailNotice(deviceType, true); }
+    watchWebDeviceAdvertisement(deviceType, deviceId);
+    delay = WEB_RECONNECT_STEADY_MS;
+  } else {
     console.warn('[bluetooth] 최대 재연결 시도 횟수 초과. 연결 실패.');
-    try {
-      if (typeof showToast === 'function') {
-        showToast('기기를 찾을 수 없습니다. 스마트로라(또는 센서)의 전원을 확인하고 수동으로 다시 연결해 주세요.');
-      } else {
-        alert('기기를 찾을 수 없습니다. 스마트로라(또는 센서)의 전원을 확인하고 수동으로 다시 연결해 주세요.');
-      }
-    } catch (e) {}
-    try {
-      window.dispatchEvent(new CustomEvent('bleReconnectFailed', { detail: { message: '기기 전원 및 연결 상태를 확인해 주세요.', deviceType: deviceType } }));
-    } catch (evErr) {}
+    stopWebReconnect(deviceType);
+    webReconnectFailNotice(deviceType, false);
     return;
   }
-  var delay = WEB_RECONNECT_BACKOFF_MS[attemptIndex];
-  setTimeout(function () {
-    reconnectToSavedDevice(deviceId, deviceType).then(function (result) {
-      if (result && result.device && result.server) {
-        if (window._stelvioReconnectScheduled) window._stelvioReconnectScheduled[deviceType] = false;
-        connectById(deviceId, deviceType).catch(function () {});
-      } else {
-        scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex + 1);
-      }
-    }).catch(function () {
-      scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex + 1);
-    });
+  st.timer = setTimeout(function () {
+    st.timer = null;
+    doWebReconnectAttempt(deviceType);
   }, delay);
+}
+var _webReconnectHooks = false;
+var _webReconnectKickAt = 0;
+function installWebReconnectResumeHooks() {
+  if (_webReconnectHooks) return;
+  _webReconnectHooks = true;
+  function kick(reason) {
+    var types = Object.keys(_webReconnect);
+    if (!types.length) return;
+    var now = Date.now();
+    if (now - _webReconnectKickAt < 8000) return;
+    _webReconnectKickAt = now;
+    types.forEach(function (t) { runWebReconnectAttemptNow(t, reason); });
+  }
+  document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') kick('visible'); });
+  window.addEventListener('focus', function () { kick('focus'); });
+  document.addEventListener('pointerdown', function () { if (isOnTrainingScreenForReconnect()) kick('touch'); }, true);
 }
 
 function notifyChildWindows(field, value) {
