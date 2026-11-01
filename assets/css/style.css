@@ -35888,3 +35888,61 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothTrainingCoachScreen .enhanced-control-btn.slot-clear:hover:not(:disabled) svg {
   transform: rotate(180deg);
 }
+
+/* ── Coach PC 상단 건너뛰기·시작(일시정지)·종료 버튼 (2026-11-01) ──
+   - 아이콘 흰색
+   - 툴팁 제거 규칙([title]:hover::before/::after content:none)이 아이콘까지 지우던 문제 → 아이콘 유지
+   - 마우스 올림: 버튼 고유색 테두리 + 빛 번짐 펄스(선택된 느낌), 누름: 살짝 눌림 */
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip { --coach-ctrl-c: 59, 130, 246; }
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play { --coach-ctrl-c: 34, 197, 94; }
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause { --coach-ctrl-c: 251, 191, 36; }
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop { --coach-ctrl-c: 239, 68, 68; }
+
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip::after {
+  border-left-color: #ffffff !important;
+}
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause::before { color: #ffffff !important; }
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop::before { background: #ffffff !important; }
+
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip[title]:hover::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip[title]:hover::after,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play[title]:hover::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause[title]:hover::before,
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop[title]:hover::before {
+  content: '' !important;
+}
+
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip:hover:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play:hover:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause:hover:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled) {
+  border-color: rgb(var(--coach-ctrl-c));
+  background: radial-gradient(circle at 50% 50%, rgba(var(--coach-ctrl-c), 0.38) 0%, rgba(var(--coach-ctrl-c), 0.16) 55%, #0f172a 100%);
+  animation: coachCtrlSelectPulse 1.4s ease-in-out infinite;
+}
+#bluetoothTrainingCoachScreen .enhanced-control-btn.skip:active:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.play:active:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.pause:active:not(:disabled),
+#bluetoothTrainingCoachScreen .enhanced-control-btn.stop:active:not(:disabled) {
+  transform: scale(0.94);
+  animation: none;
+  box-shadow: 0 0 0 4px rgba(var(--coach-ctrl-c), 0.45), 0 0 18px rgba(var(--coach-ctrl-c), 0.6);
+}
+@keyframes coachCtrlSelectPulse {
+  0%, 100% {
+    transform: translateY(-2px) scale(1);
+    box-shadow: 0 0 0 0 rgba(var(--coach-ctrl-c), 0.55), 0 8px 22px rgba(var(--coach-ctrl-c), 0.35);
+  }
+  50% {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 0 0 7px rgba(var(--coach-ctrl-c), 0), 0 8px 28px rgba(var(--coach-ctrl-c), 0.55);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #bluetoothTrainingCoachScreen .enhanced-control-btn.skip:hover:not(:disabled),
+  #bluetoothTrainingCoachScreen .enhanced-control-btn.play:hover:not(:disabled),
+  #bluetoothTrainingCoachScreen .enhanced-control-btn.pause:hover:not(:disabled),
+  #bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled) { animation: none; }
+}
