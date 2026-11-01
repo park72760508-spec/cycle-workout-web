@@ -537,7 +537,10 @@
                 </tspan>
                 {/* 현재 순위의 기준 평속(최근 90일 상위 2회 평균) */}
                 <tspan x={lx} dy="9.5" style={{ fontSize: '7.5px', fontWeight: 600, fill: '#0369a1' }}>
-                  {sp != null ? sp.toFixed(1) + ' km/h' : '—'}
+                  {sp != null ? sp.toFixed(1) : '—'}
+                  {sp != null ? (
+                    <tspan dx="1" style={{ fontSize: '5.5px', fontWeight: 400, fill: '#94a3b8' }}>km/h</tspan>
+                  ) : null}
                 </tspan>
               </text>
             );
