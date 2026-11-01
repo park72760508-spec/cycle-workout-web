@@ -539,19 +539,43 @@
   }
 
   var FRAME_MS = 33;
+  /*
+   * 2026-11-01 안드로이드 가로 화면(차량 거치·분할 화면 등)에서 속도계 바늘·현재 속도가 멈추던 문제:
+   *  속도계는 브라우저 프레임 신호(requestAnimationFrame)로만 다시 그렸는데, 일부 안드로이드 WebView 는 화면이 보이는데도
+   *  이 신호를 멈추거나 '숨김(document.hidden)'으로 알려 와 바늘·숫자만 갱신되지 않았다(지도·하단 값은 계속 갱신).
+   *  → 프레임 신호가 0.4초 넘게 오지 않거나 숨김으로 알려 오면 GPS 가 들어올 때마다 직접 한 번 그린다.
+   */
+  function nowTs() { return window.performance && performance.now ? performance.now() : Date.now(); }
   function kickLoop() {
     if (st.saver) return; // 배터리 절약 화면 중에는 속도계 애니메이션 멈춤
-    if (st.rafId == null && isActive() && !document.hidden) st.rafId = requestAnimationFrame(loop);
+    if (!isActive()) return;
+    if (document.hidden) { st.hiddenDraws = (st.hiddenDraws || 0) + 1; loop(nowTs(), true); return; } // 숨김으로 알려 와도 값은 갱신(실제로 숨겨졌으면 그리는 비용 거의 없음)
+    if (st.rafId != null) {
+      if (Date.now() - (st.rafReqAt || 0) < 400) return;
+      try { cancelAnimationFrame(st.rafId); } catch (e) {} // 프레임 신호가 멈춤 → 직접 그림
+      st.rafId = null;
+      st.rafStall = (st.rafStall || 0) + 1;
+      loop(nowTs(), true);
+      return;
+    }
+    st.rafReqAt = Date.now();
+    st.rafId = requestAnimationFrame(loop);
   }
-  function loop(ts) {
+  function loop(ts, direct) {
     st.rafId = null;
-    if (!isActive() || document.hidden) return;
-    if (st.lastFrameTs && ts - st.lastFrameTs < FRAME_MS) {
+    if (!isActive() || (document.hidden && !direct)) return;
+    if (!direct && st.lastFrameTs && ts - st.lastFrameTs < FRAME_MS) {
+      st.rafReqAt = Date.now();
       st.rafId = requestAnimationFrame(loop);
       return;
     }
     st.lastFrameTs = ts;
     var tgt = shownSpeed(); // 3초(자전거 2초) 평균 표시 속도
+    // 잘못된 값(NaN 등)이 한 번 들어오면 바늘 회전값이 깨져 바늘이 사라지고 다시 돌아오지 않음 → 막음
+    if (!isFinite(tgt) || tgt < 0) tgt = 0;
+    if (!isFinite(st.displaySpeed)) st.displaySpeed = tgt;
+    if (st.numSpeed != null && !isFinite(st.numSpeed)) st.numSpeed = tgt;
+    if (direct) { st.displaySpeed = tgt; st.numSpeed = tgt; } // 직접 그릴 때(프레임 신호 없음)는 바로 현재 값으로
     var diff = tgt - st.displaySpeed;
     var needleSettled = Math.abs(diff) <= 0.05;
     // 2026-10-27: 이동 중에는 약 0.5초에 걸쳐 미끄러지듯(1초 간격 GPS 사이를 이어 줌), 0 으로 멈출 때는 빠르게
@@ -598,7 +622,7 @@
     }
     setSplitNumber('outd-ui-speed', 'outd-ui-speed-dec', Math.max(0, st.numSpeed), 1); // 정수만 가운데(2026-10-30 사용자 요청으로 원래대로)
     if (st.expanded) setExpSpeed(st.numSpeed); // 지도 크게 보기 위쪽 속도
-    if (!settled) st.rafId = requestAnimationFrame(loop);
+    if (!settled && !document.hidden) { st.rafReqAt = Date.now(); st.rafId = requestAnimationFrame(loop); }
   }
 
   function renderToggle() {
@@ -1239,7 +1263,9 @@
     favRpc('fn_save_outdoor_gps_debug', { p: {
       session_id: d.sid, started_at: new Date(d.started).toISOString(), device: (navigator.userAgent || '').slice(0, 200),
       fixes: fixes, steps: steps,
-      meta: { fields: DBG_FIELDS, travelMode: travelMode, motionAvailable: !!(D && D.state().available), v: 1 }
+      meta: { fields: DBG_FIELDS, travelMode: travelMode, motionAvailable: !!(D && D.state().available), v: 1,
+        // 2026-11-01: 속도계 프레임 신호 멈춤 진단(안드로이드 가로 화면 바늘 멈춤) — 멈춤 횟수·숨김 보고·화면 크기
+        rafStall: st.rafStall || 0, hiddenDraws: st.hiddenDraws || 0, view: (window.innerWidth || 0) + 'x' + (window.innerHeight || 0) }
     } }).then(function (res) {
       d.sending = false;
       if (!res || res.success !== true) { d.buf = fixes.concat(d.buf); }
