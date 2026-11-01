@@ -3385,7 +3385,7 @@ function updateSpeedometerSegmentInfo() {
         if (targetType === 'cadence_rpm') {
             // cadence_rpm 타입: "세그먼트 이름 - RPM 값"
             const targetRpm = Number(targetValue) || 0;
-            segmentText = `${segmentName} - RPM ${targetRpm}`;
+            segmentText = `${segmentName} RPM ${targetRpm}`;
         } else if (targetType === 'dual') {
             // dual 타입: "세그먼트 이름 - FTP 값% / RPM 값"
             let ftpPercent = 100;
@@ -3405,15 +3405,21 @@ function updateSpeedometerSegmentInfo() {
                 targetRpm = Number(targetValue[1]) || 0;
             }
             
-            segmentText = `${segmentName} - FTP ${ftpPercent}% / RPM ${targetRpm || 0}`;
+            segmentText = `${segmentName} FTP ${ftpPercent}% / RPM ${targetRpm || 0}`;
         } else if (targetType === 'ftp_pctz') {
             // 존 타입: "세그먼트 이름 - FTP 56 ~ 76%" (2026-10-18: "56~76"을 숫자로 읽지 못해 FTP 100%로 표시되던 오류 수정)
             const range = indivParsePctzRange(targetValue);
-            segmentText = `${segmentName} - FTP ${range.min} ~ ${range.max}%`;
+            segmentText = `${segmentName} FTP ${range.min} ~ ${range.max}%`;
         } else {
             // ftp_pct 타입: "세그먼트 이름 - FTP 값%"
             const ftpPercent = Number(targetValue) || 100;
-            segmentText = `${segmentName} - FTP ${ftpPercent}%`;
+            segmentText = `${segmentName} FTP ${ftpPercent}%`;
+        }
+        // 2026-11-01: 세그먼트 시간 — 예: SST FTP 80% (5분)
+        const segSec = Math.max(0, Math.round(Number(currentSeg.duration_sec != null ? currentSeg.duration_sec : currentSeg.duration) || 0));
+        if (segSec > 0) {
+            const sm = Math.floor(segSec / 60), sr = segSec % 60;
+            segmentText += ' (' + (!sm ? sr + '초' : (sr ? sm + '분 ' + sr + '초' : sm + '분')) + ')';
         }
         
         // 표시

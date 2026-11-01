@@ -20349,6 +20349,16 @@ function startMobileTrainingTimerLoop() {
  * 모바일 대시보드용 세그먼트 정보를 표시 형식으로 변환 (예: FTP 60%, RPM 90 등)
  * individual.js의 formatSegmentInfo와 동일한 로직 (독립적으로 구동)
  */
+/** 세그먼트 시간 표시(2026-11-01): 300초 → "5분", 90초 → "1분 30초", 45초 → "45초" */
+function formatSegmentDurationLabel(seg) {
+  const sec = Math.max(0, Math.round(Number(seg && (seg.duration_sec != null ? seg.duration_sec : seg.duration)) || 0));
+  if (!sec) return '';
+  const m = Math.floor(sec / 60), r = sec % 60;
+  if (!m) return `${r}초`;
+  return r ? `${m}분 ${r}초` : `${m}분`;
+}
+if (typeof window !== 'undefined') window.formatSegmentDurationLabel = formatSegmentDurationLabel;
+
 function formatMobileSegmentInfo(targetType, targetValue, segmentIndex) {
   if (!targetType || targetValue === undefined || targetValue === null) {
     return '준비 중';
@@ -20547,10 +20557,9 @@ function updateMobileDashboardUI() {
     // 세그먼트 목표값을 표시 형식으로 변환
     const targetText = formatMobileSegmentInfo(targetType, targetValue, currentSegIndex);
     
-    // 세그먼트 이름이 있으면 "세그먼트 이름(목표 값)" 형식, 없으면 "목표 값"만 표시
-    const segmentText = segmentName 
-      ? `${segmentName}(${targetText})`
-      : targetText;
+    // 2026-11-01: "세그먼트 이름 목표 값 (세그먼트 시간)" — 예: SST FTP 80% (5분)
+    const durText = formatSegmentDurationLabel(currentSeg);
+    const segmentText = (segmentName ? `${segmentName} ${targetText}` : targetText) + (durText ? ` (${durText})` : '');
     
     segmentInfoEl.textContent = segmentText;
   } else if (segmentInfoEl) {
