@@ -3,10 +3,15 @@
  *
  * 점수 규칙
  *  - 워밍업·휴식(회복)·쿨다운 세그먼트와 목표 파워가 없는 세그먼트(케이던스 전용)는 점수 제외
- *  - 세그먼트 점수 = 10점 × 달성률(랩파워 ÷ 목표 파워, 최대 120%) × W/kg 가중치
- *      예) 105% → 10.5점, 98% → 9.8점
+ *  - 2026-11-02 개정: 세그먼트 점수 = 구간 길이(분) × 1점 × 수행도 × W/kg 가중치
+ *      · 시간 가중: 30초 구간과 20분 구간이 같은 점수가 아니라 길이에 비례(긴 구간을 끝까지 지켜야 순위 상승)
+ *      · 수행도 = 목표 근접도 50% + 목표 구간 유지 시간 50%
+ *        - 목표 근접도(랩 평균 ÷ 목표): 100% = 1.0, 초과는 115%까지 절반만 가산(105% → 1.025, 115% 이상 1.075 동결),
+ *          미달은 그대로 감점(90% → 0.9), 50% 이하 0 → 한 구간 몰아치기·구간 건너뛰기 둘 다 불리
+ *        - 목표 구간 유지: 1초마다 현재 파워가 목표 ±5% 안이면 1, ±5~10%면 0.5, 그 밖(또는 데이터 없음) 0 → 평균
+ *          (초반 과속 후 처짐·들쭉날쭉한 수행보다 고르게 지킨 수행이 유리)
  *  - W/kg 가중치(FTP ÷ 체중): 2.0 미만 1.00 · 2.0~ 1.01 · 2.5~ 1.02 · 3.0~ 1.03 · 3.5~ 1.04 · 4.0 이상 1.05
- *  - 진행 중인 세그먼트는 현재 달성률 × 진행 비율만큼 실시간 반영 → 끝나면 확정
+ *  - 진행 중인 세그먼트는 지금까지의 수행도 × 경과 시간(분)으로 실시간 반영 → 끝나면 구간 전체 길이로 확정
  *  - 랩파워는 참가자 화면에 표시되는 LAP(세그먼트 평균 파워)과 같은 값, 세그먼트 시작 5초 이후 값만 사용(이전 세그먼트 값 섞임 방지)
  * 화면
  *  - 오른쪽 가장자리 손잡이로 펼치기/접기(상태 기억)
@@ -19,7 +24,10 @@
 
   var SCREEN_ID = 'bluetoothTrainingCoachScreen';
   var ROW_H = 54;
-  var ACH_CAP = 1.2;
+  var PROX_CAP = 1.15;   // 목표 근접도: 초과 달성 인정 상한
+  var PROX_FLOOR = 0.5;  // 이 이하 달성은 0
+  var ZONE_FULL = 0.05;  // 목표 ±5%: 유지 1초 인정
+  var ZONE_HALF = 0.10;  // 목표 ±10%: 0.5초 인정
   var LAP_GUARD_SEC = 5;
   var MOVE_SHOW_MS = 5000;
   var OPEN_KEY = 'stelvioCoachRaceBoardOpen';
@@ -59,13 +67,26 @@
     if (w >= 2.0) return 1.01;
     return 1;
   }
-  /** 세그먼트 점수와 달성률 (제외 구간이면 null) */
-  function segScore(seg, lapW, u) {
+  /** 목표 근접도 0~1.075 */
+  function proximity(ach) {
+    if (!(ach > PROX_FLOOR)) return 0;
+    if (ach < 1) return ach;
+    return 1 + (Math.min(ach, PROX_CAP) - 1) * 0.5;
+  }
+  /**
+   * 세그먼트 점수 (제외 구간이면 null)
+   * @param minutes 점수에 반영할 시간(분) — 확정 시 구간 전체 길이, 진행 중이면 경과 시간
+   * @param tiz 목표 구간 유지 집계 { n: 샘플 수, z: 인정 합 }
+   */
+  function segScore(seg, lapW, u, tiz, minutes) {
     if (isExcludedSegment(seg)) return null;
     var target = segTarget(seg, u.ftp, u.reportedTarget);
     if (!(target > 0)) return null;
-    var ach = Math.max(0, Math.min(ACH_CAP, lapW / target));
-    return { ach: ach, pts: 10 * ach * wkgWeight(u.ftp, u.weight) };
+    var ach = Math.max(0, lapW / target);
+    var prox = proximity(ach);
+    var keep = tiz && tiz.n > 0 ? Math.max(0, Math.min(1, tiz.z / tiz.n)) : Math.min(1, prox);
+    var quality = 0.5 * prox + 0.5 * keep;
+    return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * wkgWeight(u.ftp, u.weight) };
   }
   function segDur(seg) { return num(seg && (seg.duration_sec || seg.duration)); }
 
@@ -77,14 +98,14 @@
   }
   function storeKey(k) { return 'stelvioCoachRace:' + k; }
   function freshState(key) {
-    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, users: {}, prevRank: {}, moves: {}, done: false };
+    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, tiz: {}, users: {}, prevRank: {}, moves: {}, done: false };
   }
   function loadState(key) {
     try {
       var raw = sessionStorage.getItem(storeKey(key));
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.key === key) { o.moves = {}; return o; }
+        if (o && o.key === key) { o.moves = {}; o.tiz = o.tiz || {}; return o; }
       }
     } catch (e) {}
     return freshState(key);
@@ -104,7 +125,8 @@
       var lp = S.lap[uid];
       var u = S.users[uid];
       if (!lp || lp.seg !== k || !u) return;
-      var sc = segScore(seg, lp.w, u);
+      var tz = S.tiz[uid] && S.tiz[uid].seg === k ? S.tiz[uid] : null;
+      var sc = segScore(seg, lp.w, u, tz, segDur(seg) / 60);
       if (!sc) return;
       if (!S.final[uid]) S.final[uid] = {};
       S.final[uid][k] = Math.round(sc.pts * 100) / 100;
@@ -186,13 +208,28 @@
       if (active && segEl >= LAP_GUARD_SEC && fresh && num(pm.segmentPower) > 0) {
         S.lap[uid] = { seg: idx, w: num(pm.segmentPower) };
       }
+      // 목표 구간 유지 시간: 진행 중(일시정지 제외)·점수 구간에서 1초마다 현재 파워를 목표와 비교
+      var segNow = segments[idx];
+      if (st === 'running' && segEl >= LAP_GUARD_SEC && segNow && !isExcludedSegment(segNow)) {
+        var tgt = segTarget(segNow, u.ftp, u.reportedTarget);
+        if (tgt > 0) {
+          var tz = S.tiz[uid];
+          if (!tz || tz.seg !== idx) tz = S.tiz[uid] = { seg: idx, n: 0, z: 0, at: 0 };
+          if (now - tz.at >= 900) {
+            tz.at = now;
+            var dev = Math.abs((fresh ? num(pm.currentPower) : 0) / tgt - 1);
+            tz.n += 1;
+            tz.z += dev <= ZONE_FULL + 1e-9 ? 1 : dev <= ZONE_HALF + 1e-9 ? 0.5 : 0; // 소수 오차(1.05/1−1=0.0500…04) 보정
+          }
+        }
+      }
       if (pm.userId) fetchAvatar(String(pm.userId));
       present.push(uid);
     });
 
     var seg = segments[idx];
     var curExcluded = !seg || isExcludedSegment(seg);
-    var progress = seg && segDur(seg) > 0 ? Math.max(0, Math.min(1, segEl / segDur(seg))) : 0;
+    var liveMin = seg ? Math.max(0, Math.min(segDur(seg) || segEl, segEl)) / 60 : 0;
     var rows = present.map(function (uid) {
       var u = S.users[uid];
       var f = S.final[uid] || {};
@@ -204,10 +241,11 @@
       var liveAch = null;
       var lp = S.lap[uid];
       if ((active || st === 'finished') && seg && lp && lp.seg === idx) {
-        var sc = segScore(seg, lp.w, u);
+        var tzL = S.tiz[uid] && S.tiz[uid].seg === idx ? S.tiz[uid] : null;
+        var sc = segScore(seg, lp.w, u, tzL, liveMin);
         if (sc) {
           liveAch = sc.ach;
-          if (active) total += sc.pts * progress;
+          if (active) total += sc.pts;
         }
       }
       return { uid: uid, track: u.track, name: u.name, total: total, liveAch: liveAch, wkg: u.ftp > 0 && u.weight > 0 ? u.ftp / u.weight : null };
@@ -268,7 +306,7 @@
         '</header>' +
         '<div class="crb__cols"><span>순위</span><span>선수</span><span>현재 구간</span><span>점수</span></div>' +
         '<div class="crb__list" id="coachRaceBoardList"></div>' +
-        '<footer class="crb__foot">세그먼트 달성 10점 × 달성률 · W/kg 가산 · 워밍업·휴식·쿨다운 제외</footer>' +
+        '<footer class="crb__foot">구간 1분당 1점 × 수행도(목표 근접 50% + 목표 ±5% 유지 50%) · W/kg 가산 · 워밍업·휴식·쿨다운 제외</footer>' +
       '</section>';
     scr.appendChild(root);
     root.querySelector('.crb__handle').addEventListener('click', function () { setOpen(!root.classList.contains('crb--open')); });
