@@ -488,7 +488,7 @@
    * 훈련 화면 진입 시 앱에 자동 연결 요청. (앱 WebView 전용 — 웹 전용에서는 표시/요청 없음)
    * - 진입 시 즉시 '연결중' 표시(낙관적). ReactNativeWebView가 없으면 재시도(100,300,600,1000,2000ms).
    */
-  function sendRequestAutoConnect() {
+  function sendRequestAutoConnect(onlyType) {
     if (!isAppEnvironmentNow()) return;
     _autoConnectRetryCount = 0;
     global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
@@ -530,7 +530,7 @@
               var names = (typeof global.StelvioDeviceBridgeStorage.loadSavedDeviceNames === 'function')
                 ? global.StelvioDeviceBridgeStorage.loadSavedDeviceNames() : {};
               var list = [];
-              var keys = ['hr', 'power', 'trainer', 'speed'];
+              var keys = onlyType ? [onlyType] : ['hr', 'power', 'trainer', 'speed']; // onlyType: 기기 1대만 요청(번갈아 시도)
               for (var i = 0; i < keys.length; i++) {
                 var k = keys[i];
                 var id = saved[k];
@@ -576,6 +576,13 @@
    */
   var AUTO_CONNECT_WINDOW_MS = 10 * 60 * 1000;
   var AUTO_CONNECT_RESEND_MS = 20000;
+  /* 기기별 번갈아 시도(2026-11-01): 안드로이드 앱은 기기를 순서대로 연결하며 심박계가 없으면 시간 제한 없이 기다려
+   * 파워미터를 시도하지 못했다(심박계를 두고 온 경우 파워미터도 연결 안 됨).
+   * → 한 번에 기기 1대만 요청하고, 30초 안에 연결되지 않으면 그 시도를 취소(ABORT)한 뒤 다음 기기로.
+   *   심박계 → 파워미터(또는 스마트로라) → 심박계 … 순서로 10분 동안 반복. 연결된 기기는 건너뜀.
+   *   (연결 후 서비스 확인·센서 준비에 약 7초가 걸리므로 시도 시간은 30초) */
+  var AUTO_CONNECT_ATTEMPT_MS = 30000;
+  var AUTO_CONNECT_TYPE_KEY = { hr: 'heartRate', power: 'powerMeter', trainer: 'trainer' };
   var _acSession = null;
   function savedTrainingDevices() {
     try {
@@ -592,6 +599,17 @@
     var needHr = known ? !!sv.hr : true;
     var needPw = known ? !!(sv.power || sv.trainer) : true;
     return (!needHr || !!c.heartRate) && (!needPw || !!(c.powerMeter || c.trainer));
+  }
+  /** 아직 연결할 기기 종류(순서: 심박계 → 파워미터 → 스마트로라). 파워미터·스마트로라 중 하나가 연결되면 둘 다 충족 */
+  function pendingAutoConnectTypes() {
+    var c = global.connectedDevices || {};
+    var sv = savedTrainingDevices();
+    var out = [];
+    if (sv.hr && !c.heartRate) out.push('hr');
+    var pwOk = !!(c.powerMeter || c.trainer);
+    if (!pwOk && sv.power) out.push('power');
+    if (!pwOk && sv.trainer) out.push('trainer');
+    return out;
   }
   function setAutoConnectWaitingLabel(text) {
     ['mobileBluetoothConnectBtn', 'trainingScreenBluetoothConnectBtn'].forEach(function (id) {
@@ -613,29 +631,55 @@
   function tickAutoConnectSession() {
     var sess = _acSession;
     if (!sess) return;
+    var now = Date.now();
     var active = getActiveScreenId();
     if (!active || !isTargetScreen(active)) { stopAutoConnectSession(false); return; }
     if (autoConnectGoalMet()) { stopAutoConnectSession(false); return; }
-    var left = AUTO_CONNECT_WINDOW_MS - (Date.now() - sess.start);
+    var left = AUTO_CONNECT_WINDOW_MS - (now - sess.start);
     if (left <= 0) {
       if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 연결 대기 10분 종료');
       stopAutoConnectSession(true);
       return;
     }
-    if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) return; // 앱이 지금 연결 시도 중('연결 중...' 표시)
-    setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
-    if (Date.now() - sess.lastSent >= AUTO_CONNECT_RESEND_MS) {
-      sess.lastSent = Date.now();
-      sendRequestAutoConnect();
+    var pending = pendingAutoConnectTypes();
+    if (!pending.length) {
+      // 저장된 기기 목록을 웹에서 알 수 없음(앱에만 저장) → 예전처럼 전체 요청을 20초 간격으로
+      if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
+      if (!global[AUTO_CONNECT_IN_PROGRESS_KEY] && now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) {
+        sess.lastSent = now;
+        sendRequestAutoConnect();
+      }
+      return;
     }
+    if (sess.cur) {
+      var key = AUTO_CONNECT_TYPE_KEY[sess.cur];
+      var c = global.connectedDevices || {};
+      var done = !!c[key] || pending.indexOf(sess.cur) < 0;
+      if (done) { sess.cur = null; sess.nextAt = now + 1000; }
+      else if (now - sess.curAt >= AUTO_CONNECT_ATTEMPT_MS) {
+        // 이 기기는 아직 연결 준비가 안 됨 → 시도 취소 후 다음 기기
+        try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+        if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+        sess.cur = null;
+        sess.nextAt = now + 1500;
+      } else return;
+    }
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
+    if (now < (sess.nextAt || 0)) return;
+    // 번갈아: 직전에 시도한 종류의 다음 것부터
+    var idx = sess.lastType ? pending.indexOf(sess.lastType) : -1;
+    var type = pending[(idx + 1) % pending.length];
+    if (idx < 0 && sess.lastType) type = pending[0];
+    sess.cur = type; sess.curAt = now; sess.lastType = type; sess.lastSent = now;
+    sendRequestAutoConnect(type);
   }
   /** 훈련 화면 진입 시 호출 — 첫 요청 + 10분 연결 대기 시작 */
   function startAutoConnectSession() {
     stopAutoConnectSession(false);
-    sendRequestAutoConnect();
-    if (!isAppEnvironmentNow()) return;
-    _acSession = { start: Date.now(), lastSent: Date.now(), timer: null };
-    _acSession.timer = setInterval(tickAutoConnectSession, 5000);
+    if (!isAppEnvironmentNow()) { sendRequestAutoConnect(); return; }
+    _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0 };
+    tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
+    if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
 
   function setDeviceErrorUI(deviceType) {
