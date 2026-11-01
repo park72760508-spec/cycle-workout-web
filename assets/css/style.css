@@ -35946,3 +35946,156 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #bluetoothTrainingCoachScreen .enhanced-control-btn.pause:hover:not(:disabled),
   #bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled) { animation: none; }
 }
+
+/* ── Coach PC 실시간 레이스 순위 전광판 (2026-11-02, coachRaceLeaderboard.js) ── */
+#coachRaceBoard.crb {
+  position: fixed;
+  top: 84px;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  transform: translateX(calc(100% - 46px));
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
+}
+#coachRaceBoard.crb--open { transform: translateX(0); }
+#coachRaceBoard .crb__handle {
+  pointer-events: auto;
+  width: 46px;
+  margin-top: 14px;
+  padding: 10px 0 8px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: linear-gradient(180deg, #1f2937 0%, #0b1220 100%);
+  color: #facc15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: -6px 6px 18px rgba(0, 0, 0, 0.45), 0 0 14px rgba(250, 204, 21, 0.25);
+}
+#coachRaceBoard .crb__handle-trophy { font-size: 20px; line-height: 1; }
+#coachRaceBoard .crb__handle-text { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; line-height: 1.15; text-align: center; }
+#coachRaceBoard .crb__handle-chev {
+  width: 8px; height: 8px; margin-top: 2px;
+  border-left: 2px solid #facc15; border-bottom: 2px solid #facc15;
+  transform: rotate(45deg); transition: transform 0.3s ease;
+}
+#coachRaceBoard.crb--open .crb__handle-chev { transform: rotate(-135deg); }
+#coachRaceBoard .crb__panel {
+  pointer-events: auto;
+  width: min(400px, 34vw);
+  max-height: calc(100vh - 110px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  overflow: hidden;
+  color: #e2e8f0;
+  background:
+    radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1.2px) 0 0 / 4px 4px,
+    linear-gradient(180deg, #0f172a 0%, #020617 100%);
+  box-shadow: -10px 10px 30px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(250, 204, 21, 0.06);
+}
+#coachRaceBoard .crb__head {
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid rgba(250, 204, 21, 0.25);
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.14), rgba(250, 204, 21, 0) 70%);
+}
+#coachRaceBoard .crb__title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 15px; font-weight: 900; letter-spacing: 0.12em; color: #facc15;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.55);
+}
+#coachRaceBoard .crb__live-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: #ef4444;
+  box-shadow: 0 0 8px #ef4444; animation: crbLive 1.2s ease-in-out infinite;
+}
+@keyframes crbLive { 50% { opacity: 0.25; } }
+#coachRaceBoard .crb__sub { margin-top: 3px; font-size: 11.5px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  display: grid;
+  grid-template-columns: 50px 1fr 92px 66px;
+  align-items: center;
+  column-gap: 6px;
+}
+#coachRaceBoard .crb__cols {
+  padding: 6px 12px; font-size: 10.5px; font-weight: 700; color: #64748b; letter-spacing: 0.06em;
+}
+#coachRaceBoard .crb__cols span:last-child { text-align: right; }
+#coachRaceBoard .crb__list {
+  position: relative;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 54px;
+  transition: height 0.3s ease;
+  scrollbar-width: thin;
+}
+#coachRaceBoard .crb-row {
+  position: absolute; left: 0; right: 0; top: 0;
+  height: 54px;
+  padding: 0 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), background 0.4s ease;
+  will-change: transform;
+}
+#coachRaceBoard .crb-row--top1 { background: linear-gradient(90deg, rgba(250, 204, 21, 0.20), rgba(250, 204, 21, 0) 80%); }
+#coachRaceBoard .crb-row--top2 { background: linear-gradient(90deg, rgba(203, 213, 225, 0.16), rgba(203, 213, 225, 0) 80%); }
+#coachRaceBoard .crb-row--top3 { background: linear-gradient(90deg, rgba(217, 119, 6, 0.18), rgba(217, 119, 6, 0) 80%); }
+#coachRaceBoard .crb-row--up { animation: crbUp 1s ease-out; }
+#coachRaceBoard .crb-row--down { animation: crbDown 1s ease-out; }
+@keyframes crbUp { 0% { box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.9); } 100% { box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0); } }
+@keyframes crbDown { 0% { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.8); } 100% { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0); } }
+#coachRaceBoard .crb-row__rank { display: flex; align-items: center; gap: 3px; }
+#coachRaceBoard .crb-row__rank b {
+  min-width: 28px; height: 28px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 900; font-variant-numeric: tabular-nums;
+  background: rgba(148, 163, 184, 0.16); color: #e2e8f0;
+}
+#coachRaceBoard .crb-row--top1 .crb-row__rank b { background: linear-gradient(135deg, #fde047, #ca8a04); color: #1c1917; box-shadow: 0 0 12px rgba(250, 204, 21, 0.6); }
+#coachRaceBoard .crb-row--top2 .crb-row__rank b { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #0f172a; }
+#coachRaceBoard .crb-row--top3 .crb-row__rank b { background: linear-gradient(135deg, #fdba74, #b45309); color: #1c1917; }
+#coachRaceBoard .crb-row__move { font-style: normal; font-size: 9.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#coachRaceBoard .crb-row--up .crb-row__move { color: #22c55e; }
+#coachRaceBoard .crb-row--down .crb-row__move { color: #ef4444; }
+#coachRaceBoard .crb-row__who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+#coachRaceBoard .crb-row__avatar {
+  flex: 0 0 34px; width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #334155, #1e293b); border: 1.5px solid rgba(148, 163, 184, 0.45);
+  font-size: 14px; font-weight: 800; color: #cbd5e1;
+}
+#coachRaceBoard .crb-row--top1 .crb-row__avatar { border-color: #facc15; }
+#coachRaceBoard .crb-row--top2 .crb-row__avatar { border-color: #cbd5e1; }
+#coachRaceBoard .crb-row--top3 .crb-row__avatar { border-color: #f59e0b; }
+#coachRaceBoard .crb-row__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#coachRaceBoard .crb-row__name { font-size: 14px; font-weight: 700; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#coachRaceBoard .crb-row__ach { display: flex; flex-direction: column; gap: 3px; }
+#coachRaceBoard .crb-row__bar { display: block; height: 6px; border-radius: 3px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+#coachRaceBoard .crb-row__bar i { display: block; height: 100%; width: 0; border-radius: 3px; transition: width 0.8s ease, background 0.4s ease; }
+#coachRaceBoard .crb-row__ach em { font-style: normal; font-size: 11.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+#coachRaceBoard .crb-ach--ok .crb-row__bar i { background: #22c55e; }
+#coachRaceBoard .crb-ach--ok em { color: #4ade80; }
+#coachRaceBoard .crb-ach--hot .crb-row__bar i { background: linear-gradient(90deg, #22c55e, #facc15); }
+#coachRaceBoard .crb-ach--hot em { color: #facc15; }
+#coachRaceBoard .crb-ach--low .crb-row__bar i { background: #f97316; }
+#coachRaceBoard .crb-ach--low em { color: #fb923c; }
+#coachRaceBoard .crb-ach--none em { color: #64748b; }
+#coachRaceBoard .crb-row__score {
+  text-align: right;
+  font-family: 'Orbitron', 'DS-Digital', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
+}
+#coachRaceBoard .crb__empty { padding: 16px; text-align: center; font-size: 12.5px; color: #64748b; }
+#coachRaceBoard .crb__foot { padding: 7px 12px; font-size: 10px; color: #64748b; border-top: 1px solid rgba(148, 163, 184, 0.15); }
+@media (prefers-reduced-motion: reduce) {
+  #coachRaceBoard .crb-row, #coachRaceBoard.crb { transition: none; }
+  #coachRaceBoard .crb__live-dot, #coachRaceBoard .crb-row--up, #coachRaceBoard .crb-row--down { animation: none; }
+}
