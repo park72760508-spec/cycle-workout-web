@@ -720,7 +720,7 @@ function createPowerMeterElement(powerMeter) {
   }
   
   const container = document.createElement('div');
-  container.className = 'speedometer-container';
+  container.className = 'speedometer-container' + (powerMeter.userName ? '' : ' coach-slot--idle');
   container.id = `power-meter-${powerMeter.id}`;
   container.dataset.powerMeterId = powerMeter.id;
   
@@ -1575,6 +1575,25 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
     infoEl.style.borderColor = '#e2e8f0';
     infoEl.style.color = '#334155';
   }
+}
+
+/** Coach PC 속도계 슬롯: 접속자 없는 슬롯은 휴대폰 Coach 모니터의 빈 슬롯처럼 어둡게(2026-11-01) */
+function syncBluetoothCoachIdleSlots() {
+  const pms = window.bluetoothCoachState && window.bluetoothCoachState.powerMeters;
+  if (!Array.isArray(pms)) return;
+  pms.forEach(function (pm) {
+    const el = document.getElementById('power-meter-' + pm.id);
+    if (el) el.classList.toggle('coach-slot--idle', !pm.userName);
+  });
+}
+if (typeof window !== 'undefined' && !window.__bluetoothCoachIdleSlotTimer) {
+  window.__bluetoothCoachIdleSlotTimer = setInterval(function () {
+    try {
+      const scr = document.getElementById('bluetoothTrainingCoachScreen');
+      if (!scr || !scr.classList.contains('active') || document.hidden) return;
+      syncBluetoothCoachIdleSlots();
+    } catch (e) {}
+  }, 1000);
 }
 
 /** Coach PC 전광판 그래프: 훈련 중 진행 점 이동·펄스 애니메이션을 위해 주기적으로 다시 그림(휴대폰 화면과 동일 효과) */

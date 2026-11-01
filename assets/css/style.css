@@ -35863,3 +35863,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   mask: url("../img/home.svg") center / contain no-repeat;
   object-position: -9999px 0;
 }
+
+/* Coach PC 모니터: 접속자 없는 속도계 슬롯 — 휴대폰 Coach 모니터 빈 슬롯(.coachm-mcard--idle)과 같은 어두운 상태 */
+#bluetoothTrainingCoachScreen .speedometer-container.coach-slot--idle {
+  opacity: 0.32;
+  transition: opacity 0.25s ease;
+}
