@@ -473,6 +473,7 @@
 
   /** 사용자 수동 연결 버튼 클릭 시 호출: 자동 연결 즉시 중단 후 수동 검색(Device Settings)으로 유도 */
   function abortAutoConnect() {
+    stopAutoConnectSession(false); // 수동 연결로 넘어가면 10분 연결 대기도 끝냄
     if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) return;
     if (typeof console !== 'undefined' && console.log) {
       console.log('[trainingDashboardBridge] AUTO_CONNECT aborted by user');
@@ -565,6 +566,76 @@
       }
     }
     tryPost();
+  }
+
+  /*
+   * 2026-11-01 연결 대기 10분: 훈련 화면 진입 후 심박계 + 파워미터(또는 스마트로라)가 모두 연결될 때까지 최대 10분 동안
+   * 앱에 자동 연결을 다시 요청한다. 기기 전원을 늦게 켜도(연결 준비가 늦어도) 그때 연결되도록.
+   *  - 앱의 한 번 시도(아이폰: 기기당 15초)가 끝나면 20초 간격으로 다시 요청, 이미 연결된 기기는 앱이 건너뜀
+   *  - 끝나는 조건: 목표 기기 연결 · 훈련 화면을 떠남 · 사용자가 연결 버튼(수동 연결) · 10분 경과(남은 연결 시도 취소)
+   */
+  var AUTO_CONNECT_WINDOW_MS = 10 * 60 * 1000;
+  var AUTO_CONNECT_RESEND_MS = 20000;
+  var _acSession = null;
+  function savedTrainingDevices() {
+    try {
+      var S = global.StelvioDeviceBridgeStorage;
+      var v = S && typeof S.loadSavedDevices === 'function' ? S.loadSavedDevices() : null;
+      return v && typeof v === 'object' ? v : {};
+    } catch (e) { return {}; }
+  }
+  /** 목표: 심박계 + (파워미터 또는 스마트로라). 저장된 기기 목록이 있으면 저장된 종류만 기준 */
+  function autoConnectGoalMet() {
+    var c = global.connectedDevices || {};
+    var sv = savedTrainingDevices();
+    var known = !!(sv.hr || sv.power || sv.trainer);
+    var needHr = known ? !!sv.hr : true;
+    var needPw = known ? !!(sv.power || sv.trainer) : true;
+    return (!needHr || !!c.heartRate) && (!needPw || !!(c.powerMeter || c.trainer));
+  }
+  function setAutoConnectWaitingLabel(text) {
+    ['mobileBluetoothConnectBtn', 'trainingScreenBluetoothConnectBtn'].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (btn) setAutoConnectStatusNextToButton(btn, !!text, text || '');
+    });
+  }
+  function stopAutoConnectSession(abortPending) {
+    var sess = _acSession;
+    if (!sess) return;
+    _acSession = null;
+    if (sess.timer) clearInterval(sess.timer);
+    if (abortPending) {
+      try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+      if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+    }
+    if (!global[AUTO_CONNECT_IN_PROGRESS_KEY]) setAutoConnectWaitingLabel('');
+  }
+  function tickAutoConnectSession() {
+    var sess = _acSession;
+    if (!sess) return;
+    var active = getActiveScreenId();
+    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(false); return; }
+    if (autoConnectGoalMet()) { stopAutoConnectSession(false); return; }
+    var left = AUTO_CONNECT_WINDOW_MS - (Date.now() - sess.start);
+    if (left <= 0) {
+      if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 연결 대기 10분 종료');
+      stopAutoConnectSession(true);
+      return;
+    }
+    if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) return; // 앱이 지금 연결 시도 중('연결 중...' 표시)
+    setAutoConnectWaitingLabel('연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
+    if (Date.now() - sess.lastSent >= AUTO_CONNECT_RESEND_MS) {
+      sess.lastSent = Date.now();
+      sendRequestAutoConnect();
+    }
+  }
+  /** 훈련 화면 진입 시 호출 — 첫 요청 + 10분 연결 대기 시작 */
+  function startAutoConnectSession() {
+    stopAutoConnectSession(false);
+    sendRequestAutoConnect();
+    if (!isAppEnvironmentNow()) return;
+    _acSession = { start: Date.now(), lastSent: Date.now(), timer: null };
+    _acSession.timer = setInterval(tickAutoConnectSession, 5000);
   }
 
   function setDeviceErrorUI(deviceType) {
@@ -957,6 +1028,7 @@
   }
 
   function teardownTrainingDashboardBridge() {
+    stopAutoConnectSession(false);
     if (typeof global.removeEventListener === 'function') {
       if (autoConnectStateHandlerRef !== null) {
         global.removeEventListener('stelvio-auto-connect-state', autoConnectStateHandlerRef);
@@ -1026,7 +1098,7 @@
       }
       if (isTargetScreen(screenId)) {
         mountTrainingDashboardBridge();
-        sendRequestAutoConnect();
+        startAutoConnectSession();
         tryShowPowerSourceSelectPopup();
         if (typeof console !== 'undefined' && console.log) {
           console.log('[trainingDashboardBridge] 훈련 화면 진입(showScreen) → REQUEST_AUTO_CONNECT, screenId=', screenId);
@@ -1051,7 +1123,7 @@
       console.log('[trainingDashboardBridge] 훈련 화면 active 감지 → 자동연결 트리거, screenId=', screenId);
     }
     mountTrainingDashboardBridge();
-    sendRequestAutoConnect();
+    startAutoConnectSession();
     tryShowPowerSourceSelectPopup();
   }
   function checkActiveScreenForAutoConnect() {
@@ -1107,7 +1179,7 @@
     if (activeId && isTargetScreen(activeId)) {
       _initialAutoConnectDone = true;
       mountTrainingDashboardBridge();
-      sendRequestAutoConnect();
+      startAutoConnectSession();
       tryShowPowerSourceSelectPopup();
       if (typeof console !== 'undefined' && console.log) {
         console.log('[trainingDashboardBridge] 초기 화면이 훈련 화면 → REQUEST_AUTO_CONNECT 시도, screenId=', activeId, 'inApp=', isAppEnvironmentNow());
