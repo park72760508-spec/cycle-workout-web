@@ -35854,3 +35854,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-01: 친구 초대하기 버튼 — 선물 카드와 안내 블록 사이 */
 .launch-notice-referral__invite--top { margin: 0 0 12px; }
+
+/* CYCLE·RUN 베이스캠프 환영 블록 홈 아이콘: '환영합니다' 글자색(#0369a1)과 동일하게 — 아이콘 모양을 마스크로 쓰고 배경색으로 칠함 */
+.basecamp-home-to-category-btn img {
+  background-color: #0369a1;
+  -webkit-mask: url("../img/home.svg") center / contain no-repeat;
+  mask: url("../img/home.svg") center / contain no-repeat;
+  object-position: -9999px 0;
+}
