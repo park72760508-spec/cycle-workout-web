@@ -4023,7 +4023,10 @@ function startBluetoothCoachTrainingTimer() {
       const remaining = segmentDuration - segmentElapsed;
       
       // 5초 카운트다운 로직 (Indoor Training과 동일)
-      if (remaining > 0) {
+      // 2026-11-01: 타이머가 한 번 늦어 남은 시간이 2초 → 0초 이하로 건너뛰면 '0'(오버레이 닫기)이 실행되지 않아
+      //  '1'이 다음 세그먼트 내내 남던 문제 → 직전 틱에 시간이 남아 있었으면 이번 틱(0 이하)에서도 경계 확인
+      const _prevRemainForKey = window.bluetoothCoachState._prevRemainMs && window.bluetoothCoachState._prevRemainMs[String(currentIndex)];
+      if (remaining > 0 || _prevRemainForKey > 0) {
         // 다음 세그(마지막이면 null)
         const nextSeg = (currentIndex < segments.length - 1) ? segments[currentIndex + 1] : null;
         
@@ -4090,6 +4093,8 @@ function startBluetoothCoachTrainingTimer() {
         if (currentIndex >= segments.length - 1) {
           // 워크아웃 종료
           window.bluetoothCoachState.trainingState = 'finished';
+          window.bluetoothCoachState.segmentCountdownActive = false;
+          if (BluetoothCoachCountdownDisplay.active) BluetoothCoachCountdownDisplay.hideImmediate();
           releaseBluetoothCoachWakeLock();
           
           // Firebase에 완료 상태 전송
@@ -4117,8 +4122,9 @@ function startBluetoothCoachTrainingTimer() {
           window.bluetoothCoachState.segmentStartTime = Date.now();
           window.bluetoothCoachState.segmentElapsedTime = 0;
           
-          // 카운트다운 상태 초기화 (다음 세그먼트를 위해)
+          // 카운트다운 상태 초기화 (다음 세그먼트를 위해) — 오버레이가 아직 떠 있으면 함께 닫음(숫자가 남지 않게)
           window.bluetoothCoachState.segmentCountdownActive = false;
+          if (BluetoothCoachCountdownDisplay.active) BluetoothCoachCountdownDisplay.hideImmediate();
           
           // 세그먼트 정보 업데이트
           updateCurrentSegmentInfo();
@@ -4341,6 +4347,7 @@ const BluetoothCoachCountdownDisplay = {
     this.overlay.classList.remove("hidden");
     this.overlay.style.display = "flex";
     this.active = true;
+    this.seq = (this.seq || 0) + 1;
     return true;
   },
   render(n) {
@@ -4354,7 +4361,9 @@ const BluetoothCoachCountdownDisplay = {
   },
   finish(delayMs = 800) {
     if (!this.overlay) return;
+    const seq = this.seq;
     setTimeout(() => {
+      if (this.seq !== seq) return; // 그 사이 새 카운트다운이 시작됨(짧은 세그먼트) → 닫지 않음
       this.overlay.classList.add("hidden");
       this.overlay.style.display = "none";
       this.active = false;
