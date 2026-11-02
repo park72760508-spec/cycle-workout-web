@@ -1548,7 +1548,7 @@
       $(SCREEN_ID).appendChild(el);
       el.addEventListener('click', function (e) {
         var t = e.target;
-        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; return; }
+        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; liveStop(el); return; }
         var tab = t.closest('[data-rt-dir]');
         if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderSubwayLinePopup(el); }
       });
@@ -1565,7 +1565,12 @@
       renderSubwayLinePopup(el);
     });
   }
-  function renderSubwayLinePopup(el) {
+  function renderSubwayLinePopup(el, fromLive) {
+    if (fromLive) { keepListScroll(el, function () { renderSubwayLinePopupInner(el, true); }); return; }
+    renderSubwayLinePopupInner(el, false);
+  }
+  function subLiveName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/(역|종착)$/, '').replace(/\s+/g, ''); }
+  function renderSubwayLinePopupInner(el, fromLive) {
     var ln = sub.data.lines[el.__li], seqs = el.__seqs || [], st = sub.data.stations;
     var badge = '<span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>';
     var card;
@@ -1574,6 +1579,18 @@
         '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>';
     } else {
       var seq = seqs[Math.min(el.__dir, seqs.length - 1)];
+      // 실시간 열차 위치(수도권): 역 이름으로 맞추고, 종착역이 목록 아래쪽이면 ↓ 위쪽이면 ↑
+      liveEnsure(el, { type: 'subway', line: ln.n }, renderSubwayLinePopup);
+      var names = seq.map(function (si) { return st[si] ? subLiveName(st[si].n) : ''; });
+      var trainAt = {}, trainN = 0, ldS = el.__live && el.__live.data;
+      if (ldS && ldS.ok) ldS.items.forEach(function (t) {
+        var k = names.indexOf(subLiveName(t.st));
+        if (k < 0) return;
+        var tk = names.indexOf(subLiveName(t.to));
+        var down = tk >= 0 ? tk > k : t.ud === '1';
+        (trainAt[k] = trainAt[k] || []).push({ down: down, to: String(t.to || '').replace(/종착$/, ''), s: t.s, ex: t.ex });
+        trainN++;
+      });
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       card = '<div class="outd-busrt__head">' + badge +
         '<div class="outd-busrt__ttl"><b>' + escHtml(ends(seq)) + '</b><span>역 ' + seq.length + '개</span></div>' +
@@ -1589,11 +1606,18 @@
             return o ? '<u style="background:' + escHtml(o.c) + '">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
           }).join('');
           var cur = si === el.__cur;
-          return '<li class="' + (cur ? 'is-cur' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
+          var k2 = seq.indexOf(si);
+          var tr = trainAt[k2] ? trainAt[k2].map(function (t) {
+            var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '전역 출발' }[t.s] || '';
+            return '<b class="outd-busrt__veh is-sub" title="' + escHtml(t.to + '행' + (t.ex ? '(급행)' : '') + (stt ? ' · ' + stt : '')) + '">🚇' + (t.down ? '↓' : '↑') + '</b>';
+          }).join('') : '';
+          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' + tr +
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
         }).join('') + '</ol>';
+      card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list">');
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
+    if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
     if (curEl && lst) lst.scrollTop = Math.max(0, curEl.offsetTop - lst.offsetTop - lst.clientHeight / 2 + curEl.offsetHeight / 2);
@@ -2085,7 +2109,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261103full2';
+  var BUS_DATA_V = '20261103live';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -2266,6 +2290,50 @@
     return fetch('assets/data/kr-bus/routes/' + id + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) { if (d) busRouteCache[id] = d; return d; }).catch(function () { return null; });
   }
+  /* ---------- 노선도 실시간 위치 (2026-11-03) ----------
+   * 팝업이 열려 있는 동안 20초마다 Edge Function transit-live 호출(서버가 노선별 20초 저장·공유, 키는 서버에만).
+   * 버스: TAGO(전국·경기)·서울 버스위치 → 정류장 원본 id 로 노선 목록에 🚌 표시 / 지하철: 서울 실시간 열차 위치 → 역 이름으로 🚇 표시 */
+  var LIVE_URL = 'https://eacrwhtbdqanaxpicqsm.supabase.co/functions/v1/transit-live';
+  function liveEnsure(el, params, render) {
+    var key = JSON.stringify(params);
+    if (el.__liveKey === key && el.__liveTimer) return;
+    liveStop(el);
+    el.__liveKey = key;
+    if (!el.__live || el.__live.key !== key) el.__live = { key: key, data: null };
+    var tick = function () {
+      if (el.style.display === 'none' || el.__liveKey !== key) { if (el.__liveKey === key) liveStop(el); return; }
+      fetch(LIVE_URL + '?' + new URLSearchParams(params).toString()).then(function (r) { return r.json(); }).then(function (j) {
+        if (el.__liveKey !== key || el.style.display === 'none') return;
+        el.__live = { key: key, data: j };
+        render(el, true);
+      }).catch(function () {
+        if (el.__liveKey !== key) return;
+        el.__live = { key: key, data: { ok: false, error: '네트워크 오류' } };
+        render(el, true);
+      });
+    };
+    tick();
+    el.__liveTimer = setInterval(tick, 20000);
+  }
+  function liveStop(el) {
+    if (el.__liveTimer) clearInterval(el.__liveTimer);
+    el.__liveTimer = null;
+    el.__liveKey = null;
+  }
+  function liveStatusHtml(el, unit, n) {
+    var d = el.__live && el.__live.data;
+    if (!d) return '<p class="outd-busrt__live is-wait">실시간 위치 불러오는 중…</p>';
+    if (!d.ok) return '<p class="outd-busrt__live is-off">실시간 위치를 불러올 수 없습니다' + (/503|HTTP 5/.test(d.error || '') ? '(제공 기관 서버 점검 중)' : '') + '</p>';
+    var t = new Date(d.at || Date.now());
+    return '<p class="outd-busrt__live"><i></i>실시간 ' + n + unit + ' 운행 중 · ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + ' 기준</p>';
+  }
+  function keepListScroll(el, fn) {
+    var lst = el.querySelector('.outd-busrt__list');
+    var top = lst ? lst.scrollTop : null;
+    fn();
+    var l2 = el.querySelector('.outd-busrt__list');
+    if (l2 && top != null) l2.scrollTop = top;
+  }
   function openBusRoutePopup(ref, ids, stop) {
     var el = $('outdBusRtPop');
     if (!el) {
@@ -2275,7 +2343,7 @@
       $(SCREEN_ID).appendChild(el);
       el.addEventListener('click', function (e) {
         var t = e.target;
-        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; return; }
+        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; liveStop(el); return; }
         var tab = t.closest('[data-rt-dir]');
         if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderBusRoutePopup(el); }
       });
@@ -2301,7 +2369,11 @@
     var a = d.s[0][0], b = d.s[d.s.length - 1][0];
     return a + ' → ' + b;
   }
-  function renderBusRoutePopup(el) {
+  function renderBusRoutePopup(el, fromLive) {
+    if (fromLive) { keepListScroll(el, function () { renderBusRoutePopupInner(el, true); }); return; }
+    renderBusRoutePopupInner(el, false);
+  }
+  function renderBusRoutePopupInner(el, fromLive) {
     var routes = el.__routes || [], stop = el.__stop;
     var card;
     if (!routes.length) {
@@ -2311,6 +2383,16 @@
       var d = routes[Math.min(el.__dir, routes.length - 1)];
       var curIdx = -1, best = 60;
       d.s.forEach(function (x, i) { var dm = busStopDistM(x, stop); if (dm < best) { best = dm; curIdx = i; } });
+      // 실시간 버스 위치: 정류장 원본 id → 노선 목록 위치
+      var liveAt = {}, liveN = 0;
+      if (d.lv && d.lv.i) {
+        liveEnsure(el, d.lv.src === 'T' ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c } : { type: 'bus', src: 'S', rid: d.lv.rid }, renderBusRoutePopup);
+        var ld = el.__live && el.__live.data;
+        if (ld && ld.ok) ld.items.forEach(function (b) {
+          var k = d.lv.i.indexOf(b.id);
+          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); liveN++; }
+        });
+      } else liveStop(el);
       card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
         '<div class="outd-busrt__ttl"><b>' + escHtml(d.s[0][0]) + ' ↔ ' + escHtml(d.s[d.s.length - 1][0]) + '</b>' +
         '<span>정류장 ' + d.s.length + '개' + (d.e ? ' · 경로로 추정한 목록' : '') + '</span></div>' +
@@ -2321,11 +2403,14 @@
         '<ol class="outd-busrt__list">' + d.s.map(function (x, i) {
           // 현재 정류장: 다음 정류장 쪽(아래)으로 이동 방향 화살표
           var nextArrow = i === curIdx && i < d.s.length - 1 ? '<b class="outd-busrt__arrow" aria-label="다음 정류장 ' + escHtml(d.s[i + 1][0]) + ' 방향"></b>' : '';
-          return '<li class="' + (i === curIdx ? 'is-cur' : '') + '"><i></i>' + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+          var lv = liveAt[i] ? '<b class="outd-busrt__veh" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '×' + liveAt[i].length : '') + '</b>' : '';
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + lv + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
+      if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN) + '<ol class="outd-busrt__list">');
     }
     card += '<p class="outd-busrt__src">노선 정보: 서울특별시 · 국토교통부(TAGO) · OpenStreetMap</p>';
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
+    if (fromLive) return;
     var cur = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
     if (cur && lst) lst.scrollTop = Math.max(0, cur.offsetTop - lst.offsetTop - lst.clientHeight / 2 + cur.offsetHeight / 2);

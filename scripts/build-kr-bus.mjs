@@ -227,6 +227,7 @@ async function main() {
   console.log('노선 직접 연결', direct, '/ 같은 이름 보완', infName, '/ 경로 근접 보완', infPath);
 
   const rmById = new Map(routeMembers.map((rm) => [rm.id, rm]));
+  const routeLive = new Map();
   // ── 공식 데이터(서울 열린데이터광장·국토교통부 TAGO, scripts/fetch-kr-bus-official.mjs) 우선 ──
   // 공식 정류소 150m 안의 OSM 정류소는 버리고, 정류소 절반 이상이 공식 정류소 근처인 OSM 노선도 버림(공식이 없는 곳만 OSM 유지)
   const OFFICIAL = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.cache/kr-bus-official/merged.json');
@@ -279,10 +280,14 @@ async function main() {
     console.log('출처별 중복 정류소 합침', mergedN);
     for (const r of off.routes) {
       // '(미정차)'·'(가상)' 지점은 실제로 서지 않으므로 노선 정류장에서 제외
-      const seq = r.s.map((sid) => offStop.get(sid)).filter((st) => st && !/미정차|\(가상\)/.test(st.n)).filter((st, i, a) => a[i - 1] !== st);
+      const pairs = r.s.map((sid) => [sid, offStop.get(sid)]).filter((p2) => p2[1] && !/미정차|\(가상\)/.test(p2[1].n))
+        .filter((p2, i, a) => !a[i - 1] || a[i - 1][1] !== p2[1]);
+      const seq = pairs.map((p2) => p2[1]);
       if (seq.length < 2) continue;
       seq.forEach((st) => addRoute(st, r.n, r.id));
       routeStops.set(r.id, seq);
+      // 실시간 위치 맞춤용: 출처(T=TAGO·S=서울), 원본 노선 id, 도시 코드, 정류장 원본 id(접두 제외)
+      routeLive.set(r.id, { src: r.id[0], rid: r.rid || '', c: r.c || null, i: pairs.map((p2) => p2[0].slice(1)) });
       rmById.set(r.id, { ref: r.n, name: r.n + ' (' + seq[seq.length - 1].n + ' 방면)' }); // 방면 = 실제 마지막 정차 정류장
     }
     officialN = off.routes.length;
@@ -324,7 +329,7 @@ async function main() {
   }
   for (const [id, seq] of routeStops) {
     const rm = rmById.get(id);
-    const js = JSON.stringify(Object.assign({ n: rm.ref, t: rm.name, s: seq.map((st) => [st.n, r5(st.lat), r5(st.lon)]) }, routeEst.has(id) ? { e: 1 } : {}));
+    const js = JSON.stringify(Object.assign({ n: rm.ref, t: rm.name, s: seq.map((st) => [st.n, r5(st.lat), r5(st.lon)]) }, routeEst.has(id) ? { e: 1 } : {}, routeLive.has(id) ? { lv: routeLive.get(id) } : {}));
     bytes += js.length;
     files.set('routes/' + id + '.json', js);
   }

@@ -104,7 +104,7 @@ async function fetchSeoul() {
   const routes = [];
   for (const [rid, r] of byRoute) {
     const seq = r.seq.sort((a, b) => a[0] - b[0]).map((x) => x[1]);
-    routes.push(...splitRoundTrip('S' + rid, r.n, seq, stops));
+    splitRoundTrip('S' + rid, r.n, seq, stops).forEach((x) => routes.push(Object.assign(x, { rid })));
   }
   console.log('서울', latest.d, '노선', byRoute.size, '정류소', Object.keys(stops).length);
   return { stops, routes };
@@ -162,7 +162,7 @@ async function fetchTago(key) {
   // 캐시로 합치기
   const stops = {}, routes = [];
   let have = 0;
-  for (const { it } of allRoutes) {
+  for (const { city, it } of allRoutes) {
     const f = path.join(CACHE, 'tago', 'r-' + it.routeid + '.json');
     if (!fs.existsSync(f)) continue;
     have++;
@@ -170,10 +170,12 @@ async function fetchTago(key) {
     items.forEach((s) => { stops['T' + s[0]] = [String(s[1] || '').trim(), Math.round(s[2] * 1e5) / 1e5, Math.round(s[3] * 1e5) / 1e5]; });
     const n = String(it.routeno);
     const dirs = [0, 1].map((d) => items.filter((s) => Number(s[5]) === d).map((s) => 'T' + s[0])).filter((q) => q.length >= 2);
+    // 실시간 위치 조회용: 원본 노선 id·도시 코드(c)
+    const meta = { rid: it.routeid, c: city };
     if (dirs.length === 2) {
-      dirs.forEach((q, k) => routes.push({ id: 'T' + it.routeid + '_' + k, n, t: n + ' (' + stops[q[q.length - 1]][0] + ' 방면)', s: q }));
+      dirs.forEach((q, k) => routes.push(Object.assign({ id: 'T' + it.routeid + '_' + k, n, t: n + ' (' + stops[q[q.length - 1]][0] + ' 방면)', s: q }, meta)));
     } else {
-      routes.push(...splitRoundTrip('T' + it.routeid, n, items.map((s) => 'T' + s[0]), stops));
+      splitRoundTrip('T' + it.routeid, n, items.map((s) => 'T' + s[0]), stops).forEach((r) => routes.push(Object.assign(r, meta)));
     }
   }
   console.log('TAGO 정류소 목록 보유', have, '/', allRoutes.length, '노선, 이번 호출', calls);

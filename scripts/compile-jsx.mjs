@@ -72,6 +72,7 @@ function runPreCommit() {
   const staged = execFileSync('git', ['diff', '--cached', '--name-only', '--diff-filter=ACM'], {
     cwd: repoRoot,
     encoding: 'utf8',
+    maxBuffer: 1 << 28, // 버스 데이터처럼 수만 개 파일을 한 번에 커밋할 때도 목록을 받을 수 있게
   })
     .split('\n')
     .map((s) => s.trim())
