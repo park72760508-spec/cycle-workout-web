@@ -36274,3 +36274,29 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .wb-routine-act--del { width: 36px; padding: 0; color: #94a3b8; }
 .wb-routine-act--del:not(:disabled):hover { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
 .wb-routine-act:disabled { opacity: 0.45; cursor: default; }
+/* 2026-11-02 워크아웃 작성: 세그먼트 추가 버튼 = 원형 아이콘 + 약어 */
+.wb-tools { display: flex; justify-content: space-between; gap: 4px; margin: 4px 0 4px; }
+.wb-tool {
+  flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-width: 40px; padding: 0; border: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.wb-tool__c {
+  width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: var(--wbt-bg); color: var(--wbt-c); box-shadow: inset 0 0 0 1.5px var(--wbt-ring);
+  transition: transform 0.12s, box-shadow 0.15s;
+}
+.wb-tool__c svg { width: 20px; height: 20px; }
+.wb-tool__t { font-size: 11px; font-weight: 800; letter-spacing: 0.3px; color: #475569; line-height: 1; }
+.wb-tool:hover .wb-tool__c { box-shadow: inset 0 0 0 2px var(--wbt-c); }
+.wb-tool:active .wb-tool__c { transform: scale(0.92); }
+.wb-tool--seg { --wbt-bg: #2e74e8; --wbt-c: #ffffff; --wbt-ring: #2e74e8; }
+.wb-tool--seg:hover .wb-tool__c { box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.25); }
+.wb-tool--wu { --wbt-bg: #fff7ed; --wbt-c: #ea580c; --wbt-ring: #fed7aa; }
+.wb-tool--int { --wbt-bg: #fef2f2; --wbt-c: #dc2626; --wbt-ring: #fecaca; }
+.wb-tool--rec { --wbt-bg: #eff6ff; --wbt-c: #2563eb; --wbt-ring: #bfdbfe; }
+.wb-tool--cd { --wbt-bg: #ecfeff; --wbt-c: #0891b2; --wbt-ring: #a5f3fc; }
+.wb-tool--rep { --wbt-bg: #f5f3ff; --wbt-c: #7c3aed; --wbt-ring: #ddd6fe; }
+.wb-tool--rtn { --wbt-bg: #ecfdf5; --wbt-c: #059669; --wbt-ring: #a7f3d0; }
+.wb-tools { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.wb-tool { min-width: 0; }
+.wb-tool__c { width: 100%; max-width: 42px; height: auto; aspect-ratio: 1; }
