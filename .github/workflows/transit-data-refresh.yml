@@ -26,21 +26,24 @@ jobs:
         with:
           node-version: '20'
 
-      - name: 지하철 데이터
+      - name: osmium 설치·국내 OSM 추출본 내려받기
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          curl -sSfL --retry 3 -o "$RUNNER_TEMP/kr.osm.pbf" https://download.geofabrik.de/asia/south-korea-latest.osm.pbf
+
+      - name: 지하철 데이터(역·호선 + 노선도)
         id: subway
         continue-on-error: true
         run: |
           node scripts/build-kr-subway.mjs
-          if [ -n "$(git status --porcelain assets/data/kr-subway.json)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
-
-      - name: osmium 설치(버스 데이터용)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+          node scripts/build-kr-subway-lines.mjs --pbf "$RUNNER_TEMP/kr.osm.pbf"
+          if [ -n "$(git status --porcelain assets/data/kr-subway.json assets/data/kr-subway-lines.json)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
 
       - name: 버스 데이터
         id: bus
         continue-on-error: true
         run: |
-          node scripts/build-kr-bus.mjs
+          node scripts/build-kr-bus.mjs --pbf "$RUNNER_TEMP/kr.osm.pbf"
           if [ -n "$(git status --porcelain assets/data/kr-bus)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
 
       - name: 캐시 버전 올리고 커밋·푸시
@@ -52,7 +55,7 @@ jobs:
           node scripts/bump-transit-data-version.mjs $FLAGS
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add assets/data/kr-subway.json assets/data/kr-bus assets/js/outdoorRide.js index.html
+          git add assets/data/kr-subway.json assets/data/kr-subway-lines.json assets/data/kr-bus assets/js/outdoorRide.js index.html
           git commit -m "루트맵 지하철·버스 데이터 자동 갱신 ($(date -u +%Y-%m-%d))$FLAGS"
           git pull --rebase origin main
           git push origin HEAD:main

@@ -1466,6 +1466,8 @@
         var t = e.target;
         if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; } // 탭 직후 중복 클릭 무시
         if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var lnBtn = t.closest('[data-sub-ln]');
+        if (lnBtn) { openSubwayLinePopup(Number(lnBtn.getAttribute('data-sub-ln')), el.__idx); return; }
         var modeBtn = t.closest('[data-pop-mode]');
         if (modeBtn) {
           if (modeBtn.classList.contains('is-disabled')) return;
@@ -1498,7 +1500,7 @@
     if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
     var chips = (s2.l || []).map(function (li) {
       var ln = sub.data.lines[li];
-      return ln ? '<span class="outd-subpop__line" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>' : '';
+      return ln ? '<button type="button" class="outd-subpop__line is-tap" data-sub-ln="' + li + '" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</button>' : '';
     }).join('');
     el.innerHTML =
       '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
@@ -1515,6 +1517,78 @@
     el.classList.remove('is-bottom');
     el.__openedAt = Date.now();
     el.style.display = 'flex';
+  }
+  /** 2026-11-03 호선 칩 탭 → 지하철 노선도 팝업(버스 노선 정류장 목록과 같은 형식, 지선 탭·환승 호선·현재 역 강조)
+   *  데이터: assets/data/kr-subway-lines.json (scripts/build-kr-subway-lines.mjs) */
+  var subLines = { data: null, loading: null };
+  function loadSubwayLines() {
+    if (subLines.data) return Promise.resolve(subLines.data);
+    if (!subLines.loading) {
+      subLines.loading = fetch('assets/data/kr-subway-lines.json?v=20261103ln').then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { subLines.data = d; subLines.loading = null; return d; }).catch(function () { subLines.loading = null; return null; });
+    }
+    return subLines.loading;
+  }
+  function openSubwayLinePopup(li, curIdx) {
+    var ln = sub.data && sub.data.lines[li];
+    if (!ln) return;
+    var el = $('outdSubLnPop');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdSubLnPop';
+      el.className = 'outd-favpop outd-light outd-busrt outd-subln';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; return; }
+        var tab = t.closest('[data-rt-dir]');
+        if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderSubwayLinePopup(el); }
+      });
+    }
+    el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__seqs = null;
+    el.style.setProperty('--ln', ln.c);
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선도를 불러오는 중…</div></div>';
+    el.style.display = 'flex';
+    loadSubwayLines().then(function (d) {
+      if (el.__li !== li || el.__cur !== curIdx) return;
+      var seqs = (d && d.o && d.o[li]) || [];
+      // 지금 역이 들어 있는 노선(본선·지선)을 먼저
+      el.__seqs = seqs.slice().sort(function (a, b) { return (b.indexOf(curIdx) >= 0 ? 1 : 0) - (a.indexOf(curIdx) >= 0 ? 1 : 0); });
+      renderSubwayLinePopup(el);
+    });
+  }
+  function renderSubwayLinePopup(el) {
+    var ln = sub.data.lines[el.__li], seqs = el.__seqs || [], st = sub.data.stations;
+    var badge = '<span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>';
+    var card;
+    if (!seqs.length) {
+      card = '<div class="outd-busrt__head">' + badge + '<div class="outd-busrt__ttl"><b>노선도 정보 없음</b></div>' +
+        '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>';
+    } else {
+      var seq = seqs[Math.min(el.__dir, seqs.length - 1)];
+      var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
+      card = '<div class="outd-busrt__head">' + badge +
+        '<div class="outd-busrt__ttl"><b>' + escHtml(ends(seq)) + '</b><span>역 ' + seq.length + '개</span></div>' +
+        '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>' +
+        (seqs.length > 1 ? '<div class="outd-busrt__dirs" role="tablist">' + seqs.map(function (q, i) {
+          return '<button type="button" class="outd-busrt__dir' + (q === seq ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab">' + escHtml(ends(q)) + '</button>';
+        }).join('') + '</div>' : '') +
+        '<ol class="outd-busrt__list">' + seq.map(function (si) {
+          var s2 = st[si];
+          if (!s2) return '';
+          var xfer = (s2.l || []).filter(function (x) { return x !== el.__li; }).map(function (x) {
+            var o = sub.data.lines[x];
+            return o ? '<u style="background:' + escHtml(o.c) + '">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
+          }).join('');
+          var cur = si === el.__cur;
+          return '<li class="' + (cur ? 'is-cur' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
+            (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
+        }).join('') + '</ol>';
+    }
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
+    var curEl = el.querySelector('.outd-busrt__list .is-cur');
+    var lst = el.querySelector('.outd-busrt__list');
+    if (curEl && lst) lst.scrollTop = Math.max(0, curEl.offsetTop - lst.offsetTop - lst.clientHeight / 2 + curEl.offsetHeight / 2);
   }
   function subwayLineNames(s2) {
     return (s2.l || []).map(function (li) { var ln = sub.data.lines[li]; return ln ? ln.n : ''; }).filter(Boolean);
@@ -1778,7 +1852,9 @@
           return '<button type="button" class="outd-busrt__dir' + (r === d ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab">' + escHtml(busRouteDirLabel(r, i)) + '</button>';
         }).join('') + '</div>' : '') +
         '<ol class="outd-busrt__list">' + d.s.map(function (x, i) {
-          return '<li class="' + (i === curIdx ? 'is-cur' : '') + '"><i></i><span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+          // 현재 정류장: 다음 정류장 쪽(아래)으로 이동 방향 화살표
+          var nextArrow = i === curIdx && i < d.s.length - 1 ? '<b class="outd-busrt__arrow" aria-label="다음 정류장 ' + escHtml(d.s[i + 1][0]) + ' 방향"></b>' : '';
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + '"><i></i>' + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';

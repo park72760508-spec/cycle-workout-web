@@ -19,6 +19,7 @@ let js = fs.readFileSync(JS, 'utf8');
 let changed = false;
 if (args.has('--subway')) {
   js = js.replace(/kr-subway\.json\?v=[\w-]+/, 'kr-subway.json?v=' + stamp + 'auto');
+  js = js.replace(/kr-subway-lines\.json\?v=[\w-]+/, 'kr-subway-lines.json?v=' + stamp + 'auto');
   changed = true;
 }
 if (args.has('--bus')) {

@@ -36396,3 +36396,29 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__list li.is-cur { font-weight: 800; color: #1d4ed8; }
 #outdoorRideScreen .outd-busrt__list li.is-cur i { width: 17px; height: 17px; margin-left: -2px; background: #2563eb; border-color: #bfdbfe; }
 #outdoorRideScreen .outd-busrt__list li em { flex: 0 0 auto; font-style: normal; font-size: 11px; font-weight: 700; color: #fff; background: #2563eb; padding: 1px 7px; border-radius: 999px; }
+/* 2026-11-03 버스 노선 목록: 현재 정류장 → 다음 정류장 이동 방향 화살표(노선 선 위, 아래로) */
+#outdoorRideScreen .outd-busrt__arrow {
+  position: absolute; z-index: 2; left: 4px; top: calc(50% + 10px); width: 13px; height: 13px;
+  display: block; pointer-events: none; animation: outdBusRtArrow 1.2s ease-in-out infinite;
+}
+#outdoorRideScreen .outd-busrt__arrow::before {
+  content: ''; position: absolute; left: 2px; top: 0; width: 7px; height: 7px; box-sizing: border-box;
+  border-right: 3px solid var(--ln, #2563eb); border-bottom: 3px solid var(--ln, #2563eb); transform: rotate(45deg);
+  filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff);
+}
+@keyframes outdBusRtArrow { 0%, 100% { transform: translateY(-2px); opacity: 0.7; } 50% { transform: translateY(3px); opacity: 1; } }
+/* 지하철 호선 칩(탭하면 노선도) + 지하철 노선도 팝업 = 버스 노선 목록 형식, 색만 호선 색 */
+#outdoorRideScreen .outd-subpop__line.is-tap { border: 0; cursor: pointer; font-family: inherit; display: inline-flex; align-items: center; gap: 3px; }
+#outdoorRideScreen .outd-subpop__line.is-tap::after { content: '›'; font-size: 15px; line-height: 1; opacity: 0.85; }
+#outdoorRideScreen .outd-subln .outd-busrt__list li::before { background: var(--ln); opacity: 0.35; }
+#outdoorRideScreen .outd-subln .outd-busrt__list li i { border-color: var(--ln); }
+#outdoorRideScreen .outd-subln .outd-busrt__list li.is-cur { color: #0f172a; }
+#outdoorRideScreen .outd-subln .outd-busrt__list li.is-cur i { background: var(--ln); border-color: #fff; box-shadow: 0 0 0 2px var(--ln); }
+#outdoorRideScreen .outd-subln .outd-busrt__list li em { background: var(--ln); }
+#outdoorRideScreen .outd-subln .outd-busrt__dir.is-on { border-color: var(--ln); color: #0f172a; background: #f8fafc; box-shadow: inset 0 -3px 0 var(--ln); }
+#outdoorRideScreen .outd-subln__xfer { flex: 0 1 auto; display: inline-flex; gap: 3px; overflow: hidden; }
+#outdoorRideScreen .outd-subln__xfer u {
+  text-decoration: none; flex: 0 0 auto; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; color: #fff;
+  max-width: 64px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
