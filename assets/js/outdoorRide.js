@@ -1358,27 +1358,23 @@
     return st.map;
   }
 
-  /* ---------- 지하철 노선 표시 (2026-11-02) ----------
-   * 줌 13 이상: 국내 도시철도·경전철·수도권 광역전철 노선을 호선 색으로(경로선 아래, 반투명)
-   * 줌 15 이상: 역 위치 점 + 역 이름(지도 회전과 무관하게 똑바로), 환승역은 큰 점
-   * 데이터: assets/data/kr-subway.json (scripts/build-kr-subway.mjs 로 OSM 에서 생성) — 줌 13 이상 처음 볼 때 한 번만 받음
+  /* ---------- 지하철 역 표시 (2026-11-02) ----------
+   * 노선 선은 그리지 않고 역만 표시(사용자 요청). 역 점은 그 역에 서는 호선 색, 환승역은 호선 색을 나눠 칠한 큰 점.
+   * 줌 13 이상: 역 점 + 환승역 이름 / 줌 14 이상: 모든 역 이름 — 지도 회전과 무관하게 똑바로
+   * 데이터: assets/data/kr-subway.json (scripts/build-kr-subway.mjs 로 OSM 에서 생성, 약 50KB) — 줌 13 이상 처음 볼 때 한 번만 받음
    * 지도 오른쪽 지하철 버튼으로 켜고 끔(기억) */
-  var SUBWAY_MIN_ZOOM = 12.5;    // 표시 숫자 13 이상
-  var SUBWAY_STATION_ZOOM = 14.5; // 표시 숫자 15 이상
+  var SUBWAY_MIN_ZOOM = 12.5;   // 표시 숫자 13 이상
+  var SUBWAY_LABEL_ZOOM = 13.5; // 표시 숫자 14 이상: 모든 역 이름
   var SUBWAY_PREF = 'stelvioOutdSubway';
   var sub = { on: (function () { try { return localStorage.getItem(SUBWAY_PREF) !== '0'; } catch (e) { return true; } })(),
-    data: null, loading: false, lineLayer: null, stLayer: null, stShown: '' };
+    data: null, loading: false, stLayer: null, stShown: '' };
   function initSubwayOverlay() {
-    var map = st.map, L = window.L;
+    var map = st.map;
     if (!map || sub.inited) return;
     sub.inited = true;
-    map.createPane('outdSubwayPane');
-    map.getPane('outdSubwayPane').style.zIndex = 390; // 경로·지나온 길(overlayPane 400) 아래, 지도 타일 위
-    map.getPane('outdSubwayPane').style.pointerEvents = 'none';
     map.createPane('outdSubwayStPane');
-    map.getPane('outdSubwayStPane').style.zIndex = 395;
+    map.getPane('outdSubwayStPane').style.zIndex = 395; // 경로선(overlayPane 400) 아래, 지도 타일 위
     map.getPane('outdSubwayStPane').style.pointerEvents = 'none';
-    sub.renderer = L.canvas({ pane: 'outdSubwayPane', padding: 0.3 });
     map.on('zoomend moveend', refreshSubway);
     syncSubwayBtn();
     refreshSubway();
@@ -1386,45 +1382,34 @@
   function loadSubwayData() {
     if (sub.data || sub.loading) return;
     sub.loading = true;
-    fetch('assets/data/kr-subway.json?v=20261102').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    fetch('assets/data/kr-subway.json?v=20261102st').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       sub.loading = false;
-      if (!d || !Array.isArray(d.lines)) return;
+      if (!d || !Array.isArray(d.stations)) return;
       sub.data = d;
       refreshSubway();
     }).catch(function () { sub.loading = false; });
   }
-  function buildSubwayLines() {
-    var L = window.L;
-    sub.lineLayer = L.layerGroup();
-    sub.data.lines.forEach(function (ln) {
-      // 어두운 테두리(밑선) + 호선 색 선 — 비슷한 색 도로(주황 간선도로 등) 위에서도 선이 묻히지 않게
-      L.polyline(ln.g, { renderer: sub.renderer, color: '#1f2937', weight: 7, opacity: 0.5, interactive: false, lineCap: 'round', lineJoin: 'round', smoothFactor: 1 }).addTo(sub.lineLayer);
-    });
-    sub.data.lines.forEach(function (ln) {
-      L.polyline(ln.g, { renderer: sub.renderer, color: ln.c, weight: 4.5, opacity: 0.95, interactive: false, lineCap: 'round', lineJoin: 'round', smoothFactor: 1 }).addTo(sub.lineLayer);
-    });
+  /** 역 점 색: 1개 호선이면 그 색, 여러 호선이면 호선 색을 같은 비율로 나눈 원 */
+  function subwayDotBg(lineIdx) {
+    var cols = (lineIdx || []).map(function (i) { var ln = sub.data.lines[i]; return ln ? ln.c : '#64748b'; });
+    if (!cols.length) return '#64748b';
+    if (cols.length === 1) return cols[0];
+    var step = 360 / cols.length;
+    return 'conic-gradient(' + cols.map(function (c, k) { return c + ' ' + (k * step).toFixed(1) + 'deg ' + ((k + 1) * step).toFixed(1) + 'deg'; }).join(',') + ')';
   }
   function refreshSubway() {
     var map = st.map, L = window.L;
     if (!map) return;
     var z = map.getZoom();
-    var want = sub.on && z >= SUBWAY_MIN_ZOOM;
-    if (!want) {
-      if (sub.lineLayer && map.hasLayer(sub.lineLayer)) map.removeLayer(sub.lineLayer);
+    if (!(sub.on && z >= SUBWAY_MIN_ZOOM)) {
       if (sub.stLayer && map.hasLayer(sub.stLayer)) map.removeLayer(sub.stLayer);
       sub.stShown = '';
       return;
     }
     if (!sub.data) { loadSubwayData(); return; }
-    if (!sub.lineLayer) buildSubwayLines();
-    if (!map.hasLayer(sub.lineLayer)) sub.lineLayer.addTo(map);
-    // 역: 줌 15 이상, 지금 화면(+여유) 안의 역만 그림
-    if (z < SUBWAY_STATION_ZOOM) {
-      if (sub.stLayer && map.hasLayer(sub.stLayer)) map.removeLayer(sub.stLayer);
-      sub.stShown = '';
-      return;
-    }
+    // 지금 화면(+여유) 안의 역만 그림
     var b = map.getBounds().pad(0.6);
+    var allNames = z >= SUBWAY_LABEL_ZOOM;
     var key = Math.round(z) + '|' + b.toBBoxString().split(',').map(function (v) { return Number(v).toFixed(2); }).join(',');
     if (key === sub.stShown && sub.stLayer && map.hasLayer(sub.stLayer)) return;
     sub.stShown = key;
@@ -1432,10 +1417,13 @@
     sub.stLayer = L.layerGroup();
     sub.data.stations.forEach(function (s2) {
       if (!b.contains(s2.p)) return;
+      var multi = s2.l && s2.l.length > 1;
+      var showName = allNames || multi;
       L.marker(s2.p, {
         pane: 'outdSubwayStPane', interactive: false, keyboard: false,
-        icon: L.divIcon({ className: 'outd-subst' + (s2.x ? ' outd-subst--x' : ''), iconSize: [0, 0],
-          html: '<span class="outd-subst__in"><i></i><b>' + escHtml(s2.n) + '</b></span>' })
+        icon: L.divIcon({ className: 'outd-subst' + (multi ? ' outd-subst--x' : ''), iconSize: [0, 0],
+          html: '<span class="outd-subst__in"><i style="background:' + subwayDotBg(s2.l) + '"></i>' +
+            (showName ? '<b>' + escHtml(s2.n) + '</b>' : '') + '</span>' })
       }).addTo(sub.stLayer);
     });
     sub.stLayer.addTo(map);
@@ -1455,7 +1443,7 @@
     syncSubwayBtn();
     refreshSubway();
     if (sub.on && st.map && st.map.getZoom() < SUBWAY_MIN_ZOOM && typeof window.showToast === 'function') {
-      window.showToast('지도를 13 이상으로 확대하면 지하철 노선이 보입니다.');
+      window.showToast('지도를 13 이상으로 확대하면 지하철역이 보입니다.');
     }
   };
 

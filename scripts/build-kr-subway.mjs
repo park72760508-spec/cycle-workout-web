@@ -91,8 +91,10 @@ out geom;`;
     const key = lineKey(name);
     if (!key) continue;
     let L = lines.get(key);
-    if (!L) { L = { key, label: shortLabel(key), colour: t.colour, ways: new Map() }; lines.set(key, L); }
+    if (!L) { L = { key, label: shortLabel(key), colour: t.colour, ways: new Map(), stops: [] }; lines.set(key, L); }
     for (const m of rel.members || []) {
+      // 정차 지점(stop·platform 노드) — 역마다 실제로 서는 호선을 찾는 데 사용
+      if (m.type === 'node' && /^(stop|platform)/.test(m.role || '') && m.lat != null) { L.stops.push([m.lat, m.lon]); continue; }
       if (m.type !== 'way' || !Array.isArray(m.geometry) || m.geometry.length < 2) continue;
       if (m.role && /platform/.test(m.role)) continue;
       if (!L.ways.has(m.ref)) L.ways.set(m.ref, m.geometry.map((g) => [g.lat, g.lon]));
@@ -111,7 +113,16 @@ out geom;`;
         grid.get(gk).add(L.key);
       }
     }
-    if (segs.length) outLines.push({ n: L.label, c: L.colour, g: segs });
+    // 2026-11-02: 지도에는 역만 표시(노선 선 제거) → 선형(g)은 저장하지 않고 이름·색만
+    if (segs.length) { L.idx = outLines.length; outLines.push({ n: L.label, c: L.colour }); }
+  }
+  const lineList = [...lines.values()].filter((L) => L.idx != null);
+  /** 이 역에 서는 호선: 정차 지점이 300m 안에 있는 노선(없으면 선로가 지나가는 노선) */
+  function linesAt(lat, lon, nearKeys) {
+    const dLat = 0.0027, dLon = 0.0034;
+    const hit = lineList.filter((L) => L.stops.some(([a, b]) => Math.abs(a - lat) < dLat && Math.abs(b - lon) < dLon));
+    const use = hit.length ? hit : lineList.filter((L) => nearKeys.has(L.key));
+    return use.map((L) => L.idx).sort((a, b) => a - b);
   }
   console.log('노선', outLines.length, '개');
 
@@ -132,10 +143,20 @@ out;`;
       if (s) s.forEach((k) => near.add(k));
     }
     if (!near.size) continue;
-    // 같은 이름 역이 200m 안에 이미 있으면 합침
-    if (seen.some((o) => o.n === name && Math.abs(o.a - n.lat) < 0.002 && Math.abs(o.b - n.lon) < 0.0025)) continue;
-    seen.push({ n: name, a: n.lat, b: n.lon });
-    stations.push({ n: name.replace(/역$/, ''), p: [r5(n.lat), r5(n.lon)], x: near.size > 1 ? 1 : 0 });
+    const l = linesAt(n.lat, n.lon, near);
+    if (!l.length) continue;
+    // 같은 이름 역(호선마다 따로 찍힌 역 지점)이 약 650m 안에 있으면 한 점으로 합침: 위치 평균, 호선 합집합
+    const dup = seen.find((o) => o.n === name && Math.abs(o.a - n.lat) < 0.006 && Math.abs(o.b - n.lon) < 0.007);
+    if (dup) {
+      dup.cnt += 1;
+      dup.sa += n.lat; dup.sb += n.lon;
+      dup.st.p = [r5(dup.sa / dup.cnt), r5(dup.sb / dup.cnt)];
+      dup.st.l = [...new Set(dup.st.l.concat(l))].sort((x, y) => x - y);
+      continue;
+    }
+    const stObj = { n: name.replace(/역$/, ''), p: [r5(n.lat), r5(n.lon)], l };
+    seen.push({ n: name, a: n.lat, b: n.lon, sa: n.lat, sb: n.lon, cnt: 1, st: stObj });
+    stations.push(stObj);
   }
   console.log('역', stations.length, '개');
 
