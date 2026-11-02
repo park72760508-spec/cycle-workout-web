@@ -48,6 +48,11 @@ service cloud.firestore {
       match /location_batches/{batchId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      // ===== users/{userId}/segment_routines (워크아웃 작성 루틴 — 본인 전용, 2026-11-02) =====
+      match /segment_routines/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // ===== 로그인 사전 확인 — 탈퇴 여부만 공개 read (전화번호 숫자 docId) =====

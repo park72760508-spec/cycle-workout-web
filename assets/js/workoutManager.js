@@ -7959,6 +7959,7 @@ function showRoutineSaveModal() {
   if (info) info.textContent = `현재 세그먼트 ${workoutSegments.length}개 · ${routineTotalLabel(workoutSegments)}를 루틴으로 저장합니다.`;
   const nameEl = safeGetElement('routineName');
   if (nameEl) nameEl.value = '';
+  setRoutineSaveError('');
   const modal = safeGetElement('routineSaveModal');
   if (modal) modal.classList.remove('hidden');
   if (nameEl) setTimeout(() => nameEl.focus(), 50);
@@ -7986,24 +7987,51 @@ function saveRoutine() {
     ramp_to_value: seg.ramp_to_value
   }));
   if (!routineUserId()) {
-    window.showToast('로그인 후 루틴을 저장할 수 있습니다.');
+    setRoutineSaveError('로그인 후 루틴을 저장할 수 있습니다.');
     return;
   }
-  fetchRoutines().then(() => {
+  if (_routineSaving) return;
+  setRoutineSaving(true);
+  // 조회는 실패해도 저장은 진행(캐시 기준), 서버 응답이 없으면 15초 뒤 실패 처리
+  withRoutineTimeout(fetchRoutines(), 15000).catch(() => null).then(() => {
     const list = loadRoutines().slice();
     const same = list.findIndex(r => r.name === name);
-    if (same >= 0 && !confirm(`"${name}" 루틴이 이미 있습니다. 덮어쓸까요?`)) return;
+    if (same >= 0 && !confirm(`"${name}" 루틴이 이미 있습니다. 덮어쓸까요?`)) return false;
     const item = { name, segments, savedAt: Date.now() };
     if (same >= 0) list[same] = item; else list.push(item);
-    return storeRoutines(list).then(() => {
-      closeRoutineSaveModal();
-      renderRoutineList();
-      window.showToast(`"${name}" 루틴이 저장되었습니다.`);
-    });
+    return withRoutineTimeout(storeRoutines(list), 15000).then(() => true);
+  }).then((saved) => {
+    setRoutineSaving(false);
+    if (!saved) return;
+    closeRoutineSaveModal();
+    renderRoutineList();
+    window.showToast(`"${name}" 루틴이 저장되었습니다.`);
   }).catch((err) => {
+    setRoutineSaving(false);
     console.warn('[Routine] 루틴 저장 실패:', err && err.message ? err.message : err);
-    window.showToast('루틴을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.');
+    setRoutineSaveError(err && err.code === 'permission-denied'
+      ? '루틴 저장 권한이 없습니다. 다시 로그인한 뒤 시도해주세요.'
+      : '루틴을 저장하지 못했습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
   });
+}
+
+var _routineSaving = false;
+function withRoutineTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+}
+function setRoutineSaving(on) {
+  _routineSaving = on;
+  const ov = safeGetElement('routineSaving');
+  const btn = safeGetElement('btnSaveRoutine');
+  if (ov) ov.hidden = !on;
+  if (btn) btn.disabled = on;
+  if (on) setRoutineSaveError('');
+}
+function setRoutineSaveError(msg) {
+  const el = safeGetElement('routineSaveErr');
+  if (!el) { if (msg) window.showToast(msg); return; }
+  el.textContent = msg || '';
+  el.hidden = !msg;
 }
 
 function applyRoutine(index) {

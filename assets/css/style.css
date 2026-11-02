@@ -36241,3 +36241,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .wb-routine-chip__del:hover { background: #fee2e2; color: #dc2626; }
 .wb-routine-btn-ic { margin-right: 6px; vertical-align: middle; }
 .wb-routine-modal__info { font-size: 13px; color: #475569; margin: 0 0 12px; }
+/* 2026-11-02 루틴 저장: 진행 오버레이(녹색 원 스피너)·오류 문구 */
+#routineSaveModal .modal-content { position: relative; }
+.wb-routine-modal__err { margin: 4px 0 0; font-size: 13px; color: #dc2626; }
+.wb-routine-saving {
+  position: absolute; inset: 0; z-index: 5; border-radius: inherit;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: rgba(255, 255, 255, 0.82); backdrop-filter: blur(1px);
+}
+.wb-routine-saving[hidden] { display: none; }
+.wb-routine-saving__spin {
+  width: 44px; height: 44px; border-radius: 50%; box-sizing: border-box;
+  border: 4px solid rgba(16, 185, 129, 0.2); border-top-color: #10b981;
+  animation: wbRoutineSpin 0.8s linear infinite;
+}
+.wb-routine-saving b { font-size: 14px; font-weight: 700; color: #047857; }
+@keyframes wbRoutineSpin { to { transform: rotate(360deg); } }
