@@ -1607,14 +1607,24 @@
           }).join('');
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
-          var tr = trainAt[k2] ? trainAt[k2].map(function (t) {
-            var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '전역 출발' }[t.s] || '';
-            return '<b class="outd-busrt__veh is-sub" title="' + escHtml(t.to + '행' + (t.ex ? '(급행)' : '') + (stt ? ' · ' + stt : '')) + '">🚇' + (t.down ? '↓' : '↑') + '</b>';
-          }).join('') : '';
-          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' + tr +
+          // 실시간 열차: 노선 선 왼쪽 = 상선(목록 위쪽 방향 ↑), 오른쪽 = 하선(목록 아래쪽 방향 ↓)
+          var tr = '';
+          if (trainAt[k2]) {
+            [false, true].forEach(function (dn) {
+              var ts = trainAt[k2].filter(function (t) { return t.down === dn; });
+              if (!ts.length) return;
+              var tip = ts.map(function (t) {
+                var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '전역 출발' }[t.s] || '';
+                return t.to + '행' + (t.ex ? '(급행)' : '') + (stt ? ' · ' + stt : '');
+              }).join(', ');
+              tr += '<b class="outd-busrt__veh is-sub ' + (dn ? 'is-dn' : 'is-up') + '" title="' + escHtml(tip) + '">' +
+                (dn ? '🚇<s>↓</s>' : '<s>↑</s>🚇') + (ts.length > 1 ? '<small>' + ts.length + '</small>' : '') + '</b>';
+            });
+          }
+          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i>' + tr + '<span>' + escHtml(s2.n) + '</span>' +
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
         }).join('') + '</ol>';
-      card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list">');
+      card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list is-rail">');
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
     if (fromLive) return;
@@ -2403,8 +2413,9 @@
         '<ol class="outd-busrt__list">' + d.s.map(function (x, i) {
           // 현재 정류장: 다음 정류장 쪽(아래)으로 이동 방향 화살표
           var nextArrow = i === curIdx && i < d.s.length - 1 ? '<b class="outd-busrt__arrow" aria-label="다음 정류장 ' + escHtml(d.s[i + 1][0]) + ' 방향"></b>' : '';
-          var lv = liveAt[i] ? '<b class="outd-busrt__veh" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '×' + liveAt[i].length : '') + '</b>' : '';
-          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + lv + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+          // 실시간 버스: 노선 선 위 정류장 원 자리에 둥근 배지(여러 대면 숫자)
+          var lv = liveAt[i] ? '<b class="outd-busrt__veh is-bus" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '<small>' + liveAt[i].length + '</small>' : '') + '</b>' : '';
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
       if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN) + '<ol class="outd-busrt__list">');
     }

@@ -36502,3 +36502,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px);
   overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
 }
+/* 2026-11-03 실시간 배지를 노선 선 위로: 버스 = 정류장 원 자리 가운데 둥근 배지, 지하철 = 선 왼쪽 상선(↑)·오른쪽 하선(↓) */
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 3;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0;
+  height: 22px; padding: 0; border-radius: 11px; font-size: 12px; line-height: 1;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25); pointer-events: auto;
+}
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh small {
+  position: absolute; right: -6px; top: -6px; min-width: 14px; height: 14px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 7px; background: #dc2626; color: #fff; font-size: 9px; font-weight: 800; line-height: 14px; text-align: center;
+}
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh s { text-decoration: none; font-size: 12px; font-weight: 900; }
+/* 버스: 원(가운데 x≈10.5px) 위에 24px 원 배지 */
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-bus { left: -1.5px; width: 24px; height: 24px; border-radius: 50%; background: #fff7ed; border: 2px solid #f59e0b; font-size: 12px; }
+/* 지하철: 선을 오른쪽으로 옮겨 왼쪽(상선)·오른쪽(하선) 자리 확보 — 선 가운데 x≈46.5px */
+#outdoorRideScreen .outd-busrt__list.is-rail li { padding-left: 40px; }
+#outdoorRideScreen .outd-busrt__list.is-rail li::before { left: 45px; }
+#outdoorRideScreen .outd-busrt__list.is-rail li > span:not(.outd-subln__xfer) { margin-left: 30px; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub { width: 34px; background: #ecfdf5; border: 1.5px solid var(--ln, #10b981); color: #065f46; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-up { left: 2px; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-dn { left: 57px; }
