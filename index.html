@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261102wbwide" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261102favsm" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30086,7 +30086,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261102stpop4"></script>
+  <script src="assets/js/outdoorRide.js?v=20261102favsm"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36185,6 +36185,10 @@
         <!-- 2026-11-02: 지하철 노선 표시 켜기/끄기 (줌 13 이상에서 호선 색으로 표시) -->
         <button type="button" id="outdSubwayBtn" class="outd-subway-btn is-on" onclick="toggleOutdoorSubway(event)" aria-pressed="true" aria-label="지하철 노선 표시">
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="3"/><path d="M5 11h14"/><circle cx="9" cy="14" r="0.9" fill="currentColor"/><circle cx="15" cy="14" r="0.9" fill="currentColor"/><path d="M8 17l-2 4M16 17l2 4"/></svg>
+        </button>
+        <!-- 2026-11-02: 버스 정류장 표시 켜기/끄기 (줌 16 이상) -->
+        <button type="button" id="outdBusBtn" class="outd-subway-btn outd-bus-btn is-on" style="display: none;" onclick="toggleOutdoorBus(event)" aria-pressed="true" aria-label="버스 정류장 표시">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16"/><circle cx="8" cy="14.5" r="0.9" fill="currentColor"/><circle cx="16" cy="14.5" r="0.9" fill="currentColor"/><path d="M7 18v2.5M17 18v2.5"/></svg>
         </button>
         <div class="outd-attrib">© OpenStreetMap</div>
         <!-- 2026-10-28: 오늘의 날씨(구·군) · 미세먼지 · 자외선 — assets/js/outdoorWeather.js. 누르면 접기/펼치기 -->

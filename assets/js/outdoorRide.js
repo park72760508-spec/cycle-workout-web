@@ -1381,6 +1381,7 @@
     bindFavPickTap(); // 즐겨찾기 핀이 없어도 역 아이콘 탭을 받도록
     syncSubwayBtn();
     refreshSubway();
+    initBusOverlay();
   }
   function loadSubwayData() {
     if (sub.data || sub.loading) return;
@@ -1533,6 +1534,188 @@
     refreshSubway();
     if (sub.on && st.map && st.map.getZoom() < SUBWAY_MIN_ZOOM && typeof window.showToast === 'function') {
       window.showToast('지도를 13 이상으로 확대하면 지하철역이 보입니다.');
+    }
+  };
+
+  /* ---------- 버스 정류장 표시 (2026-11-02) ----------
+   * 지하철과 같은 방식: 줌 16 이상에서 둥근 원 + 흰 버스 아이콘, 줌 18 이상 정류장 이름. 탭하면 노선번호 + 목적지 안내 팝업.
+   * 데이터: assets/data/kr-bus/{i}_{j}.json (0.1° 타일, scripts/build-kr-bus.mjs 로 OSM 에서 생성) — 화면 근처 타일만 받음
+   * 지도 오른쪽 버스 버튼으로 켜고 끔(기억) */
+  var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
+  var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
+  var BUS_PREF = 'stelvioOutdBus';
+  var BUS_DATA_V = '20261102bus';
+  var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
+  var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
+    index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
+  function initBusOverlay() {
+    var map = st.map;
+    if (!map || bus.inited) return;
+    bus.inited = true;
+    map.createPane('outdBusPane');
+    map.getPane('outdBusPane').style.zIndex = 394; // 지하철역(395) 바로 아래
+    map.getPane('outdBusPane').style.pointerEvents = 'none';
+    map.on('zoomend moveend', refreshBus);
+    syncBusBtn();
+    loadBusIndex(); // 데이터(타일 목록)가 있을 때만 버스 버튼 표시
+  }
+  function loadBusIndex() {
+    if (bus.index || bus.idxLoading) return;
+    bus.idxLoading = true;
+    fetch('assets/data/kr-bus/index.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      bus.idxLoading = false;
+      if (!d || !Array.isArray(d.t)) return;
+      bus.index = { cell: d.cell || 0.1, set: {} };
+      d.t.forEach(function (k) { bus.index.set[k] = 1; });
+      var btn = $('outdBusBtn');
+      if (btn) btn.style.display = '';
+      refreshBus();
+    }).catch(function () { bus.idxLoading = false; });
+  }
+  function loadBusTile(k) {
+    if (bus.tiles[k]) return;
+    bus.tiles[k] = 'loading';
+    fetch('assets/data/kr-bus/' + k + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      bus.tiles[k] = d && Array.isArray(d.s) ? d : { r: [], s: [] };
+      bus.shown = '';
+      refreshBus();
+    }).catch(function () { delete bus.tiles[k]; });
+  }
+  function refreshBus() {
+    var map = st.map, L = window.L;
+    if (!map) return;
+    var z = map.getZoom();
+    if (!(bus.on && z >= BUS_MIN_ZOOM)) {
+      if (bus.layer && map.hasLayer(bus.layer)) map.removeLayer(bus.layer);
+      bus.shown = '';
+      return;
+    }
+    if (!bus.index) { loadBusIndex(); return; }
+    var b = map.getBounds().pad(0.4);
+    var cell = bus.index.cell;
+    var keys = [];
+    for (var i = Math.floor(b.getSouth() / cell); i <= Math.floor(b.getNorth() / cell); i++) {
+      for (var j = Math.floor(b.getWest() / cell); j <= Math.floor(b.getEast() / cell); j++) {
+        var k = i + '_' + j;
+        if (bus.index.set[k]) keys.push(k);
+      }
+    }
+    var pending = false;
+    keys.forEach(function (k) { if (!bus.tiles[k]) loadBusTile(k); if (bus.tiles[k] === 'loading') pending = true; });
+    var allNames = z >= BUS_LABEL_ZOOM;
+    var key = Math.round(z) + '|' + b.toBBoxString().split(',').map(function (v) { return Number(v).toFixed(3); }).join(',') + (pending ? '|p' : '');
+    if (key === bus.shown && bus.layer && map.hasLayer(bus.layer)) return;
+    bus.shown = key;
+    if (bus.layer) map.removeLayer(bus.layer);
+    bus.layer = L.layerGroup();
+    bus.stops = [];
+    keys.forEach(function (k) {
+      var t = bus.tiles[k];
+      if (!t || t === 'loading') return;
+      t.s.forEach(function (s2) {
+        if (!b.contains([s2[0], s2[1]])) return;
+        var bi = bus.stops.length;
+        bus.stops.push({ p: [s2[0], s2[1]], n: s2[2] || '', r: (s2[3] || []).map(function (ri) { return t.r[ri]; }).filter(Boolean) });
+        L.marker([s2[0], s2[1]], {
+          pane: 'outdBusPane', interactive: false, keyboard: false,
+          icon: L.divIcon({ className: 'outd-busst', iconSize: [0, 0],
+            html: '<span class="outd-subst__in outd-busst__in"><i data-bus-st="' + bi + '">' + BUS_SVG + '</i>' +
+              (allNames && s2[2] ? '<b>' + escHtml(s2[2]) + '</b>' : '') + '</span>' })
+        }).addTo(bus.layer);
+      });
+    });
+    bus.layer.addTo(map);
+    applyFavPinUnrotate(true);
+  }
+  /** 탭한 지점 근처(반경 28px)의 버스 정류장 → { idx, d2 } */
+  function busStopAt(x, y) {
+    if (!bus.layer || !st.map || !st.map.hasLayer(bus.layer)) return null;
+    var R2 = 28 * 28, best = null;
+    var icons = document.querySelectorAll('#outdMap [data-bus-st]');
+    for (var i = 0; i < icons.length; i++) {
+      var r = icons[i].getBoundingClientRect();
+      if (!r.width) continue;
+      var dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2), d = dx * dx + dy * dy;
+      if (d <= R2 && (!best || d < best.d2)) best = { idx: Number(icons[i].getAttribute('data-bus-st')), d2: d };
+    }
+    return best;
+  }
+  function openBusPopup(idx) {
+    var s2 = bus.stops[idx];
+    if (!s2) return;
+    var el = $('outdBusPop');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdBusPop';
+      el.className = 'outd-favpop outd-light';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (e) {
+        var t = e.target;
+        if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; }
+        if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var modeBtn = t.closest('[data-pop-mode]');
+        if (modeBtn) {
+          if (modeBtn.classList.contains('is-disabled')) return;
+          el.__mode = modeBtn.getAttribute('data-pop-mode');
+          Array.prototype.forEach.call(el.querySelectorAll('[data-pop-mode]'), function (b2) {
+            var on = b2.getAttribute('data-pop-mode') === el.__mode;
+            b2.classList.toggle('is-on', on);
+            b2.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+          return;
+        }
+        if (t.closest('[data-pop-go]')) {
+          var cur = el.__stop;
+          if (!cur) return;
+          if (el.__mode) { travelMode = el.__mode; travelModeUserSet = true; renderTravelModes(); }
+          el.style.display = 'none';
+          var favSh = $('outdFavSheet');
+          if (favSh) favSh.style.display = 'none';
+          unlockAudio();
+          window.openOutdoorRouteSearch({ noFocus: true });
+          chooseDestination({ name: (cur.n || '버스 정류장') + ' 정류장', lat: cur.p[0], lng: cur.p[1], sub: cur.r.length ? cur.r.join(', ') + '번' : '버스 정류장' });
+        }
+      });
+    }
+    el.__stop = s2;
+    var it = { lat: s2.p[0], lng: s2.p[1] };
+    var rows = [];
+    var dist = favDistText(it);
+    if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
+    var chips = s2.r.length
+      ? s2.r.map(function (r) { return '<span class="outd-subpop__line outd-buspop__line">' + escHtml(r) + '</span>'; }).join('')
+      : '<span class="outd-buspop__none">노선 정보 없음</span>';
+    el.innerHTML =
+      '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
+      '<div class="outd-favpop__head"><span class="outd-subpop__icon outd-buspop__icon">' + BUS_SVG + '</span>' +
+      '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(s2.n || '버스 정류장') + '</b></div>' +
+      '<span>버스 정류장' + (s2.r.length ? ' · ' + s2.r.length + '개 노선' : '') + '</span></div>' +
+      '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
+      '<div class="outd-subpop__lines outd-buspop__lines">' + chips + '</div>' +
+      (rows.length ? '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
+      '<div class="outd-favpop__likerow"><span></span>' + favPopModesHtml(it, el) + '</div>' +
+      '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
+      '<button type="button" class="outd-fav__save" data-pop-go>목적지로 안내</button></div>' +
+      '</div>';
+    el.classList.remove('is-bottom');
+    el.__openedAt = Date.now();
+    el.style.display = 'flex';
+  }
+  function syncBusBtn() {
+    var btn = $('outdBusBtn');
+    if (btn) {
+      btn.classList.toggle('is-on', !!bus.on);
+      btn.setAttribute('aria-pressed', bus.on ? 'true' : 'false');
+    }
+  }
+  window.toggleOutdoorBus = function (e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    bus.on = !bus.on;
+    try { localStorage.setItem(BUS_PREF, bus.on ? '1' : '0'); } catch (e2) {}
+    syncBusBtn();
+    refreshBus();
+    if (bus.on && st.map && st.map.getZoom() < BUS_MIN_ZOOM && typeof window.showToast === 'function') {
+      window.showToast('지도를 16 이상으로 확대하면 버스 정류장이 보입니다.');
     }
   };
 
@@ -4294,7 +4477,7 @@
           ? '<button type="button" class="outd-fav__cat is-btn" data-fav-hide="' + it.id + '" aria-label="' + (it.admin_hidden ? '다시 공개' : '공개 장소에서 숨기기') + '" title="' + (it.admin_hidden ? '숨김 · 눌러서 다시 공개' : '공개 중 · 눌러서 숨기기') + '">' + c.e + '</button>'
           : '<span class="outd-fav__cat" aria-hidden="true">' + c.e + '</span>') +
         '<span class="outd-fav__txt"><span class="outd-fav__namerow"><span class="outd-route__name">' + escHtml(it.name) + '</span>' +
-        (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 24) : '') + '</span>' +
+        (Number(it.affiliate_discount) > 0 ? favDiscountBadge(it.affiliate_discount, 36) : '') + '</span>' +
         '<span class="outd-route__sub">' + escHtml(sub) + '</span>' +
         (it.memo ? '<span class="outd-route__sub outd-fav__memo">' + escHtml(it.memo) + '</span>' : '') + '</span>' +
         '<span class="outd-fav__right">' + right + '</span></div>';
@@ -4447,7 +4630,7 @@
       var html = '<div class="outd-favpin outd-favpin--' + kind + (it.admin_hidden ? ' is-admin-hidden' : '') + '" data-fav-pin="' + it.id + '"><div class="outd-favpin__in">' +
         '<div class="outd-favpin__body"><span class="outd-favpin__dot">' + c.e + '</span>' +
         (Number(it.affiliate_discount) > 0
-          ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 36) + '</i>'
+          ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 24) + '</i>'
           : '') + '</div>' + // 2026-10-24: 공개 장소 STELVIO 로고 배지 제거(제휴 할인율 배지만)
         (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
         (g.length > 1 ? '<i class="outd-favpin__cnt">' + g.length + '</i>' : '') +
@@ -4693,8 +4876,17 @@
       if (!fav.picking) {
         var pid = favPinAt(e.clientX, e.clientY);
         if (pid) { openFavPopup(pid, fav.groups && fav.groups[pid]); return; }
+        // 지하철역·버스 정류장 중 탭한 곳에 더 가까운 쪽(지하철은 아이콘·이름 영역이면 우선)
         var sidx = subwayStationAt(e.clientX, e.clientY);
+        var bst = busStopAt(e.clientX, e.clientY);
+        if (sidx != null && bst) {
+          var sic = document.querySelector('#outdMap [data-sub-st="' + sidx + '"]');
+          var sr = sic && sic.getBoundingClientRect();
+          var sd = sr ? Math.pow(e.clientX - (sr.left + sr.width / 2), 2) + Math.pow(e.clientY - (sr.top + sr.height / 2), 2) : 0;
+          if (bst.d2 < sd) sidx = null;
+        }
         if (sidx != null) openSubwayPopup(sidx);
+        else if (bst) openBusPopup(bst.idx);
         return;
       }
       var ll = clientToLatLng(e.clientX, e.clientY);

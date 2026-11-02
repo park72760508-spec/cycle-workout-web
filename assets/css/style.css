@@ -36306,3 +36306,35 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #workoutBuilderScreen .segments-list { padding: 8px; }
 #workoutBuilderScreen .segment-card { padding: 12px 10px; }
 #workoutBuilderScreen .builder-actions { margin-left: 0; margin-right: 0; }
+/* 2026-11-02 루트맵 버스 정류장: 켜기/끄기 버튼(지하철 버튼 위) + 둥근 원 버스 아이콘 + 노선번호 팝업 */
+#outdoorRideScreen .outd-bus-btn { bottom: 212px; }
+#outdoorRideScreen .outd-bus-btn.is-on { box-shadow: inset 0 0 0 2px #2563eb; }
+.outd-busst { background: none; border: 0; }
+.outd-busst__in i {
+  left: -9px; top: -9px; width: 18px; height: 18px; border-radius: 50%;
+  background: #2563eb; border: 1.5px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+.outd-busst__in i svg { width: 11px; height: 11px; }
+.outd-busst__in b { left: 12px; top: -8px; font-size: 10.5px; font-weight: 600; color: #1e3a8a; }
+#outdoorRideScreen .outd-buspop__icon { background: #2563eb; border-radius: 50%; }
+#outdoorRideScreen .outd-buspop__lines { max-height: 120px; overflow-y: auto; }
+#outdoorRideScreen .outd-buspop__line { background: #2563eb; height: 26px; padding: 0 10px; border-radius: 6px; font-size: 13px; }
+#outdoorRideScreen .outd-buspop__none { font-size: 13px; color: #64748b; }
+/* 2026-11-02 루트맵 즐겨찾기 핀 축소: 물방울 핀 → 즐겨찾기 목록 카테고리 탭과 같은 둥근 아이콘(지점 중심),
+   테두리 색으로 구분(내 즐겨찾기 = 주황, 다른 사용자 공개 장소 = 보라). 이름·좋아요·묶음 숫자 배지는 그대로 */
+#outdoorRideScreen .outd-favpin__body {
+  left: -14px; top: -14px; width: 28px; height: 28px; border-radius: 50%; transform: none;
+  background: #ffffff; border: 2.5px solid #f59e0b;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+#outdoorRideScreen .outd-favpin--pub .outd-favpin__body {
+  background: #ffffff; border-color: #8b5cf6;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.25), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+#outdoorRideScreen .outd-favpin__body::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; } /* 탭 범위 넓힘 */
+#outdoorRideScreen .outd-favpin__dot { transform: none; font-size: 18px; line-height: 0; }
+#outdoorRideScreen .outd-favpin__name { top: 17px; font-size: 10.5px; padding: 0 6px; }
+#outdoorRideScreen .outd-favpin__likes { left: 9px; top: -24px; font-size: 10px; padding: 0 5px; }
+#outdoorRideScreen .outd-favpin__cnt { left: -25px; top: -24px; min-width: 18px; height: 18px; font-size: 10px; line-height: 14px; }
+#outdoorRideScreen .outd-favpin__affbadge { right: -14px; top: -14px; transform: none; }
