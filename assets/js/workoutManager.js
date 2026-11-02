@@ -7871,26 +7871,60 @@ window.changeSegmentPage = changeSegmentPage;
 
 // ==========================================================
 // 2026-11-02 루틴: 자주 쓰는 세그먼트 묶음 저장 → 탭하면 세그먼트 목록 끝에 추가
-// 저장 위치 = 이 기기 localStorage(사용자별 키)
+// 저장 위치 = Firestore users/{uid}/segment_routines/main (본인만 읽기·쓰기, 여러 기기 공유)
 // ==========================================================
-function routineStorageKey() {
-  let uid = '';
+var _routineState = { uid: null, list: [], loaded: false, promise: null };
+
+function routineUserId() {
   try {
-    const u = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
-    uid = (u && (u.id || u.uid)) || '';
-  } catch (e) { /* noop */ }
-  return 'stelvio_segment_routines_' + (uid || 'guest');
+    var auth = window.authV9 || (window.firebase && window.firebase.auth && window.firebase.auth());
+    if (auth && auth.currentUser && auth.currentUser.uid) return String(auth.currentUser.uid);
+  } catch (e) {}
+  return getCompletedWorkoutsUserId();
+}
+
+function routineDocRef(uid) {
+  return window.firestore.collection('users').doc(uid).collection('segment_routines').doc('main');
+}
+
+/** 서버에서 1회 불러와 메모리 캐시. 처음이면 이 기기에 임시 저장돼 있던 루틴을 서버로 옮긴다. */
+function fetchRoutines() {
+  var uid = routineUserId();
+  var st = _routineState;
+  if (!uid || !window.firestore) return Promise.resolve(st.list);
+  if (st.uid === uid && st.loaded) return Promise.resolve(st.list);
+  if (st.uid === uid && st.promise) return st.promise;
+  st.uid = uid; st.list = []; st.loaded = false;
+  st.promise = routineDocRef(uid).get().then(function (doc) {
+    var list = doc.exists && Array.isArray(doc.get('routines')) ? doc.get('routines') : [];
+    var localKey = 'stelvio_segment_routines_' + uid;
+    var local = [];
+    try { local = JSON.parse(localStorage.getItem(localKey) || '[]'); } catch (e) {}
+    if (Array.isArray(local) && local.length) {
+      local.forEach(function (r) { if (r && r.name && !list.some(function (x) { return x.name === r.name; })) list.push(r); });
+      routineDocRef(uid).set({ routines: list, updatedAt: Date.now() }).then(function () {
+        try { localStorage.removeItem(localKey); } catch (e) {}
+      }).catch(function () {});
+    }
+    if (st.uid === uid) { st.list = list; st.loaded = true; }
+    return list;
+  }).catch(function (err) {
+    console.warn('[Routine] 루틴 조회 실패:', err && err.message ? err.message : err);
+    return st.list;
+  }).finally(function () { if (st.uid === uid) st.promise = null; });
+  return st.promise;
 }
 
 function loadRoutines() {
-  try {
-    const list = JSON.parse(localStorage.getItem(routineStorageKey()) || '[]');
-    return Array.isArray(list) ? list : [];
-  } catch (e) { return []; }
+  return _routineState.uid === routineUserId() ? _routineState.list : [];
 }
 
 function storeRoutines(list) {
-  try { localStorage.setItem(routineStorageKey(), JSON.stringify(list)); return true; } catch (e) { return false; }
+  var uid = routineUserId();
+  if (!uid || !window.firestore) return Promise.reject(new Error('로그인 필요'));
+  return routineDocRef(uid).set({ routines: list, updatedAt: Date.now() }).then(function () {
+    _routineState.uid = uid; _routineState.list = list; _routineState.loaded = true;
+  });
 }
 
 function routineTotalLabel(segs) {
@@ -7903,6 +7937,9 @@ function renderRoutineList() {
   const wrap = safeGetElement('wbRoutines');
   const listEl = safeGetElement('wbRoutineList');
   if (!wrap || !listEl) return;
+  if (!_routineState.loaded || _routineState.uid !== routineUserId()) {
+    fetchRoutines().then(() => { if (_routineState.loaded) renderRoutineList(); });
+  }
   const list = loadRoutines();
   wrap.hidden = list.length === 0;
   listEl.innerHTML = list.map((r, i) => `
@@ -7948,18 +7985,25 @@ function saveRoutine() {
     ramp: seg.ramp,
     ramp_to_value: seg.ramp_to_value
   }));
-  const list = loadRoutines();
-  const same = list.findIndex(r => r.name === name);
-  if (same >= 0 && !confirm(`"${name}" 루틴이 이미 있습니다. 덮어쓸까요?`)) return;
-  const item = { name, segments, savedAt: Date.now() };
-  if (same >= 0) list[same] = item; else list.push(item);
-  if (!storeRoutines(list)) {
-    window.showToast('루틴을 저장하지 못했습니다.');
+  if (!routineUserId()) {
+    window.showToast('로그인 후 루틴을 저장할 수 있습니다.');
     return;
   }
-  closeRoutineSaveModal();
-  renderRoutineList();
-  window.showToast(`"${name}" 루틴이 저장되었습니다.`);
+  fetchRoutines().then(() => {
+    const list = loadRoutines().slice();
+    const same = list.findIndex(r => r.name === name);
+    if (same >= 0 && !confirm(`"${name}" 루틴이 이미 있습니다. 덮어쓸까요?`)) return;
+    const item = { name, segments, savedAt: Date.now() };
+    if (same >= 0) list[same] = item; else list.push(item);
+    return storeRoutines(list).then(() => {
+      closeRoutineSaveModal();
+      renderRoutineList();
+      window.showToast(`"${name}" 루틴이 저장되었습니다.`);
+    });
+  }).catch((err) => {
+    console.warn('[Routine] 루틴 저장 실패:', err && err.message ? err.message : err);
+    window.showToast('루틴을 저장하지 못했습니다. 잠시 후 다시 시도해주세요.');
+  });
 }
 
 function applyRoutine(index) {
@@ -7974,12 +8018,13 @@ function applyRoutine(index) {
 }
 
 function deleteRoutine(index) {
-  const list = loadRoutines();
+  const list = loadRoutines().slice();
   const r = list[index];
   if (!r || !confirm(`"${r.name}" 루틴을 삭제할까요?`)) return;
   list.splice(index, 1);
-  storeRoutines(list);
-  renderRoutineList();
+  storeRoutines(list).then(renderRoutineList).catch(() => {
+    window.showToast('루틴을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
+  });
 }
 
 window.showRoutineSaveModal = showRoutineSaveModal;
