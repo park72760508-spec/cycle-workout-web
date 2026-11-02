@@ -278,11 +278,12 @@ async function main() {
     }
     console.log('출처별 중복 정류소 합침', mergedN);
     for (const r of off.routes) {
-      const seq = r.s.map((sid) => offStop.get(sid)).filter((st, i, a) => st && a[i - 1] !== st);
+      // '(미정차)'·'(가상)' 지점은 실제로 서지 않으므로 노선 정류장에서 제외
+      const seq = r.s.map((sid) => offStop.get(sid)).filter((st) => st && !/미정차|\(가상\)/.test(st.n)).filter((st, i, a) => a[i - 1] !== st);
       if (seq.length < 2) continue;
       seq.forEach((st) => addRoute(st, r.n, r.id));
       routeStops.set(r.id, seq);
-      rmById.set(r.id, { ref: r.n, name: r.t });
+      rmById.set(r.id, { ref: r.n, name: r.n + ' (' + seq[seq.length - 1].n + ' 방면)' }); // 방면 = 실제 마지막 정차 정류장
     }
     officialN = off.routes.length;
     console.log('공식 데이터 반영: 노선(방향별)', off.routes.length, '정류소', new Set(offStop.values()).size, off.tago ? `(TAGO ${off.tago.have}/${off.tago.total} 노선 수집)` : '');
