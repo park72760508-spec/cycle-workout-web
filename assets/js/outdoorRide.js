@@ -1544,7 +1544,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261102bus';
+  var BUS_DATA_V = '20261103inf';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -1615,10 +1615,12 @@
       t.s.forEach(function (s2) {
         if (!b.contains([s2[0], s2[1]])) return;
         var bi = bus.stops.length;
-        bus.stops.push({ p: [s2[0], s2[1]], n: s2[2] || '', r: (s2[3] || []).map(function (ri) { return t.r[ri]; }).filter(Boolean) });
+        var rts = (s2[3] || []).map(function (ri) { return t.r[ri]; }).filter(Boolean);
+        bus.stops.push({ p: [s2[0], s2[1]], n: s2[2] || '', r: rts, inf: s2[4] === 1 });
         L.marker([s2[0], s2[1]], {
           pane: 'outdBusPane', interactive: false, keyboard: false,
-          icon: L.divIcon({ className: 'outd-busst', iconSize: [0, 0],
+          // 노선번호 없는 정류장은 연한 파랑
+          icon: L.divIcon({ className: 'outd-busst' + (rts.length ? '' : ' outd-busst--none'), iconSize: [0, 0],
             html: '<span class="outd-subst__in outd-busst__in"><i data-bus-st="' + bi + '">' + BUS_SVG + '</i>' +
               (allNames && s2[2] ? '<b>' + escHtml(s2[2]) + '</b>' : '') + '</span>' })
         }).addTo(bus.layer);
@@ -1689,9 +1691,10 @@
       '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
       '<div class="outd-favpop__head"><span class="outd-subpop__icon outd-buspop__icon">' + BUS_SVG + '</span>' +
       '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(s2.n || '버스 정류장') + '</b></div>' +
-      '<span>버스 정류장' + (s2.r.length ? ' · ' + s2.r.length + '개 노선' : '') + '</span></div>' +
+      '<span>버스 정류장' + (s2.r.length ? ' · ' + s2.r.length + '개 노선' + (s2.inf ? '(추정)' : '') : '') + '</span></div>' +
       '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
       '<div class="outd-subpop__lines outd-buspop__lines">' + chips + '</div>' +
+      (s2.inf && s2.r.length ? '<p class="outd-buspop__inf">주변 버스 노선 경로로 추정한 노선번호입니다.</p>' : '') +
       (rows.length ? '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
       '<div class="outd-favpop__likerow"><span></span>' + favPopModesHtml(it, el) + '</div>' +
       '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +

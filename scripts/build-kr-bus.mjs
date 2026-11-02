@@ -52,6 +52,7 @@ async function main() {
   const stops = new Map();      // node id → { lat, lon, n, routes:Set }
   const routeMembers = [];      // { ref, nodes:[id] }
   const nodePos = new Map();    // 노선 구성 노드 위치(정차 지점 → 가까운 정류장 연결용)
+  const wayNodes = new Map();   // 노선 경로(way) → 노드 목록(경로 근접 추정용)
   const rl = readline.createInterface({ input: fs.createReadStream(opl), crlfDelay: Infinity });
   for await (const line of rl) {
     const f = {};
@@ -66,13 +67,18 @@ async function main() {
         if (/[가-힣]/.test(nm)) { stops.set(id, { lat, lon, n: nm, routes: new Set() }); continue; } // 국내 정류장만
       }
       nodePos.set(id, [lat, lon]);
+    } else if (line[0] === 'w') {
+      wayNodes.set(Number(line.slice(1, line.indexOf(' '))), (f.N || '').split(',').filter(Boolean).map((x) => Number(x.slice(1))));
     } else if (line[0] === 'r') {
       const t = oplTags(f.T);
       if (t.route !== 'bus') continue;
       const ref = String(t.ref || '').trim();
       if (!ref) continue;
       const nodes = (f.M || '').split(',').filter((m) => m[0] === 'n').map((m) => Number(m.slice(1, m.indexOf('@'))));
-      routeMembers.push({ ref, nodes });
+      const ways = (f.M || '').split(',').filter((m) => m[0] === 'w').map((m) => Number(m.slice(1, m.indexOf('@'))));
+      // 광역급행(M버스)·급행은 지나가는 정류장에 서지 않으므로 경로 근접 추정에서 제외
+      const express = /^M|급행|직행|공항/.test(ref) || /광역급행|급행|공항/.test(t.network || '') || /급행|공항/.test(t.name || '');
+      routeMembers.push({ ref, nodes, ways, express });
     }
   }
   fs.rmSync(work, { recursive: true, force: true });
@@ -110,7 +116,63 @@ async function main() {
     }
   }
 
-  // 타일로 나눠 저장: { r:[노선번호...], s:[[lat, lon, 이름, [노선 인덱스...]]] }
+  const direct = [...stops.values()].filter((x) => x.routes.size).length;
+
+  // ── 노선 정보 없는 정류장 보완(추정, inf 표시) ──
+  // 1) 같은 이름 정류장(길 건너편 반대 방향 등) 250m 안에 노선이 있으면 그 노선
+  const byName = new Map();
+  for (const st of stops.values()) if (st.routes.size) {
+    if (!byName.has(st.n)) byName.set(st.n, []);
+    byName.get(st.n).push(st);
+  }
+  let infName = 0;
+  for (const st of stops.values()) {
+    if (st.routes.size) continue;
+    const peers = (byName.get(st.n) || []).filter((o) => Math.hypot((o.lat - st.lat) * 111000, (o.lon - st.lon) * 88000) <= 250);
+    if (!peers.length) continue;
+    peers.forEach((o) => o.routes.forEach((r) => st.routes.add(r)));
+    st.inf = true; infName++;
+  }
+  // 2) 노선 경로(일반 시내·마을버스)가 20m 안으로 지나가면 그 노선(국내 버스는 경로 위 정류장 대부분 정차)
+  const PATH_M = 20, GC = 0.0005;
+  const segGrid = new Map(); // 격자 → [[lat1, lon1, lat2, lon2, ref]]
+  for (const rm of routeMembers) {
+    if (rm.express) continue;
+    for (const wid of rm.ways) {
+      const ns = wayNodes.get(wid);
+      if (!ns) continue;
+      for (let i = 1; i < ns.length; i++) {
+        const a = nodePos.get(ns[i - 1]), b = nodePos.get(ns[i]);
+        if (!a || !b) continue;
+        const seg = [a[0], a[1], b[0], b[1], rm.ref];
+        const i0 = Math.floor((Math.min(a[0], b[0]) - 0.0003) / GC), i1 = Math.floor((Math.max(a[0], b[0]) + 0.0003) / GC);
+        const j0 = Math.floor((Math.min(a[1], b[1]) - 0.0003) / GC), j1 = Math.floor((Math.max(a[1], b[1]) + 0.0003) / GC);
+        if ((i1 - i0 + 1) * (j1 - j0 + 1) > 400) continue; // 비정상적으로 긴 구간
+        for (let gi = i0; gi <= i1; gi++) for (let gj = j0; gj <= j1; gj++) {
+          const k = gi + ':' + gj;
+          if (!segGrid.has(k)) segGrid.set(k, []);
+          segGrid.get(k).push(seg);
+        }
+      }
+    }
+  }
+  function segDistM(lat, lon, s) {
+    const ky = 111000, kx = 88000;
+    const ax = s[1] * kx, ay = s[0] * ky, bx = s[3] * kx, by = s[2] * ky, px = lon * kx, py = lat * ky;
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy || 1e-9;
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l2));
+    return Math.hypot(ax + t * dx - px, ay + t * dy - py);
+  }
+  let infPath = 0;
+  for (const st of stops.values()) {
+    if (st.routes.size) continue;
+    const segs = segGrid.get(Math.floor(st.lat / GC) + ':' + Math.floor(st.lon / GC)) || [];
+    for (const sg of segs) if (!st.routes.has(sg[4]) && segDistM(st.lat, st.lon, sg) <= PATH_M) st.routes.add(sg[4]);
+    if (st.routes.size) { st.inf = true; infPath++; }
+  }
+  console.log('노선 직접 연결', direct, '/ 같은 이름 보완', infName, '/ 경로 근접 보완', infPath);
+
+  // 타일로 나눠 저장: { r:[노선번호...], s:[[lat, lon, 이름, [노선 인덱스...], 추정이면 1]] }
   const tiles = new Map();
   for (const s of stops.values()) {
     const k = cellKey(s.lat, s.lon);
@@ -127,7 +189,9 @@ async function main() {
       r: refs,
       s: list.map((s) => {
         if (s.routes.size) withRoutes++;
-        return [r5(s.lat), r5(s.lon), s.n, [...s.routes].sort(byNum).map((r) => ri.get(r))];
+        const row = [r5(s.lat), r5(s.lon), s.n, [...s.routes].sort(byNum).map((r) => ri.get(r))];
+        if (s.inf) row.push(1); // 추정 노선
+        return row;
       })
     };
     const js = JSON.stringify(out);
