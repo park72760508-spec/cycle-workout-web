@@ -36185,3 +36185,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 .outd-subst__in b { left: 9px; }
 .outd-subst--x .outd-subst__in b { left: 11px; }
+/* 2026-11-02 지하철 역 = 전철 아이콘(호선 색 바탕 둥근 사각형 + 흰 전철), 환승역은 호선 색 분할 + 조금 크게 */
+.outd-subst__in i {
+  left: -9px; top: -9px; width: 18px; height: 18px;
+  border-radius: 5px; border: 1.5px solid #ffffff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.outd-subst__in i svg { width: 12px; height: 12px; display: block; filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.45)); }
+.outd-subst--x .outd-subst__in i {
+  left: -11px; top: -11px; width: 22px; height: 22px; border-radius: 6px; border-width: 2px;
+  box-shadow: 0 0 0 1.5px rgba(15, 23, 42, 0.65), 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.outd-subst--x .outd-subst__in i svg { width: 14px; height: 14px; }
+.outd-subst__in b { left: 12px; top: -8px; }
+.outd-subst--x .outd-subst__in b { left: 14px; }

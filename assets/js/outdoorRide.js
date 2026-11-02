@@ -1366,6 +1366,8 @@
   var SUBWAY_MIN_ZOOM = 12.5;   // 표시 숫자 13 이상
   var SUBWAY_LABEL_ZOOM = 13.5; // 표시 숫자 14 이상: 모든 역 이름
   var SUBWAY_PREF = 'stelvioOutdSubway';
+  /** 역 아이콘 안의 흰 전철 그림(호선 색 바탕 위) */
+  var SUBWAY_TRAIN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M12 2c-4 0-7 .5-7 4v9.5A3.5 3.5 0 0 0 8.5 19L7 20.5v.5h2.2l2-2h1.6l2 2H17v-.5L15.5 19a3.5 3.5 0 0 0 3.5-3.5V6c0-3.5-3-4-7-4zM8.5 17a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm7 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM17 11H7V6h10v5z"/></svg>';
   var sub = { on: (function () { try { return localStorage.getItem(SUBWAY_PREF) !== '0'; } catch (e) { return true; } })(),
     data: null, loading: false, stLayer: null, stShown: '' };
   function initSubwayOverlay() {
@@ -1389,7 +1391,7 @@
       refreshSubway();
     }).catch(function () { sub.loading = false; });
   }
-  /** 역 점 색: 1개 호선이면 그 색, 여러 호선이면 호선 색을 같은 비율로 나눈 원 */
+  /** 역 아이콘 바탕색: 1개 호선이면 그 색, 여러 호선이면 호선 색을 같은 비율로 나눔 */
   function subwayDotBg(lineIdx) {
     var cols = (lineIdx || []).map(function (i) { var ln = sub.data.lines[i]; return ln ? ln.c : '#64748b'; });
     if (!cols.length) return '#64748b';
@@ -1422,7 +1424,7 @@
       L.marker(s2.p, {
         pane: 'outdSubwayStPane', interactive: false, keyboard: false,
         icon: L.divIcon({ className: 'outd-subst' + (multi ? ' outd-subst--x' : ''), iconSize: [0, 0],
-          html: '<span class="outd-subst__in"><i style="background:' + subwayDotBg(s2.l) + '"></i>' +
+          html: '<span class="outd-subst__in"><i style="background:' + subwayDotBg(s2.l) + '">' + SUBWAY_TRAIN_SVG + '</i>' +
             (showName ? '<b>' + escHtml(s2.n) + '</b>' : '') + '</span>' })
       }).addTo(sub.stLayer);
     });
