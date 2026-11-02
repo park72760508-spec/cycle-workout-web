@@ -36213,3 +36213,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 12px;
   font: 700 12px/1 "Noto Sans KR", sans-serif; color: #fff; text-shadow: 0 0 2px rgba(0, 0, 0, 0.35);
 }
+/* 2026-11-02 지하철역 아이콘 30% 확대(일반 18→23px, 환승 22→29px) */
+.outd-subst__in i { left: -11.5px; top: -11.5px; width: 23px; height: 23px; border-radius: 6.5px; border-width: 2px; }
+.outd-subst__in i svg { width: 16px; height: 16px; }
+.outd-subst--x .outd-subst__in i { left: -14.5px; top: -14.5px; width: 29px; height: 29px; border-radius: 8px; border-width: 2.5px; }
+.outd-subst--x .outd-subst__in i svg { width: 18px; height: 18px; }
+.outd-subst__in b { left: 15px; top: -8px; }
+.outd-subst--x .outd-subst__in b { left: 18px; }
