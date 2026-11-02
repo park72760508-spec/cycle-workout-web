@@ -1,0 +1,61 @@
+# 루트맵 지하철역·버스 정류장 데이터 자동 갱신 (2026-11-02)
+# 매월 2일 03:00 KST(1일 18:00 UTC): OpenStreetMap 에서 다시 받아 바뀐 경우에만 캐시 버전을 올리고 main 에 커밋·푸시(→ GitHub Pages 반영)
+# Actions 탭에서 "Run workflow" 로 수동 실행도 가능
+name: Transit data refresh
+
+on:
+  schedule:
+    - cron: '0 18 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: transit-data-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 지하철 데이터
+        id: subway
+        continue-on-error: true
+        run: |
+          node scripts/build-kr-subway.mjs
+          if [ -n "$(git status --porcelain assets/data/kr-subway.json)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: 버스 데이터
+        id: bus
+        continue-on-error: true
+        run: |
+          node scripts/build-kr-bus.mjs
+          if [ -n "$(git status --porcelain assets/data/kr-bus)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: 캐시 버전 올리고 커밋·푸시
+        if: steps.subway.outputs.changed == '1' || steps.bus.outputs.changed == '1'
+        run: |
+          FLAGS=""
+          [ "${{ steps.subway.outputs.changed }}" = "1" ] && FLAGS="$FLAGS --subway"
+          [ "${{ steps.bus.outputs.changed }}" = "1" ] && FLAGS="$FLAGS --bus"
+          node scripts/bump-transit-data-version.mjs $FLAGS
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/data/kr-subway.json assets/data/kr-bus assets/js/outdoorRide.js index.html
+          git commit -m "루트맵 지하철·버스 데이터 자동 갱신 ($(date -u +%Y-%m-%d))$FLAGS"
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: 실패 표시
+        if: steps.subway.outcome == 'failure' || steps.bus.outcome == 'failure'
+        run: |
+          echo "지하철: ${{ steps.subway.outcome }} / 버스: ${{ steps.bus.outcome }}"
+          exit 1

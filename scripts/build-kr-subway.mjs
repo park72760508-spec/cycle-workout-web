@@ -161,6 +161,12 @@ out;`;
   console.log('역', stations.length, '개');
 
   const out = { v: new Date().toISOString().slice(0, 10), src: '© OpenStreetMap contributors (ODbL)', lines: outLines, stations };
+  // 내용이 그대로면 파일을 건드리지 않음(자동 갱신 작업이 변경 여부로 배포를 판단)
+  try {
+    const old = JSON.parse(fs.readFileSync(OUT, 'utf8'));
+    if (JSON.stringify([old.lines, old.stations]) === JSON.stringify([out.lines, out.stations])) { console.log('변경 없음'); return; }
+    if (stations.length < old.stations.length * 0.9) throw new Error(`역 수 급감(${old.stations.length} → ${stations.length}) — 저장 중단`);
+  } catch (e) { if (/급감/.test(e.message)) throw e; /* 처음 생성 */ }
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(out));
   console.log('저장:', OUT, (fs.statSync(OUT).size / 1024).toFixed(0) + ' KB');
