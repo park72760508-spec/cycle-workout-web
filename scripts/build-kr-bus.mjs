@@ -49,8 +49,8 @@ async function main() {
   execFileSync('osmium', ['tags-filter', pbf, 'n/highway=bus_stop', 'r/route=bus', '-o', filtered, '--overwrite'], { stdio: 'inherit' });
   execFileSync('osmium', ['cat', filtered, '-f', 'opl', '-o', opl, '--overwrite'], { stdio: 'inherit' });
 
-  const stops = new Map();      // node id → { lat, lon, n, routes:Set }
-  const routeMembers = [];      // { ref, nodes:[id] }
+  const stops = new Map();      // node id → { lat, lon, n, routes:Map(노선번호 → Set(노선 relation id)) }
+  const routeMembers = [];      // { id, ref, name, nodes:[id], roles:[역할], ways:[id], express }
   const nodePos = new Map();    // 노선 구성 노드 위치(정차 지점 → 가까운 정류장 연결용)
   const wayNodes = new Map();   // 노선 경로(way) → 노드 목록(경로 근접 추정용)
   const rl = readline.createInterface({ input: fs.createReadStream(opl), crlfDelay: Infinity });
@@ -64,7 +64,7 @@ async function main() {
       const t = oplTags(f.T);
       if (t.highway === 'bus_stop') {
         const nm = t['name:ko'] || t.name || '';
-        if (/[가-힣]/.test(nm)) { stops.set(id, { lat, lon, n: nm, routes: new Set() }); continue; } // 국내 정류장만
+        if (/[가-힣]/.test(nm)) { stops.set(id, { lat, lon, n: nm, routes: new Map() }); continue; } // 국내 정류장만
       }
       nodePos.set(id, [lat, lon]);
     } else if (line[0] === 'w') {
@@ -74,11 +74,13 @@ async function main() {
       if (t.route !== 'bus') continue;
       const ref = String(t.ref || '').trim();
       if (!ref) continue;
-      const nodes = (f.M || '').split(',').filter((m) => m[0] === 'n').map((m) => Number(m.slice(1, m.indexOf('@'))));
+      const nm = (f.M || '').split(',').filter((m) => m[0] === 'n');
+      const nodes = nm.map((m) => Number(m.slice(1, m.indexOf('@'))));
+      const roles = nm.map((m) => m.slice(m.indexOf('@') + 1));
       const ways = (f.M || '').split(',').filter((m) => m[0] === 'w').map((m) => Number(m.slice(1, m.indexOf('@'))));
       // 광역급행(M버스)·급행은 지나가는 정류장에 서지 않으므로 경로 근접 추정에서 제외
       const express = /^M|급행|직행|공항/.test(ref) || /광역급행|급행|공항/.test(t.network || '') || /급행|공항/.test(t.name || '');
-      routeMembers.push({ ref, nodes, ways, express });
+      routeMembers.push({ id: Number(line.slice(1, line.indexOf(' '))), ref, name: t['name:ko'] || t.name || '', nodes, roles, ways, express });
     }
   }
   fs.rmSync(work, { recursive: true, force: true });
@@ -105,15 +107,27 @@ async function main() {
     }
     return best;
   }
+  const addRoute = (st, ref, id) => {
+    if (!st.routes.has(ref)) st.routes.set(ref, new Set());
+    st.routes.get(ref).add(id);
+  };
+  // 노선 구성 정차 지점 → 정류장 연결 + 노선별 정류장 순서(노선번호 탭 → 정류장 목록 팝업)
+  const routeStops = new Map(); // relation id → [정류장 객체…] (운행 순서)
   for (const rm of routeMembers) {
-    for (const nid of rm.nodes) {
-      const s = stops.get(nid);
-      if (s) { s.routes.add(rm.ref); continue; }
-      const p = nodePos.get(nid);
-      if (!p) continue;
-      const near = nearestStop(p[0], p[1]);
-      if (near) near.routes.add(rm.ref);
-    }
+    const seq = [];
+    rm.nodes.forEach((nid, i) => {
+      let st = stops.get(nid);
+      if (!st) {
+        const p = nodePos.get(nid);
+        if (p) st = nearestStop(p[0], p[1]);
+      }
+      if (!st) return;
+      addRoute(st, rm.ref, rm.id);
+      if (/^(stop|platform|bus_stop)/.test(rm.roles[i] || '') || stops.has(nid)) {
+        if (seq[seq.length - 1] !== st) seq.push(st); // 정차 지점·승강장이 짝으로 들어간 경우 한 번만
+      }
+    });
+    if (seq.length >= 2) routeStops.set(rm.id, seq);
   }
 
   const direct = [...stops.values()].filter((x) => x.routes.size).length;
@@ -130,12 +144,12 @@ async function main() {
     if (st.routes.size) continue;
     const peers = (byName.get(st.n) || []).filter((o) => Math.hypot((o.lat - st.lat) * 111000, (o.lon - st.lon) * 88000) <= 250);
     if (!peers.length) continue;
-    peers.forEach((o) => o.routes.forEach((r) => st.routes.add(r)));
+    peers.forEach((o) => o.routes.forEach((ids, ref) => ids.forEach((id) => addRoute(st, ref, id))));
     st.inf = true; infName++;
   }
   // 2) 노선 경로(일반 시내·마을버스)가 20m 안으로 지나가면 그 노선(국내 버스는 경로 위 정류장 대부분 정차)
   const PATH_M = 20, GC = 0.0005;
-  const segGrid = new Map(); // 격자 → [[lat1, lon1, lat2, lon2, ref]]
+  const segGrid = new Map(); // 격자 → [[lat1, lon1, lat2, lon2, ref, relation id]]
   for (const rm of routeMembers) {
     if (rm.express) continue;
     for (const wid of rm.ways) {
@@ -144,7 +158,7 @@ async function main() {
       for (let i = 1; i < ns.length; i++) {
         const a = nodePos.get(ns[i - 1]), b = nodePos.get(ns[i]);
         if (!a || !b) continue;
-        const seg = [a[0], a[1], b[0], b[1], rm.ref];
+        const seg = [a[0], a[1], b[0], b[1], rm.ref, rm.id];
         const i0 = Math.floor((Math.min(a[0], b[0]) - 0.0003) / GC), i1 = Math.floor((Math.max(a[0], b[0]) + 0.0003) / GC);
         const j0 = Math.floor((Math.min(a[1], b[1]) - 0.0003) / GC), j1 = Math.floor((Math.max(a[1], b[1]) + 0.0003) / GC);
         if ((i1 - i0 + 1) * (j1 - j0 + 1) > 400) continue; // 비정상적으로 긴 구간
@@ -167,12 +181,53 @@ async function main() {
   for (const st of stops.values()) {
     if (st.routes.size) continue;
     const segs = segGrid.get(Math.floor(st.lat / GC) + ':' + Math.floor(st.lon / GC)) || [];
-    for (const sg of segs) if (!st.routes.has(sg[4]) && segDistM(st.lat, st.lon, sg) <= PATH_M) st.routes.add(sg[4]);
+    for (const sg of segs) if (segDistM(st.lat, st.lon, sg) <= PATH_M) addRoute(st, sg[4], sg[5]);
     if (st.routes.size) { st.inf = true; infPath++; }
+  }
+  // 3) 정차 지점 없이 경로만 있는 노선(서울 등): 경로를 따라가며 20m 안 정류장을 순서대로 → 노선 정류장 목록(추정)
+  const routeEst = new Set();
+  for (const rm of routeMembers) {
+    if (routeStops.has(rm.id) || rm.express) continue;
+    const seq = [];
+    let prevEnd = null;
+    rm.ways.forEach((wid, wi) => {
+      let ns = wayNodes.get(wid);
+      if (!ns || ns.length < 2) return;
+      // 운행 방향으로 way 뒤집기: 앞 way 끝과 이어지는 쪽이 시작
+      const nextWay = wayNodes.get(rm.ways[wi + 1]);
+      const last = ns[ns.length - 1], first = ns[0];
+      if (prevEnd != null ? (last === prevEnd && first !== prevEnd) : (nextWay && (first === nextWay[0] || first === nextWay[nextWay.length - 1]) && last !== nextWay[0] && last !== nextWay[nextWay.length - 1])) ns = ns.slice().reverse();
+      prevEnd = ns[ns.length - 1];
+      for (let i = 1; i < ns.length; i++) {
+        const a2 = nodePos.get(ns[i - 1]), b2 = nodePos.get(ns[i]);
+        if (!a2 || !b2) continue;
+        const sg = [a2[0], a2[1], b2[0], b2[1]];
+        const found = [];
+        const i0 = Math.round((Math.min(a2[0], b2[0])) / 0.0005) - 1, i1 = Math.round((Math.max(a2[0], b2[0])) / 0.0005) + 1;
+        const j0 = Math.round((Math.min(a2[1], b2[1])) / 0.0005) - 1, j1 = Math.round((Math.max(a2[1], b2[1])) / 0.0005) + 1;
+        if ((i1 - i0 + 1) * (j1 - j0 + 1) > 400) continue;
+        for (let gi = i0; gi <= i1; gi++) for (let gj = j0; gj <= j1; gj++) {
+          for (const sid of g.get(gi + ':' + gj) || []) {
+            const st = stops.get(sid);
+            if (segDistM(st.lat, st.lon, sg) > PATH_M) continue;
+            // 우측 통행: 진행 방향 오른쪽 정류장만(길 건너 반대 방향 정류장 제외)
+            const cross = (b2[1] - a2[1]) * 88000 * (st.lat - a2[0]) * 111000 - (b2[0] - a2[0]) * 111000 * (st.lon - a2[1]) * 88000;
+            if (cross > 0) continue;
+            const t = ((st.lat - a2[0]) * (b2[0] - a2[0]) + (st.lon - a2[1]) * (b2[1] - a2[1])) / (((b2[0] - a2[0]) ** 2 + (b2[1] - a2[1]) ** 2) || 1e-12);
+            found.push([t, st]);
+          }
+        }
+        found.sort((x, y) => x[0] - y[0]).forEach(([, st]) => {
+          if (!seq.includes(st) && !(seq.length && seq[seq.length - 1].n === st.n)) seq.push(st);
+        });
+      }
+    });
+    if (seq.length >= 2) { routeStops.set(rm.id, seq); routeEst.add(rm.id); seq.forEach((st) => addRoute(st, rm.ref, rm.id)); }
   }
   console.log('노선 직접 연결', direct, '/ 같은 이름 보완', infName, '/ 경로 근접 보완', infPath);
 
-  // 타일로 나눠 저장: { r:[노선번호...], s:[[lat, lon, 이름, [노선 인덱스...], 추정이면 1]] }
+  // 타일로 나눠 저장: { r:[[노선번호, [relation id…]]…], s:[[lat, lon, 이름, [노선 인덱스...], 추정이면 1]] }
+  // 노선 정류장 목록: routes/{relation id}.json = { n:노선번호, t:노선 이름, s:[[이름, lat, lon]…] } (운행 순서)
   const tiles = new Map();
   for (const s of stops.values()) {
     const k = cellKey(s.lat, s.lon);
@@ -183,13 +238,18 @@ async function main() {
   const files = new Map();
   let bytes = 0, withRoutes = 0;
   for (const [k, list] of tiles) {
-    const refs = [...new Set(list.flatMap((s) => [...s.routes]))].sort(byNum);
+    const refIds = new Map();
+    list.forEach((s) => s.routes.forEach((ids, ref) => {
+      if (!refIds.has(ref)) refIds.set(ref, new Set());
+      ids.forEach((id) => { if (routeStops.has(id)) refIds.get(ref).add(id); });
+    }));
+    const refs = [...refIds.keys()].sort(byNum);
     const ri = new Map(refs.map((r, i) => [r, i]));
     const out = {
-      r: refs,
+      r: refs.map((r) => [r, [...refIds.get(r)].sort((a, b) => a - b)]),
       s: list.map((s) => {
         if (s.routes.size) withRoutes++;
-        const row = [r5(s.lat), r5(s.lon), s.n, [...s.routes].sort(byNum).map((r) => ri.get(r))];
+        const row = [r5(s.lat), r5(s.lon), s.n, [...s.routes.keys()].sort(byNum).map((r) => ri.get(r))];
         if (s.inf) row.push(1); // 추정 노선
         return row;
       })
@@ -198,8 +258,15 @@ async function main() {
     bytes += js.length;
     files.set(k + '.json', js);
   }
+  const rmById = new Map(routeMembers.map((rm) => [rm.id, rm]));
+  for (const [id, seq] of routeStops) {
+    const rm = rmById.get(id);
+    const js = JSON.stringify(Object.assign({ n: rm.ref, t: rm.name, s: seq.map((st) => [st.n, r5(st.lat), r5(st.lon)]) }, routeEst.has(id) ? { e: 1 } : {}));
+    bytes += js.length;
+    files.set('routes/' + id + '.json', js);
+  }
   // 내용이 그대로면 파일을 건드리지 않음(자동 갱신 작업이 변경 여부로 배포를 판단)
-  const oldNames = fs.existsSync(OUT_DIR) ? fs.readdirSync(OUT_DIR).filter((f) => f !== 'index.json') : [];
+  const oldNames = fs.existsSync(OUT_DIR) ? fs.readdirSync(OUT_DIR, { recursive: true }).filter((f) => f.endsWith('.json') && f !== 'index.json') : [];
   const same = oldNames.length === files.size &&
     [...files].every(([f, js]) => fs.existsSync(path.join(OUT_DIR, f)) && fs.readFileSync(path.join(OUT_DIR, f), 'utf8') === js);
   if (same) { console.log('변경 없음'); return; }
@@ -209,10 +276,11 @@ async function main() {
     if (prevN && stops.size < prevN * 0.8) throw new Error(`정류장 수 급감(${prevN} → ${stops.size}) — 저장 중단`);
   } catch (e) { if (/급감/.test(e.message)) throw e; }
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
-  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.mkdirSync(path.join(OUT_DIR, 'routes'), { recursive: true });
   for (const [f, js] of files) fs.writeFileSync(path.join(OUT_DIR, f), js);
   const index = { v: new Date().toISOString().slice(0, 10), src: '© OpenStreetMap contributors (ODbL)', cell: CELL, n: stops.size, t: [...tiles.keys()].sort() };
   fs.writeFileSync(path.join(OUT_DIR, 'index.json'), JSON.stringify(index));
+  console.log('노선 정류장 목록', routeStops.size, '개(경로 추정', routeEst.size, ')');
   console.log('타일', tiles.size, '개, 합계', (bytes / 1024 / 1024).toFixed(1), 'MB, 노선번호 있는 정류장', withRoutes, '/', stops.size);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

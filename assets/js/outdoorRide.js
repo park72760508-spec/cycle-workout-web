@@ -1544,7 +1544,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261103inf';
+  var BUS_DATA_V = '20261103rt';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -1615,8 +1615,11 @@
       t.s.forEach(function (s2) {
         if (!b.contains([s2[0], s2[1]])) return;
         var bi = bus.stops.length;
-        var rts = (s2[3] || []).map(function (ri) { return t.r[ri]; }).filter(Boolean);
-        bus.stops.push({ p: [s2[0], s2[1]], n: s2[2] || '', r: rts, inf: s2[4] === 1 });
+        // 타일 노선 목록: [노선번호, [노선(방향)별 정류장 목록 id…]]
+        var rents = (s2[3] || []).map(function (ri) { return t.r[ri]; }).filter(Boolean);
+        var rts = rents.map(function (x) { return typeof x === 'string' ? x : x[0]; });
+        var rids = rents.map(function (x) { return typeof x === 'string' ? [] : (x[1] || []); });
+        bus.stops.push({ p: [s2[0], s2[1]], n: s2[2] || '', r: rts, rid: rids, inf: s2[4] === 1 });
         L.marker([s2[0], s2[1]], {
           pane: 'outdBusPane', interactive: false, keyboard: false,
           // 노선번호 없는 정류장은 연한 파랑
@@ -1655,6 +1658,12 @@
         var t = e.target;
         if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; }
         if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var rtBtn = t.closest('[data-bus-rt]');
+        if (rtBtn) {
+          var k = Number(rtBtn.getAttribute('data-bus-rt'));
+          openBusRoutePopup(el.__stop.r[k], el.__stop.rid[k], el.__stop);
+          return;
+        }
         var modeBtn = t.closest('[data-pop-mode]');
         if (modeBtn) {
           if (modeBtn.classList.contains('is-disabled')) return;
@@ -1685,7 +1694,12 @@
     var dist = favDistText(it);
     if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
     var chips = s2.r.length
-      ? s2.r.map(function (r) { return '<span class="outd-subpop__line outd-buspop__line">' + escHtml(r) + '</span>'; }).join('')
+      ? s2.r.map(function (r, k) {
+        var has = s2.rid && s2.rid[k] && s2.rid[k].length;
+        return has
+          ? '<button type="button" class="outd-subpop__line outd-buspop__line is-tap" data-bus-rt="' + k + '">' + escHtml(r) + '</button>'
+          : '<span class="outd-subpop__line outd-buspop__line">' + escHtml(r) + '</span>';
+      }).join('')
       : '<span class="outd-buspop__none">노선 정보 없음</span>';
     el.innerHTML =
       '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
@@ -1703,6 +1717,74 @@
     el.classList.remove('is-bottom');
     el.__openedAt = Date.now();
     el.style.display = 'flex';
+  }
+  /** 2026-11-03 노선번호 탭 → 그 노선의 정류장 목록(운행 순서, 방향별 탭, 지금 정류장 강조) */
+  var busRouteCache = {};
+  function loadBusRoute(id) {
+    if (busRouteCache[id]) return Promise.resolve(busRouteCache[id]);
+    return fetch('assets/data/kr-bus/routes/' + id + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) busRouteCache[id] = d; return d; }).catch(function () { return null; });
+  }
+  function openBusRoutePopup(ref, ids, stop) {
+    var el = $('outdBusRtPop');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdBusRtPop';
+      el.className = 'outd-favpop outd-light outd-busrt';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (e) {
+        var t = e.target;
+        if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; return; }
+        var tab = t.closest('[data-rt-dir]');
+        if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderBusRoutePopup(el); }
+      });
+    }
+    el.__ref = ref; el.__stop = stop; el.__routes = null; el.__dir = 0;
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선 정보를 불러오는 중…</div></div>';
+    el.style.display = 'flex';
+    Promise.all((ids || []).map(loadBusRoute)).then(function (list) {
+      if (el.__ref !== ref || el.__stop !== stop) return;
+      el.__routes = list.filter(function (d) { return d && d.s && d.s.length; });
+      // 지금 정류장이 들어 있는 방향을 먼저
+      var near = function (d) { return d.s.some(function (x) { return busStopDistM(x, stop) < 60; }); };
+      el.__routes.sort(function (a, b) { return (near(b) ? 1 : 0) - (near(a) ? 1 : 0); });
+      renderBusRoutePopup(el);
+    });
+  }
+  function busStopDistM(x, stop) {
+    return Math.hypot((x[1] - stop.p[0]) * 111000, (x[2] - stop.p[1]) * 88000);
+  }
+  function busRouteDirLabel(d, i) {
+    var m = /\(([^)]*)\)\s*$/.exec(d.t || '');
+    if (m) return m[1];
+    var a = d.s[0][0], b = d.s[d.s.length - 1][0];
+    return a + ' → ' + b;
+  }
+  function renderBusRoutePopup(el) {
+    var routes = el.__routes || [], stop = el.__stop;
+    var card;
+    if (!routes.length) {
+      card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span><b>정류장 정보 없음</b>' +
+        '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>';
+    } else {
+      var d = routes[Math.min(el.__dir, routes.length - 1)];
+      var curIdx = -1, best = 60;
+      d.s.forEach(function (x, i) { var dm = busStopDistM(x, stop); if (dm < best) { best = dm; curIdx = i; } });
+      card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
+        '<div class="outd-busrt__ttl"><b>' + escHtml(d.s[0][0]) + ' ↔ ' + escHtml(d.s[d.s.length - 1][0]) + '</b>' +
+        '<span>정류장 ' + d.s.length + '개' + (d.e ? ' · 경로로 추정한 목록' : '') + '</span></div>' +
+        '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>' +
+        (routes.length > 1 ? '<div class="outd-busrt__dirs" role="tablist">' + routes.map(function (r, i) {
+          return '<button type="button" class="outd-busrt__dir' + (r === d ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab">' + escHtml(busRouteDirLabel(r, i)) + '</button>';
+        }).join('') + '</div>' : '') +
+        '<ol class="outd-busrt__list">' + d.s.map(function (x, i) {
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + '"><i></i><span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+        }).join('') + '</ol>';
+    }
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
+    var cur = el.querySelector('.outd-busrt__list .is-cur');
+    var lst = el.querySelector('.outd-busrt__list');
+    if (cur && lst) lst.scrollTop = Math.max(0, cur.offsetTop - lst.offsetTop - lst.clientHeight / 2 + cur.offsetHeight / 2);
   }
   function syncBusBtn() {
     var btn = $('outdBusBtn');
