@@ -1601,7 +1601,7 @@
   /* ---------- 지하철 경로 찾기 (2026-11-03) ----------
    * 길찾기 → [지하철 경로]: 출발역·도착역을 고르면 앱 안에서 바로 계산(서버·비용 없음).
    * 그래프: 호선별 역 순서(kr-subway-lines.json)의 이웃 역 연결(순환선은 양 끝도 연결), 역의 다른 호선으로 갈아타기.
-   * 소요 시간(어림): 역마다 1분 + 역 사이 1km당 1.3분, 환승 5분. 최소 환승은 환승 1회 = 60분으로 무겁게 계산.
+   * 소요 시간(어림): 역마다 1분 + 역 사이 1km당 1.3분, 환승 7분(걷기·기다림). 최소 환승은 환승 1회 = 60분으로 무겁게 계산.
    * 결과: 호선 색 노선도 형식(구간별 방면·역 목록·환승), [출발역까지 길안내]로 바로 길찾기. */
   var subRoute = { from: null, to: null, mode: 'time', graph: null };
   function subStDistKm(a, b) {
@@ -1625,11 +1625,24 @@
         }
       });
     });
+    // 같은 이름 역이 따로 저장된 경우(서울·대전·부산·동래 등) 1.5km 안이면 걸어서 갈아타기로 연결
+    var S = sub.data.stations, byName = {};
+    S.forEach(function (s2, i) { (byName[s2.n] = byName[s2.n] || []).push(i); });
+    Object.keys(byName).forEach(function (n) {
+      var a = byName[n];
+      for (var i = 0; i < a.length; i++) for (var j = 0; j < a.length; j++) {
+        if (i === j) continue;
+        var km = subStDistKm(a[i], a[j]);
+        if (km > 1.5) continue;
+        var w = km < 0.3 ? 2 : 4 + km * 12;
+        (S[a[i]].l || []).forEach(function (la) { (S[a[j]].l || []).forEach(function (lb) { add(a[i], a[j], la, w); var k = a[i] + '|' + la; adj[k][adj[k].length - 1][1] = lb; }); });
+      }
+    });
     return { adj: adj, loops: loops, o: lines.o };
   }
   function findSubwayRoute(from, to, mode) {
     var g = subRoute.graph, S = sub.data.stations;
-    var XFER = mode === 'xfer' ? 60 : 5;
+    var XFER = mode === 'xfer' ? 60 : 7;
     var dist = {}, prev = {}, heap = [];
     var push = function (c, k) { heap.push([c, k]); var i = heap.length - 1; while (i > 0) { var p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; var t = heap[p]; heap[p] = heap[i]; heap[i] = t; i = p; } };
     var pop = function () { var top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; var i = 0; for (;;) { var l = 2 * i + 1, r = l + 1, m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; var t = heap[m]; heap[m] = heap[i]; heap[i] = t; i = m; } } return top; };
@@ -1657,7 +1670,7 @@
     legs = legs.filter(function (l) { return l.st.length >= 2; });
     var mins = 0, n = 0;
     legs.forEach(function (l) { for (var i = 1; i < l.st.length; i++) { mins += 1 + subStDistKm(l.st[i - 1], l.st[i]) * 1.3; n++; } });
-    mins += Math.max(0, legs.length - 1) * 5;
+    mins += Math.max(0, legs.length - 1) * 7;
     return { legs: legs, mins: Math.round(mins), hops: n, xfers: Math.max(0, legs.length - 1) };
   }
   /** 구간 방면: 그 호선 순서에서 진행 방향 끝 역(순환선은 다음 역) */
@@ -1742,7 +1755,7 @@
             var tag = k === 0 && i === 0 ? '<em>출발</em>' : (k === res.legs.length - 1 && i === leg.st.length - 1 ? '<em>도착</em>' : (edge ? '<em class="is-x">환승</em>' : ''));
             return '<li class="' + (edge ? 'is-cur' : '') + '" style="--ln:' + escHtml(ln.c) + '"><i></i><span>' + escHtml(S[si].n) + '</span>' + tag + '</li>';
           }).join('');
-          return (k > 0 ? '<li class="outd-subroute__xfer">환승 · 약 5분</li>' : '') +
+          return (k > 0 ? '<li class="outd-subroute__xfer">환승 · 약 7분</li>' : '') +
             '<li class="outd-subroute__leghd" style="--ln:' + escHtml(ln.c) + '"><span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>' +
             '<span>' + escHtml(subLegDirection(leg)) + ' · ' + (leg.st.length - 1) + '개 역</span></li>' + rows;
         }).join('') + '</ol>' +
