@@ -4632,9 +4632,11 @@
         (Number(it.affiliate_discount) > 0
           ? '<i class="outd-favpin__affbadge">' + favDiscountBadge(it.affiliate_discount, 24) + '</i>'
           : '') + '</div>' + // 2026-10-24: 공개 장소 STELVIO 로고 배지 제거(제휴 할인율 배지만)
-        (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
         (g.length > 1 ? '<i class="outd-favpin__cnt">' + g.length + '</i>' : '') +
-        '<span class="outd-favpin__name">' + escHtml(it.name) + (g.length > 1 ? ' 외 ' + (g.length - 1) : '') + '</span></div></div>';
+        // 2026-11-02: 좋아요 배지를 장소명 이름표 안(이름 오른쪽)에 함께 표시
+        '<span class="outd-favpin__name"><em class="outd-favpin__nm">' + escHtml(it.name) + (g.length > 1 ? ' 외 ' + (g.length - 1) : '') + '</em>' +
+        (it.is_public ? '<span class="outd-favpin__likes' + (it.liked ? ' is-on' : '') + '">♥ ' + favLikeText(it.like_count) + '</span>' : '') +
+        '</span></div></div>';
       L.marker([Number(it.lat), Number(it.lng)], {
         icon: L.divIcon({ className: 'outd-favpin-wrap', html: html, iconSize: [0, 0], iconAnchor: [0, 0] }),
         interactive: false,

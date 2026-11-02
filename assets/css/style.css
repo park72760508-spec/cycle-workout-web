@@ -36338,3 +36338,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-favpin__likes { left: 9px; top: -24px; font-size: 10px; padding: 0 5px; }
 #outdoorRideScreen .outd-favpin__cnt { left: -25px; top: -24px; min-width: 18px; height: 18px; font-size: 10px; line-height: 14px; }
 #outdoorRideScreen .outd-favpin__affbadge { right: -14px; top: -14px; transform: none; }
+/* 2026-11-02 즐겨찾기 좋아요 배지 = 장소명 이름표 안(이름 오른쪽) */
+#outdoorRideScreen .outd-favpin__name { max-width: 180px; }
+#outdoorRideScreen .outd-favpin__name .outd-favpin__likes {
+  position: static; display: inline-block; margin-left: 4px; vertical-align: 0;
+  padding: 0 4px; font-size: 9.5px; line-height: 1.35; box-shadow: none;
+}
+#outdoorRideScreen #outdMap.outd-favlabels .outd-favpin__name { display: flex; align-items: center; }
+#outdoorRideScreen .outd-favpin__nm { font-style: normal; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-favpin__name .outd-favpin__likes { flex: 0 0 auto; }
