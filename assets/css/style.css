@@ -36300,3 +36300,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .wb-tools { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
 .wb-tool { min-width: 0; }
 .wb-tool__c { width: 100%; max-width: 42px; height: auto; aspect-ratio: 1; }
+/* 2026-11-02 워크아웃 작성: 좌우 여백 최소화 — 블럭(카드)이 화면 폭을 최대한 사용 */
+#workoutBuilderScreen.screen { padding-left: 6px; padding-right: 6px; }
+#workoutBuilderScreen .card { padding-left: 10px; padding-right: 10px; margin-left: 0; margin-right: 0; max-width: none; }
+#workoutBuilderScreen .segments-list { padding: 8px; }
+#workoutBuilderScreen .segment-card { padding: 12px 10px; }
+#workoutBuilderScreen .builder-actions { margin-left: 0; margin-right: 0; }
