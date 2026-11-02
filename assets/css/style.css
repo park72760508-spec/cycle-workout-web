@@ -36498,5 +36498,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__veh.is-sub { background: #ecfdf5; border-color: #10b981; color: #065f46; }
 #outdoorRideScreen .outd-busrt__list li.has-veh span { font-weight: 700; }
 /* 2026-11-03 API 인증키 화면: 칸이 늘어 마지막 저장 버튼이 화면 밖으로 밀리던 문제 — 카드 안에서 스크롤 */
-#outdoorRideScreen .outd-apikeys { align-items: flex-start; overflow-y: auto; padding-top: calc(16px + env(safe-area-inset-top, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
-#outdoorRideScreen .outd-apikeys .outd-favpop__card { max-height: none; margin: auto 0; }
+#outdoorRideScreen .outd-apikeys .outd-favpop__card {
+  max-height: calc(100vh - 150px); max-height: calc(100dvh - 150px);
+  overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+}
