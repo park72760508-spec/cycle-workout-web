@@ -2221,13 +2221,30 @@ function formatMdDowFromYmdSeoul(ymd) {
 }
 
 /** 월간 목록: 일시 오름차순 정렬 */
+/** 출발 시각 "9:00"·"09:00"·"14:00" → 비교용 "0900"·"1400" (없으면 맨 뒤) */
+function openRidingDepartureSortKey(t) {
+  var m = /(\d{1,2})\s*:\s*(\d{2})/.exec(String(t || ''));
+  return m ? ('0' + m[1]).slice(-2) + m[2] : '9999';
+}
+
+/** 2026-11-03: 날짜(서울 기준) → 출발 시각 순 */
 function sortOpenRidingListByDateTime(rides) {
   return rides.slice().sort(function (a, b) {
-    var ta = a && a.date && typeof a.date.toDate === 'function' ? a.date.toDate().getTime() : 0;
-    var tb = b && b.date && typeof b.date.toDate === 'function' ? b.date.toDate().getTime() : 0;
-    if (ta !== tb) return ta - tb;
-    return String(a.departureTime || '00:00').localeCompare(String(b.departureTime || '00:00'));
+    var ya = getRideDateSeoulYmd(a) || '';
+    var yb = getRideDateSeoulYmd(b) || '';
+    if (ya !== yb) return ya < yb ? -1 : 1;
+    var ka = openRidingDepartureSortKey(a && a.departureTime);
+    var kb = openRidingDepartureSortKey(b && b.departureTime);
+    if (ka !== kb) return ka < kb ? -1 : 1;
+    return 0;
   });
+}
+
+/** 목록 행 날짜 "11/2"(서울 기준) */
+function formatOpenRidingMdShort(ride) {
+  var ymd = getRideDateSeoulYmd(ride);
+  var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+  return m ? Number(m[2]) + '/' + Number(m[3]) : '';
 }
 
 /**
@@ -3840,6 +3857,8 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
   }
   var rideYmd = getRideDateSeoulYmd(r);
   var useInviteHostedRow = !!(ex.compactInviteOrHostedList || ex.myRidesUnifiedList);
+  // 2026-11-03: 나의 라이딩·러닝 목록 — 날짜를 출발 시각 왼쪽에 "11/2 14:00"
+  var rideMdShort = ex.showRideDate ? formatOpenRidingMdShort(r) : '';
   var dateLabel = '';
   if (ex.showRideDate) {
     dateLabel = useInviteHostedRow ? formatRideDateMdDowSeoul(r) : rideYmd && formatKoreanDateLabelFromYmd(rideYmd);
@@ -3996,7 +4015,10 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
             })()}
           </span>
           {openRidingMetaSep()}
-          <span className="shrink-0">{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
+          <span className="shrink-0">
+            {ex.showRideDate && rideMdShort ? <span className="font-semibold text-slate-700 mr-1">{rideMdShort}</span> : null}
+            {r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}
+          </span>
           {openRidingMetaSep()}
           <span className={'font-semibold tabular-nums shrink-0 ' + (isCancelled ? 'text-slate-400' : 'text-emerald-700')}>
             {openRidingRideParticipantRatioShared(r)}
@@ -4010,7 +4032,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
             (isPastDayListFade ? ' opacity-60' : '')
           }
         >
-          {ex.showRideDate && dateLabel ? (
+          {ex.showRideDate && dateLabel && !rideMdShort ? (
             <>
               <span className={'shrink-0 ' + (useInviteHostedRow ? 'text-slate-600' : 'text-slate-500')}>{dateLabel}</span>
               {openRidingMetaSep()}
@@ -4028,7 +4050,10 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
               : '-'}
           </span>
           {openRidingMetaSep()}
-          <span className="shrink-0">{r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}</span>
+          <span className="shrink-0">
+            {ex.showRideDate && rideMdShort ? <span className="font-semibold text-slate-700 mr-1">{rideMdShort}</span> : null}
+            {r.departureTime != null && String(r.departureTime).trim() ? r.departureTime : '-'}
+          </span>
           {openRidingMetaSep()}
           <span className="shrink-0">{openRidingRideDistanceKmShared(r)}</span>
           {openRidingMetaSep()}
@@ -8239,12 +8264,13 @@ function OpenRidingGroupCalendarSection(props) {
   var ridesForSelectedDay = useMemo(
     function () {
       if (!selectedKey) return [];
-      return groupRides.filter(function (r) {
+      // 2026-11-03: 고른 날짜 목록도 출발 시각 순(14:00 → 19:00)
+      return sortOpenRidingListByDateTime(groupRides.filter(function (r) {
         var ts = r.date;
         var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
         if (!d) return false;
         return dateKey(d.getFullYear(), d.getMonth(), d.getDate()) === selectedKey;
-      });
+      }));
     },
     [groupRides, selectedKey]
   );
