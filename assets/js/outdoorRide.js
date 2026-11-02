@@ -1432,15 +1432,24 @@
     sub.stLayer.addTo(map);
     applyFavPinUnrotate(true);
   }
-  /** 탭한 지점의 지하철역 아이콘(인덱스) */
+  /** 탭한 지점의 지하철역 아이콘(인덱스) — 2026-11-02: 아이콘(18px)만 정확히 눌러야 하던 것을
+   *  화면상 거리 기준으로 확대(아이콘 중심 반경 28px 또는 역 이름 글자 영역, 여러 개면 가장 가까운 역) */
   function subwayStationAt(x, y) {
-    if (!sub.data) return null;
-    var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
-    for (var i = 0; i < els.length; i++) {
-      var ic = els[i].closest && els[i].closest('[data-sub-st]');
-      if (ic) return Number(ic.getAttribute('data-sub-st'));
+    if (!sub.data || !sub.stLayer) return null;
+    var R = 28, best = null, bestD = R * R;
+    var icons = document.querySelectorAll('#outdMap [data-sub-st]');
+    for (var i = 0; i < icons.length; i++) {
+      var r = icons[i].getBoundingClientRect();
+      if (!r.width) continue;
+      var dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2), d = dx * dx + dy * dy;
+      var lb = icons[i].nextElementSibling;
+      if (d > bestD && lb && lb.tagName === 'B') {
+        var br = lb.getBoundingClientRect();
+        if (x >= br.left - 4 && x <= br.right + 4 && y >= br.top - 4 && y <= br.bottom + 4) d = Math.min(d, bestD - 1);
+      }
+      if (d <= bestD) { bestD = d; best = Number(icons[i].getAttribute('data-sub-st')); }
     }
-    return null;
+    return best;
   }
   /** 2026-11-02 지하철역 아이콘 → 목적지 안내 팝업(즐겨찾기 팝업과 같은 디자인·이동 수단 선택 → 길찾기) */
   function openSubwayPopup(idx) {
