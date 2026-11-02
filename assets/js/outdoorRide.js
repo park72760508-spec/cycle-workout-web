@@ -1378,6 +1378,7 @@
     map.getPane('outdSubwayStPane').style.zIndex = 395; // 경로선(overlayPane 400) 아래, 지도 타일 위
     map.getPane('outdSubwayStPane').style.pointerEvents = 'none';
     map.on('zoomend moveend', refreshSubway);
+    bindFavPickTap(); // 즐겨찾기 핀이 없어도 역 아이콘 탭을 받도록
     syncSubwayBtn();
     refreshSubway();
   }
@@ -1417,19 +1418,96 @@
     sub.stShown = key;
     if (sub.stLayer) map.removeLayer(sub.stLayer);
     sub.stLayer = L.layerGroup();
-    sub.data.stations.forEach(function (s2) {
+    sub.data.stations.forEach(function (s2, si) {
       if (!b.contains(s2.p)) return;
       var multi = s2.l && s2.l.length > 1;
       var showName = allNames || multi;
       L.marker(s2.p, {
         pane: 'outdSubwayStPane', interactive: false, keyboard: false,
         icon: L.divIcon({ className: 'outd-subst' + (multi ? ' outd-subst--x' : ''), iconSize: [0, 0],
-          html: '<span class="outd-subst__in"><i style="background:' + subwayDotBg(s2.l) + '">' + SUBWAY_TRAIN_SVG + '</i>' +
+          html: '<span class="outd-subst__in"><i data-sub-st="' + si + '" style="background:' + subwayDotBg(s2.l) + '">' + SUBWAY_TRAIN_SVG + '</i>' +
             (showName ? '<b>' + escHtml(s2.n) + '</b>' : '') + '</span>' })
       }).addTo(sub.stLayer);
     });
     sub.stLayer.addTo(map);
     applyFavPinUnrotate(true);
+  }
+  /** 탭한 지점의 지하철역 아이콘(인덱스) */
+  function subwayStationAt(x, y) {
+    if (!sub.data) return null;
+    var els = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+    for (var i = 0; i < els.length; i++) {
+      var ic = els[i].closest && els[i].closest('[data-sub-st]');
+      if (ic) return Number(ic.getAttribute('data-sub-st'));
+    }
+    return null;
+  }
+  /** 2026-11-02 지하철역 아이콘 → 목적지 안내 팝업(즐겨찾기 팝업과 같은 디자인·이동 수단 선택 → 길찾기) */
+  function openSubwayPopup(idx) {
+    var s2 = sub.data && sub.data.stations[idx];
+    if (!s2) return;
+    var el = $('outdSubPop');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdSubPop';
+      el.className = 'outd-favpop outd-light';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (e) {
+        var t = e.target;
+        if (Date.now() - (el.__openedAt || 0) < 450) { e.preventDefault(); e.stopPropagation(); return; } // 탭 직후 중복 클릭 무시
+        if (t === el || t.closest('[data-pop-close]')) { el.style.display = 'none'; return; }
+        var modeBtn = t.closest('[data-pop-mode]');
+        if (modeBtn) {
+          if (modeBtn.classList.contains('is-disabled')) return;
+          el.__mode = modeBtn.getAttribute('data-pop-mode');
+          Array.prototype.forEach.call(el.querySelectorAll('[data-pop-mode]'), function (b2) {
+            var on = b2.getAttribute('data-pop-mode') === el.__mode;
+            b2.classList.toggle('is-on', on);
+            b2.setAttribute('aria-checked', on ? 'true' : 'false');
+          });
+          return;
+        }
+        if (t.closest('[data-pop-go]')) {
+          var cur = sub.data && sub.data.stations[el.__idx];
+          if (!cur) return;
+          // 팝업에서 고른 수단을 사용자 선택으로 확정(길찾기 화면이 기본 수단으로 되돌리지 않게)
+          if (el.__mode) { travelMode = el.__mode; travelModeUserSet = true; renderTravelModes(); }
+          el.style.display = 'none';
+          var favSh = $('outdFavSheet');
+          if (favSh) favSh.style.display = 'none';
+          unlockAudio();
+          window.openOutdoorRouteSearch({ noFocus: true });
+          chooseDestination({ name: cur.n + '역', lat: cur.p[0], lng: cur.p[1], sub: subwayLineNames(cur).join(' · ') });
+        }
+      });
+    }
+    el.__idx = idx;
+    var it = { lat: s2.p[0], lng: s2.p[1] };
+    var rows = [];
+    var dist = favDistText(it);
+    if (dist) rows.push(['거리', '내 위치에서 ' + dist]);
+    var chips = (s2.l || []).map(function (li) {
+      var ln = sub.data.lines[li];
+      return ln ? '<span class="outd-subpop__line" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>' : '';
+    }).join('');
+    el.innerHTML =
+      '<div class="outd-favpop__card" role="dialog" aria-modal="true">' +
+      '<div class="outd-favpop__head"><span class="outd-subpop__icon" style="background:' + subwayDotBg(s2.l) + '">' + SUBWAY_TRAIN_SVG + '</span>' +
+      '<div class="outd-favpop__title"><div class="outd-favpop__namerow"><b>' + escHtml(s2.n) + '역</b></div>' +
+      '<span>지하철역' + ((s2.l || []).length > 1 ? ' · 환승역' : '') + '</span></div>' +
+      '<button type="button" class="coachm-picker__close" data-pop-close aria-label="닫기">✕</button></div>' +
+      '<div class="outd-subpop__lines">' + chips + '</div>' +
+      (rows.length ? '<dl class="outd-favpop__rows">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd>' + escHtml(r[1]) + '</dd></div>'; }).join('') + '</dl>' : '') +
+      '<div class="outd-favpop__likerow"><span></span>' + favPopModesHtml(it, el) + '</div>' +
+      '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-pop-close>닫기</button>' +
+      '<button type="button" class="outd-fav__save" data-pop-go>목적지로 안내</button></div>' +
+      '</div>';
+    el.classList.remove('is-bottom');
+    el.__openedAt = Date.now();
+    el.style.display = 'flex';
+  }
+  function subwayLineNames(s2) {
+    return (s2.l || []).map(function (li) { var ln = sub.data.lines[li]; return ln ? ln.n : ''; }).filter(Boolean);
   }
   function syncSubwayBtn() {
     var btn = $('outdSubwayBtn');
@@ -4437,7 +4515,8 @@
         var go = t.closest('[data-pop-go]');
         if (go) {
           // 고른 이동 수단으로 길찾기(경로 선택 화면 위 수단 버튼도 같은 수단으로 표시)
-          if (el.__mode && el.__mode !== travelMode) { travelMode = el.__mode; renderTravelModes(); }
+          // 팝업에서 고른 수단을 사용자 선택으로 확정(길찾기 화면이 기본 수단으로 되돌리지 않게)
+          if (el.__mode) { travelMode = el.__mode; travelModeUserSet = true; renderTravelModes(); }
           el.style.display = 'none';
           goFav(go.getAttribute('data-pop-go'));
           return;
@@ -4604,7 +4683,9 @@
       }
       if (!fav.picking) {
         var pid = favPinAt(e.clientX, e.clientY);
-        if (pid) openFavPopup(pid, fav.groups && fav.groups[pid]);
+        if (pid) { openFavPopup(pid, fav.groups && fav.groups[pid]); return; }
+        var sidx = subwayStationAt(e.clientX, e.clientY);
+        if (sidx != null) openSubwayPopup(sidx);
         return;
       }
       var ll = clientToLatLng(e.clientX, e.clientY);
