@@ -19,3 +19,4 @@ functions/scripts/serviceAccountKey.json
 # Node.js 의존성 (npm install로 재생성 가능)
 node_modules/
 functions/node_modules/
+.cache/

@@ -226,7 +226,69 @@ async function main() {
   }
   console.log('노선 직접 연결', direct, '/ 같은 이름 보완', infName, '/ 경로 근접 보완', infPath);
 
-  // 타일로 나눠 저장: { r:[[노선번호, [relation id…]]…], s:[[lat, lon, 이름, [노선 인덱스...], 추정이면 1]] }
+  const rmById = new Map(routeMembers.map((rm) => [rm.id, rm]));
+  // ── 공식 데이터(서울 열린데이터광장·국토교통부 TAGO, scripts/fetch-kr-bus-official.mjs) 우선 ──
+  // 공식 정류소 150m 안의 OSM 정류소는 버리고, 정류소 절반 이상이 공식 정류소 근처인 OSM 노선도 버림(공식이 없는 곳만 OSM 유지)
+  const OFFICIAL = path.resolve(path.dirname(new URL(import.meta.url).pathname), '../.cache/kr-bus-official/merged.json');
+  let officialN = 0;
+  if (fs.existsSync(OFFICIAL)) {
+    const off = JSON.parse(fs.readFileSync(OFFICIAL, 'utf8'));
+    const og = new Map(); // 약 150m 격자
+    const ogk = (a2, b2) => Math.round(a2 / 0.0015) + ':' + Math.round(b2 / 0.0015);
+    for (const [sid, v] of Object.entries(off.stops)) {
+      if (!v) continue;
+      const k = ogk(v[1], v[2]);
+      if (!og.has(k)) og.set(k, []);
+      og.get(k).push(v);
+    }
+    const nearOfficial = (lat, lon, m) => {
+      const i0 = Math.round(lat / 0.0015), j0 = Math.round(lon / 0.0015);
+      for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) {
+        for (const v of og.get((i0 + di) + ':' + (j0 + dj)) || []) if (Math.hypot((v[1] - lat) * 111000, (v[2] - lon) * 88000) <= m) return true;
+      }
+      return false;
+    };
+    for (const [id, seq] of [...routeStops]) {
+      if (seq.filter((st) => nearOfficial(st.lat, st.lon, 150)).length >= seq.length / 2) { routeStops.delete(id); routeEst.delete(id); }
+    }
+    for (const [id, st] of [...stops]) if (nearOfficial(st.lat, st.lon, 150)) stops.delete(id);
+    // 같은 실제 정류장이 출처별로 따로 있는 경우(서울 정류소 + 서울을 지나는 경기 노선의 TAGO 정류소) 하나로 합침:
+    // 이름이 같고 40m 안, 또는 이름과 상관없이 15m 안 — 서울(S) 정류소를 먼저 기준으로 둠
+    const offStop = new Map(), cg = new Map();
+    const cgk = (a2, b2) => Math.round(a2 / 0.0005) + ':' + Math.round(b2 / 0.0005);
+    const norm = (n) => String(n || '').replace(/[\s.·()]/g, '');
+    const entries = Object.entries(off.stops).filter(([, v]) => v).sort((x, y) => (x[0][0] === 'S' ? 0 : 1) - (y[0][0] === 'S' ? 0 : 1));
+    let mergedN = 0;
+    for (const [sid, v] of entries) {
+      const i0 = Math.round(v[1] / 0.0005), j0 = Math.round(v[2] / 0.0005);
+      let hit = null;
+      for (let di = -1; di <= 1 && !hit; di++) for (let dj = -1; dj <= 1 && !hit; dj++) {
+        for (const c of cg.get((i0 + di) + ':' + (j0 + dj)) || []) {
+          const d = Math.hypot((c.lat - v[1]) * 111000, (c.lon - v[2]) * 88000);
+          if (d <= 15 || (d <= 40 && norm(c.n) === norm(v[0]))) { hit = c; break; }
+        }
+      }
+      if (hit) { offStop.set(sid, hit); mergedN++; continue; }
+      const st = { lat: v[1], lon: v[2], n: v[0], routes: new Map() };
+      offStop.set(sid, st);
+      stops.set(sid, st);
+      const k = cgk(v[1], v[2]);
+      if (!cg.has(k)) cg.set(k, []);
+      cg.get(k).push(st);
+    }
+    console.log('출처별 중복 정류소 합침', mergedN);
+    for (const r of off.routes) {
+      const seq = r.s.map((sid) => offStop.get(sid)).filter((st, i, a) => st && a[i - 1] !== st);
+      if (seq.length < 2) continue;
+      seq.forEach((st) => addRoute(st, r.n, r.id));
+      routeStops.set(r.id, seq);
+      rmById.set(r.id, { ref: r.n, name: r.t });
+    }
+    officialN = off.routes.length;
+    console.log('공식 데이터 반영: 노선(방향별)', off.routes.length, '정류소', new Set(offStop.values()).size, off.tago ? `(TAGO ${off.tago.have}/${off.tago.total} 노선 수집)` : '');
+  }
+
+  // 타일로 나눠 저장: { r:[[노선번호, [노선(방향) id…]]…], s:[[lat, lon, 이름, [노선 항목 인덱스...], 추정이면 1]] }
   // 노선 정류장 목록: routes/{relation id}.json = { n:노선번호, t:노선 이름, s:[[이름, lat, lon]…] } (운행 순서)
   const tiles = new Map();
   for (const s of stops.values()) {
@@ -238,18 +300,19 @@ async function main() {
   const files = new Map();
   let bytes = 0, withRoutes = 0;
   for (const [k, list] of tiles) {
-    const refIds = new Map();
-    list.forEach((s) => s.routes.forEach((ids, ref) => {
-      if (!refIds.has(ref)) refIds.set(ref, new Set());
-      ids.forEach((id) => { if (routeStops.has(id)) refIds.get(ref).add(id); });
-    }));
-    const refs = [...refIds.keys()].sort(byNum);
-    const ri = new Map(refs.map((r, i) => [r, i]));
+    // 노선 항목 = (노선번호, 그 정류장에 실제로 서는 노선 id들) — 같은 번호의 다른 지역 노선이 섞이지 않게 정류장 기준으로 묶음
+    const entKey = new Map(), ents = [];
+    const entOf = (ref, ids) => {
+      const keep = [...ids].filter((id) => routeStops.has(id)).map(String).sort();
+      const k = ref + '|' + keep.join(',');
+      if (!entKey.has(k)) { entKey.set(k, ents.length); ents.push([ref, keep]); }
+      return entKey.get(k);
+    };
     const out = {
-      r: refs.map((r) => [r, [...refIds.get(r)].sort((a, b) => a - b)]),
+      r: ents,
       s: list.map((s) => {
         if (s.routes.size) withRoutes++;
-        const row = [r5(s.lat), r5(s.lon), s.n, [...s.routes.keys()].sort(byNum).map((r) => ri.get(r))];
+        const row = [r5(s.lat), r5(s.lon), s.n, [...s.routes.keys()].sort(byNum).map((r) => entOf(r, s.routes.get(r)))];
         if (s.inf) row.push(1); // 추정 노선
         return row;
       })
@@ -258,7 +321,6 @@ async function main() {
     bytes += js.length;
     files.set(k + '.json', js);
   }
-  const rmById = new Map(routeMembers.map((rm) => [rm.id, rm]));
   for (const [id, seq] of routeStops) {
     const rm = rmById.get(id);
     const js = JSON.stringify(Object.assign({ n: rm.ref, t: rm.name, s: seq.map((st) => [st.n, r5(st.lat), r5(st.lon)]) }, routeEst.has(id) ? { e: 1 } : {}));
@@ -272,13 +334,15 @@ async function main() {
   if (same) { console.log('변경 없음'); return; }
   // 서버가 일부만 돌려준 경우 대비: 정류장 수가 이전보다 20% 넘게 줄면 저장하지 않고 실패
   try {
-    const prevN = JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'index.json'), 'utf8')).n || 0;
-    if (prevN && stops.size < prevN * 0.8) throw new Error(`정류장 수 급감(${prevN} → ${stops.size}) — 저장 중단`);
+    const prevIdx = JSON.parse(fs.readFileSync(path.join(OUT_DIR, 'index.json'), 'utf8'));
+    const prevN = prevIdx.n || 0;
+    // 공식 데이터 범위가 바뀐 실행(정류소 합침·교체로 수가 크게 달라짐)은 비교하지 않음
+    if (prevN && (prevIdx.o || 0) === officialN && stops.size < prevN * 0.8) throw new Error(`정류장 수 급감(${prevN} → ${stops.size}) — 저장 중단`);
   } catch (e) { if (/급감/.test(e.message)) throw e; }
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(path.join(OUT_DIR, 'routes'), { recursive: true });
   for (const [f, js] of files) fs.writeFileSync(path.join(OUT_DIR, f), js);
-  const index = { v: new Date().toISOString().slice(0, 10), src: '© OpenStreetMap contributors (ODbL)', cell: CELL, n: stops.size, t: [...tiles.keys()].sort() };
+  const index = { v: new Date().toISOString().slice(0, 10), src: '© OpenStreetMap contributors (ODbL)', cell: CELL, n: stops.size, o: officialN, t: [...tiles.keys()].sort() };
   fs.writeFileSync(path.join(OUT_DIR, 'index.json'), JSON.stringify(index));
   console.log('노선 정류장 목록', routeStops.size, '개(경로 추정', routeEst.size, ')');
   console.log('타일', tiles.size, '개, 합계', (bytes / 1024 / 1024).toFixed(1), 'MB, 노선번호 있는 정류장', withRoutes, '/', stops.size);

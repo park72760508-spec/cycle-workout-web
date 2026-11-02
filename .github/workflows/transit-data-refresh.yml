@@ -1,11 +1,14 @@
 # 루트맵 지하철역·버스 정류장 데이터 자동 갱신 (2026-11-02)
-# 매월 2일 03:00 KST(1일 18:00 UTC): OpenStreetMap 에서 다시 받아 바뀐 경우에만 캐시 버전을 올리고 main 에 커밋·푸시(→ GitHub Pages 반영)
+# 매주 월요일 03:00 KST(일 18:00 UTC): OpenStreetMap + 공식 버스 데이터(서울 열린데이터광장·국토교통부 TAGO)를 다시 받아
+# 바뀐 경우에만 캐시 버전을 올리고 main 에 커밋·푸시(→ GitHub Pages 반영).
+# TAGO 는 하루 호출 한도 때문에 실행마다 최대 9000개 노선씩(없는 것·30일 지난 것부터) — 수집 결과는 Actions 캐시로 다음 실행에 이어 씀.
+# 필요한 저장소 비밀값: DATA_GO_KR_KEY(공공데이터포털 인증키, 없으면 공식 데이터 수집은 건너뜀)
 # Actions 탭에서 "Run workflow" 로 수동 실행도 가능
 name: Transit data refresh
 
 on:
   schedule:
-    - cron: '0 18 1 * *'
+    - cron: '0 18 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -18,7 +21,9 @@ concurrency:
 jobs:
   refresh:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
+    env:
+      DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +43,27 @@ jobs:
           node scripts/build-kr-subway.mjs
           node scripts/build-kr-subway-lines.mjs --pbf "$RUNNER_TEMP/kr.osm.pbf"
           if [ -n "$(git status --porcelain assets/data/kr-subway.json assets/data/kr-subway-lines.json)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
+
+      - name: 공식 버스 데이터 캐시 복원
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/kr-bus-official
+          key: kr-bus-official-${{ github.run_id }}
+          restore-keys: kr-bus-official-
+
+      - name: 공식 버스 데이터 수집(서울·TAGO)
+        if: env.DATA_GO_KR_KEY != ''
+        continue-on-error: true
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+        run: node scripts/fetch-kr-bus-official.mjs
+
+      - name: 공식 버스 데이터 캐시 저장
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/kr-bus-official
+          key: kr-bus-official-${{ github.run_id }}
 
       - name: 버스 데이터
         id: bus

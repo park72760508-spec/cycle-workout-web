@@ -1829,7 +1829,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261103rt';
+  var BUS_DATA_V = '20261103off';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -2068,6 +2068,7 @@
           return '<li class="' + (i === curIdx ? 'is-cur' : '') + '"><i></i>' + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
     }
+    card += '<p class="outd-busrt__src">노선 정보: 서울특별시 · 국토교통부(TAGO) · OpenStreetMap</p>';
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
     var cur = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');

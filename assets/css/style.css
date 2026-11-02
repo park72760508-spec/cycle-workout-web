@@ -36478,3 +36478,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-apikeys__exp { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; }
 #outdoorRideScreen .outd-apikeys__exp input { height: 32px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
 #outdoorRideScreen .outd-apikeys__save { height: 38px; padding: 0; font-size: 14px; }
+#outdoorRideScreen .outd-busrt__src { margin: 0; font-size: 10.5px; color: #94a3b8; text-align: right; }
