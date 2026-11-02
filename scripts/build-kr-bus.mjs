@@ -61,6 +61,8 @@ async function main() {
     let ns = 0, nr = 0;
     for (const el of d.elements || []) {
       if (el.type === 'node' && el.tags && el.tags.highway === 'bus_stop') {
+        const nm = el.tags['name:ko'] || el.tags.name || '';
+        if (!/[가-힣]/.test(nm)) continue; // 국내 정류장만(일본 후쿠오카·쓰시마 등 제외)
         if (!stops.has(el.id)) {
           const t = el.tags;
           stops.set(el.id, { lat: el.lat, lon: el.lon, n: t['name:ko'] || t.name || '', routes: new Set() });
@@ -101,7 +103,11 @@ out skel qt;`;
     await sleep(2000);
   }
   for (let la = LAT0; la < LAT1; la += CHUNK) {
-    for (let lo = LON0; lo < LON1; lo += CHUNK) await chunk(la, lo, CHUNK);
+    for (let lo = LON0; lo < LON1; lo += CHUNK) {
+      if (la < 35 && lo >= 129.5) continue; // 규슈·쓰시마(일본) 해역 — 국내 정류장 없음
+      if (la < 37 && lo >= 130) continue;   // 동해 먼바다(울릉도는 위도 37.4~37.6)
+      await chunk(la, lo, CHUNK);
+    }
   }
   for (const [id, s] of stops) nodePos.set(id, [s.lat, s.lon]);
   console.log('정류장 합계', stops.size, '노선 관계', routeMembers.length);
