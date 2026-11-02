@@ -5278,13 +5278,14 @@ function OpenRidingCalendarMain(props) {
 
   var ridesForDay = useMemo(function () {
     if (!selectedKey) return [];
-    return ridesMonth.filter(function (r) {
+    // 2026-11-03: 달력에서 고른 날짜 목록 = 출발 시각 순(14:00 → 19:00)
+    return sortOpenRidingListByDateTime(ridesMonth.filter(function (r) {
       var ts = r.date;
       var d = ts && typeof ts.toDate === 'function' ? ts.toDate() : null;
       if (!d) return false;
       var k = dateKey(d.getFullYear(), d.getMonth(), d.getDate());
       return k === selectedKey;
-    });
+    }));
   }, [ridesMonth, selectedKey]);
 
   /** 해당 월에 라이딩이 하나라도 있는 모든 날짜(필터 무관) */
