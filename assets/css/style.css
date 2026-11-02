@@ -36424,3 +36424,47 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-busrt__arrow { left: 3px; top: calc(50% + 9px); width: 15px; height: 15px; }
 #outdoorRideScreen .outd-busrt__arrow::before { left: 2px; width: 10px; height: 10px; border-right-width: 3.5px; border-bottom-width: 3.5px; }
+/* 2026-11-03 지하철 경로 찾기: 길찾기 버튼 · 출발/도착 입력 · 최소 시간/환승 · 호선 색 경로 */
+#outdoorRideScreen .outd-route__picks { display: flex; gap: 8px; }
+#outdoorRideScreen .outd-route__picks .outd-route__mappick { flex: 1 1 0; min-width: 0; }
+#outdoorRideScreen .outd-route__subbtn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+#outdoorRideScreen .outd-route__subico { width: 20px; height: 20px; border-radius: 5px; background: #00a23f; display: inline-flex; align-items: center; justify-content: center; }
+#outdoorRideScreen .outd-route__subico svg { width: 14px; height: 14px; }
+#outdoorRideScreen .outd-subroute { z-index: 100170; }
+#outdoorRideScreen .outd-subroute__card { max-height: min(86vh, 720px); }
+#outdoorRideScreen .outd-subroute__ico { background: #00a23f; min-width: 36px; padding: 0; }
+#outdoorRideScreen .outd-subroute__ico svg { width: 20px; height: 20px; }
+#outdoorRideScreen .outd-subroute__form { position: relative; display: flex; flex-direction: column; gap: 6px; padding-right: 44px; }
+#outdoorRideScreen .outd-subroute__field { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; }
+#outdoorRideScreen .outd-subroute__lbl { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #64748b; }
+#outdoorRideScreen .outd-subroute__input { flex: 1 1 auto; min-width: 0; border: 0; outline: none; font-size: 15px; background: transparent; padding: 8px 0; color: #0f172a; }
+#outdoorRideScreen .outd-subroute__chosen { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; border: 0; background: none; padding: 8px 0; cursor: pointer; text-align: left; font-family: inherit; }
+#outdoorRideScreen .outd-subroute__chosen b { font-size: 15px; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#outdoorRideScreen .outd-subroute__chosen::after { content: '변경'; margin-left: auto; font-size: 11px; color: #64748b; }
+#outdoorRideScreen .outd-subroute__swap {
+  position: absolute; right: 0; top: 50%; transform: translateY(-50%); width: 36px; height: 36px; border-radius: 50%;
+  border: 1px solid #cbd5e1; background: #fff; font-size: 17px; color: #334155; cursor: pointer;
+}
+#outdoorRideScreen .outd-subroute__sug:empty { display: none; }
+#outdoorRideScreen .outd-subroute__sug { display: flex; flex-direction: column; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; max-height: 220px; overflow-y: auto; }
+#outdoorRideScreen .outd-subroute__sugitem { display: flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 12px; border: 0; border-bottom: 1px solid #f1f5f9; background: #fff; cursor: pointer; text-align: left; font-family: inherit; }
+#outdoorRideScreen .outd-subroute__sugitem b { font-size: 14px; color: #0f172a; }
+#outdoorRideScreen .outd-subroute__none { padding: 10px 12px; font-size: 13px; color: #64748b; }
+#outdoorRideScreen .outd-subroute__sum { display: flex; align-items: baseline; gap: 10px; }
+#outdoorRideScreen .outd-subroute__sum b { font-size: 20px; color: #0f172a; }
+#outdoorRideScreen .outd-subroute__sum span { font-size: 13px; color: #64748b; }
+#outdoorRideScreen .outd-subroute__legs { max-height: 44vh; }
+#outdoorRideScreen .outd-subroute__legs li::before { background: var(--ln, #94a3b8); opacity: 0.45; }
+#outdoorRideScreen .outd-subroute__legs li i { border-color: var(--ln, #2563eb); }
+#outdoorRideScreen .outd-subroute__legs li.is-cur { color: #0f172a; }
+#outdoorRideScreen .outd-subroute__legs li.is-cur i { background: var(--ln); border-color: #fff; box-shadow: 0 0 0 2px var(--ln); }
+#outdoorRideScreen .outd-subroute__legs li em { background: var(--ln); }
+#outdoorRideScreen .outd-subroute__legs li em.is-x { background: #fff; color: #334155; border: 1px solid #cbd5e1; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__leghd { min-height: 38px; gap: 8px; padding-left: 0; font-size: 12.5px; color: #475569; font-weight: 700; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__leghd::before { display: none; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__leghd .outd-busrt__no { min-width: 0; height: 24px; font-size: 12px; padding: 0 8px; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__xfer { min-height: 30px; padding-left: 24px; font-size: 12px; color: #64748b; font-weight: 700; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__xfer::before { background: repeating-linear-gradient(to bottom, #94a3b8 0 3px, transparent 3px 6px); opacity: 1; }
+#outdoorRideScreen .outd-subpop__sr { display: flex; gap: 8px; }
+#outdoorRideScreen .outd-subpop__sr button { flex: 1 1 0; height: 34px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; font-family: inherit; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__leghd .outd-busrt__no { flex: 0 0 auto; }
