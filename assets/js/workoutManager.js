@@ -6115,6 +6115,7 @@ function updateSegmentSummary() {
     
     if (durationEl) durationEl.textContent = `${totalMinutes}분`;
     if (countEl) countEl.textContent = `${segmentCount}개`;
+    renderRoutineList();
   }, 200);
 }
 
@@ -7867,6 +7868,126 @@ window.updateFtpZoneValues = updateFtpZoneValues;
 window.renderSegments = renderSegments;
 window.updateSegmentSummary = updateSegmentSummary;
 window.changeSegmentPage = changeSegmentPage;
+
+// ==========================================================
+// 2026-11-02 루틴: 자주 쓰는 세그먼트 묶음 저장 → 탭하면 세그먼트 목록 끝에 추가
+// 저장 위치 = 이 기기 localStorage(사용자별 키)
+// ==========================================================
+function routineStorageKey() {
+  let uid = '';
+  try {
+    const u = window.currentUser || JSON.parse(localStorage.getItem('currentUser') || 'null');
+    uid = (u && (u.id || u.uid)) || '';
+  } catch (e) { /* noop */ }
+  return 'stelvio_segment_routines_' + (uid || 'guest');
+}
+
+function loadRoutines() {
+  try {
+    const list = JSON.parse(localStorage.getItem(routineStorageKey()) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch (e) { return []; }
+}
+
+function storeRoutines(list) {
+  try { localStorage.setItem(routineStorageKey(), JSON.stringify(list)); return true; } catch (e) { return false; }
+}
+
+function routineTotalLabel(segs) {
+  const sec = segs.reduce((sum, seg) => sum + (seg.duration_sec || 0), 0);
+  const m = Math.floor(sec / 60), r = sec % 60;
+  return r ? `${m}분 ${r}초` : `${m}분`;
+}
+
+function renderRoutineList() {
+  const wrap = safeGetElement('wbRoutines');
+  const listEl = safeGetElement('wbRoutineList');
+  if (!wrap || !listEl) return;
+  const list = loadRoutines();
+  wrap.hidden = list.length === 0;
+  listEl.innerHTML = list.map((r, i) => `
+    <span class="wb-routine-chip" role="button" tabindex="0" onclick="applyRoutine(${i})" title="세그먼트에 추가">
+      <span class="wb-routine-chip__name">${escapeHtml(r.name)}</span>
+      <span class="wb-routine-chip__meta">${r.segments.length}개 · ${routineTotalLabel(r.segments)}</span>
+      <button type="button" class="wb-routine-chip__del" aria-label="루틴 삭제" onclick="event.stopPropagation(); deleteRoutine(${i})">✕</button>
+    </span>`).join('');
+}
+
+function showRoutineSaveModal() {
+  if (!workoutSegments.length) {
+    window.showToast('세그먼트를 먼저 구성한 뒤 루틴으로 저장하세요.');
+    return;
+  }
+  const info = safeGetElement('routineSaveInfo');
+  if (info) info.textContent = `현재 세그먼트 ${workoutSegments.length}개 · ${routineTotalLabel(workoutSegments)}를 루틴으로 저장합니다.`;
+  const nameEl = safeGetElement('routineName');
+  if (nameEl) nameEl.value = '';
+  const modal = safeGetElement('routineSaveModal');
+  if (modal) modal.classList.remove('hidden');
+  if (nameEl) setTimeout(() => nameEl.focus(), 50);
+}
+
+function closeRoutineSaveModal() {
+  const modal = safeGetElement('routineSaveModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function saveRoutine() {
+  const nameEl = safeGetElement('routineName');
+  const name = nameEl ? nameEl.value.trim() : '';
+  if (!name) {
+    window.showToast('루틴 이름을 입력해주세요.');
+    return;
+  }
+  const segments = workoutSegments.map(seg => ({
+    label: seg.label,
+    segment_type: seg.segment_type,
+    duration_sec: seg.duration_sec,
+    target_type: seg.target_type,
+    target_value: seg.target_value,
+    ramp: seg.ramp,
+    ramp_to_value: seg.ramp_to_value
+  }));
+  const list = loadRoutines();
+  const same = list.findIndex(r => r.name === name);
+  if (same >= 0 && !confirm(`"${name}" 루틴이 이미 있습니다. 덮어쓸까요?`)) return;
+  const item = { name, segments, savedAt: Date.now() };
+  if (same >= 0) list[same] = item; else list.push(item);
+  if (!storeRoutines(list)) {
+    window.showToast('루틴을 저장하지 못했습니다.');
+    return;
+  }
+  closeRoutineSaveModal();
+  renderRoutineList();
+  window.showToast(`"${name}" 루틴이 저장되었습니다.`);
+}
+
+function applyRoutine(index) {
+  const r = loadRoutines()[index];
+  if (!r || !Array.isArray(r.segments) || !r.segments.length) return;
+  r.segments.forEach(seg => {
+    workoutSegments.push(Object.assign({}, seg, { id: Date.now() + Math.random() }));
+  });
+  renderSegments();
+  updateSegmentSummary();
+  window.showToast(`"${r.name}" 루틴 세그먼트 ${r.segments.length}개가 추가되었습니다.`);
+}
+
+function deleteRoutine(index) {
+  const list = loadRoutines();
+  const r = list[index];
+  if (!r || !confirm(`"${r.name}" 루틴을 삭제할까요?`)) return;
+  list.splice(index, 1);
+  storeRoutines(list);
+  renderRoutineList();
+}
+
+window.showRoutineSaveModal = showRoutineSaveModal;
+window.closeRoutineSaveModal = closeRoutineSaveModal;
+window.saveRoutine = saveRoutine;
+window.applyRoutine = applyRoutine;
+window.deleteRoutine = deleteRoutine;
+window.renderRoutineList = renderRoutineList;
 
 // 반복 기능
 window.showRepeatModal = showRepeatModal;

@@ -36220,3 +36220,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-subst--x .outd-subst__in i svg { width: 18px; height: 18px; }
 .outd-subst__in b { left: 15px; top: -8px; }
 .outd-subst--x .outd-subst__in b { left: 18px; }
+/* 2026-11-02 워크아웃 작성: 루틴(자주 쓰는 세그먼트 묶음) */
+.wb-routines { display: flex; align-items: flex-start; gap: 10px; margin: -6px 0 14px; }
+.wb-routines[hidden] { display: none; }
+.wb-routines__title { flex: 0 0 auto; font-size: 13px; font-weight: 700; color: #6b7280; line-height: 32px; }
+.wb-routines__list { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.wb-routine-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 4px 0 12px; max-width: 100%;
+  border-radius: 16px; background: #eef4fe; border: 1px solid #c7dafa; color: #1e3a8a;
+  cursor: pointer; user-select: none; transition: background 0.15s, transform 0.1s;
+}
+.wb-routine-chip:hover { background: #dce9fd; }
+.wb-routine-chip:active { transform: scale(0.97); }
+.wb-routine-chip__name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; }
+.wb-routine-chip__meta { font-size: 11px; color: #64748b; white-space: nowrap; }
+.wb-routine-chip__del {
+  width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: #94a3b8;
+  font-size: 11px; line-height: 24px; padding: 0; cursor: pointer;
+}
+.wb-routine-chip__del:hover { background: #fee2e2; color: #dc2626; }
+.wb-routine-btn-ic { margin-right: 6px; vertical-align: middle; }
+.wb-routine-modal__info { font-size: 13px; color: #475569; margin: 0 0 12px; }

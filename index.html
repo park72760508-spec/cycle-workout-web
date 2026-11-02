@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261102stbig" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261102routine" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -7477,6 +7477,11 @@
       <span class="segment-count">세그먼트: <strong id="segmentCount">0개</strong></span>
     </div>
   </div>
+  <!-- 2026-11-02 루틴: 자주 쓰는 세그먼트 묶음 — 탭하면 세그먼트 목록 끝에 추가 -->
+  <div class="wb-routines" id="wbRoutines" hidden>
+    <span class="wb-routines__title">루틴</span>
+    <div class="wb-routines__list" id="wbRoutineList"></div>
+  </div>
   
   <!-- 세그먼트 목록 -->
   <div id="wbSegments" class="segments-list">
@@ -7498,6 +7503,7 @@
       <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('rest')">휴식</button>
       <button class="btn btn-secondary btn-sm btn-default-style" onclick="addQuickSegment('cooldown')">쿨다운</button>
       <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="showRepeatModal()"><img src="assets/img/reload.png" alt="반복" class="btn-icon-image" style="width: 18px; height: 18px; margin-right: 6px; vertical-align: middle;" /> 반복</button>
+      <button class="btn btn-secondary btn-sm btn-default-style btn-with-icon" onclick="showRoutineSaveModal()"><svg class="wb-routine-btn-ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="11" width="18" height="5" rx="1.5"/><path d="M7 20h10"/></svg> 루틴</button>
     </div>
   </div>
   <div class="builder-actions" style="margin-top: 12px;">
@@ -7673,6 +7679,27 @@
 
 
   
+<!-- 2026-11-02 루틴 저장 모달 -->
+<div id="routineSaveModal" class="modal hidden">
+  <div class="modal-content wb-routine-modal">
+    <div class="modal-header">
+      <h3>루틴 저장</h3>
+      <button class="modal-close" onclick="closeRoutineSaveModal()">✖</button>
+    </div>
+    <div class="modal-body">
+      <p class="wb-routine-modal__info" id="routineSaveInfo"></p>
+      <div class="form-group">
+        <label>루틴 이름 *</label>
+        <input type="text" id="routineName" maxlength="30" placeholder="예: 스윗스팟 3x10" onkeydown="if (event.key === 'Enter') saveRoutine()" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-success btn-default-style btn-with-icon" onclick="saveRoutine()"><img src="assets/img/save2.png" alt="저장" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 저장</button>
+      <button class="btn btn-secondary btn-default-style btn-with-icon" onclick="closeRoutineSaveModal()"><img src="assets/img/cancel2.png" alt="취소" class="btn-icon-image" style="width: 21px; height: 21px; margin-right: 6px; vertical-align: middle;" /> 취소</button>
+    </div>
+  </div>
+</div>
+
  <!-- 5) 훈련 준비 화면 -->
   <div id="trainingReadyScreen" class="screen">
     <div class="connection-main-container">
@@ -9453,7 +9480,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="assets/js/data.js"></script>
-<script src="assets/js/workoutManager.js?v=cardbars-20261018"></script>
+<script src="assets/js/workoutManager.js?v=routine-20261102"></script>
 <!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
 <script type="module" src="assets/js/referral/stelvioReferral.js?v=20261101goal"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
