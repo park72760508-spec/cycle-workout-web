@@ -5791,9 +5791,78 @@
     if (e && e.stopPropagation) e.stopPropagation();
     unlockAudio();
     setText('outdSoundLabel', soundLabel());
+    var ak = $('outdApiKeyItem');
+    if (ak) ak.style.display = favIsAdmin() ? '' : 'none'; // 관리자만
     var m = $('outdMenu');
     if (m) m.classList.toggle('show');
   };
+
+  /* ---------- 외부 API 인증키 갱신 (관리자, 2026-11-03) ----------
+   * 교통카드 빅데이터(STCIS)·공공데이터포털 키를 넣고 [저장]하면 서버 금고(Supabase Vault)에 교체 저장.
+   * 키 원문은 다시 보여주지 않음(앞뒤 4자리만), 만료일을 넣으면 남은 날짜 표시. RPC: fn_admin_api_keys_status / fn_admin_set_api_key */
+  window.openOutdoorApiKeys = function (e) {
+    if (e && e.stopPropagation) e.stopPropagation();
+    closeMenu();
+    if (!favIsAdmin()) return;
+    var el = $('outdApiKeys');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'outdApiKeys';
+      el.className = 'outd-favpop outd-light outd-busrt outd-apikeys';
+      $(SCREEN_ID).appendChild(el);
+      el.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (t === el || t.closest('[data-ak-close]')) { el.style.display = 'none'; return; }
+        var sv = t.closest('[data-ak-save]');
+        if (sv) saveApiKey(sv.getAttribute('data-ak-save'), sv);
+      });
+    }
+    el.style.display = 'flex';
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">불러오는 중…</div></div>';
+    favRpc('fn_admin_api_keys_status', {}).then(function (rows) { renderApiKeys(el, rows || []); }, function (err) {
+      el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">불러오지 못했습니다: ' + escHtml((err && err.message) || '') + '</div>' +
+        '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-ak-close>닫기</button></div></div>';
+    });
+  };
+  function apiKeyDday(d) {
+    if (!d) return '';
+    var days = Math.ceil((new Date(d + 'T23:59:59+09:00') - Date.now()) / 86400000);
+    return days < 0 ? '만료됨' : 'D-' + days;
+  }
+  function renderApiKeys(el, rows) {
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' +
+      '<div class="outd-busrt__head"><div class="outd-busrt__ttl"><b>API 인증키</b><span>새 키를 넣고 저장하면 바로 교체됩니다(관리자 전용)</span></div>' +
+      '<button type="button" class="coachm-picker__close" data-ak-close aria-label="닫기">✕</button></div>' +
+      rows.map(function (r) {
+        var dd = apiKeyDday(r.expires_on);
+        var status = r.configured
+          ? '등록됨 · ' + escHtml(r.key_hint || '') + (r.registered_at ? ' · ' + new Date(r.registered_at).toLocaleDateString('ko-KR') + ' 저장' : '') +
+            (r.expires_on ? ' · 만료 ' + escHtml(r.expires_on) + ' <b class="' + (dd === '만료됨' || /^D-([0-9]|1[0-4])$/.test(dd) ? 'is-warn' : '') + '">' + dd + '</b>' : '')
+          : '<b class="is-warn">미등록</b>';
+        return '<div class="outd-apikeys__item" data-ak-row="' + escHtml(r.name) + '">' +
+          '<div class="outd-apikeys__name">' + escHtml(r.label) + '</div>' +
+          '<div class="outd-apikeys__status">' + status + '</div>' +
+          '<input type="password" class="outd-apikeys__input" data-ak-key placeholder="새 인증키 붙여넣기" autocomplete="off" spellcheck="false">' +
+          '<label class="outd-apikeys__exp">만료일(선택) <input type="date" data-ak-exp value="' + escHtml(r.expires_on || '') + '"></label>' +
+          '<button type="button" class="outd-fav__save outd-apikeys__save" data-ak-save="' + escHtml(r.name) + '">저장</button>' +
+          '</div>';
+      }).join('') +
+      '</div>';
+  }
+  function saveApiKey(name, btn) {
+    var row = btn.closest('[data-ak-row]');
+    var key = (row.querySelector('[data-ak-key]').value || '').trim();
+    var exp = row.querySelector('[data-ak-exp]').value || null;
+    if (key.length < 8) { if (typeof window.showToast === 'function') window.showToast('인증키를 붙여넣어 주세요.'); return; }
+    btn.disabled = true; btn.textContent = '저장 중…';
+    favRpc('fn_admin_set_api_key', { p_name: name, p_key: key, p_expires_on: exp }).then(function () {
+      if (typeof window.showToast === 'function') window.showToast('인증키를 저장했습니다.');
+      return favRpc('fn_admin_api_keys_status', {}).then(function (rows) { renderApiKeys($('outdApiKeys'), rows || []); });
+    }, function (err) {
+      btn.disabled = false; btn.textContent = '저장';
+      if (typeof window.showToast === 'function') window.showToast('저장하지 못했습니다: ' + ((err && err.message) || ''));
+    });
+  }
   function closeMenu() {
     var m = $('outdMenu');
     if (m) m.classList.remove('show');

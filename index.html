@@ -4005,7 +4005,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261103subrt2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261103apikey" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30086,7 +30086,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261103subrt3"></script>
+  <script src="assets/js/outdoorRide.js?v=20261103apikey"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36163,6 +36163,11 @@
             <div class="mobile-bluetooth-dropdown-item" onclick="cycleOutdoorSound(event)">
               <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>
               <span id="outdSoundLabel">소리 안내: 음성 + 알림음</span>
+            </div>
+            <!-- 2026-11-03: 관리자 전용 — 외부 API 인증키(교통카드 빅데이터·공공데이터포털) 갱신 -->
+            <div id="outdApiKeyItem" class="mobile-bluetooth-dropdown-item" onclick="openOutdoorApiKeys(event)" style="display: none;">
+              <svg class="outd-menu-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg>
+              <span>API 인증키</span>
             </div>
             <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="exitOutdoorRide(event)">
               <img src="assets/img/logout.png" alt="">

@@ -36468,3 +36468,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-subpop__sr { display: flex; gap: 8px; }
 #outdoorRideScreen .outd-subpop__sr button { flex: 1 1 0; height: 34px; border-radius: 10px; border: 1px solid #cbd5e1; background: #fff; font-size: 13px; font-weight: 700; color: #334155; cursor: pointer; font-family: inherit; }
 #outdoorRideScreen .outd-subroute__legs li.outd-subroute__leghd .outd-busrt__no { flex: 0 0 auto; }
+/* 2026-11-03 API 인증키 갱신(관리자) */
+#outdoorRideScreen .outd-apikeys { z-index: 100180; }
+#outdoorRideScreen .outd-apikeys__item { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 12px; }
+#outdoorRideScreen .outd-apikeys__name { font-size: 14px; font-weight: 800; color: #0f172a; }
+#outdoorRideScreen .outd-apikeys__status { font-size: 12px; color: #64748b; word-break: break-all; }
+#outdoorRideScreen .outd-apikeys__status b.is-warn { color: #dc2626; }
+#outdoorRideScreen .outd-apikeys__input { height: 38px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+#outdoorRideScreen .outd-apikeys__exp { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #475569; }
+#outdoorRideScreen .outd-apikeys__exp input { height: 32px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
+#outdoorRideScreen .outd-apikeys__save { height: 38px; padding: 0; font-size: 14px; }
