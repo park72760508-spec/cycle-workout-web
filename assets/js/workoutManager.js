@@ -7942,12 +7942,35 @@ function renderRoutineList() {
   }
   const list = loadRoutines();
   wrap.hidden = list.length === 0;
-  listEl.innerHTML = list.map((r, i) => `
-    <span class="wb-routine-chip" role="button" tabindex="0" onclick="applyRoutine(${i})" title="세그먼트에 추가">
-      <span class="wb-routine-chip__name">${escapeHtml(r.name)}</span>
-      <span class="wb-routine-chip__meta">${r.segments.length}개 · ${routineTotalLabel(r.segments)}</span>
-      <button type="button" class="wb-routine-chip__del" aria-label="루틴 삭제" onclick="event.stopPropagation(); deleteRoutine(${i})">✕</button>
-    </span>`).join('');
+  // 콤보 박스: 고르면 바로 세그먼트에 추가, 고른 루틴은 [추가]로 다시 넣거나 [✕]로 삭제
+  let selIdx = list.findIndex(r => r.name === _routineSelectedName);
+  if (selIdx < 0) _routineSelectedName = '';
+  listEl.innerHTML = `
+    <select class="wb-routine-select" id="wbRoutineSelect" onchange="onRoutineSelectChange(this)" aria-label="루틴 선택">
+      <option value="">루틴 선택 (${list.length}개)</option>
+      ${list.map((r, i) => `<option value="${i}"${i === selIdx ? ' selected' : ''}>${escapeHtml(r.name)} · ${r.segments.length}개 · ${routineTotalLabel(r.segments)}</option>`).join('')}
+    </select>
+    <button type="button" class="wb-routine-act wb-routine-act--add" onclick="applySelectedRoutine()" title="선택한 루틴을 세그먼트에 추가"${selIdx < 0 ? ' disabled' : ''}>추가</button>
+    <button type="button" class="wb-routine-act wb-routine-act--del" onclick="deleteSelectedRoutine()" aria-label="선택한 루틴 삭제" title="선택한 루틴 삭제"${selIdx < 0 ? ' disabled' : ''}>✕</button>`;
+}
+
+var _routineSelectedName = '';
+function selectedRoutineIndex() {
+  return loadRoutines().findIndex(r => r.name === _routineSelectedName);
+}
+function onRoutineSelectChange(sel) {
+  const r = loadRoutines()[Number(sel.value)];
+  _routineSelectedName = sel.value === '' || !r ? '' : r.name;
+  if (_routineSelectedName) applyRoutine(Number(sel.value));
+  else renderRoutineList();
+}
+function applySelectedRoutine() {
+  const i = selectedRoutineIndex();
+  if (i >= 0) applyRoutine(i);
+}
+function deleteSelectedRoutine() {
+  const i = selectedRoutineIndex();
+  if (i >= 0) deleteRoutine(i);
 }
 
 function showRoutineSaveModal() {
@@ -8046,13 +8069,24 @@ function applyRoutine(index) {
 }
 
 function deleteRoutine(index) {
-  const list = loadRoutines().slice();
-  const r = list[index];
-  if (!r || !confirm(`"${r.name}" 루틴을 삭제할까요?`)) return;
-  list.splice(index, 1);
-  storeRoutines(list).then(renderRoutineList).catch(() => {
-    window.showToast('루틴을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
-  });
+  const r = loadRoutines()[index];
+  if (!r) return;
+  const run = function () {
+    const list = loadRoutines().filter(x => x.name !== r.name);
+    withRoutineTimeout(storeRoutines(list), 15000).then(() => {
+      if (_routineSelectedName === r.name) _routineSelectedName = '';
+      renderRoutineList();
+      window.showToast(`"${r.name}" 루틴이 삭제되었습니다.`);
+    }).catch(() => {
+      window.showToast('루틴을 삭제하지 못했습니다. 잠시 후 다시 시도해주세요.');
+    });
+  };
+  const msg = `정말 "${r.name}" 루틴을 삭제하시겠습니까?`;
+  if (typeof window.showStelvioExitConfirmPopup === 'function') {
+    window.showStelvioExitConfirmPopup(run, { message: msg, cancelText: '취소', okText: '확인' });
+  } else if (window.confirm(msg)) {
+    run();
+  }
 }
 
 window.showRoutineSaveModal = showRoutineSaveModal;
@@ -8060,6 +8094,9 @@ window.closeRoutineSaveModal = closeRoutineSaveModal;
 window.saveRoutine = saveRoutine;
 window.applyRoutine = applyRoutine;
 window.deleteRoutine = deleteRoutine;
+window.onRoutineSelectChange = onRoutineSelectChange;
+window.applySelectedRoutine = applySelectedRoutine;
+window.deleteSelectedRoutine = deleteSelectedRoutine;
 window.renderRoutineList = renderRoutineList;
 
 // 반복 기능

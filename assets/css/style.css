@@ -36257,3 +36257,20 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 .wb-routine-saving b { font-size: 14px; font-weight: 700; color: #047857; }
 @keyframes wbRoutineSpin { to { transform: rotate(360deg); } }
+/* 2026-11-02 루틴 목록: 콤보 박스 + 추가·삭제 버튼 */
+.wb-routines { align-items: center; }
+.wb-routines__title { line-height: 1; }
+.wb-routines__list { flex: 1 1 auto; flex-wrap: nowrap; align-items: center; gap: 6px; }
+.wb-routine-select {
+  flex: 1 1 auto; min-width: 0; height: 36px; padding: 0 30px 0 12px;
+  border: 1px solid #c7dafa; border-radius: 10px; background-color: #f5f9ff;
+  font-size: 13px; font-weight: 600; color: #1e3a8a; text-overflow: ellipsis;
+}
+.wb-routine-act {
+  flex: 0 0 auto; height: 36px; border-radius: 10px; border: 1px solid #c7dafa;
+  background: #eef4fe; color: #1d4ed8; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.wb-routine-act--add { padding: 0 12px; }
+.wb-routine-act--del { width: 36px; padding: 0; color: #94a3b8; }
+.wb-routine-act--del:not(:disabled):hover { background: #fee2e2; border-color: #fecaca; color: #dc2626; }
+.wb-routine-act:disabled { opacity: 0.45; cursor: default; }
