@@ -327,6 +327,33 @@ async function main() {
     bytes += js.length;
     files.set('routes/' + id + '.json', js);
   }
+  // ── 대중교통 경로 찾기용 권역 그래프(2026-11-03): graph/{권역}.json ──
+  // { s:[lat*1e5, lon*1e5, …](정류장 좌표, 정수), n:[정류장 이름…], r:[[노선번호, 노선 이름, [정류장 인덱스…]]…] }
+  // 앱(루트맵 대중교통 경로)이 출발·도착이 함께 들어가는 가장 작은 권역 파일만 받아 지하철 노선과 합쳐 계산
+  const REGIONS = {
+    capital: [36.85, 126.3, 38.35, 127.95], busan: [34.7, 127.6, 35.95, 129.6], daegu: [35.5, 127.8, 37.2, 129.6],
+    gwangju: [34.2, 125.9, 35.5, 127.9], daejeon: [35.9, 126.1, 37.1, 128.1], jeonbuk: [35.3, 126.4, 36.2, 127.9],
+    gangwon: [37.0, 127.4, 38.6, 129.4], jeju: [33.1, 126.1, 33.6, 127.0]
+  };
+  for (const [rg, bb] of Object.entries(REGIONS)) {
+    const inside = (st) => st.lat >= bb[0] && st.lat <= bb[2] && st.lon >= bb[1] && st.lon <= bb[3];
+    const idx = new Map(), S = [], N = [], R = [];
+    for (const [id, seq] of routeStops) {
+      if (!seq.some(inside)) continue;
+      const rm = rmById.get(id) || {};
+      // 일반 이용객이 아무 정류장에서나 탈 수 없는 노선은 경로 찾기에서 제외(지도·노선 목록에는 그대로)
+      if (/공항|예약|리무진|출근|퇴근|투어|관광|학생|통학|새벽|심야|올빼미/.test((rm.ref || '') + ' ' + (rm.name || '')) || /^N\d/.test(rm.ref || '')) continue;
+      const q = seq.filter((st) => !/\(가상\)|가상정류장/.test(st.n)).map((st) => {
+        if (!idx.has(st)) { idx.set(st, N.length); S.push(Math.round(st.lat * 1e5), Math.round(st.lon * 1e5)); N.push(st.n); }
+        return idx.get(st);
+      });
+      R.push([rm.ref || '', rm.name || '', q]);
+    }
+    const js = JSON.stringify({ v: 1, bb, s: S, n: N, r: R });
+    bytes += js.length;
+    files.set('graph/' + rg + '.json', js);
+  }
+
   // 내용이 그대로면 파일을 건드리지 않음(자동 갱신 작업이 변경 여부로 배포를 판단)
   const oldNames = fs.existsSync(OUT_DIR) ? fs.readdirSync(OUT_DIR, { recursive: true }).filter((f) => f.endsWith('.json') && f !== 'index.json') : [];
   const same = oldNames.length === files.size &&
@@ -341,6 +368,7 @@ async function main() {
   } catch (e) { if (/급감/.test(e.message)) throw e; }
   fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(path.join(OUT_DIR, 'routes'), { recursive: true });
+  fs.mkdirSync(path.join(OUT_DIR, 'graph'), { recursive: true });
   for (const [f, js] of files) fs.writeFileSync(path.join(OUT_DIR, f), js);
   const index = { v: new Date().toISOString().slice(0, 10), src: '© OpenStreetMap contributors (ODbL)', cell: CELL, n: stops.size, o: officialN, t: [...tiles.keys()].sort() };
   fs.writeFileSync(path.join(OUT_DIR, 'index.json'), JSON.stringify(index));

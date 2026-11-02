@@ -36479,3 +36479,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-apikeys__exp input { height: 32px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
 #outdoorRideScreen .outd-apikeys__save { height: 38px; padding: 0; font-size: 14px; }
 #outdoorRideScreen .outd-busrt__src { margin: 0; font-size: 10.5px; color: #94a3b8; text-align: right; }
+/* 2026-11-03 대중교통 경로(버스+지하철): 종류 탭 · 내 위치 · 버스 배지 · 도보 줄 */
+#outdoorRideScreen .outd-subroute__kinds .outd-busrt__dir.is-on { background: #ecfdf5; border-color: #00a23f; color: #047857; }
+#outdoorRideScreen .outd-subroute__here { flex: 0 0 auto; height: 28px; padding: 0 8px; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 12px; font-weight: 700; color: #334155; cursor: pointer; font-family: inherit; }
+#outdoorRideScreen .outd-subroute__busno { background: #2563eb; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__walk { min-height: 32px; padding-left: 24px; font-size: 12px; color: #475569; font-weight: 700; }
+#outdoorRideScreen .outd-subroute__legs li.outd-subroute__walk::before { background: repeating-linear-gradient(to bottom, #94a3b8 0 2px, transparent 2px 5px); opacity: 1; }

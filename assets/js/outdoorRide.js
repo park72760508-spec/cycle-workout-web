@@ -1603,7 +1603,7 @@
    * 그래프: 호선별 역 순서(kr-subway-lines.json)의 이웃 역 연결(순환선은 양 끝도 연결), 역의 다른 호선으로 갈아타기.
    * 소요 시간(어림): 역마다 1분 + 역 사이 1km당 1.3분, 환승 7분(걷기·기다림). 최소 환승은 환승 1회 = 60분으로 무겁게 계산.
    * 결과: 호선 색 노선도 형식(구간별 방면·역 목록·환승), [출발역까지 길안내]로 바로 길찾기. */
-  var subRoute = { from: null, to: null, mode: 'time', graph: null };
+  var subRoute = { from: null, to: null, mode: 'time', graph: null, kind: 'all' };
   function subStDistKm(a, b) {
     var A = sub.data.stations[a].p, B = sub.data.stations[b].p;
     return Math.hypot((A[0] - B[0]) * 111, (A[1] - B[1]) * 88);
@@ -1684,15 +1684,179 @@
     }
     return '';
   }
-  function nearestSubwayStation() {
-    if (!st.lastFix || !sub.data) return null;
+  /* ---------- 대중교통 경로(버스 + 지하철) (2026-11-03) ----------
+   * 지하철 경로 화면을 확장: [버스+지하철] [지하철] [버스] — 출발·도착은 내 위치·지하철역·버스 정류장.
+   * 버스: 권역 그래프 assets/data/kr-bus/graph/{권역}.json(공식 노선·경유 정류소 + OSM), 지하철: 호선별 역 순서.
+   * 계산(앱 안, 다익스트라): 정류장 노드 + 노선 위치 노드. 타기(버스 6분·지하철 4분 기다림), 이동(버스 0.4분 + 1km당 2.4분,
+   * 지하철 0.8분 + 1km당 1.3분), 내리기 0, 걷기(분당 75m, 정류장끼리 300m·지하철 끼면 400m), 출발·도착은 600m 안 정류장.
+   * 최소 환승: 타기마다 50분을 더해 환승이 적은 경로 우선. 지하철만 탭은 기존 지하철 경로 계산 사용. */
+  var TRANSIT_REGIONS = {
+    jeju: [33.1, 126.1, 33.6, 127.0], jeonbuk: [35.3, 126.4, 36.2, 127.9], gwangju: [34.2, 125.9, 35.5, 127.9],
+    busan: [34.7, 127.6, 35.95, 129.6], daejeon: [35.9, 126.1, 37.1, 128.1], gangwon: [37.0, 127.4, 38.6, 129.4],
+    daegu: [35.5, 127.8, 37.2, 129.6], capital: [36.85, 126.3, 38.35, 127.95]
+  };
+  var transit = { rg: null, g: null, loading: null };
+  function transitRegionFor(lat, lon) {
+    var best = null, area = Infinity;
+    Object.keys(TRANSIT_REGIONS).forEach(function (k) {
+      var b = TRANSIT_REGIONS[k];
+      if (lat < b[0] || lat > b[2] || lon < b[1] || lon > b[3]) return;
+      var a2 = (b[2] - b[0]) * (b[3] - b[1]);
+      if (k === 'capital') a2 *= 0.5; // 수도권 우선(겹치는 지역)
+      if (a2 < area) { area = a2; best = k; }
+    });
+    return best;
+  }
+  function loadTransit(rg) {
+    if (transit.rg === rg && transit.g) return Promise.resolve(transit.g);
+    if (transit.loading && transit.loadingRg === rg) return transit.loading;
+    transit.loadingRg = rg;
+    transit.loading = Promise.all([
+      fetch('assets/data/kr-bus/graph/' + rg + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }),
+      loadSubwayLines()
+    ]).then(function (res) {
+      transit.loading = null;
+      if (!res[0]) return null;
+      transit.rg = rg;
+      transit.g = buildTransitGraph(res[0], res[1]);
+      return transit.g;
+    }).catch(function () { transit.loading = null; return null; });
+    return transit.loading;
+  }
+  function buildTransitGraph(d, lines) {
+    var lat = [], lon = [], name = [], isSub = [];
+    for (var i = 0; i < d.n.length; i++) { lat.push(d.s[2 * i] / 1e5); lon.push(d.s[2 * i + 1] / 1e5); name.push(d.n[i]); isSub.push(0); }
+    var routes = d.r.map(function (r) { return { ref: r[0], name: r[1], q: r[2], sub: false }; });
+    // 지하철: 권역 안 역을 정류장으로, 호선별 순서를 정·역방향 노선으로
+    var bb = d.bb, stMap = {};
+    if (sub.data && lines && lines.o) {
+      sub.data.stations.forEach(function (s2, si) {
+        if (s2.p[0] < bb[0] - 0.05 || s2.p[0] > bb[2] + 0.05 || s2.p[1] < bb[1] - 0.05 || s2.p[1] > bb[3] + 0.05) return;
+        stMap[si] = name.length; lat.push(s2.p[0]); lon.push(s2.p[1]); name.push(s2.n + '역'); isSub.push(si + 1);
+      });
+      lines.o.forEach(function (seqs, li) {
+        var ln = sub.data.lines[li];
+        seqs.forEach(function (q) {
+          var qq = q.filter(function (si) { return stMap[si] != null; }).map(function (si) { return stMap[si]; });
+          if (qq.length < 2) return;
+          var loop = q.length > 10 && subStDistKm(q[0], q[q.length - 1]) < 2.5;
+          [qq, qq.slice().reverse()].forEach(function (x) {
+            if (loop) x = x.concat([x[0]]);
+            routes.push({ ref: ln.n, name: ln.n, q: x, sub: true, li: li, color: ln.c });
+          });
+        });
+      });
+    }
+    var NS = name.length, off = [], tot = NS;
+    routes.forEach(function (r) { off.push(tot); tot += r.q.length; });
+    var occ = []; for (var k = 0; k < NS; k++) occ.push([]);
+    routes.forEach(function (r, ri) { r.q.forEach(function (sidx, qi) { if (qi < r.q.length - 1) occ[sidx].push(ri, qi); }); });
+    var grid = {};
+    for (var s3 = 0; s3 < NS; s3++) { var gk = Math.floor(lat[s3] / 0.003) + ':' + Math.floor(lon[s3] / 0.003); (grid[gk] = grid[gk] || []).push(s3); }
+    return { lat: lat, lon: lon, name: name, isSub: isSub, routes: routes, NS: NS, off: off, tot: tot, occ: occ, grid: grid, bb: bb, stMap: stMap };
+  }
+  function tgDistM(g, a, latB, lonB) { return Math.hypot((g.lat[a] - latB) * 111000, (g.lon[a] - lonB) * 88000); }
+  function tgNear(g, la, lo, m) {
+    var out = [], c = Math.ceil(m / 300) + 0;
+    var i0 = Math.floor(la / 0.003), j0 = Math.floor(lo / 0.003);
+    for (var di = -c; di <= c; di++) for (var dj = -c; dj <= c; dj++) {
+      (g.grid[(i0 + di) + ':' + (j0 + dj)] || []).forEach(function (s4) { var dm = tgDistM(g, s4, la, lo); if (dm <= m) out.push([s4, dm]); });
+    }
+    return out;
+  }
+  function findTransitRoute(g, from, to, kind, mode) {
+    var WALK = 75, BIG = mode === 'xfer' ? 50 : 0;
+    var dist = new Float64Array(g.tot).fill(Infinity), prev = new Int32Array(g.tot).fill(-1);
+    var hk = [], hv = [];
+    var push = function (c, v) { hk.push(c); hv.push(v); var i = hk.length - 1; while (i > 0) { var p2 = (i - 1) >> 1; if (hk[p2] <= hk[i]) break; var t1 = hk[p2]; hk[p2] = hk[i]; hk[i] = t1; t1 = hv[p2]; hv[p2] = hv[i]; hv[i] = t1; i = p2; } };
+    var pop = function () { var c = hk[0], v = hv[0], lc = hk.pop(), lv = hv.pop(); if (hk.length) { hk[0] = lc; hv[0] = lv; var i = 0; for (;;) { var l = 2 * i + 1, r = l + 1, m = i; if (l < hk.length && hk[l] < hk[m]) m = l; if (r < hk.length && hk[r] < hk[m]) m = r; if (m === i) break; var t1 = hk[m]; hk[m] = hk[i]; hk[i] = t1; t1 = hv[m]; hv[m] = hv[i]; hv[i] = t1; i = m; } } return [c, v]; };
+    var relax = function (v, c, from2) { if (c < dist[v]) { dist[v] = c; prev[v] = from2; push(c, v); } };
+    tgNear(g, from.lat, from.lon, 600).forEach(function (x) { relax(x[0], x[1] / WALK, -2); });
+    var targets = {}; tgNear(g, to.lat, to.lon, 600).forEach(function (x) { targets[x[0]] = x[1] / WALK; });
+    var best = Infinity, bestS = -1, guard = 0;
+    while (hk.length && guard++ < 3000000) {
+      var it = pop(), c = it[0], v = it[1];
+      if (c > dist[v]) continue;
+      if (c >= best) break;
+      if (v < g.NS) {
+        if (targets[v] != null && c + targets[v] < best) { best = c + targets[v]; bestS = v; }
+        var oc = g.occ[v];
+        for (var k = 0; k < oc.length; k += 2) {
+          var r = g.routes[oc[k]];
+          if ((kind === 'bus' && r.sub) || (kind === 'subway' && !r.sub)) continue;
+          relax(g.off[oc[k]] + oc[k + 1], c + (r.sub ? 4 : 6) + BIG, v);
+        }
+        var rad = g.isSub[v] ? 400 : 300;
+        var nb = tgNear(g, g.lat[v], g.lon[v], rad);
+        for (var n2 = 0; n2 < nb.length; n2++) {
+          if (nb[n2][0] === v) continue;
+          if (!g.isSub[v] && !g.isSub[nb[n2][0]] && nb[n2][1] > 300) continue;
+          relax(nb[n2][0], c + nb[n2][1] / WALK + 1, v);
+        }
+      } else {
+        // 노선 위치 노드 → 다음 정류장 / 내리기
+        var ri = routeOfNode(g, v), r2 = g.routes[ri], qi = v - g.off[ri];
+        var a1 = r2.q[qi], b1 = r2.q[qi + 1];
+        if (b1 != null) {
+          var km = Math.hypot((g.lat[a1] - g.lat[b1]) * 111, (g.lon[a1] - g.lon[b1]) * 88);
+          relax(v + 1, c + (r2.sub ? 0.8 + km * 1.3 : 0.4 + km * 2.4), v);
+        }
+        if (qi > 0) relax(a1, c, v);
+      }
+    }
+    if (bestS < 0) return null;
+    var path = [];
+    for (var x = bestS; x >= 0; x = prev[x]) path.unshift(x);
+    // 구간으로 묶기
+    var legs = [], walkM = 0, boards = 0;
+    var firstStop = path[0];
+    var w0 = tgDistM(g, firstStop, from.lat, from.lon);
+    if (w0 > 30) legs.push({ walk: Math.round(w0) });
+    walkM += w0;
+    for (var p3 = 0; p3 < path.length; p3++) {
+      var nd = path[p3];
+      if (nd >= g.NS) {
+        var rI = routeOfNode(g, nd), leg = legs[legs.length - 1];
+        if (!leg || leg.walk != null || leg.r !== rI || leg.done) { leg = { r: rI, st: [] }; legs.push(leg); boards++; }
+        var sx = g.routes[rI].q[nd - g.off[rI]];
+        if (leg.st[leg.st.length - 1] !== sx) leg.st.push(sx);
+      } else if (p3 > 0 && path[p3 - 1] < g.NS) {
+        var wm = tgDistM(g, nd, g.lat[path[p3 - 1]], g.lon[path[p3 - 1]]);
+        walkM += wm;
+        legs.push({ walk: Math.round(wm) });
+      } else if (p3 > 0) {
+        var lg = legs[legs.length - 1];
+        if (lg && lg.walk == null) { if (lg.st[lg.st.length - 1] !== nd) lg.st.push(nd); lg.done = true; }
+      }
+    }
+    var wEnd = tgDistM(g, bestS, to.lat, to.lon);
+    if (wEnd > 30) legs.push({ walk: Math.round(wEnd) });
+    walkM += wEnd;
+    legs = legs.filter(function (l) { return l.walk != null ? l.walk > 0 : l.st.length >= 2; });
+    // 이어진 걷기 합치기
+    var merged = [];
+    legs.forEach(function (l) { var last = merged[merged.length - 1]; if (l.walk != null && last && last.walk != null) last.walk += l.walk; else merged.push(l); });
+    var rides = merged.filter(function (l) { return l.walk == null; });
+    var mins = Math.round(best - (BIG ? BIG * rides.length : 0));
+    return { legs: merged, mins: mins, xfers: Math.max(0, rides.length - 1), walkMin: Math.round(walkM / WALK) };
+  }
+  function routeOfNode(g, v) {
+    var lo = 0, hi = g.off.length - 1;
+    while (lo < hi) { var mid = (lo + hi + 1) >> 1; if (g.off[mid] <= v) lo = mid; else hi = mid - 1; }
+    return lo;
+  }
+  function nearestSubwayStation(lat, lng) {
+    if (lat == null) { if (!st.lastFix) return null; lat = st.lastFix.lat; lng = st.lastFix.lng; }
+    if (!sub.data) return null;
     var best = null, bd = 3000;
     sub.data.stations.forEach(function (s2, i) {
-      var d = hav(st.lastFix.lat, st.lastFix.lng, s2.p[0], s2.p[1]);
+      var d = hav(lat, lng, s2.p[0], s2.p[1]);
       if (d < bd) { bd = d; best = i; }
     });
     return best;
   }
+  function stEp(si) { var s2 = sub.data.stations[si]; return s2 ? { t: 'st', i: si, name: s2.n + '역', lat: s2.p[0], lon: s2.p[1] } : null; }
+  function hereEp() { return st.lastFix ? { t: 'here', name: '내 위치', lat: st.lastFix.lat, lon: st.lastFix.lng } : null; }
   function openSubwayRoute(opts) {
     var el = $('outdSubRoute');
     if (!el) {
@@ -1707,14 +1871,30 @@
       });
     }
     el.style.display = 'flex';
-    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">지하철 노선을 불러오는 중…</div></div>';
+    el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">대중교통 노선을 불러오는 중…</div></div>';
     var ready = sub.data ? Promise.resolve() : fetch('assets/data/kr-subway.json?v=20261102st').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) { if (d && Array.isArray(d.stations)) sub.data = d; });
     ready.then(loadSubwayLines).then(function (lines) {
-      if (!sub.data || !lines) { el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">지하철 노선을 불러오지 못했습니다.</div></div>'; return; }
+      if (!sub.data || !lines) { el.innerHTML = '<div class="outd-favpop__card outd-busrt__card"><div class="outd-busrt__loading">노선을 불러오지 못했습니다.</div></div>'; return; }
       if (!subRoute.graph) subRoute.graph = buildSubwayGraph(lines);
-      if (opts && opts.from != null) subRoute.from = opts.from;
-      if (opts && opts.to != null) subRoute.to = opts.to;
-      if (subRoute.from == null) subRoute.from = nearestSubwayStation();
+      if (opts && opts.from != null) subRoute.from = stEp(opts.from);
+      if (opts && opts.to != null) subRoute.to = stEp(opts.to);
+      if (!subRoute.kind) subRoute.kind = 'all';
+      if (!subRoute.from) subRoute.from = subRoute.kind === 'subway' ? stEp(nearestSubwayStation()) : hereEp();
+      ensureTransitThenRender();
+    });
+  }
+  /** 버스가 들어가는 탭이면 출발(없으면 내 위치·지도 중심) 권역 그래프를 받은 뒤 그림 */
+  function ensureTransitThenRender() {
+    if (subRoute.kind === 'subway') { renderSubRoute(); return; }
+    var p = subRoute.from || hereEp();
+    var c = !p && st.map ? st.map.getCenter() : null;
+    var rg = transitRegionFor(p ? p.lat : c.lat, p ? p.lon : c.lng);
+    if (!rg) { subRoute.err = '이 지역은 버스 경로를 아직 지원하지 않습니다.'; renderSubRoute(); return; }
+    if (transit.rg === rg && transit.g) { subRoute.err = ''; renderSubRoute(); return; }
+    subRoute.loadingBus = true; renderSubRoute();
+    loadTransit(rg).then(function (g) {
+      subRoute.loadingBus = false;
+      subRoute.err = g ? '' : '버스 노선을 불러오지 못했습니다.';
       renderSubRoute();
     });
   }
@@ -1724,45 +1904,102 @@
       return ln ? '<u style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n.replace(/호선$/, '')) + '</u>' : '';
     }).join('');
   }
+  function epChips(ep) {
+    if (!ep) return '';
+    if (ep.t === 'st') return subStChips(ep.i);
+    if (ep.t === 'bs') return '<u style="background:#2563eb">버스</u>';
+    return '';
+  }
   function subRouteField(kind, label) {
-    var si = subRoute[kind];
+    var ep = subRoute[kind];
+    var ph = subRoute.kind === 'subway' ? label + '역 이름' : label + ' 역·정류장 이름';
     return '<div class="outd-subroute__field" data-sr-field="' + kind + '"><span class="outd-subroute__lbl">' + label + '</span>' +
-      (si != null
-        ? '<button type="button" class="outd-subroute__chosen" data-sr-edit="' + kind + '"><b>' + escHtml(sub.data.stations[si].n) + '</b><span class="outd-subln__xfer">' + subStChips(si) + '</span></button>'
-        : '<input type="search" class="outd-subroute__input" data-sr-input="' + kind + '" placeholder="' + label + '역 이름" autocomplete="off" enterkeyhint="search">') +
+      (ep
+        ? '<button type="button" class="outd-subroute__chosen" data-sr-edit="' + kind + '"><b>' + escHtml(ep.name) + '</b><span class="outd-subln__xfer">' + epChips(ep) + '</span></button>'
+        : '<input type="search" class="outd-subroute__input" data-sr-input="' + kind + '" placeholder="' + ph + '" autocomplete="off" enterkeyhint="search">' +
+          (st.lastFix ? '<button type="button" class="outd-subroute__here" data-sr-here="' + kind + '">📍 내 위치</button>' : '')) +
       '</div><div class="outd-subroute__sug" data-sr-sug="' + kind + '"></div>';
+  }
+  function busBadge(r) {
+    return r.sub
+      ? '<span class="outd-busrt__no" style="background:' + escHtml(r.color) + '">' + escHtml(r.ref) + '</span>'
+      : '<span class="outd-busrt__no outd-subroute__busno">' + escHtml(r.ref) + '</span>';
   }
   function renderSubRoute() {
     var el = $('outdSubRoute');
     if (!el) return;
-    var res = subRoute.from != null && subRoute.to != null && subRoute.from !== subRoute.to ? findSubwayRoute(subRoute.from, subRoute.to, subRoute.mode) : null;
+    var K = subRoute.kind || 'all', F = subRoute.from, T = subRoute.to;
     var html = '<div class="outd-favpop__card outd-busrt__card outd-subroute__card" role="dialog" aria-modal="true">' +
       '<div class="outd-busrt__head"><span class="outd-busrt__no outd-subroute__ico">' + SUBWAY_TRAIN_SVG + '</span>' +
-      '<div class="outd-busrt__ttl"><b>지하철 경로</b><span>출발역·도착역을 고르면 바로 찾아 드려요</span></div>' +
+      '<div class="outd-busrt__ttl"><b>대중교통 경로</b><span>출발·도착을 고르면 바로 찾아 드려요</span></div>' +
       '<button type="button" class="coachm-picker__close" data-sr-close aria-label="닫기">✕</button></div>' +
+      '<div class="outd-busrt__dirs outd-subroute__kinds" role="tablist">' +
+      [['all', '버스+지하철'], ['subway', '지하철'], ['bus', '버스']].map(function (x) {
+        return '<button type="button" class="outd-busrt__dir' + (K === x[0] ? ' is-on' : '') + '" data-sr-kind="' + x[0] + '" role="tab">' + x[1] + '</button>';
+      }).join('') + '</div>' +
       '<div class="outd-subroute__form">' + subRouteField('from', '출발') + subRouteField('to', '도착') +
       '<button type="button" class="outd-subroute__swap" data-sr-swap aria-label="출발·도착 바꾸기">⇅</button></div>' +
       '<div class="outd-busrt__dirs" role="tablist">' +
       '<button type="button" class="outd-busrt__dir' + (subRoute.mode === 'time' ? ' is-on' : '') + '" data-sr-mode="time" role="tab">최소 시간</button>' +
       '<button type="button" class="outd-busrt__dir' + (subRoute.mode === 'xfer' ? ' is-on' : '') + '" data-sr-mode="xfer" role="tab">최소 환승</button></div>';
-    if (res) {
-      var S = sub.data.stations;
-      html += '<div class="outd-subroute__sum"><b>약 ' + res.mins + '분</b><span>환승 ' + res.xfers + '회 · ' + res.hops + '개 역 이동</span></div>' +
-        '<ol class="outd-busrt__list outd-subroute__legs">' + res.legs.map(function (leg, k) {
-          var ln = sub.data.lines[leg.li];
-          var rows = leg.st.map(function (si, i) {
-            var edge = i === 0 || i === leg.st.length - 1;
-            var tag = k === 0 && i === 0 ? '<em>출발</em>' : (k === res.legs.length - 1 && i === leg.st.length - 1 ? '<em>도착</em>' : (edge ? '<em class="is-x">환승</em>' : ''));
-            return '<li class="' + (edge ? 'is-cur' : '') + '" style="--ln:' + escHtml(ln.c) + '"><i></i><span>' + escHtml(S[si].n) + '</span>' + tag + '</li>';
-          }).join('');
-          return (k > 0 ? '<li class="outd-subroute__xfer">환승 · 약 7분</li>' : '') +
-            '<li class="outd-subroute__leghd" style="--ln:' + escHtml(ln.c) + '"><span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>' +
-            '<span>' + escHtml(subLegDirection(leg)) + ' · ' + (leg.st.length - 1) + '개 역</span></li>' + rows;
-        }).join('') + '</ol>' +
-        '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-sr-close>닫기</button>' +
-        '<button type="button" class="outd-fav__save" data-sr-go>출발역까지 길안내</button></div>';
-    } else if (subRoute.from != null && subRoute.to != null) {
-      html += '<div class="outd-busrt__loading">' + (subRoute.from === subRoute.to ? '출발역과 도착역이 같습니다.' : '두 역을 잇는 지하철 경로를 찾지 못했습니다.') + '</div>';
+    var go = null;
+    if (subRoute.loadingBus) {
+      html += '<div class="outd-busrt__loading">버스 노선을 불러오는 중…</div>';
+    } else if (subRoute.err && K !== 'subway') {
+      html += '<div class="outd-busrt__loading">' + escHtml(subRoute.err) + '</div>';
+    } else if (F && T) {
+      if (K === 'subway') {
+        var a = F.t === 'st' ? F.i : nearestSubwayStation(F.lat, F.lon), b = T.t === 'st' ? T.i : nearestSubwayStation(T.lat, T.lon);
+        var res = a != null && b != null && a !== b ? findSubwayRoute(a, b, subRoute.mode) : null;
+        if (res) {
+          var S = sub.data.stations;
+          html += '<div class="outd-subroute__sum"><b>약 ' + res.mins + '분</b><span>환승 ' + res.xfers + '회 · ' + res.hops + '개 역 이동</span></div>' +
+            '<ol class="outd-busrt__list outd-subroute__legs">' + res.legs.map(function (leg, k) {
+              var ln = sub.data.lines[leg.li];
+              var rows = leg.st.map(function (si, i) {
+                var edge = i === 0 || i === leg.st.length - 1;
+                var tag = k === 0 && i === 0 ? '<em>출발</em>' : (k === res.legs.length - 1 && i === leg.st.length - 1 ? '<em>도착</em>' : (edge ? '<em class="is-x">환승</em>' : ''));
+                return '<li class="' + (edge ? 'is-cur' : '') + '" style="--ln:' + escHtml(ln.c) + '"><i></i><span>' + escHtml(S[si].n) + '</span>' + tag + '</li>';
+              }).join('');
+              return (k > 0 ? '<li class="outd-subroute__xfer">환승 · 약 7분</li>' : '') +
+                '<li class="outd-subroute__leghd" style="--ln:' + escHtml(ln.c) + '"><span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>' +
+                '<span>' + escHtml(subLegDirection(leg)) + ' · ' + (leg.st.length - 1) + '개 역</span></li>' + rows;
+            }).join('') + '</ol>';
+          var s0 = S[res.legs[0].st[0]];
+          go = { name: s0.n + '역', lat: s0.p[0], lng: s0.p[1] };
+        } else {
+          html += '<div class="outd-busrt__loading">' + (a === b && a != null ? '출발역과 도착역이 같습니다.' : '두 곳을 잇는 지하철 경로를 찾지 못했습니다(3km 안에 역이 없을 수 있어요).') + '</div>';
+        }
+      } else {
+        var g = transit.g;
+        var outB = g && (T.lat < g.bb[0] || T.lat > g.bb[2] || T.lon < g.bb[1] || T.lon > g.bb[3]);
+        var r2 = g && !outB ? findTransitRoute(g, F, T, K, subRoute.mode) : null;
+        if (r2) {
+          var rides = r2.legs.filter(function (l) { return l.walk == null; });
+          html += '<div class="outd-subroute__sum"><b>약 ' + r2.mins + '분</b><span>환승 ' + r2.xfers + '회 · 도보 약 ' + r2.walkMin + '분</span></div>' +
+            '<ol class="outd-busrt__list outd-subroute__legs">' + r2.legs.map(function (leg, k) {
+              if (leg.walk != null) return '<li class="outd-subroute__walk">🚶 도보 약 ' + Math.max(1, Math.round(leg.walk / 75)) + '분 · ' + leg.walk + 'm</li>';
+              var rt = g.routes[leg.r], col = rt.sub ? rt.color : '#2563eb';
+              var dir = rt.sub ? g.name[rt.q[rt.q.length - 1]].replace(/역$/, '') + ' 방면' : ((/\(([^)]*)\)\s*$/.exec(rt.name) || [])[1] || (g.name[rt.q[rt.q.length - 1]] + ' 방면'));
+              var ri = rides.indexOf(leg);
+              var rows = leg.st.map(function (sx, i) {
+                var edge = i === 0 || i === leg.st.length - 1;
+                var tag = edge ? (i === 0 ? (ri === 0 ? '<em>승차</em>' : '<em class="is-x">환승</em>') : (ri === rides.length - 1 ? '<em>하차</em>' : '<em class="is-x">하차</em>')) : '';
+                return '<li class="' + (edge ? 'is-cur' : '') + '" style="--ln:' + escHtml(col) + '"><i></i><span>' + escHtml(g.name[sx]) + '</span>' + tag + '</li>';
+              }).join('');
+              return '<li class="outd-subroute__leghd" style="--ln:' + escHtml(col) + '">' + busBadge(rt) +
+                '<span>' + escHtml(dir) + ' · ' + (leg.st.length - 1) + '개 ' + (rt.sub ? '역' : '정류장') + '</span></li>' + rows;
+            }).join('') + '</ol>';
+          if (rides.length) { var f0 = rides[0].st[0]; go = { name: g.name[f0], lat: g.lat[f0], lng: g.lon[f0] }; }
+        } else {
+          html += '<div class="outd-busrt__loading">' + (outB ? '출발과 도착이 같은 권역(수도권·부산경남 등) 안에 있어야 합니다.' : '경로를 찾지 못했습니다. 출발·도착 600m 안에 정류장이나 역이 없을 수 있어요.') + '</div>';
+        }
+      }
+    }
+    if (go) {
+      subRoute.go = go;
+      html += '<div class="outd-favpop__btns"><button type="button" class="outd-fav__cancel" data-sr-close>닫기</button>' +
+        '<button type="button" class="outd-fav__save" data-sr-go>' + (K === 'subway' ? '출발역까지 길안내' : '첫 승차 지점까지 길안내') + '</button></div>';
     }
     html += '</div>';
     el.innerHTML = html;
@@ -1775,29 +2012,48 @@
     q = String(q || '').replace(/\s+/g, '').replace(/역$/, '');
     if (!q) { box.innerHTML = ''; return; }
     var S = sub.data.stations, hits = [];
-    S.forEach(function (s2, i) { var n = s2.n.replace(/\s+/g, ''); var p = n.indexOf(q); if (p >= 0) hits.push([p === 0 ? 0 : 1, n.length, i]); });
+    S.forEach(function (s2, i) { var n = s2.n.replace(/\s+/g, ''); var p = n.indexOf(q); if (p >= 0) hits.push([p === 0 ? 0 : 1, n.length, 'st', i]); });
+    var g = transit.g;
+    if (subRoute.kind !== 'subway' && g) {
+      var seen = {};
+      for (var i = 0; i < g.NS; i++) {
+        if (g.isSub[i]) continue;
+        var n = g.name[i].replace(/\s+/g, ''), p = n.indexOf(q);
+        if (p < 0 || seen[n]) continue;
+        seen[n] = 1; hits.push([p === 0 ? 0.5 : 1.5, n.length, 'bs', i]);
+      }
+    }
     hits.sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
-    box.innerHTML = hits.slice(0, 8).map(function (h) {
-      return '<button type="button" class="outd-subroute__sugitem" data-sr-pick="' + kind + '" data-sr-st="' + h[2] + '"><b>' + escHtml(S[h[2]].n) + '</b><span class="outd-subln__xfer">' + subStChips(h[2]) + '</span></button>';
-    }).join('') || '<div class="outd-subroute__none">일치하는 역이 없습니다</div>';
+    box.innerHTML = hits.slice(0, 10).map(function (h) {
+      if (h[2] === 'st') return '<button type="button" class="outd-subroute__sugitem" data-sr-pick="' + kind + '" data-sr-st="' + h[3] + '"><b>' + escHtml(S[h[3]].n) + '역</b><span class="outd-subln__xfer">' + subStChips(h[3]) + '</span></button>';
+      return '<button type="button" class="outd-subroute__sugitem" data-sr-pick="' + kind + '" data-sr-bs="' + h[3] + '"><b>' + escHtml(g.name[h[3]]) + '</b><span class="outd-subln__xfer"><u style="background:#2563eb">버스</u></span></button>';
+    }).join('') || '<div class="outd-subroute__none">일치하는 역·정류장이 없습니다</div>';
   }
   function onSubRouteClick(e) {
     var el = $('outdSubRoute'), t = e.target;
     if (t === el || t.closest('[data-sr-close]')) { el.style.display = 'none'; return; }
     var pick = t.closest('[data-sr-pick]');
-    if (pick) { subRoute[pick.getAttribute('data-sr-pick')] = Number(pick.getAttribute('data-sr-st')); renderSubRoute(); return; }
+    if (pick) {
+      var k = pick.getAttribute('data-sr-pick');
+      if (pick.hasAttribute('data-sr-st')) subRoute[k] = stEp(Number(pick.getAttribute('data-sr-st')));
+      else { var gi = Number(pick.getAttribute('data-sr-bs')), g = transit.g; subRoute[k] = { t: 'bs', name: g.name[gi], lat: g.lat[gi], lon: g.lon[gi] }; }
+      if (k === 'from') ensureTransitThenRender(); else renderSubRoute();
+      return;
+    }
+    var here = t.closest('[data-sr-here]');
+    if (here) { subRoute[here.getAttribute('data-sr-here')] = hereEp(); ensureTransitThenRender(); return; }
     var ed = t.closest('[data-sr-edit]');
     if (ed) { subRoute[ed.getAttribute('data-sr-edit')] = null; renderSubRoute(); return; }
-    if (t.closest('[data-sr-swap]')) { var f = subRoute.from; subRoute.from = subRoute.to; subRoute.to = f; renderSubRoute(); return; }
+    if (t.closest('[data-sr-swap]')) { var f = subRoute.from; subRoute.from = subRoute.to; subRoute.to = f; ensureTransitThenRender(); return; }
+    var kd = t.closest('[data-sr-kind]');
+    if (kd) { subRoute.kind = kd.getAttribute('data-sr-kind'); ensureTransitThenRender(); return; }
     var md = t.closest('[data-sr-mode]');
     if (md) { subRoute.mode = md.getAttribute('data-sr-mode'); renderSubRoute(); return; }
-    if (t.closest('[data-sr-go]')) {
-      var s2 = sub.data.stations[subRoute.from];
-      if (!s2) return;
+    if (t.closest('[data-sr-go]') && subRoute.go) {
       el.style.display = 'none';
       unlockAudio();
       window.openOutdoorRouteSearch({ noFocus: true });
-      chooseDestination({ name: s2.n + '역', lat: s2.p[0], lng: s2.p[1], sub: subwayLineNames(s2).join(' · ') });
+      chooseDestination({ name: subRoute.go.name, lat: subRoute.go.lat, lng: subRoute.go.lng });
     }
   }
   window.openOutdoorSubwayRoute = openSubwayRoute;
@@ -1829,7 +2085,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261103off';
+  var BUS_DATA_V = '20261103full';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -4268,7 +4524,7 @@
       '<form class="outd-route__search" id="outdRouteForm" action="#" role="search"><input id="outdRouteInput" type="search" placeholder="목적지 검색 (장소·주소)" autocomplete="off" enterkeyhint="search">' +
       '<button type="submit" class="outd-route__go">검색</button></form>' +
       '<div class="outd-route__picks"><button type="button" class="outd-route__mappick" data-route-mappick>📍 지도에서 목적지 선택</button>' +
-      '<button type="button" class="outd-route__mappick outd-route__subbtn" data-route-subway><span class="outd-route__subico">' + SUBWAY_TRAIN_SVG + '</span>지하철 경로</button></div>' +
+      '<button type="button" class="outd-route__mappick outd-route__subbtn" data-route-subway><span class="outd-route__subico">' + SUBWAY_TRAIN_SVG + '</span>대중교통 경로</button></div>' +
       '<div id="outdKakaoUsage" class="outd-kusage" style="display:none"></div>' +
       '<div id="outdRouteList" class="coachm-picker__list outd-route__list"></div>' +
       '<div class="outd-route__credit" style="display:none">경로: 카카오(오토바이·자전거·걷기) · Valhalla(OSM) · 검색: 카카오 · Photon(OSM)</div>' + // 관리자에게만(2026-10-28)
