@@ -36422,3 +36422,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   display: inline-flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; color: #fff;
   max-width: 64px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
 }
+#outdoorRideScreen .outd-busrt__arrow { left: 3px; top: calc(50% + 9px); width: 15px; height: 15px; }
+#outdoorRideScreen .outd-busrt__arrow::before { left: 2px; width: 10px; height: 10px; border-right-width: 3.5px; border-bottom-width: 3.5px; }
