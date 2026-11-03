@@ -522,6 +522,23 @@
   var MOBILE_SCREEN_ID = 'bluetoothCoachMobileScreen';
   window.coachRaceAvatarUrl = function (uid) { return avatarCache[uid] || ''; };
   window.coachRaceBoardLatest = function () { return window.__coachRaceLatest || null; };
+  /* 2026-11-04 참가자 화면 미니 순위 전광판용: 집계 결과를 sessions/{id}/race 에 게시(변경 시 2초 간격, 변화 없어도 10초마다) */
+  var pubSig = '', pubAt = 0;
+  function publishRace(v) {
+    try {
+      if (!v || !v.rows || !v.rows.length || typeof window.bluetoothCoachRtdbSet !== 'function') return;
+      var sid = sessionId();
+      if (!sid) return;
+      var now = Date.now();
+      var rows = v.rows.slice(0, 40).map(function (r) {
+        return { u: r.uid, n: r.name, s: Math.round(r.total * 10) / 10, a: avatarCache[r.uid] || '' };
+      });
+      var sig = JSON.stringify(rows);
+      if (sig === pubSig ? now - pubAt < 10000 : now - pubAt < 2000) return;
+      pubSig = sig; pubAt = now;
+      window.bluetoothCoachRtdbSet('sessions/' + sid + '/race', { t: now, state: v.state || '', rows: rows }).catch(function () {});
+    } catch (e) {}
+  }
   function tick() {
     if (document.hidden) return;
     var scr = $(SCREEN_ID);
@@ -531,11 +548,12 @@
     if (!pcOn && !mobOn) return;
     if (!pcOn) {
       // 휴대폰 Coach: 집계만(연결 메뉴의 순위 목록이 사용)
-      try { window.__coachRaceLatest = compute(); } catch (e) {}
+      try { window.__coachRaceLatest = compute(); publishRace(window.__coachRaceLatest); } catch (e) {}
       return;
     }
     try {
       window.__coachRaceLatest = compute();
+      publishRace(window.__coachRaceLatest);
       render(window.__coachRaceLatest);
       var lv = window.__coachRaceLatest;
       if (S && S.ceremony) {

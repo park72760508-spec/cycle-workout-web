@@ -297,7 +297,6 @@
     if (now - st.lastTextAt >= 150) {
       st.lastTextAt = now;
       renderTexts(pm);
-      try { updateMiniBoard(pm); } catch (e) {}
       var menu = $('coachmMenu');
       if (menu && menu.classList.contains('show')) {
         /*
@@ -571,53 +570,6 @@
     try { return typeof window.coachRaceBoardLatest === 'function' ? window.coachRaceBoardLatest() : null; } catch (e) { return null; }
   }
   window.__coachmRaceSource = function () { return { plan: st.fbPlan, status: st.fbStatus }; };
-
-
-  /* ---------- 속도계 좌우 미니 순위 전광판 (2026-11-04) ----------
-   * 현재 파워 숫자 좌측 = 1~5위, 우측 = 6~8위 … 나의 순위(선택한 사용자).
-   * 10위 안이면 10위까지 모두, 10위 밖이면 8위까지 + 「⋯」 + 10번째 자리에 내 순위. 항목: 순위 · 아바타+이름 · 점수 */
-  function miniRow(r, meUid) {
-    var url = typeof window.coachRaceAvatarUrl === 'function' ? window.coachRaceAvatarUrl(r.uid) : '';
-    var nm = String(r.name || '?');
-    var av = url ? '<img src="' + escapeText(url) + '" alt="" decoding="async" onerror="this.remove()">' : '<i>' + escapeText(nm.charAt(0)) + '</i>';
-    return '<div class="coachm-mb__row' + (r.uid === meUid ? ' coachm-mb__row--me' : '') + (r.rank <= 3 ? ' coachm-mb__row--t' + r.rank : '') + '">' +
-      '<b>' + r.rank + '</b><span class="coachm-mb__av">' + av + '</span><span class="coachm-mb__nm">' + escapeText(nm) + '</span>' +
-      '<em>' + Math.round(r.total) + '</em></div>';
-  }
-  function updateMiniBoard(pm) {
-    var box = document.querySelector('#bluetoothCoachMobileScreen .mobile-gauge-container');
-    if (!box) return;
-    var L = $('coachmMiniL'), R = $('coachmMiniR');
-    if (!L) {
-      L = document.createElement('div'); L.id = 'coachmMiniL'; L.className = 'coachm-mb coachm-mb--l';
-      R = document.createElement('div'); R.id = 'coachmMiniR'; R.className = 'coachm-mb coachm-mb--r';
-      box.appendChild(L); box.appendChild(R);
-    }
-    var race = raceLatest();
-    var rows = race && race.rows ? race.rows : [];
-    var show = !st.monitorMode && rows.length > 0;
-    L.style.display = R.style.display = show ? '' : 'none';
-    if (!show) { L.__sig = R.__sig = ''; return; }
-    var me = null;
-    if (pm) {
-      me = rows.find(function (r) { return String(r.track) === String(pm.id); }) || null;
-    }
-    var meUid = me ? me.uid : '';
-    var left = rows.slice(0, 5), right;
-    if (rows.length <= 10 || (me && me.rank <= 10)) right = rows.slice(5, 10);
-    else right = rows.slice(5, 8).concat(['gap'], me ? [me] : []);
-    var sig = [left, right].map(function (a) {
-      return a.map(function (r) {
-        if (r === 'gap') return '-';
-        var u = typeof window.coachRaceAvatarUrl === 'function' ? window.coachRaceAvatarUrl(r.uid) : '';
-        return r.uid + ':' + r.rank + ':' + Math.round(r.total) + ':' + r.name + ':' + (u ? 1 : 0);
-      }).join(',');
-    }).join('|') + '|' + meUid;
-    if (L.__sig === sig) return;
-    L.__sig = R.__sig = sig;
-    L.innerHTML = left.map(function (r) { return miniRow(r, meUid); }).join('');
-    R.innerHTML = right.map(function (r) { return r === 'gap' ? '<div class="coachm-mb__gap">⋯</div>' : miniRow(r, meUid); }).join('');
-  }
 
   function renderSlotList() {
     var list = $('coachmSlotList');
