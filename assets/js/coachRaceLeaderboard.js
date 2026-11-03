@@ -536,7 +536,7 @@
       var sig = JSON.stringify(rows);
       if (sig === pubSig ? now - pubAt < 10000 : now - pubAt < 2000) return;
       pubSig = sig; pubAt = now;
-      window.bluetoothCoachRtdbSet('sessions/' + sid + '/race', { t: now, state: v.state || '', rows: rows }).catch(function () {});
+      window.bluetoothCoachRtdbSet('sessions/' + sid + '/race', { t: now, state: v.state || '', rows: rows }).catch(function (e) { if (window.console) console.warn('[coachRace] 순위 게시 실패', e && e.message); });
     } catch (e) {}
   }
   function tick() {

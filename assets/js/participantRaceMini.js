@@ -12,6 +12,8 @@
     { screen: 'bluetoothIndividualScreen', box: '.indiv-gauge-container', power: 'indiv-ui-current-power' },
     { screen: 'mobileDashboardScreen', box: '.mobile-gauge-container', power: 'mobile-ui-current-power' }
   ];
+  var dbg = {};
+  window.__pmbDebug = function () { return { sid: lastSid, uid: myUid(), data: data, seenAgoMs: seenAt ? Date.now() - seenAt : null, dbg: dbg }; };
   var data = null, seenT = null, seenAt = 0, fetching = false, lastFetch = 0, lastSid = '';
 
   var css = document.createElement('style');
@@ -33,7 +35,10 @@
   }
   function visible(el) { return !!(el && el.offsetParent !== null && getComputedStyle(el).display !== 'none'); }
   function sessionId() {
-    return String(window.SESSION_ID || window.currentTrainingRoomId || '');
+    var id = window.SESSION_ID || window.currentTrainingRoomId || '';
+    if (!id) { try { id = localStorage.getItem('currentTrainingRoomId') || ''; } catch (e) {} }
+    if (!id && typeof SESSION_ID !== 'undefined') id = SESSION_ID || '';
+    return String(id || '');
   }
   function myUid() {
     var u = window.currentUser || {};
@@ -59,7 +64,7 @@
     }).then(function (r) { return r.ok ? r.json() : null; }).then(function (v) {
       if (v && v.rows && v.t !== seenT) { seenT = v.t; seenAt = Date.now(); }
       data = v && v.rows ? v : null;
-    }).catch(function () {}).then(function () { fetching = false; });
+    }).catch(function (e) { dbg.err = String(e && e.message || e); }).then(function () { fetching = false; });
   }
 
   function rowHtml(r, rank, me) {
@@ -91,6 +96,7 @@
       var scr = document.getElementById(t.screen);
       if (!act && visible(scr)) act = { t: t, scr: scr };
     });
+    dbg.screen = act ? act.t.screen : null;
     if (!act) return;
     var sid = sessionId();
     if (sid !== lastSid) { lastSid = sid; data = null; seenT = null; }
@@ -98,6 +104,7 @@
     if (!box) return;
     if (!sid) { hide(box); return; }
     poll(sid);
+    dbg.rows = data && data.rows ? data.rows.length : 0;
     var fresh = data && data.rows && data.rows.length && Date.now() - seenAt < 40000;
     if (!fresh) { hide(box); return; }
 
