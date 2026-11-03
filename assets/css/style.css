@@ -36084,7 +36084,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row--top2 .crb-row__avatar { border-color: #cbd5e1; }
 #coachRaceBoard .crb-row--top3 .crb-row__avatar { border-color: #f59e0b; }
 #coachRaceBoard .crb-row__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-#coachRaceBoard .crb-row__name { font-size: 26px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#coachRaceBoard .crb-row__name { font-size: 34px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #coachRaceBoard .crb-row__ach { display: flex; flex-direction: column; gap: 6px; }
 #coachRaceBoard .crb-row__bar { display: block; height: 9px; border-radius: 5px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
 #coachRaceBoard .crb-row__bar i { display: block; height: 100%; width: 0; border-radius: 3px; transition: width 0.8s ease, background 0.4s ease; }
@@ -36108,13 +36108,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row--top1 .crb-row__avatar, #coachRaceBoard .crb-row--top2 .crb-row__avatar, #coachRaceBoard .crb-row--top3 .crb-row__avatar { border-width: 3px; }
 /* 보드가 열려 있으면 하단 환경 설정 줄 버튼(트랙 생성·뒤로·자동 퇴실)을 보드 왼쪽으로 */
 #bluetoothTrainingCoachScreen.crb-board-open .speedometer-list-section .list-header { padding-right: calc(var(--crb-w, 0px) + 58px) !important; box-sizing: border-box; }
+/* 보드가 열려 있으면 속도계 블록을 보드 왼쪽 영역에 재배치(10개 줄 → 7개 줄: 1~7 / 8~14 / 15~), 접으면 원래대로 */
+#bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachPowerMeterGrid { padding-right: calc(var(--crb-w, 0px) + 50px) !important; box-sizing: border-box; }
+#bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachPowerMeterGrid.coach-grid-dense { grid-template-columns: repeat(7, minmax(0, 1fr)) !important; }
+/* 로고 칸은 10칸 기준 위치(10·20번째 칸)에 고정 배치라 7칸 배치에서는 빈 열을 만들므로 숨김 */
+#bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachPowerMeterGrid .coach-grid-logo-cell { display: none !important; }
 /* 좁은 PC 화면 */
 @media (max-width: 1500px) {
   #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(0, 1fr) 84px 92px; column-gap: 8px; }
   #coachRaceBoard .crb-row { padding: 0 12px; }
   #coachRaceBoard .crb-row__rank b { min-width: 40px; height: 40px; font-size: 22px; }
   #coachRaceBoard .crb-row__avatar { flex-basis: 42px; width: 42px; height: 42px; font-size: 17px; }
-  #coachRaceBoard .crb-row__name { font-size: 20px; }
+  #coachRaceBoard .crb-row__name { font-size: 26px; }
   #coachRaceBoard .crb-row__ach em { font-size: 16px; }
   #coachRaceBoard .crb-row__score { font-size: 28px; }
   #coachRaceBoard .crb__title { font-size: 20px; }
