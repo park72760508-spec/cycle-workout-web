@@ -36559,3 +36559,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   left: 12.5px; width: 24px; height: 20px; background: transparent; border: 0; box-shadow: none; font-size: 13px;
   filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff);
 }
+/* 2026-11-03 아이폰·Safari(WebKit)는 이모지 글자를 줄 상자 아래쪽에 그려 🚇가 역 원 하단으로 치우침 — WebKit에서만 위로 보정(Chrome·안드로이드는 이미 가운데) */
+@supports (font: -apple-system-body) {
+  #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub { padding-bottom: 3px; }
+  #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-bus { padding-bottom: 1px; }
+}
