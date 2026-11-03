@@ -6946,6 +6946,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
     let currentTime = 0;
     const maxTargetPower = ftp * 2; // FTP의 2배를 최대값으로
     
+    const durationLabelBars = [];
     segments.forEach((seg, index) => {
         const segDuration = seg.duration_sec || 0;
         if (segDuration <= 0) return;
@@ -6991,6 +6992,7 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         }
         
         const y = padding.top + chartHeight - powerHeight;
+        if (powerHeight > 0) durationLabelBars.push({ seg: seg, x: x, w: segWidth, top: y, bottom: padding.top + chartHeight });
         
         // 현재 세그먼트인지 확인
         const isCurrent = index === currentSegmentIndex;
@@ -7120,6 +7122,12 @@ function drawSegmentGraphForScoreboard(segments, currentSegmentIndex = -1, canva
         
         currentTime += segDuration;
     });
+    if (typeof drawSegmentDurationLabelsOnCanvas === 'function') {
+        drawSegmentDurationLabelsOnCanvas(ctx, durationLabelBars, {
+            scale: canvas.clientWidth > 0 ? canvas.clientWidth / graphWidth : 1,
+            minX: padding.left, maxX: padding.left + chartWidth
+        });
+    }
     
     // 가로축 시간 눈금 표시 (민트색 둥근 박스에 검정색 텍스트)
     const timeSteps = Math.min(8, Math.max(4, Math.floor(totalSeconds / 60))); // 전광판용: 최대 8개

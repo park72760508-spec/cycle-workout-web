@@ -711,6 +711,70 @@ function getStelvioRuntimeBadgeIcon() {
   return __stelvioRuntimeBadgeIconReady ? __stelvioRuntimeBadgeIconImg : null;
 }
 
+/* 2026-11-04 워크아웃 막대 가운데 구간 시간 라벨 — 워밍업·휴식(회복)·쿨다운과 케이던스 전용 구간 제외.
+   표기: 분 ′(프라임)·초 ″(더블 프라임) 약어를 키보드 기호 ' " 로 — 3분 3' · 30초 30" · 1분 30초 1'30"
+   짧은 구간이 붙어 있으면 왼쪽부터 겹치지 않는 라벨만 남기고 건너뛴다. */
+function segmentDurationShortLabel(sec) {
+  const t = Math.round(Number(sec) || 0);
+  if (t <= 0) return '';
+  if (t < 60) return t + '"';
+  const m = Math.floor(t / 60);
+  const s = t % 60;
+  return s ? m + "'" + s + '"' : m + "'";
+}
+function isSegmentDurationLabelTarget(seg) {
+  if (!seg || (seg.target_type || 'ftp_pct') === 'cadence_rpm') return false;
+  const t = String((seg.segment_type || '') + ' ' + (seg.label || '') + ' ' + (seg.type || '')).toLowerCase();
+  return !/warm|cool|rest|recover|워밍|웜업|휴식|회복|쿨다운|쿨링/.test(t);
+}
+/** items[i] = { cx, w } (같은 단위, w = 라벨 폭) → 표시할지 boolean[] */
+function pickNonOverlappingLabels(items, gap, minX, maxX) {
+  let prevRight = -Infinity;
+  return items.map(function (it) {
+    const l = Math.max(minX == null ? -Infinity : minX, it.cx - it.w / 2);
+    const rr = l + it.w;
+    if (l < prevRight + gap || (maxX != null && rr > maxX + it.w * 0.25)) return false;
+    prevRight = rr;
+    return true;
+  });
+}
+/**
+ * 캔버스 막대 그래프에 구간 시간 라벨 그리기
+ * @param bars [{ seg, x, w, top, bottom }] — 버퍼 좌표(px)
+ * @param opts { scale: 화면 표시 폭 ÷ 버퍼 폭, minX, maxX, fontFamily }
+ */
+function drawSegmentDurationLabelsOnCanvas(ctx, bars, opts) {
+  if (!ctx || !bars || !bars.length) return;
+  const o = opts || {};
+  const scale = o.scale > 0 ? o.scale : 1;
+  const fontPx = Math.max(8, Math.round(11 / scale));
+  ctx.save();
+  ctx.font = '700 ' + fontPx + 'px ' + (o.fontFamily || 'sans-serif');
+  const items = [];
+  bars.forEach(function (b) {
+    if (!isSegmentDurationLabelTarget(b.seg)) return;
+    const text = segmentDurationShortLabel(b.seg.duration_sec || b.seg.duration);
+    if (!text) return;
+    items.push({ b: b, text: text, cx: b.x + b.w / 2, w: ctx.measureText(text).width });
+  });
+  const show = pickNonOverlappingLabels(items, 4 / scale, o.minX, o.maxX);
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, 2.5 / scale);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.fillStyle = '#ffffff';
+  items.forEach(function (it, i) {
+    if (!show[i]) return;
+    const b = it.b;
+    let cy = (b.top + b.bottom) / 2;
+    if (b.bottom - b.top < fontPx + 2) cy = b.top - fontPx * 0.7; // 막대가 글자보다 낮으면 막대 바로 위
+    ctx.strokeText(it.text, it.cx, cy);
+    ctx.fillText(it.text, it.cx, cy);
+  });
+  ctx.restore();
+}
+
 /**
  * 세그먼트 그래프 그리기 (Canvas 기반)
  * @param {Array} segments - 세그먼트 배열
@@ -1202,6 +1266,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   // 세그먼트 막대 그리기
   let currentTime = 0;
+  const durationLabelBars = [];
   segments.forEach((seg, index) => {
     const duration = seg.duration_sec || 0;
     if (duration <= 0) return;
@@ -1277,6 +1342,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
     
     let y = padding.top + chartHeight - barHeight;
+    if (barHeight > 0) durationLabelBars.push({ seg: seg, x: x, w: barWidth, top: padding.top + chartHeight - Math.max(barHeight, 3), bottom: padding.top + chartHeight });
     
     // 세그먼트 타입 확인 (segment_type)
     const segType = (seg.segment_type || '').toLowerCase();
@@ -1721,6 +1787,10 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     }
     
     currentTime += duration;
+  });
+  drawSegmentDurationLabelsOnCanvas(ctx, durationLabelBars, {
+    scale: canvas.clientWidth > 0 ? canvas.clientWidth / graphWidth : 1,
+    minX: padding.left, maxX: padding.left + chartWidth, fontFamily: textFontFamily
   });
   
   // 가로축 시간 표시 (개인 대시보드 및 모바일 대시보드, 훈련 준비 화면은 제거)
@@ -7408,7 +7478,8 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       heightPercent = ftpPercentToBarHeight(ftpForHeight);
     }
     const cadenceClass = isCadence ? ' segmented-workout-graph__bar--cadence' : '';
-    return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom };
+    const durText = isSegmentDurationLabelTarget(seg) ? segmentDurationShortLabel(duration) : '';
+    return { duration, zone, flexGrow, heightPercent, cadenceClass, isCadence, isDual, cadenceRpm, cadenceLineBottom, durText };
   }).filter(Boolean);
   
   // RPM 값 표시 여부: rpm 바 너비 vs rpm 숫자폭 기준
@@ -7449,6 +7520,21 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
     const levels = minW < RPM_TEXT_WIDTH_PERCENT * 0.3 ? 3 : 2;
     run.forEach((b, i) => { b.rpmLevel = i % levels; });
   });
+
+  // 구간 시간 라벨: 실측 폭(px)으로 왼쪽부터 겹치지 않는 것만 표시
+  {
+    const pxW = containerWidthPx > 0 ? containerWidthPx : 320;
+    const durItems = [];
+    let acc = 0;
+    bars.forEach((b) => {
+      const cx = ((acc + b.flexGrow / 2) / totalFlexGrow) * pxW;
+      acc += b.flexGrow;
+      if (b.durText) durItems.push({ b, cx, w: measureSegmentedGraphLabelWidthPx(b.durText) - 8 });
+    });
+    const durShow = pickNonOverlappingLabels(durItems, 4, 0, pxW);
+    durItems.forEach((it, i) => { it.b.showDur = durShow[i]; });
+  }
+  const durSpan = (b) => (b.showDur ? `<span class="segmented-workout-graph__dur">${b.durText}</span>` : '');
 
   // 실제 세그먼트별 평균 파워 오버레이(연한 오렌지 계단선) — actualFtp 기준으로 target 막대와 동일한
   // ftpPercentToBarHeight 스케일을 사용해야 두 값이 같은 좌표계에서 비교된다.
@@ -7558,11 +7644,11 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
             return `
           <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone} segmented-workout-graph__bar--dual" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%; --cadence-line-bottom: ${b.cadenceLineBottom}%;" title="Zone ${b.zone} · RPM ${b.cadenceRpm} · ${Math.round(b.duration)}초">
             <div class="segmented-workout-graph__cadence-line segmented-workout-graph__cadence-line--dual"></div>
-            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value segmented-workout-graph__cadence-value--dual${b.rpmCompact ? ' segmented-workout-graph__cadence-value--compact' : ''}${b.rpmLevel ? ' segmented-workout-graph__cadence-value--lvl' + b.rpmLevel : ''}">${b.cadenceRpm}</span>` : ''}
+            ${b.showRpmValue ? `<span class="segmented-workout-graph__cadence-value segmented-workout-graph__cadence-value--dual${b.rpmCompact ? ' segmented-workout-graph__cadence-value--compact' : ''}${b.rpmLevel ? ' segmented-workout-graph__cadence-value--lvl' + b.rpmLevel : ''}">${b.cadenceRpm}</span>` : ''}${durSpan(b)}
           </div>`;
           }
           return `
-          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;" title="Zone ${b.zone} · ${Math.round(b.duration)}초"></div>`;
+          <div class="segmented-workout-graph__bar segmented-workout-graph__bar--zone-${b.zone}" style="flex: ${b.flexGrow} 1 0; --bar-height: ${b.heightPercent}%;" title="Zone ${b.zone} · ${Math.round(b.duration)}초">${durSpan(b)}</div>`;
         }).join('')}
       </div>
       ${actualOverlayMarkup}
