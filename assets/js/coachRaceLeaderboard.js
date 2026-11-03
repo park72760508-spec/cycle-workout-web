@@ -23,7 +23,8 @@
   window.__coachRaceBoardLoaded = true;
 
   var SCREEN_ID = 'bluetoothTrainingCoachScreen';
-  var ROW_H = 54;
+  var TOP_H = 92;  // 1~3위 행 높이(고정 영역)
+  var ROW_H = 64;  // 4위~ 행 높이(스크롤 영역)
   var PROX_CAP = 1.15;   // 목표 근접도: 초과 달성 인정 상한
   var PROX_FLOOR = 0.5;  // 이 이하 달성은 0
   var ZONE_FULL = 0.05;  // 목표 ±5%: 유지 1초 인정
@@ -278,6 +279,8 @@
   }
 
   // ---------- 화면 ----------
+  // 2026-11-03 스포츠 레이스 전광판: 접기/펼치기 탭은 워크아웃 그래프 블록(민트 테두리) 상단,
+  // 보드는 그래프 Y축 선 ~ 화면 오른쪽, 그래프 블록 아래 ~ 화면 바닥. 1~3위 고정, 4위부터 스크롤.
   function isOpen() {
     try { return localStorage.getItem(OPEN_KEY) !== '0'; } catch (e) { return true; }
   }
@@ -285,31 +288,43 @@
     try { localStorage.setItem(OPEN_KEY, open ? '1' : '0'); } catch (e) {}
     var root = $('coachRaceBoard');
     if (root) root.classList.toggle('crb--open', !!open);
+    var scr0 = $(SCREEN_ID);
+    if (scr0) scr0.classList.toggle('crb-board-open', !!open);
+    var h = $('coachRaceBoardHandle');
+    if (h) { h.classList.toggle('crb-tab--open', !!open); h.setAttribute('aria-expanded', open ? 'true' : 'false'); }
   }
   function ensureRoot() {
     var scr = $(SCREEN_ID);
     if (!scr) return null;
     var root = $('coachRaceBoard');
     if (root) return root;
+    var open = isOpen();
+    var tab = document.createElement('button');
+    tab.type = 'button';
+    tab.id = 'coachRaceBoardHandle';
+    tab.className = 'crb-tab' + (open ? ' crb-tab--open' : '');
+    tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    tab.setAttribute('aria-label', '실시간 순위 전광판 펼치기/접기');
+    tab.innerHTML = '<span class="crb-tab__dot" aria-hidden="true"></span><span class="crb-tab__text">LIVE RANK</span><span class="crb-tab__chev" aria-hidden="true"></span>';
+    scr.appendChild(tab);
+    tab.addEventListener('click', function () { setOpen(!$('coachRaceBoard').classList.contains('crb--open')); });
+
     root = document.createElement('div');
     root.id = 'coachRaceBoard';
-    root.className = 'crb' + (isOpen() ? ' crb--open' : '');
+    root.className = 'crb' + (open ? ' crb--open' : '');
     root.innerHTML =
-      '<button type="button" class="crb__handle" aria-label="실시간 순위 전광판 펼치기/접기">' +
-        '<span class="crb__handle-trophy" aria-hidden="true">🏆</span><span class="crb__handle-text">LIVE<br>RANK</span>' +
-        '<span class="crb__handle-chev" aria-hidden="true"></span>' +
-      '</button>' +
       '<section class="crb__panel" aria-label="실시간 레이스 순위">' +
         '<header class="crb__head">' +
-          '<div class="crb__title"><span class="crb__live-dot"></span>LIVE RACE RANKING</div>' +
+          '<div class="crb__title"><span class="crb__live-dot"></span><span>LIVE RACE RANKING</span></div>' +
           '<div class="crb__sub" id="coachRaceBoardSub"></div>' +
+          '<div class="crb__prog"><i id="coachRaceBoardProg"></i></div>' +
         '</header>' +
-        '<div class="crb__cols"><span>순위</span><span>선수</span><span>현재 구간</span><span>점수</span></div>' +
+        '<div class="crb__cols"><span>POS</span><span>RIDER</span><span>현재 구간</span><span>POINTS</span></div>' +
+        '<div class="crb__top" id="coachRaceBoardTop"></div>' +
         '<div class="crb__list" id="coachRaceBoardList"></div>' +
         '<footer class="crb__foot">구간 1분당 1점 × 수행도(목표 근접 50% + 목표 ±5% 유지 50%) · W/kg 가산 · 워밍업·휴식·쿨다운 제외</footer>' +
       '</section>';
     scr.appendChild(root);
-    root.querySelector('.crb__handle').addEventListener('click', function () { setOpen(!root.classList.contains('crb--open')); });
     return root;
   }
 
@@ -324,15 +339,20 @@
     var root = ensureRoot();
     if (!root || !v) return;
     var sub = $('coachRaceBoardSub');
+    var top = $('coachRaceBoardTop');
     var list = $('coachRaceBoardList');
-    if (!list) return;
+    if (!list || !top) return;
     var subText;
     if (!v.hasWorkout) subText = '워크아웃을 선택하면 집계가 시작됩니다';
     else if (v.state === 'idle') subText = v.rows.some(function (r) { return r.total > 0; }) ? '지난 레이스 최종 순위 · 새 훈련 시작 시 초기화' : '훈련 시작 시 실시간 집계 · 점수 구간 ' + v.scoredTotal + '개';
-    else if (v.state === 'finished') subText = '최종 순위 · 점수 구간 ' + v.scoredTotal + '개';
+    else if (v.state === 'finished') subText = 'FINISH · 최종 순위 · 점수 구간 ' + v.scoredTotal + '개';
     else subText = 'SEG ' + (v.idx + 1) + '/' + v.segCount + ' · ' + v.segLabel + (v.curExcluded ? ' (점수 제외)' : '') + (v.state === 'paused' ? ' · 일시정지' : '');
     if (sub && sub.textContent !== subText) sub.textContent = subText;
+    var prog = $('coachRaceBoardProg');
+    if (prog) prog.style.width = (v.scoredTotal ? Math.min(100, v.scoredDone / v.scoredTotal * 100) : 0) + '%';
+    root.classList.toggle('crb--live', v.state === 'running');
 
+    var leader = v.rows.length ? v.rows[0].total : 0;
     var seen = {};
     v.rows.forEach(function (r) {
       seen[r.uid] = true;
@@ -344,13 +364,16 @@
           '<div class="crb-row__rank"><b></b><i class="crb-row__move"></i></div>' +
           '<div class="crb-row__who"><span class="crb-row__avatar"></span><span class="crb-row__name"></span></div>' +
           '<div class="crb-row__ach"><span class="crb-row__bar"><i></i></span><em></em></div>' +
-          '<div class="crb-row__score"></div>';
-        list.appendChild(row);
+          '<div class="crb-row__pts"><div class="crb-row__score"></div><div class="crb-row__gap"></div></div>';
         rowEls[r.uid] = row;
       }
-      var cls = 'crb-row' + (r.rank <= 3 ? ' crb-row--top' + r.rank : '') + (r.move > 0 ? ' crb-row--up' : r.move < 0 ? ' crb-row--down' : '');
+      // 1~3위는 고정 영역, 4위부터 스크롤 영역(영역 안에서는 순위 변동이 미끄러지듯 이동)
+      var box = r.rank <= 3 ? top : list;
+      if (row.parentNode !== box) box.appendChild(row);
+      var y = r.rank <= 3 ? (r.rank - 1) * TOP_H : (r.rank - 4) * ROW_H;
+      var cls = 'crb-row' + (r.rank <= 3 ? ' crb-row--top crb-row--top' + r.rank : '') + (r.move > 0 ? ' crb-row--up' : r.move < 0 ? ' crb-row--down' : '');
       if (row.className !== cls) row.className = cls;
-      row.style.transform = 'translateY(' + ((r.rank - 1) * ROW_H) + 'px)';
+      row.style.transform = 'translateY(' + y + 'px)';
       row.querySelector('.crb-row__rank b').textContent = String(r.rank);
       var mv = row.querySelector('.crb-row__move');
       var mvText = r.move > 0 ? '▲' + r.move : r.move < 0 ? '▼' + (-r.move) : '';
@@ -370,20 +393,58 @@
       var sc = row.querySelector('.crb-row__score');
       var st = r.total.toFixed(1);
       if (sc.textContent !== st) sc.textContent = st;
+      var gp = row.querySelector('.crb-row__gap');
+      var gt = r.rank === 1 ? (leader > 0 ? 'LEADER' : '') : (leader - r.total > 0.05 ? '−' + (leader - r.total).toFixed(1) : '');
+      if (gp.textContent !== gt) gp.textContent = gt;
     });
     Object.keys(rowEls).forEach(function (uid) {
       if (!seen[uid]) { rowEls[uid].remove(); delete rowEls[uid]; }
     });
-    list.style.height = Math.max(1, v.rows.length) * ROW_H + 'px';
-    var empty = list.querySelector('.crb__empty');
+    var nTop = Math.min(3, v.rows.length);
+    top.style.height = Math.max(1, nTop) * TOP_H + 'px';
+    var inner = list.querySelector('.crb__list-in');
+    if (!inner) { inner = document.createElement('div'); inner.className = 'crb__list-in'; list.appendChild(inner); }
+    inner.style.height = Math.max(0, v.rows.length - 3) * ROW_H + 'px';
+    root.classList.toggle('crb--norest', v.rows.length <= 3);
+    var empty = top.querySelector('.crb__empty');
     if (!v.rows.length) {
       if (!empty) {
         empty = document.createElement('div');
         empty.className = 'crb__empty';
         empty.textContent = '접속한 참가자가 없습니다';
-        list.appendChild(empty);
+        top.appendChild(empty);
       }
     } else if (empty) empty.remove();
+  }
+
+  // 보드 위치: 왼쪽 = 워크아웃 그래프 Y축 선, 위 = 그래프 블록(민트 테두리) 아래, 아래 = 화면 바닥
+  function layout() {
+    var root = $('coachRaceBoard');
+    var tab = $('coachRaceBoardHandle');
+    var sb = document.querySelector('#' + SCREEN_ID + ' .scoreboard-display');
+    if (!root || !tab || !sb) return;
+    var sbr = sb.getBoundingClientRect();
+    var left = Math.round(window.innerWidth * 0.62);
+    var cv = $('bluetoothCoachSegmentGraphCanvas');
+    if (cv && cv.width > 0) {
+      var cr = cv.getBoundingClientRect();
+      if (cr.width > 0) left = Math.round(cr.left + 35 * (cr.width / cv.width)); // drawSegmentGraphForScoreboard padding.left
+    }
+    // 작은 화면에서도 이름이 보이도록 최소 폭 480px(그때는 Y축보다 조금 왼쪽까지)
+    left = Math.max(Math.round(window.innerWidth * 0.45), Math.min(left, window.innerWidth - 480));
+    var topY = Math.round(sbr.bottom + 6);
+    var key = left + '|' + topY + '|' + Math.round(sbr.top) + '|' + window.innerHeight;
+    if (root.dataset.k === key) return;
+    root.dataset.k = key;
+    root.style.left = left + 'px';
+    var scr1 = $(SCREEN_ID);
+    if (scr1) {
+      scr1.style.setProperty('--crb-w', (window.innerWidth - left) + 'px');
+      scr1.classList.toggle('crb-board-open', root.classList.contains('crb--open'));
+    }
+    root.style.top = topY + 'px';
+    tab.style.left = left + 'px';
+    tab.style.top = Math.round(sbr.top) + 'px';
   }
 
   var MOBILE_SCREEN_ID = 'bluetoothCoachMobileScreen';
@@ -403,21 +464,11 @@
     try {
       window.__coachRaceLatest = compute();
       render(window.__coachRaceLatest);
-      // 상단 시간·워크아웃 그래프를 가리지 않도록 속도계 영역 시작 높이에 맞춤
-      var grid = $('bluetoothCoachPowerMeterGrid');
-      var root = $('coachRaceBoard');
-      if (grid && root) {
-        var top = Math.max(60, Math.round(grid.getBoundingClientRect().top));
-        if (root.dataset.top !== String(top)) {
-          root.dataset.top = String(top);
-          root.style.top = top + 'px';
-          var panel = root.querySelector('.crb__panel');
-          if (panel) panel.style.maxHeight = 'calc(100vh - ' + (top + 16) + 'px)';
-        }
-      }
+      layout();
     } catch (e) { if (window.console) console.warn('[coachRaceBoard]', e); }
   }
   setInterval(tick, 1000);
+  window.addEventListener('resize', function () { var r = $('coachRaceBoard'); if (r) { r.dataset.k = ''; layout(); } });
   window.coachRaceBoardTick = tick;
   window.coachRaceBoardCompute = compute; // 디버그·검증용
 })();
