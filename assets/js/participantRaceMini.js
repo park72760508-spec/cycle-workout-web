@@ -34,7 +34,13 @@
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
   }
-  function visible(el) { return !!(el && el.offsetParent !== null && getComputedStyle(el).display !== 'none'); }
+  function visible(el) {
+    if (!el) return false;
+    var cs = getComputedStyle(el); // 화면 컨테이너가 position:fixed 라 offsetParent 로는 판별 불가
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    var r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  }
   function sessionId() {
     var id = window.SESSION_ID || window.currentTrainingRoomId || '';
     if (!id) { try { id = localStorage.getItem('currentTrainingRoomId') || ''; } catch (e) {} }
