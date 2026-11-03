@@ -9,8 +9,8 @@
   window.__pmbLoaded = true;
 
   var TARGETS = [
-    { screen: 'bluetoothIndividualScreen', box: '.indiv-gauge-container', power: 'indiv-ui-current-power' },
-    { screen: 'mobileDashboardScreen', box: '.mobile-gauge-container', power: 'mobile-ui-current-power' }
+    { screen: 'bluetoothIndividualScreen', box: '.indiv-gauge-container', power: 'indiv-ui-current-power', needle: 'indiv-gauge-needle' },
+    { screen: 'mobileDashboardScreen', box: '.mobile-gauge-container', power: 'mobile-ui-current-power', needle: 'mobile-gauge-needle' }
   ];
   var dbg = {};
   window.__pmbDebug = function () { return { sid: lastSid, uid: myUid(), data: data, seenAgoMs: seenAt ? Date.now() - seenAt : null, dbg: dbg }; };
@@ -19,7 +19,7 @@
   var css = document.createElement('style');
   css.textContent =
     '.pmb{position:absolute;display:flex;flex-direction:column;gap:1px;pointer-events:none;z-index:3;font-variant-numeric:tabular-nums}' +
-    '.pmb__row{flex:1 1 0;min-height:0;display:flex;align-items:center;gap:3px;padding:0 4px;border-radius:4px;background:rgba(255,255,255,.05);color:#cfd3d8;font-size:10px;line-height:1;overflow:hidden}' +
+    '.pmb__row{flex:0 0 var(--rh,20px);height:var(--rh,20px);font-size:var(--fs,10px)!important;display:flex;align-items:center;gap:3px;padding:0 4px;border-radius:4px;background:rgba(255,255,255,.05);color:#cfd3d8;font-size:10px;line-height:1;overflow:hidden}' +
     '.pmb__row b{flex:0 0 13px;text-align:center;font-weight:700;color:#8a9099}' +
     '.pmb__t1 b{color:#ffd54a}.pmb__t2 b{color:#cfd8dc}.pmb__t3 b{color:#d99a6c}' +
     '.pmb__av{flex:0 0 13px;width:13px;height:13px;border-radius:50%;overflow:hidden;background:#2c3138;display:inline-flex;align-items:center;justify-content:center}' +
@@ -169,9 +169,14 @@
     var pr = pw && pw.getBoundingClientRect();
     if (!pr || !pr.width || !br.width) return;
     var bs = boards(box);
-    var h = pr.height * 1.25;
-    var bottom = pr.bottom - br.top + pr.height * 0.05;
-    var top = bottom - h;
+    // 바늘 축(원) 아래 ~ 현재 파워 숫자 아래 사이를 5줄로 균등 분할(바늘·눈금과 겹치지 않게)
+    var nd = document.getElementById(act.t.needle);
+    var hub = nd && nd.querySelector('circle');
+    var hr = hub && hub.getBoundingClientRect();
+    var bottom = pr.bottom - br.top;
+    var top = hr && hr.height ? hr.bottom - br.top + 3 : bottom - pr.height * 0.9;
+    var h = Math.max(60, bottom - top);
+    var rh = Math.floor((h - 4) / 5);
     var gapPx = Math.max(4, pr.width * 0.06);
     var wL = pr.left - br.left - gapPx - 2;
     var wR = br.right - pr.right - gapPx - 2;
@@ -179,7 +184,7 @@
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
-    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; }
+    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', Math.max(8, Math.min(11, rh * 0.42)) + 'px'); }
     place(bs[0], 2, wL);
     place(bs[1], pr.right - br.left + gapPx, wR);
     bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting); }).join('');
