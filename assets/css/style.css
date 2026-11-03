@@ -36566,3 +36566,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 /* 2026-11-03 지하철 노선도 역 간격 20% 넓힘(행 36px → 43px), 버스 목록은 36px 유지 */
 #outdoorRideScreen .outd-busrt__list.is-rail li { height: 43px; min-height: 43px; }
+/* 2026-11-03 지하철 노선도 환승 표시를 역 이름 바로 뒤에 좌측 정렬('현재 역'만 오른쪽 끝) */
+#outdoorRideScreen .outd-subln .outd-busrt__list li > span:not(.outd-subln__xfer) { flex: 0 1 auto; }
+#outdoorRideScreen .outd-subln .outd-busrt__list li > em { margin-left: auto; }
