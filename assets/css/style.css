@@ -36569,3 +36569,33 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-03 지하철 노선도 환승 표시를 역 이름 바로 뒤에 좌측 정렬('현재 역'만 오른쪽 끝) */
 #outdoorRideScreen .outd-subln .outd-busrt__list li > span:not(.outd-subln__xfer) { flex: 0 1 auto; }
 #outdoorRideScreen .outd-subln .outd-busrt__list li > em { margin-left: auto; }
+/* 2026-11-03 카테고리 화면: 루트맵·중고랜드 = CYCLE/RUN과 같은 사각 타일(2×2). 로그인 시 그리드에 .has-entry-tiles */
+#sportCategoryScreen .connection-device-section.basecamp-device-section .sport-category-grid.has-entry-tiles {
+  grid-template-rows: repeat(2, 1fr) !important;
+  aspect-ratio: 1 / 1 !important;
+}
+#sportCategoryScreen .sport-category-grid .sport-category-tile {
+  border: 2px solid rgba(135, 206, 235, 0.6) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  position: relative; overflow: hidden;
+  width: 100% !important; height: 100% !important; min-height: 0 !important; aspect-ratio: 1 !important;
+  box-sizing: border-box !important; margin: 0 !important; padding: 0 !important;
+  flex-direction: column !important; justify-content: flex-end !important; align-items: center !important;
+  padding-bottom: 5% !important; color: #4682b4 !important;
+}
+#sportCategoryScreen .sport-category-grid .sport-category-tile::before {
+  background: rgba(135, 206, 235, 0.3) !important; z-index: 1;
+}
+#sportCategoryScreen .sport-category-grid .sport-category-tile:hover:not(:disabled)::before { opacity: 0.55; }
+#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__icon {
+  position: relative; z-index: 2; display: block; flex-shrink: 0; width: 40%; height: auto; aspect-ratio: 1; margin: auto 0;
+}
+#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__icon--route {
+  background-color: currentColor;
+  -webkit-mask: url('../img/route.svg') center / contain no-repeat;
+  mask: url('../img/route.svg') center / contain no-repeat;
+}
+#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__label {
+  position: relative; z-index: 2; margin: 0; color: #4682b4;
+  font-size: clamp(14px, 4.4vw, 19px); font-weight: 700; letter-spacing: 0.02em; line-height: 1.1; white-space: nowrap;
+}
