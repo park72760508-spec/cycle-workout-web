@@ -27,6 +27,7 @@
     '.pmb__nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}' +
     '.pmb__row em{flex:0 0 auto;font-style:normal;font-weight:700;color:#e8eaed}' +
     '.pmb__me{background:rgba(0,212,170,.2);box-shadow:inset 0 0 0 1px rgba(0,212,170,.7);color:#fff}.pmb__me b{color:#00d4aa}' +
+    '.pmb__wait{color:#7d838c!important;font-weight:400!important;font-size:9px}' +
     '.pmb__gap{flex:1 1 0;display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
   document.head.appendChild(css);
 
@@ -67,11 +68,42 @@
     }).catch(function (e) { dbg.err = String(e && e.message || e); }).then(function () { fetching = false; });
   }
 
-  function rowHtml(r, rank, me) {
+  // 순위 집계가 아직 없을 때(훈련 시작 전·Coach 미게시): 접속자(sessions/{id}/users)를 가나다 순으로 — 대기 상태
+  var waitRows = null, waitFetching = false, waitAt = 0, avCache = {};
+  function pollUsers(sid) {
+    if (waitFetching || Date.now() - waitAt < 4000) return;
+    waitFetching = true; waitAt = Date.now();
+    token().then(function (t) {
+      return fetch(dbBase() + '/sessions/' + encodeURIComponent(sid) + '/users.json?auth=' + encodeURIComponent(t), { cache: 'no-store' });
+    }).then(function (r) { return r.ok ? r.json() : null; }).then(function (v) {
+      var list = [];
+      if (v && typeof v === 'object') {
+        Object.keys(v).forEach(function (k) {
+          var u = v[k];
+          if (u && u.userName) list.push({ u: String(u.userId || 'track-' + k), n: String(u.userName), s: 0, a: '', w: 1 });
+        });
+      }
+      list.sort(function (a, b) { return a.n.localeCompare(b.n, 'ko'); });
+      list.forEach(function (r) {
+        if (avCache[r.u] !== undefined) { r.a = avCache[r.u] || ''; return; }
+        avCache[r.u] = '';
+        if (typeof window.getUserByUid === 'function' && r.u.indexOf('track-') !== 0) {
+          window.getUserByUid(r.u).then(function (p) {
+            var url = p && (p.profileImageUrl || p.profile_image_url);
+            avCache[r.u] = url ? String(url) : '';
+            waitAt = 0;
+          }).catch(function () {});
+        }
+      });
+      waitRows = list;
+    }).catch(function (e) { dbg.err = String(e && e.message || e); }).then(function () { waitFetching = false; });
+  }
+
+  function rowHtml(r, rank, me, waiting) {
     var nm = String(r.n || '?');
     var av = r.a ? '<img src="' + esc(r.a) + '" alt="" decoding="async" onerror="this.remove()">' : '<i>' + esc(nm.charAt(0)) + '</i>';
     return '<div class="pmb__row' + (me ? ' pmb__me' : '') + (rank <= 3 ? ' pmb__t' + rank : '') + '"><b>' + rank + '</b><span class="pmb__av">' + av +
-      '</span><span class="pmb__nm">' + esc(nm) + '</span><em>' + Math.round(Number(r.s) || 0) + '</em></div>';
+      '</span><span class="pmb__nm">' + esc(nm) + '</span>' + (waiting ? '<em class="pmb__wait">대기</em>' : '<em>' + Math.round(Number(r.s) || 0) + '</em>') + '</div>';
   }
   function boards(box) {
     var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r');
@@ -106,9 +138,19 @@
     poll(sid);
     dbg.rows = data && data.rows ? data.rows.length : 0;
     var fresh = data && data.rows && data.rows.length && Date.now() - seenAt < 40000;
-    if (!fresh) { hide(box); return; }
+    var src = fresh ? data.rows : null;
+    var waiting = false;
+    if (fresh) {
+      // 아직 아무도 점수가 없으면(훈련 시작 전) 대기 표시
+      waiting = !data.rows.some(function (r) { return Number(r.s) > 0; }) && data.state !== 'running' && data.state !== 'paused' && data.state !== 'finished';
+    } else {
+      pollUsers(sid);
+      src = (waitRows || []).map(function (r) { return Object.assign({}, r, { a: avCache[r.u] || r.a }); });
+      waiting = true;
+    }
+    if (!src || !src.length) { hide(box); return; }
 
-    var rows = data.rows.map(function (r, i) { return { r: r, rank: i + 1 }; });
+    var rows = src.map(function (r, i) { return { r: r, rank: i + 1 }; });
     var uid = myUid();
     var me = uid ? rows.find(function (x) { return String(x.r.u) === uid; }) : null;
     var left = rows.slice(0, 5), right;
@@ -127,15 +169,15 @@
     var gapPx = Math.max(4, pr.width * 0.06);
     var wL = pr.left - br.left - gapPx - 2;
     var wR = br.right - pr.right - gapPx - 2;
-    var sig = JSON.stringify([left, right, uid, Math.round(wL), Math.round(wR), Math.round(top), Math.round(h)]);
+    var sig = JSON.stringify([waiting, left, right, uid, Math.round(wL), Math.round(wR), Math.round(top), Math.round(h)]);
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
     function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; }
     place(bs[0], 2, wL);
     place(bs[1], pr.right - br.left + gapPx, wR);
-    bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank); }).join('');
-    bs[1].innerHTML = right.map(function (x) { return x === 'gap' ? '<div class="pmb__gap">⋯</div>' : rowHtml(x.r, x.rank, me && me.rank === x.rank); }).join('');
+    bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting); }).join('');
+    bs[1].innerHTML = right.map(function (x) { return x === 'gap' ? '<div class="pmb__gap">⋯</div>' : rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting); }).join('');
   }
   setInterval(tick, 1000);
   window.addEventListener('resize', function () { TARGETS.forEach(function (t) { var b = document.querySelector('#' + t.screen + ' ' + t.box); if (b) b.__pmbSig = ''; }); });
