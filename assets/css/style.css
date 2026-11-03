@@ -36599,3 +36599,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   position: relative; z-index: 2; margin: 0; color: #4682b4;
   font-size: clamp(14px, 4.4vw, 19px); font-weight: 700; letter-spacing: 0.02em; line-height: 1.1; white-space: nowrap;
 }
+/* 2026-11-03 지하철 노선도 환승 표시 탭 → 그 호선 노선도로 전환(작은 배지라 터치 범위를 위아래로 넓힘) */
+#outdoorRideScreen .outd-subln .outd-busrt__list .outd-subln__xfer { overflow: visible; }
+#outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap { position: relative; cursor: pointer; overflow: visible; }
+#outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap::after { content: ''; position: absolute; left: -2px; right: -2px; top: -10px; bottom: -10px; }
+#outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap:active { filter: brightness(0.85); }
+/* 카테고리 타일 레이블: 굵지 않은 보통 */
+#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__label { font-weight: 400; }

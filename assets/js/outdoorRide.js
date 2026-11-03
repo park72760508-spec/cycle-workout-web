@@ -1550,9 +1550,13 @@
         var t = e.target;
         if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; liveStop(el); return; }
         var tab = t.closest('[data-rt-dir]');
-        if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderSubwayLinePopup(el); }
+        if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderSubwayLinePopup(el); return; }
+        // 환승 표시 탭 → 그 호선 노선도로 바꿔 보여 줌(그 역이 현재 역)
+        var xl = t.closest('[data-xln]');
+        if (xl) openSubwayLinePopup(Number(xl.getAttribute('data-xln')), Number(xl.getAttribute('data-xst')));
       });
     }
+    liveStop(el); // 다른 호선으로 바꿀 때 이전 호선 실시간 응답이 목록을 다시 그리지 않게
     el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__seqs = null;
     el.style.setProperty('--ln', ln.c);
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선도를 불러오는 중…</div></div>';
@@ -1603,7 +1607,7 @@
           if (!s2) return '';
           var xfer = (s2.l || []).filter(function (x) { return x !== el.__li; }).map(function (x) {
             var o = sub.data.lines[x];
-            return o ? '<u style="background:' + escHtml(o.c) + '">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
+            return o ? '<u class="is-tap" data-xln="' + x + '" data-xst="' + si + '" style="background:' + escHtml(o.c) + '" title="' + escHtml(o.n) + ' 노선도 보기">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
           }).join('');
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
@@ -1634,7 +1638,7 @@
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
-    if (curEl && lst) lst.scrollTop = Math.max(0, curEl.offsetTop - lst.offsetTop - lst.clientHeight / 2 + curEl.offsetHeight / 2);
+    if (curEl && lst) lst.scrollTop = Math.max(0, lst.scrollTop + curEl.getBoundingClientRect().top - lst.getBoundingClientRect().top - lst.clientHeight / 2 + curEl.offsetHeight / 2);
   }
   /* ---------- 지하철 경로 찾기 (2026-11-03) ----------
    * 길찾기 → [지하철 경로]: 출발역·도착역을 고르면 앱 안에서 바로 계산(서버·비용 없음).
@@ -2428,7 +2432,7 @@
     if (fromLive) return;
     var cur = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
-    if (cur && lst) lst.scrollTop = Math.max(0, cur.offsetTop - lst.offsetTop - lst.clientHeight / 2 + cur.offsetHeight / 2);
+    if (cur && lst) lst.scrollTop = Math.max(0, lst.scrollTop + cur.getBoundingClientRect().top - lst.getBoundingClientRect().top - lst.clientHeight / 2 + cur.offsetHeight / 2);
   }
   function syncBusBtn() {
     var btn = $('outdBusBtn');
