@@ -36605,4 +36605,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap::after { content: ''; position: absolute; left: -2px; right: -2px; top: -10px; bottom: -10px; }
 #outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap:active { filter: brightness(0.85); }
 /* 카테고리 타일 레이블: 굵지 않은 보통 */
-#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__label { font-weight: 400; }
+#sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__label { font-weight: 500; }
