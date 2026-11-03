@@ -36606,3 +36606,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap:active { filter: brightness(0.85); }
 /* 카테고리 타일 레이블: 굵지 않은 보통 */
 #sportCategoryScreen .sport-category-grid .sport-category-tile .sport-category-tile__label { font-weight: 500; }
+/* 2026-11-03 환승 표시: '수도권광역철도A'처럼 긴 이름도 배지 상자 안에 다 들어가게(최대 폭 해제), 칸이 모자라면 배지 줄바꿈 */
+#outdoorRideScreen .outd-subln .outd-busrt__list .outd-subln__xfer { flex-wrap: wrap; row-gap: 2px; min-width: 0; }
+#outdoorRideScreen .outd-subln .outd-subln__xfer u.is-tap { max-width: none; text-overflow: clip; }
+#outdoorRideScreen .outd-subln .outd-busrt__list li > span:not(.outd-subln__xfer) { flex: 0 0 auto; max-width: 55%; }
