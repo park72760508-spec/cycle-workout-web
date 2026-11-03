@@ -1593,8 +1593,9 @@
   }
   function subAgeText(t, now) {
     // 예: "지축 출발 2분 3초 전", "삼송 진입 30초 전", "삼송 접근 40초 전"(전 역 출발)
-    var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '접근' }[t.s] || '운행';
-    var head = (t.stn ? t.stn + ' ' : '') + stt;
+    var ds = t.dispS || t.s, dst = t.dispStn || t.stn;
+    var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '접근' }[ds] || '운행';
+    var head = (dst ? dst + ' ' : '') + stt;
     if (!t.at) return head;
     var sec = Math.max(0, Math.round((now - t.at) / 1000));
     return head + ' ' + (sec >= 60 ? Math.floor(sec / 60) + '분 ' + (sec % 60) + '초 전' : sec + '초 전');
@@ -1612,9 +1613,26 @@
     var now = Date.now();
     var trains = (el.__trains || []).map(function (t) { t.n = cy.length; return t; });
     // 같은 역에 정차(또는 거의 정차) 중인 열차는 배지 1개로(↑·↓ 화살표 함께), 역 사이 열차는 원 없이 아이콘만
+    // 같은 방향 열차는 한 역에 겹치지 않음: 뒤차가 역에 있으면 앞차는 그 역을 '출발'한 것으로 앞으로 밀어 표시
+    trains.forEach(function (t) { t.p = subTrainPos(t, now); t.dispS = t.s; t.dispStn = t.stn; });
+    [true, false].forEach(function (down) {
+      var dir = down ? 1 : -1;
+      var q = trains.filter(function (t) { return t.down === down; });
+      var rank = { '3': 0, '0': 1, '1': 2, '2': 3 }; // 같은 위치면 접근 < 진입 < 도착 < 출발 순으로 앞차
+      q.sort(function (a, b) { return (dir * a.p - dir * b.p) || ((rank[a.s] || 0) - (rank[b.s] || 0)); });
+      for (var i = 1; i < q.length; i++) {
+        var rear = q[i - 1], lead = q[i];
+        if (dir * (lead.p - rear.p) < 0.35) {
+          var base = Math.round(rear.p);
+          lead.p = Math.max(0, Math.min(cy.length - 1, rear.p + dir * 0.35));
+          lead.dispS = '2';
+          lead.dispStn = rows[base] ? (rows[base].querySelector('span') || {}).textContent || lead.stn : lead.stn;
+        }
+      }
+    });
     var groups = [];
     trains.forEach(function (t) {
-      var p = subTrainPos(t, now);
+      var p = t.p;
       var atSt = Math.abs(p - Math.round(p)) < 0.12;
       var g = null;
       for (var j = 0; j < groups.length; j++) if (Math.abs(groups[j].p - p) < 0.3 && groups[j].atSt === atSt) { g = groups[j]; break; }
