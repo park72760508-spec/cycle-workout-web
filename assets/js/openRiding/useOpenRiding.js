@@ -25,6 +25,28 @@ import {
  * @param {Date} [anchorMonth] 표시 월 기준일
  * @param {string} [moimCategory] 'CYCLE' | 'RUN' — 맞춤 필터(관심 레벨·활동 지역) 저장을 모임별로 분리
  */
+/**
+ * 2026-11-03 Firestore SDK 내부 오류(INTERNAL ASSERTION FAILED: Unexpected state)로 db가 고장 나면
+ * 새 인스턴스로 복구(index.html stelvioRecoverFirestoreV9)한 뒤 한 번 더 시도한다.
+ * 참석·취소 트랜잭션은 이미 반영된 경우 'already'로 끝나므로 다시 시도해도 포인트가 두 번 차감되지 않는다.
+ */
+async function withFirestoreRecovery(db, fn) {
+  try {
+    return await fn(db);
+  } catch (e) {
+    const w = typeof window !== 'undefined' ? window : null;
+    if (!w || typeof w.stelvioIsFirestoreBrokenError !== 'function' || !w.stelvioIsFirestoreBrokenError(e) ||
+        typeof w.stelvioRecoverFirestoreV9 !== 'function') throw e;
+    const db2 = await w.stelvioRecoverFirestoreV9();
+    try {
+      return await fn(db2);
+    } catch (e2) {
+      if (w.stelvioIsFirestoreBrokenError(e2)) throw new Error('FIRESTORE_BROKEN');
+      throw e2;
+    }
+  }
+}
+
 export function useOpenRiding(db, userId, anchorMonth, moimCategory) {
   const [prefs, setPrefs] = useState({ activeRegions: [], preferredLevels: [] });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
@@ -314,13 +336,13 @@ export function useOpenRideDetail(db, rideId, userId) {
       if (!phone) phone = String(prof.contactInfo || '').trim().slice(0, 80);
 
       const jopt = joinOptions && typeof joinOptions === 'object' ? joinOptions : {};
-      const res = await joinRideTransaction(db, rideId, userId, dn || '라이더', phone, {
+      const res = await withFirestoreRecovery(db, (d) => joinRideTransaction(d, rideId, userId, dn || '라이더', phone, {
         contactPublicToParticipants: !!jopt.contactPublicToParticipants,
         joinPasswordAttempt: String(jopt.joinPasswordAttempt != null ? jopt.joinPasswordAttempt : '')
           .replace(/\D/g, '')
           .slice(0, 4)
-      });
-      await reload();
+      }));
+      await reload().catch(() => {});
       return res;
     } catch (e) {
       const raw = (e && e.message) || 'join_failed';
@@ -337,6 +359,8 @@ export function useOpenRideDetail(db, rideId, userId) {
                 ? '사용자 포인트 정보를 찾을 수 없습니다. 다시 로그인해 주세요.'
             : raw === 'RIDE_JOIN_CLOSED'
               ? '이 모임은 일정이 지났거나, 방장 후기가 등록되어 참석 신청·취소가 마감되었습니다.'
+            : raw === 'FIRESTORE_BROKEN'
+              ? '일시적인 연결 오류가 발생했습니다. 앱을 완전히 종료했다가 다시 열어 신청해 주세요.'
               : raw;
       setActionError(msg);
       return undefined;
@@ -347,8 +371,8 @@ export function useOpenRideDetail(db, rideId, userId) {
     if (!db || !rideId || !userId) return;
     setActionError(null);
     try {
-      const res = await leaveRideTransaction(db, rideId, userId);
-      await reload();
+      const res = await withFirestoreRecovery(db, (d) => leaveRideTransaction(d, rideId, userId));
+      await reload().catch(() => {});
       return res;
     } catch (e) {
       const raw = (e && e.message) || 'leave_failed';

@@ -18695,6 +18695,16 @@ function OpenRidingRoomApp(props) {
     [firestore]
   );
 
+  /** 2026-11-03 Firestore 내부 오류로 새 인스턴스가 만들어지면(stelvioRecoverFirestoreV9) 새 db로 교체 */
+  useEffect(function () {
+    if (typeof window === 'undefined') return undefined;
+    var onRecovered = function () {
+      if (window.firestoreV9) setFirestore(window.firestoreV9);
+    };
+    window.addEventListener('stelvio-firestoreV9-recovered', onRecovered);
+    return function () { window.removeEventListener('stelvio-firestoreV9-recovered', onRecovered); };
+  }, []);
+
   /** PC/모바일: Firebase 세션 복원 전에는 Firestore가 permission-denied — UID를 auth와 동기화 */
   var _uidEff = useState(function () {
     return String(props.userId || '').trim();

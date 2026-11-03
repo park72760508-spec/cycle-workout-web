@@ -12,6 +12,6 @@ refreshDualRunFromRemoteConfig(true).catch(function (err) {
   }
 });
 import './openRidingFriendsService.js?v=cost-rpc-20260925b';
-import './useOpenRiding.js?v=admin-point-exempt-20261002';
+import './useOpenRiding.js?v=fsrecover-20261103';
 import './koreaRegions.js';
 import './groupRideEligibility.js';

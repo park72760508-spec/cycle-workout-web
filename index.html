@@ -297,6 +297,32 @@
         if (typeof stelvioAdminLog === 'function') stelvioAdminLog('✅ Firebase v9 핵심 API 준비 (로그인·프로필)');
         else console.log('✅ Firebase v9 핵심 API 준비 (로그인·프로필)');
         try { window.dispatchEvent(new CustomEvent('stelvio-firestoreV9-ready')); } catch (eFsReady) {}
+        /* 2026-11-03 Firestore SDK 내부 오류(INTERNAL ASSERTION FAILED: Unexpected state) 복구 —
+           이 오류가 한 번 나면 그 Firestore 인스턴스는 이후 모든 읽기·쓰기가 같은 오류로 실패한다(안드로이드 WebView 백그라운드 복귀 등).
+           기존 인스턴스를 종료하고 같은 앱(로그인 유지)에 새 인스턴스를 만들어 window.firestoreV9를 교체, 화면들은 이벤트로 새 db를 받는다. */
+        window.stelvioIsFirestoreBrokenError = function (e) {
+          var m = String((e && (e.message || e.code)) || e || '');
+          return /INTERNAL ASSERTION FAILED|Unexpected state|AsyncQueue is already failed/i.test(m);
+        };
+        var _fsRecovering = null;
+        window.stelvioRecoverFirestoreV9 = function () {
+          if (_fsRecovering) return _fsRecovering;
+          _fsRecovering = (async function () {
+            var old = firestoreV9;
+            try { if (old && typeof firestoreMod.terminate === 'function') await firestoreMod.terminate(old); } catch (eTerm) {}
+            firestoreV9 = initFirestore(appV9, {
+              experimentalForceLongPolling: true,
+              experimentalAutoDetectLongPolling: false,
+              useFetchStreams: false
+            });
+            window.firestoreV9 = firestoreV9;
+            console.warn('[Firebase v9] Firestore 내부 오류 → 새 인스턴스로 복구');
+            try { window.dispatchEvent(new CustomEvent('stelvio-firestoreV9-recovered')); } catch (eRec) {}
+            return firestoreV9;
+          })();
+          _fsRecovering.then(function () { setTimeout(function () { _fsRecovering = null; }, 3000); }, function () { _fsRecovering = null; });
+          return _fsRecovering;
+        };
         try { window.dispatchEvent(new CustomEvent('stelvio-v9-firebase-user-api-ready')); } catch (eApiReady) {}
 
         /* Storage·Functions는 로그인 경로와 분리 — 백그라운드 로드 */
@@ -30095,7 +30121,7 @@
        defer가 반드시 필요 — 없으면 이 스크립트가 문서 위치에서 즉시(React 로드 전에) 실행되어
        "React is not defined" 등 오류가 난다. -->
   <script defer src="assets/js/workoutDifficulty.js?v=20260929a"></script>
-  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=mdsort2-20261103"></script>
+  <script defer src="assets/js/openRiding/OpenRidingScreens.compiled.js?v=fsrecover-20261103"></script>
   <script>
     (function() {
       var openRidingReactRoot = null;
@@ -30180,7 +30206,7 @@
           rootEl.innerHTML = '<div style="padding:48px 16px;text-align:center;color:#64748b;font-size:14px;"><div class="loading-spinner" style="margin:0 auto 12px;"></div>불러오는 중…</div>';
         }
         try {
-          await import('./assets/js/openRiding/openRidingBoot.js?v=admin-point-exempt-20261002');
+          await import('./assets/js/openRiding/openRidingBoot.js?v=fsrecover-20261103');
         } catch (bootErr) {
           console.error('[OpenRiding] openRidingBoot 로드 실패:', bootErr);
           rootEl.innerHTML = '<p class="text-sm text-red-700 px-2">오픈 라이딩 모듈을 불러오지 못했습니다.</p>';
