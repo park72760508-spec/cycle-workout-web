@@ -83,6 +83,7 @@ async function seoulSubway(line: string) {
   return list.map((t: Record<string, unknown>) => ({
     st: String(t.statnNm || ""), ud: String(t.updnLine || ""), s: String(t.trainSttus || ""),
     no: String(t.trainNo || ""), to: String(t.statnTnm || ""), ex: String(t.directAt || "") === "1",
+    dt: String(t.recptnDt || ""), // 기록 시각(KST "YYYY-MM-DD HH:MM:SS") — 앱이 경과 시간만큼 위치 추정
   }));
 }
 

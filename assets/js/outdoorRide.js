@@ -1574,6 +1574,71 @@
     renderSubwayLinePopupInner(el, false);
   }
   function subLiveName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/(역|종착)$/, '').replace(/\s+/g, ''); }
+  /* 실시간 열차 위치 추정(2026-11-04, 호출 주기·트래픽은 그대로):
+   * 서울시 실시간 열차위치는 역 진입·도착·출발 때만 기록되어 30초~1분 늦다 → 상태별로 위치를 달리하고,
+   * 기록 시각(recptnDt)부터 지난 시간만큼 역 간 평균 2분 기준으로 다음 역 쪽으로 서서히 움직여 보여 준다(1초마다).
+   * pos = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
+  var SUB_HOP_SEC = 120;
+  function subTrainPos(t, now) {
+    var dir = t.down ? 1 : -1;
+    var age = t.at ? Math.max(0, (now - t.at) / 1000) : 0;
+    if (age > 600) age = 0; // 너무 오래된 기록은 움직이지 않음
+    var adv = age / SUB_HOP_SEC;
+    var p;
+    if (t.s === '2') p = t.k + dir * Math.min(0.9, 0.15 + adv);        // 출발: 역을 떠나 다음 역 쪽으로
+    else if (t.s === '3') p = t.k - dir * Math.max(0.25, 0.85 - adv);  // 전역 출발: 이전 역 → 이 역으로 오는 중
+    else if (t.s === '0') p = t.k - dir * Math.max(0.06, 0.25 - adv * 0.6); // 진입: 이 역 바로 앞
+    else p = t.k;                                                      // 도착: 역에 정차
+    return Math.max(0, Math.min((t.n || 1) - 1, p));
+  }
+  function subAgeText(t, now) {
+    // 예: "지축 출발 2분 3초 전", "삼송 진입 30초 전", "삼송 접근 40초 전"(전 역 출발)
+    var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '접근' }[t.s] || '운행';
+    var head = (t.stn ? t.stn + ' ' : '') + stt;
+    if (!t.at) return head;
+    var sec = Math.max(0, Math.round((now - t.at) / 1000));
+    return head + ' ' + (sec >= 60 ? Math.floor(sec / 60) + '분 ' + (sec % 60) + '초 전' : sec + '초 전');
+  }
+  function placeSubTrains(el, rebuild) {
+    var lst = el.querySelector('.outd-busrt__list.is-rail');
+    var layer = lst && lst.querySelector('.outd-subtr');
+    if (el.__trTimer && (!layer || el.style.display === 'none')) { clearInterval(el.__trTimer); el.__trTimer = null; }
+    if (!layer) return;
+    var rows = lst.querySelectorAll('li:not(.outd-subtr)');
+    if (!rows.length) return;
+    var cy = [];
+    for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
+    var yAt = function (p) { var a = Math.floor(p), b = Math.min(cy.length - 1, a + 1); return cy[a] + (cy[b] - cy[a]) * (p - a); };
+    var now = Date.now();
+    var trains = (el.__trains || []).map(function (t) { t.n = cy.length; return t; });
+    // 같은 역에 정차(또는 거의 정차) 중인 열차는 배지 1개로(↑·↓ 화살표 함께), 역 사이 열차는 원 없이 아이콘만
+    var groups = [];
+    trains.forEach(function (t) {
+      var p = subTrainPos(t, now);
+      var atSt = Math.abs(p - Math.round(p)) < 0.12;
+      var g = null;
+      for (var j = 0; j < groups.length; j++) if (Math.abs(groups[j].p - p) < 0.3 && groups[j].atSt === atSt) { g = groups[j]; break; }
+      if (!g) { g = { p: p, atSt: atSt, ts: [] }; groups.push(g); }
+      g.ts.push(t);
+    });
+    // 경과 표시 라벨이 겹치지 않게 위에서부터 최소 17px 간격으로 쌓음
+    groups.sort(function (a, b) { return a.p - b.p; });
+    var lastY = -1e9;
+    groups.forEach(function (g) { g.y = yAt(g.p); g.ly = Math.max(g.y, lastY + 17); lastY = g.ly; });
+    var html = groups.map(function (g) {
+      var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
+      var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ');
+      var lead = g.ts[0];
+      return '<b class="outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + '" style="top:' + g.y.toFixed(1) + 'px" title="' + escHtml(tip) + '">' +
+        (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') + (g.ts.length > 1 ? '<small>' + g.ts.length + '</small>' : '') + '</b>' +
+        '<u class="outd-subtr__age' + (lead.down ? ' is-dn' : ' is-up') + '" style="top:' + g.ly.toFixed(1) + 'px">' + escHtml(subAgeText(lead, now)) + '</u>';
+    }).join('');
+    layer.innerHTML = html;
+    if (rebuild) {
+      if (el.__trTimer) clearInterval(el.__trTimer);
+      el.__trTimer = setInterval(function () { placeSubTrains(el, false); }, 1000);
+    }
+  }
   function renderSubwayLinePopupInner(el, fromLive) {
     var ln = sub.data.lines[el.__li], seqs = el.__seqs || [], st = sub.data.stations;
     var badge = '<span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>';
@@ -1586,15 +1651,18 @@
       // 실시간 열차 위치(수도권): 역 이름으로 맞추고, 종착역이 목록 아래쪽이면 ↓ 위쪽이면 ↑
       liveEnsure(el, { type: 'subway', line: ln.n }, renderSubwayLinePopup);
       var names = seq.map(function (si) { return st[si] ? subLiveName(st[si].n) : ''; });
-      var trainAt = {}, trainN = 0, ldS = el.__live && el.__live.data;
+      // 2026-11-04 열차 상태(진입·도착·출발·전역출발)별 위치 + 기록 시각부터 지난 시간만큼 다음 역 쪽으로 추정 이동(placeSubTrains)
+      var trains = [], trainN = 0, ldS = el.__live && el.__live.data;
       if (ldS && ldS.ok) ldS.items.forEach(function (t) {
         var k = names.indexOf(subLiveName(t.st));
         if (k < 0) return;
         var tk = names.indexOf(subLiveName(t.to));
         var down = tk >= 0 ? tk > k : t.ud === '1';
-        (trainAt[k] = trainAt[k] || []).push({ down: down, to: String(t.to || '').replace(/종착$/, ''), s: t.s, ex: t.ex });
+        var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
+        trains.push({ k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
         trainN++;
       });
+      el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       card = '<div class="outd-busrt__head">' + badge +
         '<div class="outd-busrt__ttl"><b>' + escHtml(ends(seq)) + '</b><span>역 ' + seq.length + '개</span></div>' +
@@ -1611,30 +1679,14 @@
           }).join('');
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
-          // 실시간 열차: 역 원 자리에 전철 배지 1개, 왼쪽 ↑(목록 위쪽 방향)·오른쪽 ↓(아래쪽 방향) 화살표.
-          // 같은 역·같은 방향 열차가 2대 이상이면(한 역에 동시에 있을 수 없음) 1대는 진행 방향 다음 역과의 중간에 표시
-          var tr = '';
-          if (trainAt[k2]) {
-            var tipOf = function (ts) {
-              return ts.map(function (t) {
-                var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '전역 출발' }[t.s] || '';
-                return t.to + '행' + (t.ex ? '(급행)' : '') + (stt ? ' · ' + stt : '');
-              }).join(', ');
-            };
-            var ups = trainAt[k2].filter(function (t) { return !t.down; });
-            var dns = trainAt[k2].filter(function (t) { return t.down; });
-            var main = (ups.length ? [ups[0]] : []).concat(dns.length ? [dns[0]] : []);
-            tr += '<b class="outd-busrt__veh is-sub' + (ups.length ? ' has-up' : '') + (dns.length ? ' has-dn' : '') + '" title="' + escHtml(tipOf(main)) + '">' +
-              (ups.length ? '<s class="up">↑</s>' : '') + '🚇' + (dns.length ? '<s class="dn">↓</s>' : '') + '</b>';
-            if (ups.length > 1) tr += '<b class="outd-busrt__veh is-sub is-mid-up has-up" title="' + escHtml(tipOf(ups.slice(1))) + '"><s class="up">↑</s>🚇' + (ups.length > 2 ? '<small>' + (ups.length - 1) + '</small>' : '') + '</b>';
-            if (dns.length > 1) tr += '<b class="outd-busrt__veh is-sub is-mid-dn has-dn" title="' + escHtml(tipOf(dns.slice(1))) + '">🚇<s class="dn">↓</s>' + (dns.length > 2 ? '<small>' + (dns.length - 1) + '</small>' : '') + '</b>';
-          }
-          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i>' + tr + '<span>' + escHtml(s2.n) + '</span>' +
+          var tr = trains.some(function (t) { return t.k === k2 && t.s === '1'; });
+          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
-        }).join('') + '</ol>';
+        }).join('') + '<li class="outd-subtr" aria-hidden="true"></li></ol>';
       card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list is-rail">');
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
+    placeSubTrains(el, true);
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
