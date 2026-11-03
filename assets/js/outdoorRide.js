@@ -1639,19 +1639,14 @@
       if (!g) { g = { p: p, atSt: atSt, ts: [] }; groups.push(g); }
       g.ts.push(t);
     });
-    // 경과 표시 라벨이 겹치지 않게 위에서부터 최소 17px 간격으로 쌓음
-    groups.sort(function (a, b) { return a.p - b.p; });
-    var lastY = -1e9;
-    groups.forEach(function (g) { g.y = yAt(g.p); g.ly = Math.max(g.y, lastY + 17); lastY = g.ly; });
+    groups.forEach(function (g) { g.y = yAt(g.p); }); // 상태·경과(예: 지축 출발 32초 전)는 배지 툴팁(title)에만
     var html = groups.map(function (g) {
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ');
-      var lead = g.ts[0];
       return '<b class="outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + '" style="top:' + g.y.toFixed(1) + 'px" title="' + escHtml(tip) + '">' +
         (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') +
         // 상·하행이 함께 있으면 ↑·↓ 화살표로 충분 — 숫자 배지는 같은 방향 열차가 겹칠 때만
-        (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '') + '</b>' +
-        '<u class="outd-subtr__age' + (lead.down ? ' is-dn' : ' is-up') + '" style="top:' + g.ly.toFixed(1) + 'px">' + escHtml(subAgeText(lead, now)) + '</u>';
+        (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '') + '</b>';
     }).join('');
     layer.innerHTML = html;
     if (rebuild) {
