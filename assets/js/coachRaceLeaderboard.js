@@ -191,6 +191,7 @@
     } else if (st === 'finished' && !S.done && S.seg != null) {
       finalizeSegment(S.seg, segments);
       S.done = true;
+      S.ceremony = true; // 모든 세그먼트 종료 → PC 화면에서 1등 축하 세리머니
     }
 
     var pms = Array.isArray(cs.powerMeters) ? cs.powerMeters : [];
@@ -396,6 +397,116 @@
     } else if (empty) empty.remove();
   }
 
+  // ---------- 1등 축하 세리머니(2026-11-03) ----------
+  // 모든 세그먼트 종료 시 화면 전체 오버레이: 트로피 + 1등 이름·점수 + 2·3위, 폭죽·불꽃·꽃가루 애니메이션.
+  // 화면을 클릭(터치)하기 전까지 계속 유지.
+  function showCeremony(rows) {
+    var old = $('coachRaceCeremony');
+    if (old && old.__stop) old.__stop();
+    var w1 = rows[0];
+    var el = document.createElement('div');
+    el.id = 'coachRaceCeremony';
+    el.className = 'crc';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', '1등 축하');
+    var pod = rows.slice(1, 3).map(function (r) {
+      return '<span class="crc__pod crc__pod--' + r.rank + '"><b>' + r.rank + '위</b>' + esc(r.name) + ' <em>' + r.total.toFixed(1) + '</em></span>';
+    }).join('');
+    var av = avatarCache[w1.uid];
+    el.innerHTML =
+      '<canvas class="crc__fx"></canvas>' +
+      '<div class="crc__stage">' +
+        '<div class="crc__rays" aria-hidden="true"></div>' +
+        '<div class="crc__trophy" aria-hidden="true">🏆</div>' +
+        '<div class="crc__label">WINNER</div>' +
+        '<div class="crc__name">' + (av ? '<img class="crc__avatar" src="' + esc(av) + '" alt="" onerror="this.remove()">' : '') + '<span>' + esc(w1.name) + '</span></div>' +
+        '<div class="crc__score"><b>' + w1.total.toFixed(1) + '</b> 점</div>' +
+        (pod ? '<div class="crc__pods">' + pod + '</div>' : '') +
+        '<div class="crc__hint">화면을 클릭하면 닫힙니다</div>' +
+      '</div>';
+    document.body.appendChild(el);
+
+    var cv = el.querySelector('.crc__fx');
+    var ctx = cv.getContext('2d');
+    var dpr = Math.min(2, window.devicePixelRatio || 1);
+    var W = 0, H = 0;
+    function size() { W = window.innerWidth; H = window.innerHeight; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+    size();
+    window.addEventListener('resize', size);
+    var COLORS = ['#facc15', '#fde047', '#f97316', '#ef4444', '#22c55e', '#38bdf8', '#a78bfa', '#f472b6', '#ffffff'];
+    var rockets = [], sparks = [], confetti = [];
+    var rnd = function (a, b) { return a + Math.random() * (b - a); };
+    function launch() {
+      rockets.push({ x: rnd(W * 0.1, W * 0.9), y: H + 10, vx: rnd(-1.2, 1.2), vy: rnd(-15, -11), c: COLORS[(Math.random() * COLORS.length) | 0], ty: rnd(H * 0.12, H * 0.45) });
+    }
+    function burst(x, y, c) {
+      var n = 90 + ((Math.random() * 60) | 0), ring = Math.random() < 0.35;
+      for (var i = 0; i < n; i++) {
+        var a = (i / n) * Math.PI * 2 + rnd(-0.05, 0.05);
+        var sp = ring ? 6.5 : rnd(1.5, 8);
+        sparks.push({ x: x, y: y, px: x, py: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rnd(55, 90), age: 0, c: Math.random() < 0.25 ? '#ffffff' : c, tw: Math.random() < 0.4 });
+      }
+    }
+    for (var k = 0; k < 160; k++) confetti.push(newConfetti(true));
+    function newConfetti(any) {
+      return { x: rnd(0, W), y: any ? rnd(-H, H) : rnd(-60, -10), w: rnd(6, 12), h: rnd(10, 18), vy: rnd(1.5, 3.8), vx: rnd(-0.8, 0.8), r: rnd(0, 6.28), vr: rnd(-0.15, 0.15), c: COLORS[(Math.random() * COLORS.length) | 0] };
+    }
+    var t0 = performance.now(), lastLaunch = 0, raf = 0;
+    // 시작하자마자 한꺼번에 터뜨림
+    for (var q = 0; q < 5; q++) burst(rnd(W * 0.15, W * 0.85), rnd(H * 0.15, H * 0.45), COLORS[(Math.random() * COLORS.length) | 0]);
+    function frame(now) {
+      raf = requestAnimationFrame(frame);
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.fillRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      if (now - lastLaunch > rnd(260, 620)) { lastLaunch = now; launch(); if (Math.random() < 0.35) launch(); }
+      for (var i = rockets.length - 1; i >= 0; i--) {
+        var r = rockets[i];
+        r.x += r.vx; r.y += r.vy; r.vy += 0.16;
+        ctx.fillStyle = r.c; ctx.beginPath(); ctx.arc(r.x, r.y, 2.6, 0, 6.283); ctx.fill();
+        ctx.fillStyle = 'rgba(255,220,150,0.5)'; ctx.beginPath(); ctx.arc(r.x - r.vx * 2, r.y - r.vy * 2, 1.6, 0, 6.283); ctx.fill();
+        if (r.y <= r.ty || r.vy >= -1) { burst(r.x, r.y, r.c); rockets.splice(i, 1); }
+      }
+      for (var j = sparks.length - 1; j >= 0; j--) {
+        var p = sparks[j];
+        p.px = p.x; p.py = p.y;
+        p.vx *= 0.975; p.vy = p.vy * 0.975 + 0.07;
+        p.x += p.vx; p.y += p.vy; p.age++;
+        var al = 1 - p.age / p.life;
+        if (al <= 0) { sparks.splice(j, 1); continue; }
+        if (p.tw && Math.random() < 0.3) al *= 0.3;
+        ctx.strokeStyle = p.c; ctx.globalAlpha = al; ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(p.px, p.py); ctx.lineTo(p.x, p.y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      for (var m = 0; m < confetti.length; m++) {
+        var f = confetti[m];
+        f.x += f.vx + Math.sin((now - t0) / 600 + m) * 0.6; f.y += f.vy; f.r += f.vr;
+        if (f.y > H + 20) confetti[m] = newConfetti(false);
+        ctx.save(); ctx.translate(f.x, f.y); ctx.rotate(f.r);
+        ctx.fillStyle = f.c; ctx.fillRect(-f.w / 2, -f.h / 2 * Math.abs(Math.cos(f.r * 2)), f.w, f.h * Math.abs(Math.cos(f.r * 2)) + 1);
+        ctx.restore();
+      }
+      if (sparks.length > 4000) sparks.splice(0, sparks.length - 4000);
+    }
+    raf = requestAnimationFrame(frame);
+    el.__stop = function () {
+      cancelAnimationFrame(raf);
+      window.removeEventListener('resize', size);
+      if (el.parentNode) el.parentNode.removeChild(el);
+    };
+    el.addEventListener('click', function () {
+      el.classList.add('crc--out');
+      setTimeout(el.__stop, 350);
+    });
+  }
+  window.coachRaceShowCeremony = function () { // 확인용: 현재 순위로 세리머니 표시
+    var v = window.__coachRaceLatest;
+    if (v && v.rows && v.rows.length) showCeremony(v.rows);
+  };
+
   var MOBILE_SCREEN_ID = 'bluetoothCoachMobileScreen';
   window.coachRaceBoardLatest = function () { return window.__coachRaceLatest || null; };
   function tick() {
@@ -413,6 +524,12 @@
     try {
       window.__coachRaceLatest = compute();
       render(window.__coachRaceLatest);
+      var lv = window.__coachRaceLatest;
+      if (S && S.ceremony) {
+        S.ceremony = false;
+        saveState();
+        if (lv && lv.rows.length && lv.rows[0].total > 0) showCeremony(lv.rows);
+      }
       // 2026-11-03 위치: 위 = 워크아웃 그래프 블록 상단(그래프를 덮음), 왼쪽 = 그래프 Y축 선, 아래 = 화면 바닥
       var root = $('coachRaceBoard');
       var sb = document.querySelector('#' + SCREEN_ID + ' .scoreboard-display');
@@ -423,6 +540,12 @@
         if (cv && cv.width > 0) {
           var cr = cv.getBoundingClientRect();
           if (cr.width > 0) left = Math.round(cr.left + 35 * (cr.width / cv.width)); // 그래프 padding.left
+        }
+        // 펼치면 속도계는 1줄 7개(블록 최소 176px) — 보드는 7번째 블록 바로 옆(여백 4px)부터 오른쪽 끝까지, 가능한 한 넓게
+        var grid = $('bluetoothCoachPowerMeterGrid');
+        if (grid) {
+          var gr = grid.getBoundingClientRect();
+          left = Math.min(left, Math.round(gr.left + 7 * 176 + 6 * 3 + 4));
         }
         left = Math.max(Math.round(window.innerWidth * 0.45), Math.min(left, window.innerWidth - 500));
         var topY = Math.max(0, Math.round(sbr.top));
