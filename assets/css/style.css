@@ -36523,3 +36523,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub { width: 34px; background: #ecfdf5; border: 1.5px solid var(--ln, #10b981); color: #065f46; }
 #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-up { left: 2px; }
 #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-dn { left: 57px; }
+/* 2026-11-03 지하철 실시간 = 버스처럼 노선 선 위 역 원 자리에 배지, 배지 좌우에 ↑/↓ — 화살표 자리 확보로 선을 조금 오른쪽(가운데 x≈24.5px) */
+#outdoorRideScreen .outd-busrt__list.is-rail li { padding-left: 18px; }
+#outdoorRideScreen .outd-busrt__list.is-rail li::before { left: 23px; }
+#outdoorRideScreen .outd-busrt__list.is-rail li > span:not(.outd-subln__xfer) { margin-left: 12px; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub {
+  left: 12.5px; width: 24px; height: 24px; border-radius: 50%; overflow: visible;
+  background: #fff; border: 2px solid var(--ln, #10b981); font-size: 12px; color: #0f172a;
+}
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub s {
+  position: absolute; top: 50%; transform: translateY(-50%); font-size: 13px; font-weight: 900; color: var(--ln, #10b981);
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff;
+}
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub s.up { right: calc(100% + 1px); }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub s.dn { left: calc(100% + 1px); }
+/* 같은 방향 두 번째 열차: 진행 방향 다음 역과의 중간(↓ = 이 역과 아래 역 사이, ↑ = 위 역과 이 역 사이) */
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-mid-dn { top: 100%; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-mid-up { top: 0; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-up,
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-dn { left: 12.5px; }
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-mid-up,
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-mid-dn { left: 14.5px; width: 20px; height: 20px; font-size: 10px; z-index: 4; }

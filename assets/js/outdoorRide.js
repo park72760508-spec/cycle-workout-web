@@ -1607,19 +1607,23 @@
           }).join('');
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
-          // 실시간 열차: 노선 선 왼쪽 = 상선(목록 위쪽 방향 ↑), 오른쪽 = 하선(목록 아래쪽 방향 ↓)
+          // 실시간 열차: 역 원 자리에 전철 배지 1개, 왼쪽 ↑(목록 위쪽 방향)·오른쪽 ↓(아래쪽 방향) 화살표.
+          // 같은 역·같은 방향 열차가 2대 이상이면(한 역에 동시에 있을 수 없음) 1대는 진행 방향 다음 역과의 중간에 표시
           var tr = '';
           if (trainAt[k2]) {
-            [false, true].forEach(function (dn) {
-              var ts = trainAt[k2].filter(function (t) { return t.down === dn; });
-              if (!ts.length) return;
-              var tip = ts.map(function (t) {
+            var tipOf = function (ts) {
+              return ts.map(function (t) {
                 var stt = { '0': '진입', '1': '도착', '2': '출발', '3': '전역 출발' }[t.s] || '';
                 return t.to + '행' + (t.ex ? '(급행)' : '') + (stt ? ' · ' + stt : '');
               }).join(', ');
-              tr += '<b class="outd-busrt__veh is-sub ' + (dn ? 'is-dn' : 'is-up') + '" title="' + escHtml(tip) + '">' +
-                (dn ? '🚇<s>↓</s>' : '<s>↑</s>🚇') + (ts.length > 1 ? '<small>' + ts.length + '</small>' : '') + '</b>';
-            });
+            };
+            var ups = trainAt[k2].filter(function (t) { return !t.down; });
+            var dns = trainAt[k2].filter(function (t) { return t.down; });
+            var main = (ups.length ? [ups[0]] : []).concat(dns.length ? [dns[0]] : []);
+            tr += '<b class="outd-busrt__veh is-sub' + (ups.length ? ' has-up' : '') + (dns.length ? ' has-dn' : '') + '" title="' + escHtml(tipOf(main)) + '">' +
+              (ups.length ? '<s class="up">↑</s>' : '') + '🚇' + (dns.length ? '<s class="dn">↓</s>' : '') + '</b>';
+            if (ups.length > 1) tr += '<b class="outd-busrt__veh is-sub is-mid-up has-up" title="' + escHtml(tipOf(ups.slice(1))) + '"><s class="up">↑</s>🚇' + (ups.length > 2 ? '<small>' + (ups.length - 1) + '</small>' : '') + '</b>';
+            if (dns.length > 1) tr += '<b class="outd-busrt__veh is-sub is-mid-dn has-dn" title="' + escHtml(tipOf(dns.slice(1))) + '">🚇<s class="dn">↓</s>' + (dns.length > 2 ? '<small>' + (dns.length - 1) + '</small>' : '') + '</b>';
           }
           return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i>' + tr + '<span>' + escHtml(s2.n) + '</span>' +
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
