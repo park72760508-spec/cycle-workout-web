@@ -1,7 +1,7 @@
 /**
  * 훈련 참가자 화면(휴대폰) — 속도계 현재 파워 좌우 미니 순위 전광판 (2026-11-04)
  * 데이터: Coach(coachRaceLeaderboard.js)가 sessions/{id}/race 에 게시한 순위를 3초마다 읽음.
- * 좌측 1~5위, 우측 6~8위 … 나의 순위(10위 안이면 10위까지). 항목: 순위 · 아바타+이름 · 점수.
+ * 좌측 1~3위, 우측 4~5위 + 나. 항목: 순위 · 아바타+이름 · 점수.
  */
 (function () {
   'use strict';
@@ -159,9 +159,11 @@
     var rows = src.map(function (r, i) { return { r: r, rank: i + 1 }; });
     var uid = myUid();
     var me = uid ? rows.find(function (x) { return String(x.r.u) === uid; }) : null;
-    var left = rows.slice(0, 5), right;
-    if (rows.length <= 10 || (me && me.rank <= 10)) right = rows.slice(5, 10);
-    else right = rows.slice(5, 8).concat(['gap'], me ? [me] : []);
+    // 6명 표시: 좌 1~3위, 우 4~5위 + 나(5위 밖이면 내 순위, 5위 안이면 6위)
+    var left = rows.slice(0, 3);
+    var right = rows.slice(3, 5);
+    var last = me && me.rank > 5 ? me : rows[5];
+    if (last) right.push(last);
 
     // 현재 파워 숫자 위치 기준 배치
     var pw = document.getElementById(act.t.power);
@@ -169,24 +171,19 @@
     var pr = pw && pw.getBoundingClientRect();
     if (!pr || !pr.width || !br.width) return;
     var bs = boards(box);
-    // 바늘 축(원) 아래 ~ 현재 파워 숫자 아래 사이를 5줄로 균등 분할(바늘·눈금과 겹치지 않게)
-    var nd = document.getElementById(act.t.needle);
-    var hub = nd && nd.querySelector('circle');
-    var hr = hub && hub.getBoundingClientRect();
+    // 속도계와 겹치지 않게: 좌우 가장자리·아래쪽(현재 파워 숫자 아래선)에 붙이고 폭은 최소화
+    var rh = 22;
+    var h = rh * 3 + 2;
     var bottom = pr.bottom - br.top;
-    var top = hr && hr.height ? hr.bottom - br.top + 3 : bottom - pr.height * 0.9;
-    var h = Math.max(60, bottom - top);
-    var rh = Math.floor((h - 4) / 5);
-    var gapPx = Math.max(4, pr.width * 0.06);
-    var wL = pr.left - br.left - gapPx - 2;
-    var wR = br.right - pr.right - gapPx - 2;
-    var sig = JSON.stringify([waiting, left, right, uid, Math.round(wL), Math.round(wR), Math.round(top), Math.round(h)]);
+    var top = bottom - h;
+    var wBoard = Math.min(Math.round(br.width * 0.27), Math.max(60, pr.left - br.left - 6), Math.max(60, br.right - pr.right - 6));
+    var sig = JSON.stringify([waiting, left, right, uid, Math.round(wBoard), Math.round(top), Math.round(h)]);
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
     function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', Math.max(8, Math.min(11, rh * 0.42)) + 'px'); }
-    place(bs[0], 2, wL);
-    place(bs[1], pr.right - br.left + gapPx, wR);
+    place(bs[0], 2, wBoard);
+    place(bs[1], br.width - wBoard - 2, wBoard);
     bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting); }).join('');
     bs[1].innerHTML = right.map(function (x) { return x === 'gap' ? '<div class="pmb__gap">⋯</div>' : rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting); }).join('');
   }
