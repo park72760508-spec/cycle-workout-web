@@ -13,6 +13,8 @@
  *  - W/kg 가중치(FTP ÷ 체중): 2.0 미만 1.00 · 2.0~ 1.01 · 2.5~ 1.02 · 3.0~ 1.03 · 3.5~ 1.04 · 4.0 이상 1.05
  *  - 진행 중인 세그먼트는 지금까지의 수행도 × 경과 시간(분)으로 실시간 반영 → 끝나면 구간 전체 길이로 확정
  *  - 랩파워는 참가자 화면에 표시되는 LAP(세그먼트 평균 파워)과 같은 값, 세그먼트 시작 5초 이후 값만 사용(이전 세그먼트 값 섞임 방지)
+ *  - 2026-11-04 짧은 인터벌 보완: 제외 시간 = min(5초, 구간 길이 20%, 최소 2초) — 15초 구간 3초,
+ *    30초 미만 구간은 수행도 = 근접도 70% + 유지 30%
  * 화면
  *  - 오른쪽 가장자리 손잡이로 펼치기/접기(상태 기억)
  *  - 순위·등락·아바타·이름·현재 세그먼트 달성률·누적 점수, 순위가 바뀌면 행이 미끄러지며 이동
@@ -28,7 +30,8 @@
   var PROX_FLOOR = 0.5;  // 이 이하 달성은 0
   var ZONE_FULL = 0.05;  // 목표 ±5%: 유지 1초 인정
   var ZONE_HALF = 0.10;  // 목표 ±10%: 0.5초 인정
-  var LAP_GUARD_SEC = 5;
+  var LAP_GUARD_SEC = 5;  // 기본 제외 시간(구간 길이 25초 이상)
+  var SHORT_SEG_SEC = 30; // 이보다 짧은 구간은 랩 평균 비중을 높임
   var MOVE_SHOW_MS = 5000;
   var OPEN_KEY = 'stelvioCoachRaceBoardOpen';
 
@@ -85,10 +88,18 @@
     var ach = Math.max(0, lapW / target);
     var prox = proximity(ach);
     var keep = tiz && tiz.n > 0 ? Math.max(0, Math.min(1, tiz.z / tiz.n)) : Math.min(1, prox);
-    var quality = 0.5 * prox + 0.5 * keep;
+    // 30초 미만 구간: 유지 시간 표본이 적고 지연 영향이 커서 랩 평균(근접도) 70% · 유지 30%
+    var wProx = segDur(seg) > 0 && segDur(seg) < SHORT_SEG_SEC ? 0.7 : 0.5;
+    var quality = wProx * prox + (1 - wProx) * keep;
     return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * wkgWeight(u.ftp, u.weight) };
   }
   function segDur(seg) { return num(seg && (seg.duration_sec || seg.duration)); }
+  /** 구간 시작 후 측정 제외 시간: 기본 5초, 짧은 구간은 길이의 20%(15초 → 3초, 최소 2초) */
+  function lapGuard(seg) {
+    var d = segDur(seg);
+    if (!(d > 0)) return LAP_GUARD_SEC;
+    return Math.min(LAP_GUARD_SEC, Math.max(2, Math.round(d * 0.2)));
+  }
 
   function sessionId() {
     try {
@@ -206,12 +217,13 @@
       if (num(pm.userWeight) > 0) u.weight = num(pm.userWeight);
       if (num(pm.reportedTargetPower) > 0) u.reportedTarget = num(pm.reportedTargetPower);
       var fresh = now - num(pm.lastUpdateTime) <= 10000;
-      if (active && segEl >= LAP_GUARD_SEC && fresh && num(pm.segmentPower) > 0) {
+      var segNow = segments[idx];
+      var guard = lapGuard(segNow);
+      if (active && segEl >= guard && fresh && num(pm.segmentPower) > 0) {
         S.lap[uid] = { seg: idx, w: num(pm.segmentPower) };
       }
       // 목표 구간 유지 시간: 진행 중(일시정지 제외)·점수 구간에서 1초마다 현재 파워를 목표와 비교
-      var segNow = segments[idx];
-      if (st === 'running' && segEl >= LAP_GUARD_SEC && segNow && !isExcludedSegment(segNow)) {
+      if (st === 'running' && segEl >= guard && segNow && !isExcludedSegment(segNow)) {
         var tgt = segTarget(segNow, u.ftp, u.reportedTarget);
         if (tgt > 0) {
           var tz = S.tiz[uid];
