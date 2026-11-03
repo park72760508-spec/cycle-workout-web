@@ -35947,157 +35947,148 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #bluetoothTrainingCoachScreen .enhanced-control-btn.stop:hover:not(:disabled) { animation: none; }
 }
 
-/* ── Coach PC 실시간 레이스 순위 전광판 (2026-11-02, 2026-11-03 스포츠 전광판 개편, coachRaceLeaderboard.js) ──
-   보드: 워크아웃 그래프 Y축 선 ~ 화면 오른쪽, 그래프 블록 아래 ~ 화면 바닥(JS layout). 멀리서도 보이게 큰 글자·고대비.
-   1~3위 고정(금·은·동), 4위부터 스크롤. 접기/펼치기 탭은 그래프 블록 민트 테두리 상단. */
-#coachRaceBoardHandle.crb-tab {
-  position: fixed; z-index: 61; top: 76px; left: 62vw;
-  transform: translateY(-50%);
-  display: inline-flex; align-items: center; gap: 8px;
-  height: 30px; padding: 0 14px 0 12px;
-  border: 1.5px solid #2dd4bf; border-radius: 999px;
-  background: linear-gradient(180deg, #0f2a2a 0%, #071a1a 100%);
-  color: #5eead4; cursor: pointer;
-  font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif; font-size: 18px; letter-spacing: 0.12em; line-height: 1;
-  box-shadow: 0 0 0 3px rgba(2, 6, 23, 0.9), 0 0 14px rgba(45, 212, 191, 0.45);
-}
-#coachRaceBoardHandle .crb-tab__dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 8px #ef4444; animation: crbLive 1.2s ease-in-out infinite; }
-#coachRaceBoardHandle .crb-tab__text { padding-top: 2px; }
-#coachRaceBoardHandle .crb-tab__chev {
-  width: 8px; height: 8px; margin-left: 2px; margin-top: -4px;
-  border-right: 2px solid currentColor; border-bottom: 2px solid currentColor;
-  transform: rotate(45deg); transition: transform 0.3s ease, margin 0.3s ease;
-}
-#coachRaceBoardHandle.crb-tab--open .crb-tab__chev { transform: rotate(-135deg); margin-top: 4px; }
-#coachRaceBoardHandle:hover { background: linear-gradient(180deg, #134e4a 0%, #0b2f2c 100%); color: #99f6e4; }
-
+/* ── Coach PC 실시간 레이스 순위 전광판 (2026-11-02, coachRaceLeaderboard.js) ──
+   2026-11-03: 위치 = 그래프 블록 상단(그래프를 덮음)·그래프 Y축 선 ~ 오른쪽·화면 바닥까지(JS), 글자·크기 확대, 1~3위 고정 + 4위~ 스크롤 */
 #coachRaceBoard.crb {
-  position: fixed; z-index: 60;
-  top: 222px; left: 62vw; right: 0; bottom: 0;
-  padding: 0 8px 10px 0;
+  position: fixed;
+  top: 84px;
+  right: 0;
+  z-index: 60;
   display: flex;
-  opacity: 0; transform: translateY(-14px) scale(0.985); transform-origin: top center;
-  pointer-events: none; visibility: hidden;
-  transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s linear 0.45s;
+  align-items: flex-start;
+  transform: translateX(calc(100% - 46px));
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  pointer-events: none;
 }
-#coachRaceBoard.crb--open { opacity: 1; transform: none; pointer-events: auto; visibility: visible; transition: opacity 0.35s ease, transform 0.45s cubic-bezier(0.22, 1, 0.36, 1), visibility 0s; }
+#coachRaceBoard.crb--open { transform: translateX(0); }
+#coachRaceBoard .crb__handle {
+  pointer-events: auto;
+  width: 46px;
+  margin-top: 14px;
+  padding: 10px 0 8px;
+  border: 1px solid rgba(250, 204, 21, 0.55);
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: linear-gradient(180deg, #1f2937 0%, #0b1220 100%);
+  color: #facc15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  box-shadow: -6px 6px 18px rgba(0, 0, 0, 0.45), 0 0 14px rgba(250, 204, 21, 0.25);
+}
+#coachRaceBoard .crb__handle-trophy { font-size: 20px; line-height: 1; }
+#coachRaceBoard .crb__handle-text { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; line-height: 1.15; text-align: center; }
+#coachRaceBoard .crb__handle-chev {
+  width: 8px; height: 8px; margin-top: 2px;
+  border-left: 2px solid #facc15; border-bottom: 2px solid #facc15;
+  transform: rotate(45deg); transition: transform 0.3s ease;
+}
+#coachRaceBoard.crb--open .crb__handle-chev { transform: rotate(-135deg); }
 #coachRaceBoard .crb__panel {
-  position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
-  display: flex; flex-direction: column;
-  border: 2px solid rgba(250, 204, 21, 0.55); border-radius: 18px; overflow: hidden;
+  pointer-events: auto;
+  width: min(580px, 40vw);
+  height: calc(100vh - 90px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  border-right: 0;
+  border-radius: 14px 0 0 14px;
+  overflow: hidden;
   color: #e2e8f0;
   background:
-    radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.3px) 0 0 / 5px 5px,
-    linear-gradient(180deg, #0b1120 0%, #020617 100%);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.6), inset 0 0 60px rgba(250, 204, 21, 0.06);
+    radial-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1.2px) 0 0 / 4px 4px,
+    linear-gradient(180deg, #0f172a 0%, #020617 100%);
+  box-shadow: -10px 10px 30px rgba(0, 0, 0, 0.55), inset 0 0 40px rgba(250, 204, 21, 0.06);
 }
-/* 헤더: 체커기 띠 + 큰 LIVE 타이틀 + 진행 바 */
 #coachRaceBoard .crb__head {
-  position: relative; flex: 0 0 auto;
-  padding: 14px 20px 12px;
-  background: linear-gradient(90deg, rgba(250, 204, 21, 0.18), rgba(250, 204, 21, 0.02) 75%);
-  border-bottom: 1px solid rgba(250, 204, 21, 0.3);
-}
-#coachRaceBoard .crb__head::after {
-  content: ''; position: absolute; top: 0; right: 0; width: 120px; height: 100%; opacity: 0.16; pointer-events: none;
-  background: repeating-conic-gradient(#fff 0 25%, transparent 0 50%) 0 0 / 16px 16px;
-  -webkit-mask: linear-gradient(90deg, transparent, #000); mask: linear-gradient(90deg, transparent, #000);
+  flex: 0 0 auto;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid rgba(250, 204, 21, 0.25);
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.14), rgba(250, 204, 21, 0) 70%);
 }
 #coachRaceBoard .crb__title {
-  display: flex; align-items: center; gap: 12px;
-  font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif; font-size: 36px; line-height: 1; letter-spacing: 0.08em; color: #facc15;
-  text-shadow: 0 0 14px rgba(250, 204, 21, 0.55);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 24px; font-weight: 900; letter-spacing: 0.12em; color: #facc15;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.55);
 }
-#coachRaceBoard .crb__live-dot { width: 13px; height: 13px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: crbLive 1.2s ease-in-out infinite; }
-#coachRaceBoard:not(.crb--live) .crb__live-dot { background: #64748b; box-shadow: none; animation: none; }
+#coachRaceBoard .crb__live-dot {
+  width: 12px; height: 12px; border-radius: 50%; background: #ef4444;
+  box-shadow: 0 0 8px #ef4444; animation: crbLive 1.2s ease-in-out infinite;
+}
 @keyframes crbLive { 50% { opacity: 0.25; } }
-#coachRaceBoard .crb__sub { margin-top: 6px; font-size: 17px; font-weight: 700; color: #cbd5e1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#coachRaceBoard .crb__prog { margin-top: 10px; height: 5px; border-radius: 3px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
-#coachRaceBoard .crb__prog i { display: block; height: 100%; width: 0; border-radius: 3px; background: linear-gradient(90deg, #22c55e, #facc15); transition: width 0.8s ease; }
-
+#coachRaceBoard .crb__sub { margin-top: 5px; font-size: 16px; font-weight: 700; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #coachRaceBoard .crb__cols,
 #coachRaceBoard .crb-row {
   display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) 132px 128px;
-  align-items: center; column-gap: 12px;
+  grid-template-columns: 70px minmax(0, 1fr) 130px 112px;
+  align-items: center;
+  column-gap: 10px;
 }
 #coachRaceBoard .crb__cols {
-  flex: 0 0 auto; padding: 8px 18px 6px;
-  font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif; font-size: 16px; letter-spacing: 0.12em; color: #64748b;
+  flex: 0 0 auto; padding: 8px 16px; font-size: 14px; font-weight: 700; color: #64748b; letter-spacing: 0.06em;
 }
-#coachRaceBoard .crb__cols span:nth-child(3) { font-family: 'Noto Sans KR', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; }
 #coachRaceBoard .crb__cols span:last-child { text-align: right; }
-
-/* 1~3위 고정 영역 */
-#coachRaceBoard .crb__top { position: relative; flex: 0 0 auto; transition: height 0.3s ease; border-bottom: 2px solid rgba(250, 204, 21, 0.35); }
-/* 4위~ 스크롤 영역(남은 높이 전부) */
-#coachRaceBoard .crb__list { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(250, 204, 21, 0.4) transparent; }
-#coachRaceBoard .crb__list::-webkit-scrollbar { width: 8px; }
-#coachRaceBoard .crb__list::-webkit-scrollbar-thumb { background: rgba(250, 204, 21, 0.35); border-radius: 4px; }
+/* 1~3위 고정 영역 + 4위부터 스크롤 영역(남은 높이) */
+#coachRaceBoard .crb__top { position: relative; flex: 0 0 auto; transition: height 0.3s ease; border-bottom: 2px solid rgba(250, 204, 21, 0.4); }
+#coachRaceBoard .crb__list {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(250, 204, 21, 0.4) transparent;
+}
 #coachRaceBoard .crb__list-in { width: 1px; }
-#coachRaceBoard.crb--norest .crb__list { flex: 0 0 0; }
 #coachRaceBoard.crb--norest .crb__top { border-bottom: 0; }
-
 #coachRaceBoard .crb-row {
   position: absolute; left: 0; right: 0; top: 0;
-  height: 64px; padding: 0 18px;
+  height: 78px;
+  padding: 0 16px;
+  box-sizing: border-box;
   border-bottom: 1px solid rgba(148, 163, 184, 0.12);
   transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1), background 0.4s ease;
   will-change: transform;
 }
-#coachRaceBoard .crb-row--top { height: 92px; }
-#coachRaceBoard .crb-row--top1 { background: linear-gradient(90deg, rgba(250, 204, 21, 0.30), rgba(250, 204, 21, 0.04) 85%); }
-#coachRaceBoard .crb-row--top2 { background: linear-gradient(90deg, rgba(226, 232, 240, 0.22), rgba(226, 232, 240, 0.03) 85%); }
-#coachRaceBoard .crb-row--top3 { background: linear-gradient(90deg, rgba(234, 88, 12, 0.26), rgba(234, 88, 12, 0.03) 85%); }
-#coachRaceBoard .crb-row--top::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 6px; border-radius: 0 4px 4px 0; }
-#coachRaceBoard .crb-row--top1::before { background: #facc15; box-shadow: 0 0 14px #facc15; }
-#coachRaceBoard .crb-row--top2::before { background: #e2e8f0; }
-#coachRaceBoard .crb-row--top3::before { background: #f97316; }
-#coachRaceBoard .crb-row--up { animation: crbUp 1.2s ease-out; }
-#coachRaceBoard .crb-row--down { animation: crbDown 1.2s ease-out; }
-@keyframes crbUp { 0% { box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0.95); background-color: rgba(34, 197, 94, 0.25); } 100% { box-shadow: inset 0 0 0 3px rgba(34, 197, 94, 0); background-color: transparent; } }
-@keyframes crbDown { 0% { box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0.85); background-color: rgba(239, 68, 68, 0.2); } 100% { box-shadow: inset 0 0 0 3px rgba(239, 68, 68, 0); background-color: transparent; } }
-
-/* 순위 */
-#coachRaceBoard .crb-row__rank { display: flex; align-items: center; gap: 4px; }
+#coachRaceBoard .crb-row--top1 { background: linear-gradient(90deg, rgba(250, 204, 21, 0.20), rgba(250, 204, 21, 0) 80%); }
+#coachRaceBoard .crb-row--top2 { background: linear-gradient(90deg, rgba(203, 213, 225, 0.16), rgba(203, 213, 225, 0) 80%); }
+#coachRaceBoard .crb-row--top3 { background: linear-gradient(90deg, rgba(217, 119, 6, 0.18), rgba(217, 119, 6, 0) 80%); }
+#coachRaceBoard .crb-row--up { animation: crbUp 1s ease-out; }
+#coachRaceBoard .crb-row--down { animation: crbDown 1s ease-out; }
+@keyframes crbUp { 0% { box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0.9); } 100% { box-shadow: inset 0 0 0 2px rgba(34, 197, 94, 0); } }
+@keyframes crbDown { 0% { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.8); } 100% { box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0); } }
+#coachRaceBoard .crb-row__rank { display: flex; align-items: center; gap: 3px; }
 #coachRaceBoard .crb-row__rank b {
-  min-width: 44px; height: 44px; border-radius: 10px;
+  min-width: 48px; height: 48px; border-radius: 12px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif; font-weight: 400; font-size: 32px; line-height: 1; padding-top: 3px; box-sizing: border-box;
-  background: rgba(148, 163, 184, 0.18); color: #f1f5f9;
+  font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums;
+  background: rgba(148, 163, 184, 0.16); color: #e2e8f0;
 }
-#coachRaceBoard .crb-row--top .crb-row__rank b { min-width: 58px; height: 58px; border-radius: 50%; font-size: 44px; }
-#coachRaceBoard .crb-row--top1 .crb-row__rank b { background: radial-gradient(circle at 35% 30%, #fef08a, #eab308 55%, #a16207); color: #1c1917; box-shadow: 0 0 18px rgba(250, 204, 21, 0.75), inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
-#coachRaceBoard .crb-row--top2 .crb-row__rank b { background: radial-gradient(circle at 35% 30%, #ffffff, #cbd5e1 55%, #64748b); color: #0f172a; box-shadow: 0 0 12px rgba(226, 232, 240, 0.45), inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
-#coachRaceBoard .crb-row--top3 .crb-row__rank b { background: radial-gradient(circle at 35% 30%, #fed7aa, #f97316 55%, #9a3412); color: #1c1917; box-shadow: 0 0 12px rgba(249, 115, 22, 0.5), inset 0 -3px 0 rgba(0, 0, 0, 0.2); }
-#coachRaceBoard .crb-row__move { font-style: normal; font-size: 13px; font-weight: 900; font-variant-numeric: tabular-nums; }
+#coachRaceBoard .crb-row--top1 .crb-row__rank b { background: linear-gradient(135deg, #fde047, #ca8a04); color: #1c1917; box-shadow: 0 0 12px rgba(250, 204, 21, 0.6); }
+#coachRaceBoard .crb-row--top2 .crb-row__rank b { background: linear-gradient(135deg, #f1f5f9, #94a3b8); color: #0f172a; }
+#coachRaceBoard .crb-row--top3 .crb-row__rank b { background: linear-gradient(135deg, #fdba74, #b45309); color: #1c1917; }
+#coachRaceBoard .crb-row__move { font-style: normal; font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums; }
 #coachRaceBoard .crb-row--up .crb-row__move { color: #22c55e; }
 #coachRaceBoard .crb-row--down .crb-row__move { color: #ef4444; }
-
-/* 선수 */
 #coachRaceBoard .crb-row__who { display: flex; align-items: center; gap: 12px; min-width: 0; }
 #coachRaceBoard .crb-row__avatar {
-  flex: 0 0 44px; width: 44px; height: 44px; border-radius: 50%; overflow: hidden;
+  flex: 0 0 54px; width: 54px; height: 54px; border-radius: 50%; overflow: hidden;
   display: inline-flex; align-items: center; justify-content: center;
-  background: linear-gradient(135deg, #334155, #1e293b); border: 2px solid rgba(148, 163, 184, 0.5);
-  font-size: 18px; font-weight: 800; color: #cbd5e1;
+  background: linear-gradient(135deg, #334155, #1e293b); border: 2.5px solid rgba(148, 163, 184, 0.45);
+  font-size: 22px; font-weight: 800; color: #cbd5e1;
 }
-#coachRaceBoard .crb-row--top .crb-row__avatar { flex-basis: 62px; width: 62px; height: 62px; border-width: 3px; font-size: 24px; }
-#coachRaceBoard .crb-row--top1 .crb-row__avatar { border-color: #facc15; box-shadow: 0 0 12px rgba(250, 204, 21, 0.5); }
-#coachRaceBoard .crb-row--top2 .crb-row__avatar { border-color: #e2e8f0; }
-#coachRaceBoard .crb-row--top3 .crb-row__avatar { border-color: #f97316; }
+#coachRaceBoard .crb-row--top1 .crb-row__avatar { border-color: #facc15; }
+#coachRaceBoard .crb-row--top2 .crb-row__avatar { border-color: #cbd5e1; }
+#coachRaceBoard .crb-row--top3 .crb-row__avatar { border-color: #f59e0b; }
 #coachRaceBoard .crb-row__avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-#coachRaceBoard .crb-row__name { font-size: 22px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; letter-spacing: -0.01em; }
-#coachRaceBoard .crb-row--top .crb-row__name { font-size: 30px; font-weight: 900; }
-#coachRaceBoard .crb-row--top1 .crb-row__name { color: #fef9c3; text-shadow: 0 0 12px rgba(250, 204, 21, 0.35); }
-
-/* 현재 구간 수행도 */
-#coachRaceBoard .crb-row__ach { display: flex; flex-direction: column; gap: 5px; }
-#coachRaceBoard .crb-row__bar { display: block; height: 8px; border-radius: 4px; background: rgba(148, 163, 184, 0.22); overflow: hidden; }
-#coachRaceBoard .crb-row--top .crb-row__bar { height: 10px; border-radius: 5px; }
-#coachRaceBoard .crb-row__bar i { display: block; height: 100%; width: 0; border-radius: inherit; transition: width 0.8s ease, background 0.4s ease; }
-#coachRaceBoard .crb-row__ach em { font-style: normal; font-size: 19px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
-#coachRaceBoard .crb-row--top .crb-row__ach em { font-size: 24px; }
+#coachRaceBoard .crb-row__name { font-size: 26px; font-weight: 800; color: #f8fafc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#coachRaceBoard .crb-row__ach { display: flex; flex-direction: column; gap: 6px; }
+#coachRaceBoard .crb-row__bar { display: block; height: 9px; border-radius: 5px; background: rgba(148, 163, 184, 0.2); overflow: hidden; }
+#coachRaceBoard .crb-row__bar i { display: block; height: 100%; width: 0; border-radius: 3px; transition: width 0.8s ease, background 0.4s ease; }
+#coachRaceBoard .crb-row__ach em { font-style: normal; font-size: 20px; line-height: 1; font-weight: 800; font-variant-numeric: tabular-nums; }
 #coachRaceBoard .crb-ach--ok .crb-row__bar i { background: #22c55e; }
 #coachRaceBoard .crb-ach--ok em { color: #4ade80; }
 #coachRaceBoard .crb-ach--hot .crb-row__bar i { background: linear-gradient(90deg, #22c55e, #facc15); }
@@ -36105,47 +36096,33 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-ach--low .crb-row__bar i { background: #f97316; }
 #coachRaceBoard .crb-ach--low em { color: #fb923c; }
 #coachRaceBoard .crb-ach--none em { color: #64748b; }
-
-/* 점수 + 선두와 격차 */
-#coachRaceBoard .crb-row__pts { text-align: right; line-height: 1; }
 #coachRaceBoard .crb-row__score {
-  font-family: 'Bebas Neue', 'Noto Sans KR', sans-serif;
-  font-size: 38px; font-weight: 400; font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-  color: #fbbf24; text-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+  text-align: right;
+  font-family: 'Orbitron', 'DS-Digital', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
 }
-#coachRaceBoard .crb-row--top .crb-row__score { font-size: 54px; }
-#coachRaceBoard .crb-row--top1 .crb-row__score { color: #fde047; text-shadow: 0 0 16px rgba(253, 224, 71, 0.8); }
-#coachRaceBoard .crb-row__gap { margin-top: 5px; min-height: 14px; font-size: 14px; font-weight: 800; color: #94a3b8; font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
-#coachRaceBoard .crb-row--top1 .crb-row__gap { color: #facc15; font-family: 'Bebas Neue', sans-serif; font-size: 17px; letter-spacing: 0.18em; }
-
-#coachRaceBoard .crb__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; color: #64748b; }
-#coachRaceBoard .crb__foot { flex: 0 0 auto; padding: 8px 18px; font-size: 12px; color: #64748b; border-top: 1px solid rgba(148, 163, 184, 0.15); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* 좁은 PC 화면: 열 폭·글자 축소 */
+#coachRaceBoard .crb__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #64748b; }
+#coachRaceBoard .crb__foot { flex: 0 0 auto; padding: 8px 16px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #64748b; border-top: 1px solid rgba(148, 163, 184, 0.15); }
+/* 1~3위: 아바타 테두리만 메달색으로 굵게(크기는 전 순위 동일) */
+#coachRaceBoard .crb-row--top1 .crb-row__avatar, #coachRaceBoard .crb-row--top2 .crb-row__avatar, #coachRaceBoard .crb-row--top3 .crb-row__avatar { border-width: 3px; }
+/* 보드가 열려 있으면 하단 환경 설정 줄 버튼(트랙 생성·뒤로·자동 퇴실)을 보드 왼쪽으로 */
+#bluetoothTrainingCoachScreen.crb-board-open .speedometer-list-section .list-header { padding-right: calc(var(--crb-w, 0px) + 58px) !important; box-sizing: border-box; }
+/* 좁은 PC 화면 */
 @media (max-width: 1500px) {
-  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 52px minmax(0, 1fr) 78px 96px; column-gap: 8px; }
+  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(0, 1fr) 84px 92px; column-gap: 8px; }
   #coachRaceBoard .crb-row { padding: 0 12px; }
-  #coachRaceBoard .crb__cols { padding: 6px 12px 4px; }
-  #coachRaceBoard .crb-row--top { height: 92px; }
-  #coachRaceBoard .crb-row--top .crb-row__rank b { min-width: 46px; height: 46px; font-size: 36px; }
-  #coachRaceBoard .crb-row__rank b { min-width: 36px; height: 36px; font-size: 26px; }
-  #coachRaceBoard .crb-row__who { gap: 8px; }
-  #coachRaceBoard .crb-row--top .crb-row__avatar { flex-basis: 46px; width: 46px; height: 46px; font-size: 19px; }
-  #coachRaceBoard .crb-row__avatar { flex-basis: 34px; width: 34px; height: 34px; font-size: 14px; }
-  #coachRaceBoard .crb-row--top .crb-row__name { font-size: 22px; }
-  #coachRaceBoard .crb-row__name { font-size: 17px; }
-  #coachRaceBoard .crb-row--top .crb-row__ach em { font-size: 19px; }
-  #coachRaceBoard .crb-row__ach em { font-size: 15px; }
-  #coachRaceBoard .crb-row--top .crb-row__score { font-size: 44px; }
-  #coachRaceBoard .crb-row__score { font-size: 30px; }
-  #coachRaceBoard .crb__title { font-size: 30px; }
-  #coachRaceBoard .crb__sub { font-size: 15px; }
-  #coachRaceBoard .crb__head { padding: 12px 14px 10px; }
+  #coachRaceBoard .crb-row__rank b { min-width: 40px; height: 40px; font-size: 22px; }
+  #coachRaceBoard .crb-row__avatar { flex-basis: 42px; width: 42px; height: 42px; font-size: 17px; }
+  #coachRaceBoard .crb-row__name { font-size: 20px; }
+  #coachRaceBoard .crb-row__ach em { font-size: 16px; }
+  #coachRaceBoard .crb-row__score { font-size: 28px; }
+  #coachRaceBoard .crb__title { font-size: 20px; }
+  #coachRaceBoard .crb__sub { font-size: 14px; }
 }
-/* 보드가 열려 있으면 하단 환경 설정 줄의 버튼(트랙 생성·뒤로·자동 퇴실)을 보드 왼쪽으로 */
-#bluetoothTrainingCoachScreen.crb-board-open .speedometer-list-section .list-header { padding-right: calc(var(--crb-w, 0px) + 12px) !important; box-sizing: border-box; }
 @media (prefers-reduced-motion: reduce) {
   #coachRaceBoard .crb-row, #coachRaceBoard.crb { transition: none; }
-  #coachRaceBoard .crb__live-dot, #coachRaceBoardHandle .crb-tab__dot, #coachRaceBoard .crb-row--up, #coachRaceBoard .crb-row--down { animation: none; }
+  #coachRaceBoard .crb__live-dot, #coachRaceBoard .crb-row--up, #coachRaceBoard .crb-row--down { animation: none; }
 }
 
 /* 휴대폰 Coach 연결 메뉴 — 실시간 순위 목록(2026-11-02, PC 레이스 전광판과 같은 점수) */
