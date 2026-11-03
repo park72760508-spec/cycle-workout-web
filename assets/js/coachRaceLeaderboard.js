@@ -520,6 +520,7 @@
   };
 
   var MOBILE_SCREEN_ID = 'bluetoothCoachMobileScreen';
+  window.coachRaceAvatarUrl = function (uid) { return avatarCache[uid] || ''; };
   window.coachRaceBoardLatest = function () { return window.__coachRaceLatest || null; };
   function tick() {
     if (document.hidden) return;
