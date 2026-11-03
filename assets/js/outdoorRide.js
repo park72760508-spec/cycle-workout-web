@@ -1574,22 +1574,69 @@
     renderSubwayLinePopupInner(el, false);
   }
   function subLiveName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/(역|종착)$/, '').replace(/\s+/g, ''); }
-  /* 실시간 열차 위치 추정(2026-11-04, 호출 주기·트래픽은 그대로):
-   * 서울시 실시간 열차위치는 역 진입·도착·출발 때만 기록되어 30초~1분 늦다 → 상태별로 위치를 달리하고,
-   * 기록 시각(recptnDt)부터 지난 시간만큼 역 간 평균 2분 기준으로 다음 역 쪽으로 서서히 움직여 보여 준다(1초마다).
-   * pos = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
-  var SUB_HOP_SEC = 120;
-  function subTrainPos(t, now) {
-    var dir = t.down ? 1 : -1;
-    var age = t.at ? Math.max(0, (now - t.at) / 1000) : 0;
-    if (age > 600) age = 0; // 너무 오래된 기록은 움직이지 않음
-    var adv = age / SUB_HOP_SEC;
-    var p;
-    if (t.s === '2') p = t.k + dir * Math.min(0.9, 0.15 + adv);        // 출발: 역을 떠나 다음 역 쪽으로
-    else if (t.s === '3') p = t.k - dir * Math.max(0.25, 0.85 - adv);  // 전역 출발: 이전 역 → 이 역으로 오는 중
-    else if (t.s === '0') p = t.k - dir * Math.max(0.06, 0.25 - adv * 0.6); // 진입: 이 역 바로 앞
-    else p = t.k;                                                      // 도착: 역에 정차
-    return Math.max(0, Math.min((t.n || 1) - 1, p));
+  /* 실시간 열차 위치 단계 이동(2026-11-04 개정, 호출 주기·트래픽은 그대로):
+   * 서울시 실시간 열차위치는 역 진입·도착·출발 때만 기록된다 → 역과 역 사이를 6단계로 나누고
+   * 20초 갱신(새 데이터)마다 출발한 열차를 1단계씩 앞으로(같은 방향 겹침 회피로 밀린 열차도 동일).
+   *  - 뒤로 물러나지 않음. 단계 이동 중 다음 역 도착(진입·도착) 기록이 오면 남은 단계를 건너뛰고 역에 표시
+   *  - 6단계까지 왔는데 아직 도착 기록이 없으면 도착할 때까지 6단계에서 대기
+   *  - 처음 보는 출발 열차는 기록 시각부터 지난 시간(20초당 1단계)으로 시작 단계를 정함
+   * 위치 = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
+  var SUB_STEPS = 6, SUB_TICK_SEC = 20;
+  function subStPos(x) { return x.st != null ? x.st : x.from + x.dir * x.step / (SUB_STEPS + 1); }
+  function subStepTrains(el, n) {
+    var ld = el.__live && el.__live.data;
+    var key = el.__li + '|' + el.__dir;
+    var S = el.__trState;
+    if (!S || S.key !== key) S = el.__trState = { key: key, at: null, map: {} };
+    var tick = ld && ld.ok ? ld.at : null;
+    if (tick === S.at) return S.map; // 같은 데이터(목록 다시 그리기 등)면 위치 그대로
+    S.at = tick;
+    var now = Date.now(), prev = S.map, next = {};
+    var last = n - 1;
+    (el.__trains || []).forEach(function (t) {
+      var dir = t.down ? 1 : -1;
+      // 기록 → 역 정차(st) 또는 역 from 에서 출발해 이동 중
+      var cst = null, cfrom = null;
+      if (t.s === '1' || t.s === '0') cst = t.k;
+      else if (t.s === '2') cfrom = t.k;
+      else if (t.s === '3') cfrom = t.k - dir;
+      if (cfrom != null && (cfrom < 0 || cfrom > last || cfrom + dir < 0 || cfrom + dir > last)) { cst = Math.max(0, Math.min(last, t.k)); cfrom = null; }
+      var pv = prev[t.id] && prev[t.id].dir === dir ? prev[t.id] : null;
+      var x = { dir: dir, st: null, from: null, step: 0, t: t };
+      if (cst != null) {
+        if (pv && pv.st == null && pv.from === cst) { x.from = cst; x.step = Math.min(SUB_STEPS, pv.step + 1); } // 밀려서 출발 표시 중 → 계속 1단계씩
+        else if (pv && dir * (subStPos(pv) - cst) > 0.001) { x.st = pv.st; x.from = pv.from; x.step = pv.step; } // 화면이 더 앞 → 대기(후퇴 없음)
+        else x.st = cst; // 도착: 남은 단계 건너뛰고 역에
+      } else {
+        if (pv && pv.st == null && pv.from === cfrom) { x.from = cfrom; x.step = Math.min(SUB_STEPS, pv.step + 1); }
+        else if (pv && pv.st == null && dir * (pv.from - cfrom) > 0) { x.from = pv.from; x.step = Math.min(SUB_STEPS, pv.step + 1); }
+        else if (pv && pv.st != null && dir * (pv.st - cfrom) > 0) { x.st = pv.st; }
+        else if (pv) { x.from = cfrom; x.step = 1; } // 방금 출발
+        else {
+          var age = t.at ? Math.max(0, (now - t.at) / 1000) : 0;
+          if (age > 600) age = 0;
+          x.from = cfrom; x.step = Math.max(1, Math.min(SUB_STEPS, 1 + Math.floor(age / SUB_TICK_SEC)));
+        }
+      }
+      next[t.id] = x;
+    });
+    // 같은 방향 열차가 같은 자리에 겹치면 앞차를 1단계 앞으로(역에 있던 앞차는 그 역 출발 1단계) — 다음 갱신부터 1단계씩
+    [1, -1].forEach(function (dir) {
+      var q = Object.keys(next).map(function (id) { return next[id]; }).filter(function (x) { return x.dir === dir; });
+      var rank = { '3': 0, '0': 1, '1': 2, '2': 3 };
+      q.sort(function (a, b) { return (dir * subStPos(a) - dir * subStPos(b)) || ((rank[a.t.s] || 0) - (rank[b.t.s] || 0)) || ((b.t.at || 0) - (a.t.at || 0)); }); // 같으면 기록이 오래된 쪽이 앞차
+      for (var i = 1; i < q.length; i++) {
+        var rear = q[i - 1], lead = q[i];
+        if (dir * (subStPos(lead) - subStPos(rear)) > 0.5 / (SUB_STEPS + 1)) continue;
+        if (lead.st != null) {
+          if (lead.st + dir < 0 || lead.st + dir > last) continue;
+          lead.from = lead.st; lead.st = null; lead.step = 1;
+        } else if (lead.step < SUB_STEPS) lead.step = Math.min(SUB_STEPS, (rear.st == null && rear.from === lead.from ? rear.step : lead.step) + 1);
+        lead.pushed = true;
+      }
+    });
+    S.map = next;
+    return next;
   }
   function subAgeText(t, now) {
     // 예: "지축 출발 2분 3초 전", "삼송 진입 30초 전", "삼송 접근 40초 전"(전 역 출발)
@@ -1600,10 +1647,9 @@
     var sec = Math.max(0, Math.round((now - t.at) / 1000));
     return head + ' ' + (sec >= 60 ? Math.floor(sec / 60) + '분 ' + (sec % 60) + '초 전' : sec + '초 전');
   }
-  function placeSubTrains(el, rebuild) {
+  function placeSubTrains(el) {
     var lst = el.querySelector('.outd-busrt__list.is-rail');
     var layer = lst && lst.querySelector('.outd-subtr');
-    if (el.__trTimer && (!layer || el.style.display === 'none')) { clearInterval(el.__trTimer); el.__trTimer = null; }
     if (!layer) return;
     var rows = lst.querySelectorAll('li:not(.outd-subtr)');
     if (!rows.length) return;
@@ -1611,47 +1657,44 @@
     for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
     var yAt = function (p) { var a = Math.floor(p), b = Math.min(cy.length - 1, a + 1); return cy[a] + (cy[b] - cy[a]) * (p - a); };
     var now = Date.now();
-    var trains = (el.__trains || []).map(function (t) { t.n = cy.length; return t; });
-    // 같은 역에 정차(또는 거의 정차) 중인 열차는 배지 1개로(↑·↓ 화살표 함께), 역 사이 열차는 원 없이 아이콘만
-    // 같은 방향 열차는 한 역에 겹치지 않음: 뒤차가 역에 있으면 앞차는 그 역을 '출발'한 것으로 앞으로 밀어 표시
-    trains.forEach(function (t) { t.p = subTrainPos(t, now); t.dispS = t.s; t.dispStn = t.stn; });
-    [true, false].forEach(function (down) {
-      var dir = down ? 1 : -1;
-      var q = trains.filter(function (t) { return t.down === down; });
-      var rank = { '3': 0, '0': 1, '1': 2, '2': 3 }; // 같은 위치면 접근 < 진입 < 도착 < 출발 순으로 앞차
-      q.sort(function (a, b) { return (dir * a.p - dir * b.p) || ((rank[a.s] || 0) - (rank[b.s] || 0)); });
-      for (var i = 1; i < q.length; i++) {
-        var rear = q[i - 1], lead = q[i];
-        if (dir * (lead.p - rear.p) < 0.35) {
-          var base = Math.round(rear.p);
-          lead.p = Math.max(0, Math.min(cy.length - 1, rear.p + dir * 0.35));
-          lead.dispS = '2';
-          lead.dispStn = rows[base] ? (rows[base].querySelector('span') || {}).textContent || lead.stn : lead.stn;
-        }
-      }
+    var map = subStepTrains(el, cy.length);
+    var nameAt = function (k) { return rows[k] ? (rows[k].querySelector('span') || {}).textContent || '' : ''; };
+    var trains = Object.keys(map).map(function (id) {
+      var x = map[id], t = x.t;
+      t.p = Math.max(0, Math.min(cy.length - 1, subStPos(x)));
+      t.dispS = t.s; t.dispStn = t.stn;
+      if (x.pushed || (x.st == null && x.from !== (t.s === '2' ? t.k : t.k - x.dir))) { t.dispS = '2'; t.dispStn = nameAt(x.from) || t.stn; }
+      return t;
     });
+    // 같은 역에 정차 중인 열차는 배지 1개로(↑·↓ 화살표 함께), 역 사이 열차는 원 없이 아이콘만
     var groups = [];
     trains.forEach(function (t) {
       var p = t.p;
-      var atSt = Math.abs(p - Math.round(p)) < 0.12;
+      var atSt = Math.abs(p - Math.round(p)) < 0.05;
       var g = null;
-      for (var j = 0; j < groups.length; j++) if (Math.abs(groups[j].p - p) < 0.3 && groups[j].atSt === atSt) { g = groups[j]; break; }
+      for (var j = 0; j < groups.length; j++) if (Math.abs(groups[j].p - p) < 0.05 && groups[j].atSt === atSt) { g = groups[j]; break; }
       if (!g) { g = { p: p, atSt: atSt, ts: [] }; groups.push(g); }
       g.ts.push(t);
     });
-    groups.forEach(function (g) { g.y = yAt(g.p); }); // 상태·경과(예: 지축 출발 32초 전)는 배지 툴팁(title)에만
+    // 단계 이동이 자연스럽게 보이도록 이전 위치에서 새 위치로 미끄러지게(목록이 다시 그려져도 열차별 이전 y 기억)
+    var prevY = el.__trPrevY || {}, nextY = {};
     var html = groups.map(function (g) {
+      g.y = yAt(g.p);
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ');
-      return '<b class="outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + '" style="top:' + g.y.toFixed(1) + 'px" title="' + escHtml(tip) + '">' +
+      var y0 = prevY[g.ts[0].id];
+      g.ts.forEach(function (t) { nextY[t.id] = g.y; });
+      return '<b class="outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + '" data-y="' + g.y.toFixed(1) + '" style="top:' + (y0 != null ? y0 : g.y).toFixed(1) + 'px" title="' + escHtml(tip) + '">' +
         (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') +
         // 상·하행이 함께 있으면 ↑·↓ 화살표로 충분 — 숫자 배지는 같은 방향 열차가 겹칠 때만
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '') + '</b>';
     }).join('');
+    el.__trPrevY = nextY;
     layer.innerHTML = html;
-    if (rebuild) {
-      if (el.__trTimer) clearInterval(el.__trTimer);
-      el.__trTimer = setInterval(function () { placeSubTrains(el, false); }, 1000);
+    var bs = layer.querySelectorAll('b[data-y]');
+    if (bs.length) {
+      void layer.offsetHeight;
+      for (var m = 0; m < bs.length; m++) bs[m].style.top = bs[m].getAttribute('data-y') + 'px';
     }
   }
   function renderSubwayLinePopupInner(el, fromLive) {
@@ -1674,7 +1717,7 @@
         var tk = names.indexOf(subLiveName(t.to));
         var down = tk >= 0 ? tk > k : t.ud === '1';
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
-        trains.push({ k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
+        trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
         trainN++;
       });
       el.__trains = trains; el.__trainN = seq.length;
@@ -1701,7 +1744,7 @@
       card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list is-rail">');
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
-    placeSubTrains(el, true);
+    placeSubTrains(el);
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
