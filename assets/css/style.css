@@ -36747,6 +36747,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-05 급행 열차 구분: 열차 아이콘은 일반과 동일, 진행 방향 화살표만 굵은 빨강 */
 #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub s.ex { color: #dc2626; font-size: 16px; font-weight: 900; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 .6px #dc2626; }
 
-/* 2026-11-05 급행 정차역: 역 원을 호선색으로 채우고 역 이름을 더 진하게(급행이 서지 않는 역은 기존 연한 톤) */
-#outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs i { background: var(--ln); border-color: var(--ln); }
-#outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs > span:not(.outd-subln__xfer) { color: #020617; font-weight: 800; }
+/* 2026-11-05 급행 정차역: 역 원 테두리만 급행 화살표 빨강의 부드러운 톤(채움·이름 스타일은 기존 그대로) */
+#outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs:not(.is-cur) i { border-color: #f08a8a; }
