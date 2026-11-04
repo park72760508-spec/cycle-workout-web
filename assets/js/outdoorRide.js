@@ -1772,7 +1772,7 @@
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
-      var html = (up.length ? '<s class="up">↑</s>' : '') + (g.ts.some(function (t) { return t.ex; }) ? '<i class="outd-exic"><i>🚇</i></i>' : '🚇') + (dn.length ? '<s class="dn">↓</s>' : '') +
+      var html = (up.length ? '<s class="up">↑</s>' : '') + (g.ts.some(function (t) { return t.ex; }) ? '<i class="outd-exic">🚇</i>' : '🚇') + (dn.length ? '<s class="dn">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.ts.some(function (t) { return t.ex; }) ? ' is-ex' : '') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
