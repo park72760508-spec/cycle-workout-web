@@ -1583,7 +1583,7 @@
    * 단계가 바뀔 때만 한 번 위치를 갱신(5초 주기로 비교만 — 바뀌지 않으면 DOM·레이아웃 접근 없음).
    * 움직임은 transform(합성 전용)으로 0.8초만 전환 → 레이아웃·페인트 비용 없음.
    * 위치 = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
-  var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 60;
+  var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 45;
   function subTrainGoals(el, n, now) {
     var last = n - 1;
     var list = (el.__trains || []).map(function (t) {
@@ -1607,20 +1607,58 @@
         lead.from = lead.st; lead.st = null; lead.dep = Math.max(lead.t.at || 0, rear.t.at || 0) || now;
       }
     });
+    var stage = function (e, segI) {
+      var T = el.__segT && el.__segT[segI];
+      // 짧은 구간은 고정 1분·2분보다 일찍(구간 예상 소요의 1/3·2/3) — 한 구간 내내 P1에 머무는 것 방지
+      var t2 = T ? Math.min(SUB_T2, T * 0.33) : SUB_T2, t3 = T ? Math.min(SUB_T3, T * 0.66) : SUB_T3;
+      return e >= t3 ? SUB_P3 : e >= t2 ? SUB_P2 : SUB_P1;
+    };
     list.forEach(function (g) {
       if (g.st != null) {
         g.goal = g.st;
         var age = g.t.at ? (now - g.t.at) / 1000 : 0;
-        // 정차 후 1분이 지나도 출발 기록이 없으면(기록 누락 대비) P1로 출발 표시
-        if (age > SUB_DWELL_SEC && age < 600 && g.st + g.dir >= 0 && g.st + g.dir <= last) g.goal = g.st + g.dir * SUB_P1;
+        // 정차 후 SUB_DWELL_SEC 지나도 출발 기록이 없으면(기록 누락 대비) 그 시각을 출발로 보고 같은 단계 시계 적용
+        if (age > SUB_DWELL_SEC && age < 600 && g.st + g.dir >= 0 && g.st + g.dir <= last) {
+          g.goal = g.st + g.dir * stage(age - SUB_DWELL_SEC, Math.min(g.st, g.st + g.dir));
+          g.inferred = true;
+        }
       } else {
         var e = g.dep ? Math.max(0, (now - g.dep) / 1000) : 0;
         if (e > 900) e = 0;
-        var f = g.pre || e >= SUB_T3 ? SUB_P3 : e >= SUB_T2 ? SUB_P2 : SUB_P1;
+        var f = g.pre ? SUB_P3 : stage(e, Math.min(g.from, g.from + g.dir));
         g.goal = g.from + g.dir * f;
       }
+      // 기록이 오래 갱신되지 않은 열차 표시(구간 안 4분·역 정차 5분 이상)
+      var ageAll = g.t.at ? (now - g.t.at) / 1000 : 0;
+      g.stale = ageAll > (g.st != null ? 300 : 240);
     });
     return list;
+  }
+  /** 수신 기록 보정(열차번호별 이력): 오래된·뒤바뀐 기록 무시, 같은 역 상태 역행 무시, 변화 없는 기록은 유지.
+   *  진행 척도 P(방향 기준): 전역출발 = 이전역+¼, 진입 = 역-⅕, 도착 = 역, 출발 = 역+¼ */
+  function subProg(t) {
+    var d = t.down ? 1 : -1;
+    var pos = t.s === '3' ? t.k - d + 0.25 * d : t.s === '0' ? t.k - 0.2 * d : t.s === '2' ? t.k + 0.25 * d : t.k;
+    return d * pos;
+  }
+  function subReconcile(el, trains) {
+    var T = el.__trk || (el.__trk = {});
+    var seen = {};
+    trains.forEach(function (t) {
+      var key = el.__li + '|' + t.id;
+      seen[key] = 1;
+      var pv = T[key];
+      var P = subProg(t);
+      if (pv && pv.down === t.down) {
+        var older = t.at && pv.at && t.at < pv.at; // 더 옛 기록(순서 뒤바뀜)
+        var back = P < pv.P - 0.05 && P > pv.P - 3; // 같은 운행 안에서 뒤로 간 기록(3역 이상은 새 운행으로 봄)
+        if (older || back) { // 이전 기록 유지
+          t.k = pv.k; t.s = pv.s; t.at = pv.at; t.stn = pv.stn; P = pv.P; t.kept = true;
+        }
+      }
+      T[key] = { k: t.k, s: t.s, at: t.at, down: t.down, P: P, stn: t.stn, seenAt: Date.now() };
+    });
+    Object.keys(T).forEach(function (k) { if (!seen[k] && Date.now() - T[k].seenAt > 600000) delete T[k]; });
   }
   /** 열차별 단계 위치(뒤로 물러나지 않음) */
   function subStages(el, n) {
@@ -1670,12 +1708,13 @@
       var x = map[id], t = x.g.t;
       var atSt = Math.abs(x.p - Math.round(x.p)) < 0.01;
       var gk = x.p.toFixed(2) + (atSt ? 's' : 'r');
-      var g = groups[gk] || (groups[gk] = { p: x.p, atSt: atSt, ts: [] });
+      var g = groups[gk] || (groups[gk] = { p: x.p, atSt: atSt, ts: [], stale: true });
       g.ts.push(t);
+      if (!x.g.stale) g.stale = false;
     });
     var keys = Object.keys(groups).sort();
     var sig = keys.map(function (k) {
-      return k + ':' + groups[k].ts.map(function (t) { return t.id + (t.down ? 'd' : 'u'); }).sort().join(',');
+      return k + (groups[k].stale ? '!' : '') + ':' + groups[k].ts.map(function (t) { return t.id + (t.down ? 'd' : 'u'); }).sort().join(',');
     }).join('|');
     if (!force && sig === el.__trSig) return; // 바뀐 것이 없으면 DOM·레이아웃 접근 없음
     el.__trSig = sig;
@@ -1693,11 +1732,11 @@
       var g = groups[k];
       var y = yAt(g.p);
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
-      var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ');
+      var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var html = (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
-      var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run');
+      var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
       if (node) {
         delete have[ek];
@@ -1764,6 +1803,8 @@
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
         trainN++;
       });
+      subReconcile(el, trains);
+      el.__segT = seq.slice(1).map(function (si, i) { return 30 + subStDistKm(seq[i], si) * 90; }); // 구간 예상 소요(초)
       el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       card = '<div class="outd-busrt__head">' + badge +
