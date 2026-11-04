@@ -36749,3 +36749,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-05 급행 정차역: 역 원 테두리만 급행 화살표 빨강의 부드러운 톤(채움·이름 스타일은 기존 그대로) */
 #outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs:not(.is-cur) i { border-color: #f08a8a; }
+/* 급행 정차역이 현재 역이면 원 안의 채움 색을 급행 정차역 표시색으로 */
+#outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs.is-cur i { background: #f08a8a; }
