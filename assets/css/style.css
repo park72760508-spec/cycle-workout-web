@@ -36746,3 +36746,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-05 급행 열차 아이콘은 빨강으로 구분 */
 #outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-ex { background: #fef2f2; border-color: #dc2626; color: #991b1b; box-shadow: 0 0 0 1px rgba(220,38,38,.25); }
+/* 급행: 열차 아이콘 바탕(검정)을 빨강으로 — 빨강 판 위에 이모지를 screen 혼합 */
+#outdoorRideScreen .outd-exic { display: inline-block; background: #dc2626; border-radius: 4px; line-height: 1; font-style: normal; isolation: isolate; }
+#outdoorRideScreen .outd-exic > i { display: block; font-style: normal; line-height: 1; mix-blend-mode: screen; }
