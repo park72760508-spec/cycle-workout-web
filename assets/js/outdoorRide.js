@@ -1660,14 +1660,24 @@
     });
     Object.keys(T).forEach(function (k) { if (!seen[k] && Date.now() - T[k].seenAt > 600000) delete T[k]; });
   }
-  /** 열차별 단계 위치(뒤로 물러나지 않음) */
+  /** 진행 방향 기준 좌표 u 에서 다음 격자점(역 · +¼ · +½ · +0.8) */
+  function subNextGrid(u) {
+    var j = Math.floor(u + 1e-9), F = [0, SUB_P1, SUB_P2, SUB_P3];
+    for (var i = 0; i < F.length; i++) if (j + F[i] > u + 1e-6) return j + F[i];
+    return j + 1;
+  }
+  /** 열차별 단계 위치(뒤로 물러나지 않음) + 선행·후행 보전:
+   *  같은 방향 열차끼리는 추월하지 않는다. 선행 열차 기록이 누락돼 제자리인데 후행 열차가 그 위치까지 와서
+   *  (같은 지점이거나 앞서거나, 같은 구간에서 선행 기록이 2분 넘게 갱신 없음) 경로에 진입하면
+   *  선행 열차를 후행 열차 바로 앞 다음 단계로 강제 이동(연쇄 적용 — 밀린 선행이 그 앞 열차를 다시 밀 수 있음). 종점은 넘지 않음. */
   function subStages(el, n) {
     var now = Date.now();
     var key = el.__li + '|' + el.__dir;
     var D = el.__trDisp;
-    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {} };
+    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {}, ord: { '1': [], '-1': [] } };
     var next = {};
     subTrainGoals(el, n, now).forEach(function (g) {
+      g.t.forced = false;
       var id = g.t.id, dir = g.dir, pv = D.map[id];
       var p = g.goal;
       if (pv && pv.dir === dir) {
@@ -1675,6 +1685,29 @@
         if (d < 0 && d > -1) p = pv.p; // 같은 구간 안에서는 후퇴 없음
       }
       next[id] = { dir: dir, p: Math.max(0, Math.min(n - 1, p)), g: g };
+    });
+    [1, -1].forEach(function (dir) {
+      var ids = Object.keys(next).filter(function (id) { return next[id].dir === dir; });
+      var U = function (id) { return dir * next[id].p; };
+      // 이전 순서(앞 → 뒤)를 유지하고, 새 열차는 위치에 맞게 끼워 넣음
+      var ord = (D.ord[dir] || []).filter(function (id) { return next[id] && next[id].dir === dir; });
+      ids.forEach(function (id) {
+        if (ord.indexOf(id) >= 0) return;
+        var at = 0;
+        while (at < ord.length && U(ord[at]) >= U(id)) at++;
+        ord.splice(at, 0, id);
+      });
+      for (var i = ord.length - 1; i >= 1; i--) {
+        var rear = next[ord[i]], lead = next[ord[i - 1]];
+        var ur = dir * rear.p, ul = dir * lead.p;
+        var sameSeg = Math.floor(ur + 1e-9) === Math.floor(ul + 1e-9);
+        var leadAge = lead.g.t.at ? (now - lead.g.t.at) / 1000 : 0;
+        if (ur >= ul - 1e-6 || (sameSeg && leadAge > 120)) {
+          var tu = Math.min(subNextGrid(ur), n - 1);
+          if (tu > ul + 1e-6) { lead.p = dir * tu; lead.g.t.forced = true; }
+        }
+      }
+      D.ord[dir] = ord;
     });
     D.map = next;
     return next;
@@ -1732,7 +1765,7 @@
       var g = groups[k];
       var y = yAt(g.p);
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
-      var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '');
+      var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var html = (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
