@@ -192,7 +192,8 @@
     var h = rh * 4 + 3;
     var bottom = pr.bottom - br.top;
     var top = bottom - h;
-    var wBoard = Math.min(Math.round(br.width * 0.36), Math.max(60, pr.left - br.left - 6), Math.max(60, br.right - pr.right - 6));
+    // 고정 폭(최소 폭): 3글자 이름 + 순위 + 원 + 점수가 들어가는 최소 폭 = 화면 폭의 29.5%(390px 기준 115px) — 파워 3자리 숫자와 겹치지 않음
+    var wBoard = Math.round(br.width * 0.295);
     var sig = JSON.stringify([waiting, excl, left, right, uid, Math.round(wBoard), Math.round(top), Math.round(h)]);
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
