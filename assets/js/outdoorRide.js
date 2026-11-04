@@ -1721,6 +1721,26 @@
     el.__trPrevY = nextY;
     if (made.length) { void layer.offsetHeight; made.forEach(function (m) { m[0].style.transform = 'translateY(' + m[1].toFixed(1) + 'px)'; }); }
   }
+  /** 2026-11-04 노선도 화면 상·하단에 종점역을 항상 떠 있게(스크롤해도 고정, 호선 색 · 흐린 큰 글자) */
+  function placeSubTerminals(el, seq, ln, st) {
+    var card = el.querySelector('.outd-busrt__card');
+    var lst = el.querySelector('.outd-busrt__list');
+    if (!card || !lst || !seq || !seq.length) return;
+    var nm = function (i) { return st[seq[i]] ? st[seq[i]].n : ''; };
+    var mk = function (cls, txt) {
+      var d = document.createElement('div');
+      d.className = 'outd-term ' + cls;
+      d.setAttribute('aria-hidden', 'true');
+      d.innerHTML = '<small>종점</small><b>' + escHtml(txt) + '</b>';
+      card.appendChild(d);
+      return d;
+    };
+    if (getComputedStyle(card).position === 'static') card.style.position = 'relative';
+    var top = mk('outd-term--top', nm(0)), bot = mk('outd-term--bot', nm(seq.length - 1));
+    top.style.top = (lst.offsetTop + 4) + 'px';
+    bot.style.top = (lst.offsetTop + lst.clientHeight - bot.offsetHeight - 4) + 'px';
+    top.style.color = bot.style.color = ln.c;
+  }
   function renderSubwayLinePopupInner(el, fromLive) {
     var ln = sub.data.lines[el.__li], seqs = el.__seqs || [], st = sub.data.stations;
     var badge = '<span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>';
@@ -1769,6 +1789,7 @@
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
     el.__trSig = null; // 목록을 새로 그렸으니 열차 레이어도 새로
+    if (seqs.length) placeSubTerminals(el, seqs[Math.min(el.__dir, seqs.length - 1)], ln, st);
     placeSubTrains(el, true);
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');

@@ -36731,3 +36731,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   pointer-events: none;
   z-index: 3;
 }
+
+/* 2026-11-04 지하철 노선도: 상·하단 종점역 고정 표시(흐린 호선 색 큰 글자) */
+#outdoorRideScreen .outd-term { position: absolute; left: 0; right: 0; z-index: 6; text-align: center; pointer-events: none; opacity: 0.32; line-height: 1.05; }
+#outdoorRideScreen .outd-term small { display: block; font-size: 11px; font-weight: 800; letter-spacing: 2px; }
+#outdoorRideScreen .outd-term b { display: block; font-size: 30px; font-weight: 900; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 12px; }
