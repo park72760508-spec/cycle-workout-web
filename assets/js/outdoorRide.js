@@ -1731,7 +1731,7 @@
       var d = document.createElement('div');
       d.className = 'outd-term ' + cls;
       d.setAttribute('aria-hidden', 'true');
-      d.innerHTML = '<small>종점</small><b>' + escHtml(txt) + '</b>';
+      d.innerHTML = '<b>' + escHtml(txt) + '</b>';
       card.appendChild(d);
       return d;
     };
