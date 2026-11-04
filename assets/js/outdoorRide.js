@@ -1587,6 +1587,7 @@
    * 단계가 바뀔 때만 한 번 위치를 갱신(5초 주기로 비교만 — 바뀌지 않으면 DOM·레이아웃 접근 없음).
    * 움직임은 transform(합성 전용)으로 0.8초만 전환 → 레이아웃·페인트 비용 없음.
    * 위치 = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
+  var SUB_PASS_HOLD_MS = 1300; // 역으로 이동(0.8초 전환) + 0.5초 정차
   var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 45;
   function subTrainGoals(el, n, now) {
     var last = n - 1;
@@ -1680,7 +1681,7 @@
     var now = Date.now();
     var key = el.__li + '|' + el.__dir;
     var D = el.__trDisp;
-    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {}, ord: { '1': [], '-1': [] } };
+    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {}, hold: {}, ord: {} };
     var next = {};
     subTrainGoals(el, n, now).forEach(function (g) {
       g.t.forced = false;
@@ -1689,6 +1690,16 @@
       if (pv && pv.dir === dir) {
         var d = dir * (p - pv.p);
         if (d < 0 && d > -1) p = pv.p; // 같은 구간 안에서는 후퇴 없음
+        // 진입(P3) 대기 중 도착 기록 없이 출발 기록이 와서 역을 건너뛰게 되면: 먼저 그 역으로 이동해 0.5초 머문 뒤 출발 지점으로
+        var pu = dir * pv.p, gu = dir * p, cu = Math.ceil(pu - 1e-6);
+        if (pu < cu - 1e-6 && gu > cu + 1e-6 && gu - cu <= 1 && cu >= 0 && cu <= n - 1) {
+          var hd = D.hold[id];
+          if (!hd || hd.st !== cu) hd = D.hold[id] = { st: cu, at: now };
+          if (now - hd.at < SUB_PASS_HOLD_MS) {
+            p = dir * cu;
+            if (!el.__passT) el.__passT = setTimeout(function () { el.__passT = null; placeSubTrains(el); }, SUB_PASS_HOLD_MS - (now - hd.at) + 60);
+          }
+        }
       }
       next[id] = { dir: dir, p: Math.max(0, Math.min(n - 1, p)), g: g };
     });
