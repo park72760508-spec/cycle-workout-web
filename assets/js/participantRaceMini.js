@@ -1,7 +1,7 @@
 /**
  * 훈련 참가자 화면(휴대폰) — 속도계 현재 파워 좌우 미니 순위 전광판 (2026-11-04)
  * 데이터: Coach(coachRaceLeaderboard.js)가 sessions/{id}/race 에 게시한 순위를 3초마다 읽음.
- * 좌측 1~3위, 우측 4~5위 + 나. 항목: 순위 · 아바타+이름 · 점수.
+ * 좌측 1~4위, 우측 5~8위(내가 9위 밖이면 5~6위 · ⋯ · 내 순위). 항목: 순위 · 아바타+이름 · 점수.
  */
 (function () {
   'use strict';
@@ -35,7 +35,7 @@
     '.pmb__row em{flex:0 0 auto;font-style:normal;font-weight:700;color:#e8eaed}' +
     '.pmb__me{background:rgba(0,212,170,.2);box-shadow:inset 0 0 0 1px rgba(0,212,170,.7);color:#fff}.pmb__me b{color:#00d4aa}' +
     '.pmb__wait{color:#7d838c!important;font-weight:400!important;font-size:9px}' +
-    '.pmb__gap{flex:1 1 0;display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
+    '.pmb__gap{flex:0 0 var(--rh,20px);height:var(--rh,20px);display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
   document.head.appendChild(css);
 
   function esc(s) {
@@ -170,11 +170,10 @@
     var rows = src.map(function (r, i) { return { r: r, rank: i + 1 }; });
     var uid = myUid();
     var me = uid ? rows.find(function (x) { return String(x.r.u) === uid; }) : null;
-    // 6명 표시: 좌 1~3위, 우 4~5위 + 나(5위 밖이면 내 순위, 5위 안이면 6위)
-    var left = rows.slice(0, 3);
-    var right = rows.slice(3, 5);
-    var last = me && me.rank > 5 ? me : rows[5];
-    if (last) right.push(last);
+    // 좌 1~4위. 우: 내가 8위 안(또는 전체 8명 이하)이면 5~8위 / 아니면 5~6위 · 생략(⋯) · 내 순위
+    var left = rows.slice(0, 4), right;
+    if (rows.length <= 8 || (me && me.rank <= 8)) right = rows.slice(4, 8);
+    else right = rows.slice(4, 6).concat(['gap'], me ? [me] : []);
 
     // 현재 파워 숫자 위치 기준 배치
     var pw = document.getElementById(act.t.power);
@@ -183,8 +182,8 @@
     if (!pr || !pr.width || !br.width) return;
     var bs = boards(box);
     // 속도계와 겹치지 않게: 좌우 가장자리·아래쪽(현재 파워 숫자 아래선)에 붙이고 폭은 최소화
-    var rh = 22;
-    var h = rh * 3 + 2;
+    var rh = 20;
+    var h = rh * 4 + 3;
     var bottom = pr.bottom - br.top;
     var top = bottom - h;
     var wBoard = Math.min(Math.round(br.width * 0.27), Math.max(60, pr.left - br.left - 6), Math.max(60, br.right - pr.right - 6));
