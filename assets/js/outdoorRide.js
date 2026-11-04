@@ -1598,8 +1598,10 @@
       return g;
     });
     // 같은 방향 열차가 같은 역에 겹치면 앞차(기록이 오래된 쪽)는 뒤차 도착 시각에 출발한 것으로 보고 P1부터
-    [1, -1].forEach(function (dir) {
-      var q = list.filter(function (g) { return g.dir === dir && g.st != null; });
+    // 급행·일반은 따로(9호선 급행은 일반 열차를 추월 정차역에서 앞지름)
+    [[1, 0], [1, 1], [-1, 0], [-1, 1]].forEach(function (dc) {
+      var dir = dc[0];
+      var q = list.filter(function (g) { return g.dir === dir && g.st != null && (g.t.ex ? 1 : 0) === dc[1]; });
       q.sort(function (a, b) { return (dir * a.st - dir * b.st) || ((b.t.at || 0) - (a.t.at || 0)); });
       for (var i = 1; i < q.length; i++) {
         var rear = q[i - 1], lead = q[i];
@@ -1686,11 +1688,14 @@
       }
       next[id] = { dir: dir, p: Math.max(0, Math.min(n - 1, p)), g: g };
     });
-    [1, -1].forEach(function (dir) {
-      var ids = Object.keys(next).filter(function (id) { return next[id].dir === dir; });
+    // 급행·일반은 서로 추월할 수 있으므로 같은 종류끼리만 선행·후행 순서를 보전
+    [[1, 0], [1, 1], [-1, 0], [-1, 1]].forEach(function (dc) {
+      var dir = dc[0], ok = dir + 'x' + dc[1];
+      var cls = function (id) { return (next[id].g.t.ex ? 1 : 0) === dc[1]; };
+      var ids = Object.keys(next).filter(function (id) { return next[id].dir === dir && cls(id); });
       var U = function (id) { return dir * next[id].p; };
       // 이전 순서(앞 → 뒤)를 유지하고, 새 열차는 위치에 맞게 끼워 넣음
-      var ord = (D.ord[dir] || []).filter(function (id) { return next[id] && next[id].dir === dir; });
+      var ord = (D.ord[ok] || []).filter(function (id) { return next[id] && next[id].dir === dir && cls(id); });
       ids.forEach(function (id) {
         if (ord.indexOf(id) >= 0) return;
         var at = 0;
@@ -1707,7 +1712,7 @@
           if (tu > ul + 1e-6) { lead.p = dir * tu; lead.g.t.forced = true; }
         }
       }
-      D.ord[dir] = ord;
+      D.ord[ok] = ord;
     });
     D.map = next;
     return next;
