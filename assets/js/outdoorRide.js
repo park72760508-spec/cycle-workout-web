@@ -1551,13 +1551,16 @@
         if (t === el || t.closest('[data-rt-close]')) { el.style.display = 'none'; liveStop(el); return; }
         var tab = t.closest('[data-rt-dir]');
         if (tab) { el.__dir = Number(tab.getAttribute('data-rt-dir')); renderSubwayLinePopup(el); return; }
+        // 방면 토글: 호선명 = 양방향, 위·아래 종착역 = 그 방면 열차만(목록 스크롤 유지)
+        var df = t.closest('[data-rt-dirf]');
+        if (df) { el.__dirf = Number(df.getAttribute('data-rt-dirf')); renderSubwayLinePopup(el, true); return; }
         // 환승 표시 탭 → 그 호선 노선도로 바꿔 보여 줌(그 역이 현재 역)
         var xl = t.closest('[data-xln]');
         if (xl) openSubwayLinePopup(Number(xl.getAttribute('data-xln')), Number(xl.getAttribute('data-xst')));
       });
     }
     liveStop(el); // 다른 호선으로 바꿀 때 이전 호선 실시간 응답이 목록을 다시 그리지 않게
-    el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__seqs = null;
+    el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__dirf = 0; el.__seqs = null;
     el.style.setProperty('--ln', ln.c);
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선도를 불러오는 중…</div></div>';
     el.style.display = 'flex';
@@ -1857,11 +1860,16 @@
         trainN++;
       });
       subReconcile(el, trains);
+      var dirf = el.__dirf || 0;
+      if (dirf) { trains = trains.filter(function (t) { return (t.down ? 1 : -1) === dirf; }); trainN = trains.length; }
       el.__segT = seq.slice(1).map(function (si, i) { return 30 + subStDistKm(seq[i], si) * 90; }); // 구간 예상 소요(초)
       el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
-      card = '<div class="outd-busrt__head">' + badge +
-        '<div class="outd-busrt__ttl"><b>' + escHtml(ends(seq)) + '</b><span>역 ' + seq.length + '개</span></div>' +
+      var dirf2 = el.__dirf || 0;
+      var nm0 = st[seq[0]] ? st[seq[0]].n : '', nm1 = st[seq[seq.length - 1]] ? st[seq[seq.length - 1]].n : '';
+      var badgeBtn = '<button type="button" class="outd-busrt__no outd-dirf__ln' + (dirf2 === 0 ? ' is-on' : '') + '" data-rt-dirf="0" style="background:' + escHtml(ln.c) + '" title="양방향 열차 모두 보기">' + escHtml(ln.n) + '</button>';
+      card = '<div class="outd-busrt__head">' + badgeBtn +
+        '<div class="outd-busrt__ttl"><b class="outd-dirf"><button type="button" class="outd-dirf__b' + (dirf2 === -1 ? ' is-on' : '') + '" data-rt-dirf="-1" title="' + escHtml(nm0) + ' 방면 열차만">' + escHtml(nm0) + '</button><i>↔</i><button type="button" class="outd-dirf__b' + (dirf2 === 1 ? ' is-on' : '') + '" data-rt-dirf="1" title="' + escHtml(nm1) + ' 방면 열차만">' + escHtml(nm1) + '</button></b><span>역 ' + seq.length + '개</span></div>' +
         '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>' +
         (seqs.length > 1 ? '<div class="outd-busrt__dirs" role="tablist">' + seqs.map(function (q, i) {
           return '<button type="button" class="outd-busrt__dir' + (q === seq ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab">' + escHtml(ends(q)) + '</button>';

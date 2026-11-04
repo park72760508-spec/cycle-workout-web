@@ -36751,3 +36751,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs:not(.is-cur) i { border-color: #f08a8a; }
 /* 급행 정차역이 현재 역이면 원 안의 채움 색을 급행 정차역 표시색으로 */
 #outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs.is-cur i { background: #f08a8a; }
+
+/* 2026-11-05 노선도 방면 토글: 호선명 = 양방향, 양 끝 종착역 = 그 방면 열차만 */
+#outdoorRideScreen .outd-dirf__ln { border: 0; cursor: pointer; opacity: .45; font-family: inherit; }
+#outdoorRideScreen .outd-dirf__ln.is-on { opacity: 1; box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px currentColor; }
+#outdoorRideScreen .outd-dirf { display: flex; align-items: center; gap: 6px; overflow: visible; white-space: nowrap; }
+#outdoorRideScreen .outd-dirf i { font-style: normal; color: #94a3b8; font-weight: 700; }
+#outdoorRideScreen .outd-dirf__b { border: 1.5px solid #cbd5e1; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 999px; cursor: pointer; line-height: 1.2; }
+#outdoorRideScreen .outd-dirf__b.is-on { background: var(--ln, #10b981); border-color: var(--ln, #10b981); color: #fff; }
