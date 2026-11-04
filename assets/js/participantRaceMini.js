@@ -9,8 +9,8 @@
   window.__pmbLoaded = true;
 
   var TARGETS = [
-    { screen: 'bluetoothIndividualScreen', box: '.indiv-gauge-container', power: 'indiv-ui-current-power', needle: 'indiv-gauge-needle' },
-    { screen: 'mobileDashboardScreen', box: '.mobile-gauge-container', power: 'mobile-ui-current-power', needle: 'mobile-gauge-needle' }
+    // 그룹훈련 참석자 훈련 화면 전용(개인훈련 태블릿·모바일 훈련 화면에는 표시하지 않음)
+    { screen: 'bluetoothIndividualScreen', box: '.indiv-gauge-container', power: 'indiv-ui-current-power', needle: 'indiv-gauge-needle' }
   ];
   var dbg = {};
   window.__pmbDebug = function () { return { sid: lastSid, uid: myUid(), data: data, seenAgoMs: seenAt ? Date.now() - seenAt : null, dbg: dbg }; };
@@ -24,7 +24,9 @@
     '.pmb__dot--ok{background:#22c55e;box-shadow:0 0 5px rgba(34,197,94,.7);animation:pmbBlink 1.4s ease-in-out infinite}' +
     '.pmb__dot--low{background:#f97316;box-shadow:0 0 5px rgba(249,115,22,.7);animation:pmbBlink 1.4s ease-in-out infinite}' +
     '.pmb__dot--wait{background:#7dd3fc;box-shadow:0 0 4px rgba(125,211,252,.5)}' +
-    '.pmb__row em.pmb__dg{font-family:DSEG7,Orbitron,ui-monospace,monospace;font-weight:700;letter-spacing:.5px;color:#f5d76e;font-size:.85em}' +
+    '.pmb__row em.pmb__dg{font-family:DSEG7,Orbitron,ui-monospace,monospace;font-weight:700;letter-spacing:.5px;color:#f5d76e;font-size:1em}' +
+    '.pmb__int{font-size:1.3em;font-weight:900;text-shadow:0 0 .6px currentColor}.pmb__dec{font-size:.8em;opacity:.9}' +
+    '.pmb__nm{font-size:1.15em;font-weight:600;color:#eef0f3}' +
     '.pmb{position:absolute;display:flex;flex-direction:column;gap:1px;pointer-events:none;z-index:3;font-variant-numeric:tabular-nums}' +
     '.pmb__row{flex:0 0 var(--rh,20px);height:var(--rh,20px);font-size:var(--fs,10px)!important;display:flex;align-items:center;gap:3px;padding:0 4px;border-radius:4px;background:rgba(255,255,255,.05);color:#cfd3d8;font-size:10px;line-height:1;overflow:hidden}' +
     '.pmb__row b{flex:0 0 13px;text-align:center;font-weight:700;color:#8a9099}' +
@@ -112,6 +114,10 @@
     }).catch(function (e) { dbg.err = String(e && e.message || e); }).then(function () { waitFetching = false; });
   }
 
+  function scoreHtml(v) {
+    var t = (Number(v) || 0).toFixed(1).split('.');
+    return '<span class="pmb__int">' + t[0] + '</span><span class="pmb__dec">.' + t[1] + '</span>';
+  }
   function rowHtml(r, rank, me, waiting, excluded) {
     var nm = String(r.n || '?');
     // 아바타 자리 = 현재 세그먼트 달성도 원: 목표 충족 녹색 깜빡임 · 미달 주황 깜빡임 · 대기/휴식 하늘색
@@ -119,7 +125,7 @@
     var kind = waiting || excluded || !(l >= 0) ? 'wait' : l >= 98.5 ? 'ok' : 'low';
     var tip = kind === 'wait' ? '대기' : '구간 달성도 ' + Math.round(l) + '%';
     return '<div class="pmb__row' + (me ? ' pmb__me' : '') + (rank <= 3 ? ' pmb__t' + rank : '') + '"><b>' + rank + '</b><span class="pmb__dot pmb__dot--' + kind + '" title="' + tip + '"></span>' +
-      '<span class="pmb__nm">' + esc(nm) + '</span>' + (waiting ? '<em class="pmb__wait">대기</em>' : '<em class="pmb__dg">' + (Number(r.s) || 0).toFixed(1) + '</em>') + '</div>';
+      '<span class="pmb__nm">' + esc(nm) + '</span>' + (waiting ? '<em class="pmb__wait">대기</em>' : '<em class="pmb__dg">' + scoreHtml(r.s) + '</em>') + '</div>';
   }
   function boards(box) {
     var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r');
@@ -182,16 +188,16 @@
     if (!pr || !pr.width || !br.width) return;
     var bs = boards(box);
     // 속도계와 겹치지 않게: 좌우 가장자리·아래쪽(현재 파워 숫자 아래선)에 붙이고 폭은 최소화
-    var rh = 20;
+    var rh = 23;
     var h = rh * 4 + 3;
     var bottom = pr.bottom - br.top;
     var top = bottom - h;
-    var wBoard = Math.min(Math.round(br.width * 0.27), Math.max(60, pr.left - br.left - 6), Math.max(60, br.right - pr.right - 6));
+    var wBoard = Math.min(Math.round(br.width * 0.36), Math.max(60, pr.left - br.left - 6), Math.max(60, br.right - pr.right - 6));
     var sig = JSON.stringify([waiting, excl, left, right, uid, Math.round(wBoard), Math.round(top), Math.round(h)]);
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
-    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', Math.max(8, Math.min(11, rh * 0.42)) + 'px'); }
+    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', Math.max(9, Math.min(12, rh * 0.5)) + 'px'); }
     place(bs[0], 2, wBoard);
     place(bs[1], br.width - wBoard - 2, wBoard);
     bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting, excl); }).join('');
