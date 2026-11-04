@@ -1573,6 +1573,10 @@
     if (fromLive) { keepListScroll(el, function () { renderSubwayLinePopupInner(el, true); }); return; }
     renderSubwayLinePopupInner(el, false);
   }
+  /* 급행 정차역(공식 안내 기준, 2026-11) — 급행이 운행되는 호선만. 역 이름은 괄호·'역' 제거한 형태 */
+  var SUB_EXPRESS_STOPS = {
+    '9호선': ['김포공항', '마곡나루', '가양', '염창', '당산', '여의도', '노량진', '동작', '고속터미널', '신논현', '선정릉', '봉은사', '종합운동장', '석촌', '올림픽공원', '중앙보훈병원']
+  };
   function subLiveName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/(역|종착)$/, '').replace(/\s+/g, ''); }
   /* 실시간 열차 위치 — 3포인트 단계 이동(2026-11-04 3차 개정, 발열 개선):
    * 연속 보간·1초 갱신·매초 DOM 재작성을 없애고, 역과 역 사이에 3개 고정 포인트만 둔다.
@@ -1861,7 +1865,9 @@
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
           var tr = trains.some(function (t) { return t.k === k2 && t.s === '1'; });
-          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
+          var xs = SUB_EXPRESS_STOPS[ln.n];
+          var isX = xs && xs.indexOf(subLiveName(s2.n)) >= 0;
+          return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + (isX ? ' is-xs' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
         }).join('') + '<li class="outd-subtr" aria-hidden="true"></li></ol>';
       card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list is-rail">');
