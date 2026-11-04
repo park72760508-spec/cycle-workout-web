@@ -36745,4 +36745,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__list.is-rail .outd-busrt__veh.is-stale { opacity: 0.5; }
 
 /* 2026-11-05 급행: 🚇 아이콘 자체를 빨강 톤으로(배경·테두리는 일반 열차와 동일) */
-#outdoorRideScreen .outd-exic { display: inline-block; font-style: normal; filter: grayscale(1) sepia(1) hue-rotate(-42deg) saturate(7) brightness(1.05); }
+#outdoorRideScreen .outd-exic { display: inline; font-style: normal; margin: 0; padding: 0; filter: grayscale(1) sepia(1) hue-rotate(-42deg) saturate(7) brightness(1.05); }
