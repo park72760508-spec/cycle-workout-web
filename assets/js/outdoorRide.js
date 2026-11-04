@@ -2474,8 +2474,12 @@
     liveStop(el);
     el.__liveKey = key;
     if (!el.__live || el.__live.key !== key) el.__live = { key: key, data: null };
+    // 2026-11-04 절전: 팝업을 열어 둔 채 LIVE_IDLE_MS 동안 조작이 없으면 조회를 멈추고, 다시 터치하면 바로 조회(키 사용량 보호)
+    el.__lastAct = Date.now();
+    liveBindActivity(el);
     var tick = function () {
       if (el.style.display === 'none' || el.__liveKey !== key) { if (el.__liveKey === key) liveStop(el); return; }
+      if (Date.now() - (el.__lastAct || 0) > LIVE_IDLE_MS) { liveSleep(el, params, render); return; }
       if (document.hidden) return; // 화면이 가려진 동안은 요청·그리기 생략(발열·데이터 절약)
       fetch(LIVE_URL + '?' + new URLSearchParams(params).toString(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
         if (el.__liveKey !== key || el.style.display === 'none') return;
@@ -2503,7 +2507,30 @@
     tick();
     el.__liveTimer = setInterval(tick, params && params.type === 'subway' ? 10000 : 20000); // 지하철 10초: 서버는 20초 캐시라 제공 기관 호출은 그대로, 새 기록이 오면 최대 10초 안에 반영
   }
+  var LIVE_IDLE_MS = 120000; // 2분 무조작 → 실시간 조회 절전
+  function liveBindActivity(el) {
+    if (el.__actBound) return;
+    el.__actBound = true;
+    var act = function () {
+      el.__lastAct = Date.now();
+      var sl = el.__liveSleep;
+      if (sl) { // 절전 중 터치 → 즉시 다시 조회
+        el.__liveSleep = null;
+        liveEnsure(el, sl.params, sl.render);
+      }
+    };
+    ['pointerdown', 'touchstart', 'wheel', 'keydown'].forEach(function (ev) { el.addEventListener(ev, act, { passive: true, capture: true }); });
+    el.addEventListener('scroll', function () { el.__lastAct = Date.now(); }, { passive: true, capture: true });
+  }
+  function liveSleep(el, params, render) {
+    liveStop(el);
+    if (el.__trTimer) { clearInterval(el.__trTimer); el.__trTimer = null; }
+    el.__liveSleep = { params: params, render: render };
+    var lb = el.querySelector('.outd-busrt__live');
+    if (lb) { lb.className = 'outd-busrt__live is-off'; lb.textContent = '💤 절전 모드 — 화면을 터치하면 실시간 위치를 다시 조회합니다'; }
+  }
   function liveStop(el) {
+    el.__liveSleep = null;
     if (el.__liveTimer) clearInterval(el.__liveTimer);
     el.__liveTimer = null;
     el.__liveKey = null;
