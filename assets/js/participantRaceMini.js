@@ -24,7 +24,7 @@
     '.pmb__dot--ok{background:#22c55e;box-shadow:0 0 5px rgba(34,197,94,.7);animation:pmbBlink 1.4s ease-in-out infinite}' +
     '.pmb__dot--low{background:#f97316;box-shadow:0 0 5px rgba(249,115,22,.7);animation:pmbBlink 1.4s ease-in-out infinite}' +
     '.pmb__dot--wait{background:#7dd3fc;box-shadow:0 0 4px rgba(125,211,252,.5)}' +
-    '.pmb__row em.pmb__dg{font-family:DSEG7,Orbitron,ui-monospace,monospace;font-weight:700;letter-spacing:1px;color:#f5d76e;font-size:.95em}' +
+    '.pmb__row em.pmb__dg{font-family:DSEG7,Orbitron,ui-monospace,monospace;font-weight:700;letter-spacing:.5px;color:#f5d76e;font-size:.85em}' +
     '.pmb{position:absolute;display:flex;flex-direction:column;gap:1px;pointer-events:none;z-index:3;font-variant-numeric:tabular-nums}' +
     '.pmb__row{flex:0 0 var(--rh,20px);height:var(--rh,20px);font-size:var(--fs,10px)!important;display:flex;align-items:center;gap:3px;padding:0 4px;border-radius:4px;background:rgba(255,255,255,.05);color:#cfd3d8;font-size:10px;line-height:1;overflow:hidden}' +
     '.pmb__row b{flex:0 0 13px;text-align:center;font-weight:700;color:#8a9099}' +
@@ -119,7 +119,7 @@
     var kind = waiting || excluded || !(l >= 0) ? 'wait' : l >= 98.5 ? 'ok' : 'low';
     var tip = kind === 'wait' ? '대기' : '구간 달성도 ' + Math.round(l) + '%';
     return '<div class="pmb__row' + (me ? ' pmb__me' : '') + (rank <= 3 ? ' pmb__t' + rank : '') + '"><b>' + rank + '</b><span class="pmb__dot pmb__dot--' + kind + '" title="' + tip + '"></span>' +
-      '<span class="pmb__nm">' + esc(nm) + '</span>' + (waiting ? '<em class="pmb__wait">대기</em>' : '<em class="pmb__dg">' + Math.round(Number(r.s) || 0) + '</em>') + '</div>';
+      '<span class="pmb__nm">' + esc(nm) + '</span>' + (waiting ? '<em class="pmb__wait">대기</em>' : '<em class="pmb__dg">' + (Number(r.s) || 0).toFixed(1) + '</em>') + '</div>';
   }
   function boards(box) {
     var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r');
