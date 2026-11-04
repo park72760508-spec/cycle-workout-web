@@ -531,12 +531,12 @@
       if (!sid) return;
       var now = Date.now();
       var rows = v.rows.slice(0, 40).map(function (r) {
-        return { u: r.uid, n: r.name, s: Math.round(r.total * 10) / 10, a: avatarCache[r.uid] || '' };
+        return { u: r.uid, n: r.name, s: Math.round(r.total * 10) / 10, a: avatarCache[r.uid] || '', l: r.liveAch == null ? -1 : Math.round(r.liveAch * 100) };
       });
       var sig = JSON.stringify(rows);
       if (sig === pubSig ? now - pubAt < 10000 : now - pubAt < 2000) return;
       pubSig = sig; pubAt = now;
-      window.bluetoothCoachRtdbSet('sessions/' + sid + '/race', { t: now, state: v.state || '', rows: rows }).catch(function (e) { if (window.console) console.warn('[coachRace] 순위 게시 실패', e && e.message); });
+      window.bluetoothCoachRtdbSet('sessions/' + sid + '/race', { t: now, state: v.state || '', x: v.curExcluded ? 1 : 0, rows: rows }).catch(function (e) { if (window.console) console.warn('[coachRace] 순위 게시 실패', e && e.message); });
     } catch (e) {}
   }
   function tick() {
