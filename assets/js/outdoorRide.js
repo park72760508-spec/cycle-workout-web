@@ -2456,7 +2456,7 @@
     var tick = function () {
       if (el.style.display === 'none' || el.__liveKey !== key) { if (el.__liveKey === key) liveStop(el); return; }
       if (document.hidden) return; // 화면이 가려진 동안은 요청·그리기 생략(발열·데이터 절약)
-      fetch(LIVE_URL + '?' + new URLSearchParams(params).toString()).then(function (r) { return r.json(); }).then(function (j) {
+      fetch(LIVE_URL + '?' + new URLSearchParams(params).toString(), { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
         if (el.__liveKey !== key || el.style.display === 'none') return;
         // 열차·차량 목록이 지난번과 같으면 목록을 다시 그리지 않고 기준 시각 글자만 갱신(전체 다시 그리기가 발열 요인)
         var sig = j && j.ok ? JSON.stringify(j.items) : null;
@@ -2480,7 +2480,7 @@
       });
     };
     tick();
-    el.__liveTimer = setInterval(tick, params && params.type === 'subway' ? 30000 : 20000); // 지하철은 제공 기관 갱신이 30초~1분 단위
+    el.__liveTimer = setInterval(tick, params && params.type === 'subway' ? 10000 : 20000); // 지하철 10초: 서버는 20초 캐시라 제공 기관 호출은 그대로, 새 기록이 오면 최대 10초 안에 반영
   }
   function liveStop(el) {
     if (el.__liveTimer) clearInterval(el.__liveTimer);
