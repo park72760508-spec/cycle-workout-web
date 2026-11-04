@@ -1774,7 +1774,7 @@
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var html = (up.length ? '<s class="up">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
-      var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
+      var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.ts.some(function (t) { return t.ex; }) ? ' is-ex' : '') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
       if (node) {
         delete have[ek];

@@ -36743,3 +36743,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-04 기록이 오래 갱신되지 않은 열차(기록 지연): 흐리게 */
 #outdoorRideScreen .outd-busrt__list.is-rail .outd-busrt__veh.is-stale { opacity: 0.5; }
+
+/* 2026-11-05 급행 열차 아이콘은 빨강으로 구분 */
+#outdoorRideScreen .outd-busrt__list .outd-busrt__veh.is-sub.is-ex { background: #fef2f2; border-color: #dc2626; color: #991b1b; box-shadow: 0 0 0 1px rgba(220,38,38,.25); }
