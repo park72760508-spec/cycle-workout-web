@@ -26,6 +26,46 @@
 
   var SCREEN_ID = 'bluetoothTrainingCoachScreen';
   var ROW_H = 78; // 2026-11-03 멀리서도 보이게 확대(전 순위 같은 높이·글자 크기)
+  var CYCLE_MS = 2500;   // 2026-11-05 4위 이하 자동 순환: 이 간격으로 한 칸씩 위로
+  var cycleK = 0;        // 순환 오프셋(맨 위에서 밀려난 칸 수)
+  var restEls = [];      // 4위부터의 행 요소(순위 순서)
+  var cycling = false;
+  /** 점수 → 정수(크고 굵은 디지털) + 소수(작고 가는 디지털) */
+  function scoreHtml(t) {
+    var parts = Number(t || 0).toFixed(1).split('.');
+    return '<span class="crb-sc__int">' + parts[0] + '</span><span class="crb-sc__dec">.' + parts[1] + '</span>';
+  }
+  function restPos(i, n) {
+    if (!cycling || n <= 0) return i;
+    return (((i - cycleK + 1) % n) + n) % n - 1; // -1(위로 밀려난 칸) ~ n-2
+  }
+  function applyRestPositions() {
+    var n = restEls.length;
+    restEls.forEach(function (row, i) {
+      if (!row) return;
+      var pos = restPos(i, n);
+      var prev = row.__pos;
+      if (prev !== undefined && Math.abs(pos - prev) > 1) {
+        // 위에서 아래(맨 끝)로 돌아가는 행은 애니메이션 없이 즉시 이동
+        row.style.transition = 'none';
+        row.style.transform = 'translateY(' + (pos * ROW_H) + 'px)';
+        void row.offsetHeight;
+        row.style.transition = '';
+      } else {
+        row.style.transform = 'translateY(' + (pos * ROW_H) + 'px)';
+      }
+      row.__pos = pos;
+    });
+  }
+  setInterval(function () {
+    try {
+      var list = document.getElementById('coachRaceBoardList');
+      if (!cycling || !restEls.length || document.hidden) return;
+      if (list && list.matches && list.matches(':hover')) return; // 마우스를 올리면 잠시 멈춤
+      cycleK = (cycleK + 1) % restEls.length;
+      applyRestPositions();
+    } catch (e) {}
+  }, CYCLE_MS);
   var PROX_CAP = 1.15;   // 목표 근접도: 초과 달성 인정 상한
   var PROX_FLOOR = 0.5;  // 이 이하 달성은 0
   var ZONE_FULL = 0.05;  // 목표 ±5%: 유지 1초 인정
@@ -369,7 +409,10 @@
       if (row.parentNode !== box) box.appendChild(row);
       var cls = 'crb-row' + (r.rank <= 3 ? ' crb-row--top' + r.rank : '') + (r.move > 0 ? ' crb-row--up' : r.move < 0 ? ' crb-row--down' : '');
       if (row.className !== cls) row.className = cls;
-      row.style.transform = 'translateY(' + ((r.rank <= 3 ? r.rank - 1 : r.rank - 4) * ROW_H) + 'px)';
+      if (r.rank <= 3) {
+        row.style.transform = 'translateY(' + ((r.rank - 1) * ROW_H) + 'px)';
+        row.__pos = r.rank - 1;
+      }
       row.querySelector('.crb-row__rank b').textContent = String(r.rank);
       var mv = row.querySelector('.crb-row__move');
       var mvText = r.move > 0 ? '▲' + r.move : r.move < 0 ? '▼' + (-r.move) : '';
@@ -388,12 +431,24 @@
       if (em.textContent !== at) em.textContent = at;
       var sc = row.querySelector('.crb-row__score');
       var st = r.total.toFixed(1);
-      if (sc.textContent !== st) sc.textContent = st;
+      if (sc.getAttribute('data-sc') !== st) { sc.setAttribute('data-sc', st); sc.innerHTML = scoreHtml(r.total); }
     });
     Object.keys(rowEls).forEach(function (uid) {
       if (!seen[uid]) { rowEls[uid].remove(); delete rowEls[uid]; }
     });
     top.style.height = Math.max(1, Math.min(3, v.rows.length)) * ROW_H + 'px';
+    // 4위부터: 보이는 칸을 넘으면 위쪽 순위부터 차례로 위로 넘어가며 계속 순환(1~3위 고정)
+    var restRows = v.rows.filter(function (r) { return r.rank > 3; });
+    var n = restRows.length;
+    var wasCycling = cycling;
+    var capRows = Math.ceil((list.clientHeight || 0) / ROW_H);
+    cycling = list.clientHeight > 0 && n >= capRows + 2 && n * ROW_H > list.clientHeight;
+    if (!cycling) cycleK = 0;
+    else if (cycleK >= n) cycleK = 0;
+    restEls = restRows.map(function (r) { return rowEls[r.uid]; });
+    list.classList.toggle('crb__list--cycle', cycling);
+    if (!cycling && wasCycling) list.scrollTop = 0;
+    applyRestPositions();
     var inner = list.querySelector('.crb__list-in');
     if (!inner) { inner = document.createElement('div'); inner.className = 'crb__list-in'; list.appendChild(inner); }
     inner.style.height = Math.max(0, v.rows.length - 3) * ROW_H + 'px';
@@ -422,7 +477,7 @@
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-label', '1등 축하');
     var pod = rows.slice(1, 3).map(function (r) {
-      return '<span class="crc__pod crc__pod--' + r.rank + '"><b>' + r.rank + '위</b>' + esc(r.name) + ' <em>' + r.total.toFixed(1) + '</em></span>';
+      return '<span class="crc__pod crc__pod--' + r.rank + '"><b>' + r.rank + '위</b>' + esc(r.name) + ' <em>' + scoreHtml(r.total) + '</em></span>';
     }).join('');
     var av = avatarCache[w1.uid];
     el.innerHTML =
@@ -432,7 +487,7 @@
         '<div class="crc__trophy" aria-hidden="true">🏆</div>' +
         '<div class="crc__label">WINNER</div>' +
         '<div class="crc__name">' + (av ? '<img class="crc__avatar" src="' + esc(av) + '" alt="" onerror="this.remove()">' : '') + '<span>' + esc(w1.name) + '</span></div>' +
-        '<div class="crc__score"><b>' + w1.total.toFixed(1) + '</b> 점</div>' +
+        '<div class="crc__score"><b>' + scoreHtml(w1.total) + '</b> 점</div>' +
         (pod ? '<div class="crc__pods">' + pod + '</div>' : '') +
         '<div class="crc__hint">화면을 클릭하면 닫힙니다</div>' +
       '</div>';

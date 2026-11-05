@@ -36023,7 +36023,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb__cols,
 #coachRaceBoard .crb-row {
   display: grid;
-  grid-template-columns: 70px minmax(176px, 1fr) minmax(88px, 130px) 112px;
+  grid-template-columns: 70px minmax(176px, 1fr) minmax(88px, 130px) 168px;
   align-items: center;
   column-gap: 10px;
 }
@@ -36098,9 +36098,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-ach--none em { color: #64748b; }
 #coachRaceBoard .crb-row__score {
   text-align: right;
-  font-family: 'Orbitron', 'DS-Digital', ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 36px; font-weight: 800; font-variant-numeric: tabular-nums;
-  color: #fbbf24; text-shadow: 0 0 8px rgba(251, 191, 36, 0.55);
+  white-space: nowrap;
+  color: #fbbf24;
 }
 #coachRaceBoard .crb__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #64748b; }
 #coachRaceBoard .crb__foot { flex: 0 0 auto; padding: 8px 16px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #64748b; border-top: 1px solid rgba(148, 163, 184, 0.15); }
@@ -36115,13 +36114,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachPowerMeterGrid .coach-grid-logo-cell { display: none !important; }
 /* 좁은 PC 화면 */
 @media (max-width: 1500px) {
-  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(132px, 1fr) minmax(64px, 84px) 92px; column-gap: 8px; }
+  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(132px, 1fr) minmax(64px, 84px) 128px; column-gap: 8px; }
   #coachRaceBoard .crb-row { padding: 0 12px; }
   #coachRaceBoard .crb-row__rank b { min-width: 40px; height: 40px; font-size: 22px; }
   #coachRaceBoard .crb-row__avatar { flex-basis: 42px; width: 42px; height: 42px; font-size: 17px; }
   #coachRaceBoard .crb-row__name { font-size: 26px; }
   #coachRaceBoard .crb-row__ach em { font-size: 16px; }
-  #coachRaceBoard .crb-row__score { font-size: 28px; }
+  #coachRaceBoard .crb-sc__int { font-size: 32px; }
+  #coachRaceBoard .crb-sc__dec { font-size: 18px; }
   #coachRaceBoard .crb__title { font-size: 20px; }
   #coachRaceBoard .crb__sub { font-size: 14px; }
 }
@@ -36814,3 +36814,26 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 2026-11-05 LIVE RACE 점수: 7세그먼트 디지털 숫자 — 정수는 크고 굵게, 소수점 이하는 작고 가늘게 */
+@font-face { font-family: 'DSEG7'; font-weight: 700; font-display: swap; src: url('../fonts/DSEG7Classic-Bold.woff2') format('woff2'); }
+@font-face { font-family: 'DSEG7'; font-weight: 400; font-display: swap; src: url('../fonts/DSEG7Classic-Regular.woff2') format('woff2'); }
+#coachRaceBoard .crb-sc__int,
+#coachRaceCeremony .crb-sc__int {
+  font-family: 'DSEG7', ui-monospace, Menlo, monospace; font-weight: 700; font-size: 44px; letter-spacing: 0.02em;
+  text-shadow: 0 0 10px rgba(251, 191, 36, 0.6);
+}
+#coachRaceBoard .crb-sc__dec,
+#coachRaceCeremony .crb-sc__dec {
+  font-family: 'DSEG7', ui-monospace, Menlo, monospace; font-weight: 400; font-size: 0.5em; opacity: 0.85;
+  text-shadow: none; margin-left: 2px;
+}
+#coachRaceBoard .crb-sc__dec { font-size: 24px; }
+#coachRaceCeremony .crc__score b { font-family: inherit; font-size: 1em; }
+#coachRaceCeremony .crc__score .crb-sc__int { font-size: 1.9em; }
+#coachRaceCeremony .crc__score .crb-sc__dec { font-size: 1em; }
+#coachRaceCeremony .crc__pod em { font-style: normal; }
+#coachRaceCeremony .crc__pod .crb-sc__int { font-size: 1.3em; }
+#coachRaceCeremony .crc__pod .crb-sc__dec { font-size: 0.8em; }
+/* 4위 이하 자동 순환 시: 스크롤바 숨기고 한 칸씩 위로 넘어감 */
+#coachRaceBoard .crb__list.crb__list--cycle { overflow: hidden; }
