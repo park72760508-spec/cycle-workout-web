@@ -1891,7 +1891,7 @@
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       var dirf2 = el.__dirf || 0;
       var nm0 = st[seq[0]] ? st[seq[0]].n : '', nm1 = st[seq[seq.length - 1]] ? st[seq[seq.length - 1]].n : '';
-      var badgeBtn = '<button type="button" class="outd-busrt__no outd-dirf__ln' + (dirf2 === 0 ? ' is-on' : '') + '" data-rt-dirf="0" style="background:' + escHtml(ln.c) + '" title="양방향 열차 모두 보기">' + escHtml(ln.n) + '</button>';
+      var badgeBtn = '<button type="button" class="outd-busrt__no outd-dirf__ln' + (dirf2 === 0 ? ' is-on' : '') + '" data-rt-dirf="0" style="' + lineBadgeStyle(ln.c) + '" title="양방향 열차 모두 보기">' + escHtml(ln.n) + '</button>';
       card = '<div class="outd-busrt__head">' + badgeBtn +
         '<div class="outd-busrt__ttl"><b class="outd-dirf"><button type="button" class="outd-dirf__b' + (dirf2 === -1 ? ' is-on' : '') + '" data-rt-dirf="-1" title="' + escHtml(nm0) + ' 방면 열차만">' + escHtml(nm0) + '</button><i>↔</i><button type="button" class="outd-dirf__b' + (dirf2 === 1 ? ' is-on' : '') + '" data-rt-dirf="1" title="' + escHtml(nm1) + ' 방면 열차만">' + escHtml(nm1) + '</button></b><span>역 ' + seq.length + '개</span></div>' +
         '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>' +
@@ -2393,6 +2393,17 @@
       btn.setAttribute('aria-pressed', sub.on ? 'true' : 'false');
     }
   }
+  /** 호선 색이 밝으면(노랑 등) 흰 글씨가 안 보이므로 회색 글씨로 */
+  function lineBadgeStyle(c) {
+    var NAMED = { yellow: '#ffff00', white: '#ffffff', gold: '#ffd700', lime: '#00ff00', cyan: '#00ffff', pink: '#ffc0cb', silver: '#c0c0c0' };
+    var cc = NAMED[String(c || '').trim().toLowerCase()] || c;
+    var m = /^#?([0-9a-f]{6})$/i.exec(String(cc || '').trim());
+    var bg = 'background:' + escHtml(c);
+    if (!m) return bg;
+    var n = parseInt(m[1], 16), r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+    var lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.8 ? bg + ';color:#4b5563' : bg;
+  }
   /* 2026-11-05 지하철 버튼 = 노선 목록 화면(호선 선택 → 노선도). 지도의 역 표시는 항상 켜 둠 */
   window.toggleOutdoorSubway = function (e) {
     if (e) { e.stopPropagation(); e.preventDefault(); }
@@ -2532,7 +2543,7 @@
           '<div class="outd-busrt__head"><div class="outd-busrt__ttl"><b>지하철 노선</b><span>호선을 고르면 노선도·실시간 열차가 보입니다</span></div>' +
           '<button type="button" class="coachm-picker__close" data-ll-close aria-label="닫기">✕</button></div>' +
           '<div class="outd-lnls__list">' + (rows.length ? rows.map(function (r) {
-            return '<button type="button" class="outd-lnls__row" data-ll-sub="' + r.li + '"><span class="outd-busrt__no" style="background:' + escHtml(r.c) + '">' + escHtml(r.n) + '</span>' +
+            return '<button type="button" class="outd-lnls__row" data-ll-sub="' + r.li + '"><span class="outd-busrt__no" style="' + lineBadgeStyle(r.c) + '">' + escHtml(r.n) + '</span>' +
               '<span class="outd-lnls__ends"><b>' + escHtml(r.ends) + '</b><small>역 ' + r.cnt + '개</small></span><em>›</em></button>';
           }).join('') : '<p class="outd-busrt__loading">노선 정보를 불러오지 못했습니다.</p>') + '</div></div>';
       });
