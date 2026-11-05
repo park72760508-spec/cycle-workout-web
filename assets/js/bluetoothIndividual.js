@@ -1383,13 +1383,65 @@ function __indivWatch(path, handler) {
     }, 5000);
     window.__btIndivFirebaseRefs.push({ off: function () { clearTimeout(fallbackTimer); } });
 }
-/** update() 대체 — SDK 연결 상태면 SDK, 아니면 REST PATCH(동시 요청 1건 제한) */
+/** update() 대체 — SDK 연결 상태면 SDK, 아니면 REST PATCH(동시 요청 1건 제한)
+ * 2026-11-05: SDK 쓰기는 서버 응답이 6초 안에 없으면(반쯤 끊긴 소켓·WebView 멈춤) 실패로 보고 REST PATCH 로 즉시 재전송하고,
+ * 60초 동안은 SDK 를 건너뛰고 REST 로만 보낸다. (예전엔 .info/connected 가 true 인 채로 SDK 쓰기가 조용히 멈추면 Coach 에 0 으로 보였다)
+ */
 var __indivPatchInFlight = {};
-function __indivUpdate(path, data) {
-    if (__indivRtdbConnected) return db.ref(path).update(data);
+var __indivSdkBadUntil = 0;
+function __indivRestPatchGuarded(path, data) {
     if (__indivPatchInFlight[path]) return Promise.resolve();
     __indivPatchInFlight[path] = true;
     return __indivRest('PATCH', path, data, 8000).finally(function () { __indivPatchInFlight[path] = false; });
+}
+function __indivUpdate(path, data) {
+    if (__indivRtdbConnected && Date.now() > __indivSdkBadUntil) {
+        var timedOut = false;
+        var sdkP = db.ref(path).update(data);
+        var guard = new Promise(function (_, rej) { setTimeout(function () { timedOut = true; rej(new Error('SDK_WRITE_TIMEOUT')); }, 6000); });
+        return Promise.race([sdkP, guard]).then(function (v) { window.__indivLastWriteOkAt = Date.now(); return v; }).catch(function (err) {
+            if (timedOut) {
+                __indivSdkBadUntil = Date.now() + 60000;
+                console.warn('[BluetoothIndividual] SDK 쓰기 무응답 → 60초간 REST 전송으로 전환:', path);
+            }
+            return __indivRestPatchGuarded(path, data).then(function (v) { window.__indivLastWriteOkAt = Date.now(); return v; });
+        });
+    }
+    return __indivRestPatchGuarded(path, data).then(function (v) { window.__indivLastWriteOkAt = Date.now(); return v; });
+}
+
+/**
+ * 2026-11-05: Coach 로 보내는 전송 타이머(TrainingTimer rAF)가 죽어 있으면 되살린다.
+ * 원인: 통합 화면 재입장 시 initializeBluetoothDashboard()(= startFirebaseDataTransmission)를 다시 부르지 않았고,
+ *      TrainingTimer 는 화면이 숨겨지면 스스로 영구 정지하므로 참가자 화면엔 센서값이 보여도 Coach 로는 아무것도 전송되지 않았다.
+ */
+function __indivEnsureSender(reason) {
+    try {
+        if (!window.SESSION_ID && !(typeof SESSION_ID !== 'undefined' && SESSION_ID)) return;
+        if (!myTrackId) return;
+        if (__indivIdPrefix) {
+            var scr = document.getElementById('bluetoothIndividualScreen');
+            var vis = scr && (scr.classList.contains('active') || window.getComputedStyle(scr).display !== 'none');
+            if (!vis) return;
+        }
+        var running = (typeof TrainingTimer !== 'undefined' && TrainingTimer.isRunning)
+            ? !!TrainingTimer.isRunning('bluetoothIndividual') : !!firebaseDataUpdateInterval;
+        if (!running) {
+            console.warn('[BluetoothIndividual] 전송 타이머 정지 감지 → 재시작 (' + (reason || '') + ')');
+            fbLastSentAt = 0; // 즉시 1회 전송
+            startFirebaseDataTransmission();
+            if (typeof updateFirebaseDevices === 'function') updateFirebaseDevices();
+        } else if (reason === 'resume') {
+            fbLastSentAt = 0; // 복귀 직후 즉시 한 번 보내 Coach 화면 갱신
+        }
+    } catch (e) { console.warn('[BluetoothIndividual] __indivEnsureSender 오류:', e); }
+}
+if (!window.__indivSenderWatchdogInstalled) {
+    window.__indivSenderWatchdogInstalled = true;
+    setInterval(function () { if (!document.hidden) __indivEnsureSender('watchdog'); }, 3000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) __indivEnsureSender('resume'); });
+    window.addEventListener('pageshow', function () { __indivEnsureSender('resume'); });
+    window.addEventListener('online', function () { __indivSdkBadUntil = 0; __indivEnsureSender('resume'); });
 }
 
 /**
@@ -5809,6 +5861,7 @@ if (__indivIdPrefix) {
                 detachBluetoothIndividualFirebaseListeners();
             }
             userDataLoaded = false;
+            __indivEnsureSender('reenter'); // 2026-11-05: 재입장 시 Coach 전송 타이머 재시작(앱 재실행 전까지 0 으로 보이던 간헐 오류)
             if (window.__bluetoothIndividualFirebaseListenersAttached) {
                 (window.__btIndivWatchers || []).forEach(function (w) { try { w.replay(); } catch (e) {} });
             } else {

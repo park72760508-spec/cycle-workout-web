@@ -1053,7 +1053,7 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   if (!powerMeter) return;
   
   const now = Date.now();
-  const NETWORK_TIMEOUT_MS = 3000; // 3초 동안 같은 값이면 네트워크 단절로 판단
+  const NETWORK_TIMEOUT_MS = 15000; // 같은 값이 15초 이상 유지되면 단절로 판단 (참가자 앱은 값이 같아도 5초마다 하트비트 전송 — 예전 3초 기준은 일정 파워 유지 시 0 으로 오표시)
   
   // 네트워크 단절 감지 로직
   let currentPowerValue = Math.max(0, Number(power) || 0);
@@ -1367,6 +1367,30 @@ async function setupFirebaseSubscriptions() {
       clearTimeout(usersFallbackTimer);
       if (offUsersStream) offUsersStream();
     };
+    /*
+     * 2026-11-05: 참가자 데이터 재동기화 안전망 — 이름은 보이는데(접속자) 12초 넘게 값이 안 들어오는 트랙만
+     * 10초마다 REST 로 그 트랙 1건을 직접 읽어 최신(lastUpdate 가 더 새로운)이면 적용한다.
+     * (SDK 구독이 조용히 멈춘 경우 복구. 참가자 쪽이 실제로 안 보내는 경우엔 서버 값도 오래된 그대로라 적용되지 않는다)
+     */
+    const resyncBusy = {};
+    const resyncTimer = setInterval(function () {
+      try {
+        if (document.hidden) return;
+        const now = Date.now();
+        (window.bluetoothCoachState.powerMeters || []).forEach(function (pm) {
+          if (!pm || pm.id == null || !pm.userName || resyncBusy[pm.id]) return;
+          if (pm.lastUpdateTime && now - Number(pm.lastUpdateTime) <= 12000) return;
+          resyncBusy[pm.id] = true;
+          bluetoothCoachRest('GET', `sessions/${sessionId}/users/${pm.id}`, undefined, 6000).then(function (v) {
+            if (v && typeof v === 'object' && Number(v.lastUpdate) > Number(pm.lastUpdateTime || 0)) {
+              console.warn('[Bluetooth Coach] 트랙 ' + pm.id + ' 구독 누락 감지 → REST 재동기화 적용');
+              deliverUser(pm.id, v);
+            }
+          }).catch(function () {}).finally(function () { resyncBusy[pm.id] = false; });
+        });
+      } catch (e) {}
+    }, 10000);
+    window.bluetoothCoachState.firebaseSubscriptions['users_resync'] = function () { clearInterval(resyncTimer); };
   } else {
     console.warn('[Bluetooth Coach] powerMeters가 배열이 아닙니다.');
   }
