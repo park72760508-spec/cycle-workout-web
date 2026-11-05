@@ -36848,9 +36848,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothTrainingCoachScreen .scoreboard-value { font-size: clamp(34px, min(5.4vw, 10.5vh), 80px); }
 #bluetoothTrainingCoachScreen .scoreboard-label { font-size: clamp(11px, 1.05vw, 14px); margin-bottom: clamp(4px, 0.8vw, 11px); }
 #bluetoothTrainingCoachScreen .dashboard-header h1 .race-title-text { font-size: clamp(22px, 2.6vw, 40px); }
-/* 순위 보드가 열려 있으면 전광판(Total/Lap)을 보드 왼쪽 영역 안에서 배치 — Lap Time 이 보드에 가려지지 않게 */
-#bluetoothTrainingCoachScreen.crb-board-open .scoreboard-display { padding-right: calc(var(--crb-w, 0px) + 8px) !important; box-sizing: border-box; }
-#bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachLapCountdownItem { left: calc((100% - var(--crb-w, 0px)) / 2) !important; }
 @media (max-width: 1280px) {
   #coachRaceBoard .crb-row__name { font-size: 22px; }
   #coachRaceBoard .crb-sc__int { font-size: 26px; }
