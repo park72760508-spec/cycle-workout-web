@@ -36903,3 +36903,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row {
   grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1fr) minmax(0, 1.5fr) max-content !important;
 }
+
+/* 2026-11-06 현재 구간 칸 폭을 직전의 2/3로 축소(선수 : 현재 구간 = 1.5 : 1), 줄어든 폭은 선수 칸에 배정 */
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1.5fr) minmax(0, 1fr) max-content !important;
+}
