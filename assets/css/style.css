@@ -36956,3 +36956,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .enhanced-control-btn.split.active { border-color:#38bdf8; color:#38bdf8; }
 #rollerRaceDashboardScreen.rr-split #speedometerGrid > :nth-child(n+6),
 #rollerRaceDashboardScreen.rr-split #speedometerList > .speedometer-list-item:nth-child(n+6) { display:none !important; }
+
+/* Indoor Race: 속도계 목록 설정 메뉴를 트랙10 아래로 이동 */
+#rollerRaceDashboardScreen .speedometer-list-section { display:flex; flex-direction:column; }
+#rollerRaceDashboardScreen .speedometer-list-section > .speedometer-list { order:1; }
+#rollerRaceDashboardScreen .speedometer-list-section > .list-header { order:2; margin-top:20px; margin-bottom:0; }
+
+/* Indoor Race 타이틀: 흰색 + 헤더 라인 수평 중앙 */
+#rollerRaceDashboardScreen .dashboard-header { min-height:64px; }
+#rollerRaceDashboardScreen .dashboard-header h1.race-title-animated {
+  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+  flex:none !important; margin:0; justify-content:center; white-space:nowrap; pointer-events:none;
+}
+#rollerRaceDashboardScreen .race-title-text { color:#ffffff !important; }
