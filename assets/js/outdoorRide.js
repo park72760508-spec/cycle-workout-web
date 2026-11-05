@@ -1590,6 +1590,18 @@
    * 단계가 바뀔 때만 한 번 위치를 갱신(5초 주기로 비교만 — 바뀌지 않으면 DOM·레이아웃 접근 없음).
    * 움직임은 transform(합성 전용)으로 0.8초만 전환 → 레이아웃·페인트 비용 없음.
    * 위치 = 노선 목록의 역 순번(소수 = 역 사이). down = 목록 아래쪽으로 가는 열차. */
+  /* 구간별 실제 주행시간 학습(2026-11-05): 출발(또는 전역출발) 기록 시각 → 다음 역 도착 기록 시각의 차이를 지수이동평균으로 저장.
+   * 기기에 저장해 다음 접속에서도 사용(공개 API에는 구간 소요시간이 없어, 지나간 열차의 실제 기록으로 대신 구함). */
+  var SUB_LEARN = (function () { try { return JSON.parse(localStorage.getItem('stelvio_subseg_v1') || '{}') || {}; } catch (e) { return {}; } })();
+  var subLearnTimer = null;
+  function subSegKey(line, a, b) { return line + '|' + (a < b ? a + '>' + b : b + '>' + a); }
+  function subLearnPut(line, a, b, sec) {
+    if (!a || !b || !(sec > 25 && sec < 420)) return;
+    var k = subSegKey(line, a, b), v = SUB_LEARN[k];
+    if (v && sec > v[0] * 2.2) return; // 정차 지연·누락이 섞인 이상치는 무시
+    SUB_LEARN[k] = v ? [Math.round((v[0] * 0.7 + sec * 0.3) * 10) / 10, Math.min(99, v[1] + 1)] : [sec, 1];
+    if (!subLearnTimer) subLearnTimer = setTimeout(function () { subLearnTimer = null; try { localStorage.setItem('stelvio_subseg_v1', JSON.stringify(SUB_LEARN)); } catch (e) {} }, 5000);
+  }
   var SUB_PASS_HOLD_MS = 1300; // 역으로 이동(0.8초 전환) + 0.5초 정차
   var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 45;
   function subTrainGoals(el, n, now) {
@@ -1618,9 +1630,10 @@
       }
     });
     var stage = function (e, segI) {
-      var T = el.__segT && el.__segT[segI];
-      // 짧은 구간은 고정 1분·2분보다 일찍(구간 예상 소요의 1/3·2/3) — 한 구간 내내 P1에 머무는 것 방지
-      var t2 = T ? Math.min(SUB_T2, T * 0.33) : SUB_T2, t3 = T ? Math.min(SUB_T3, T * 0.66) : SUB_T3;
+      var T = el.__segT && el.__segT[segI], L = el.__segL && el.__segL[segI];
+      // 구간 소요(학습값이면 정확, 어림값이면 25% 여유)의 1/3·2/3 지점에 단계 이동, 소요시간이 지나면 도착한 것으로 보고 역에 표시
+      var t2 = T ? Math.min(SUB_T2 * (L ? 1.6 : 1), T * 0.33) : SUB_T2, t3 = T ? Math.min(SUB_T3 * (L ? 1.6 : 1), T * 0.66) : SUB_T3;
+      if (T && e >= T * (L ? 1.0 : 1.25)) return 1; // 도착 추정(실제 도착 기록이 오면 바로 확정)
       return e >= t3 ? SUB_P3 : e >= t2 ? SUB_P2 : SUB_P1;
     };
     list.forEach(function (g) {
@@ -1659,6 +1672,11 @@
       seen[key] = 1;
       var pv = T[key];
       var P = subProg(t);
+      if (pv && pv.down === t.down && t.at && pv.at && t.at > pv.at && t.s === '1' && el.__names) {
+        var dd = t.down ? 1 : -1, nmz = el.__names;
+        if (pv.s === '2' && t.k === pv.k + dd) subLearnPut(el.__lnName, nmz[pv.k], nmz[t.k], (t.at - pv.at) / 1000);
+        else if (pv.s === '3' && t.k === pv.k) subLearnPut(el.__lnName, nmz[pv.k - dd], nmz[t.k], (t.at - pv.at) / 1000);
+      }
       if (pv && pv.down === t.down) {
         var older = t.at && pv.at && t.at < pv.at; // 더 옛 기록(순서 뒤바뀜)
         var back = P < pv.P - 0.05 && P > pv.P - 3; // 같은 운행 안에서 뒤로 간 기록(3역 이상은 새 운행으로 봄)
@@ -1859,10 +1877,16 @@
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
         trainN++;
       });
+      el.__names = names; el.__lnName = ln.n;
       subReconcile(el, trains);
       var dirf = el.__dirf || 0;
       if (dirf) { trains = trains.filter(function (t) { return (t.down ? 1 : -1) === dirf; }); trainN = trains.length; }
-      el.__segT = seq.slice(1).map(function (si, i) { return 30 + subStDistKm(seq[i], si) * 90; }); // 구간 예상 소요(초)
+      el.__segL = [];
+      el.__segT = seq.slice(1).map(function (si, i) { // 구간 소요(초): 학습값 우선, 없으면 거리 어림
+        var lv = SUB_LEARN[subSegKey(ln.n, names[i], names[i + 1])];
+        el.__segL[i] = !!lv;
+        return lv ? lv[0] : 30 + subStDistKm(seq[i], si) * 90;
+      });
       el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       var dirf2 = el.__dirf || 0;
