@@ -36853,3 +36853,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #coachRaceBoard .crb-sc__int { font-size: 26px; }
   #coachRaceBoard .crb-sc__dec { font-size: 15px; }
 }
+
+/* 2026-11-06 순위 보드: 폭이 좁아져도 오른쪽 끝(점수 소수점 이하)이 잘리지 않게 — 선수 칸이 줄고, 점수 칸은 내용 폭만큼, 글자는 보드 폭에 비례 */
+#coachRaceBoard .crb__panel { container-type: inline-size; }
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1fr) clamp(52px, 14cqi, 110px) max-content !important;
+  column-gap: clamp(4px, 1.6cqi, 10px) !important;
+}
+#coachRaceBoard .crb-row__name { min-width: 0 !important; font-size: clamp(16px, 5.6cqi, 34px) !important; }
+#coachRaceBoard .crb-row__avatar { flex: 0 0 clamp(30px, 8cqi, 52px) !important; width: clamp(30px, 8cqi, 52px) !important; height: clamp(30px, 8cqi, 52px) !important; }
+#coachRaceBoard .crb-sc__int { font-size: clamp(22px, 7.4cqi, 44px) !important; }
+#coachRaceBoard .crb-sc__dec { font-size: clamp(13px, 4cqi, 24px) !important; }
+#coachRaceBoard .crb-row__score { padding-right: clamp(8px, 2.6cqi, 16px) !important; }
