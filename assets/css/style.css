@@ -36969,3 +36969,20 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   flex:none !important; margin:0; justify-content:center; white-space:nowrap; pointer-events:none;
 }
 #rollerRaceDashboardScreen .race-title-text { color:#ffffff !important; }
+
+/* STELVIO Race 로고: 네온 제거 + 좌→우 회전하며 흰색→빨강 */
+#rollerRaceDashboardScreen .race-logo-spin {
+  display:inline-block; height:calc(1.3 * 1em); aspect-ratio:1/1; flex:none;
+  background-color:#fff;
+  -webkit-mask: url("../img/stelvio_w.png") center/contain no-repeat;
+          mask: url("../img/stelvio_w.png") center/contain no-repeat;
+  filter:none !important;
+  animation: rrLogoSpin 4s ease-in-out infinite;
+}
+@keyframes rrLogoSpin {
+  0%   { transform: perspective(300px) rotateY(0deg);   background-color:#fff; }
+  40%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  75%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  100% { transform: perspective(300px) rotateY(360deg); background-color:#fff; }
+}
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .race-logo-spin { animation:none; } }
