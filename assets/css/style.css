@@ -36977,12 +36977,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   -webkit-mask: url("../img/stelvio_w.png") center/contain no-repeat;
           mask: url("../img/stelvio_w.png") center/contain no-repeat;
   filter:none !important;
-  animation: rrLogoSpin 4s ease-in-out infinite;
+  animation: rrLogoSpin 10s ease-in-out infinite;
 }
 @keyframes rrLogoSpin {
-  0%   { transform: perspective(300px) rotateY(0deg);   background-color:#fff; }
-  40%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
-  75%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  0%   { transform: perspective(300px) rotateY(0deg);   background-color:#fff; animation-timing-function:linear; }
+  60%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  85%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
   100% { transform: perspective(300px) rotateY(360deg); background-color:#fff; }
 }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .race-logo-spin { animation:none; } }
