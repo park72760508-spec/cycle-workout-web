@@ -36937,3 +36937,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row__who { overflow: hidden; }
 #coachRaceBoard .crb__cols span:nth-child(3) { text-align: right !important; }
 #coachRaceBoard .crb-row__ach { justify-self: end; width: 100%; }
+
+/* 2026-11-06 점수 칸 폭 1/4 축소(104~170px → 78~128px)·점수 글자 비례 축소, 줄어든 폭은 선수 이름 칸에 배정하고 이름 글자 확대 */
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns:
+    clamp(40px, 11cqi, 70px)
+    minmax(calc(clamp(30px, 8cqi, 52px) + 12px + 3.2 * clamp(16px, 6.4cqi, 38px)), 1.9fr)
+    minmax(0, 1fr)
+    clamp(78px, 22.5cqi, 128px) !important;
+}
+#coachRaceBoard .crb-row__name { font-size: clamp(16px, 6.4cqi, 38px) !important; }
+#coachRaceBoard .crb-sc__int { font-size: clamp(18px, 5.6cqi, 34px) !important; }
+#coachRaceBoard .crb-sc__dec { font-size: clamp(11px, 3cqi, 18px) !important; }
