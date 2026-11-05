@@ -36023,7 +36023,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb__cols,
 #coachRaceBoard .crb-row {
   display: grid;
-  grid-template-columns: 70px minmax(176px, 1fr) minmax(88px, 130px) 168px;
+  grid-template-columns: 70px minmax(176px, 1fr) minmax(88px, 130px) 184px;
   align-items: center;
   column-gap: 10px;
 }
@@ -36100,6 +36100,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   text-align: right;
   white-space: nowrap;
   color: #fbbf24;
+  padding-right: 16px; /* 2026-11-05 오른쪽 여백 — 왼쪽 순위 숫자 여백과 같게 */
+  box-sizing: border-box;
 }
 #coachRaceBoard .crb__empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 17px; color: #64748b; }
 #coachRaceBoard .crb__foot { flex: 0 0 auto; padding: 8px 16px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #64748b; border-top: 1px solid rgba(148, 163, 184, 0.15); }
@@ -36114,7 +36116,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothTrainingCoachScreen.crb-board-open #bluetoothCoachPowerMeterGrid .coach-grid-logo-cell { display: none !important; }
 /* 좁은 PC 화면 */
 @media (max-width: 1500px) {
-  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(132px, 1fr) minmax(64px, 84px) 128px; column-gap: 8px; }
+  #coachRaceBoard .crb__cols, #coachRaceBoard .crb-row { grid-template-columns: 54px minmax(132px, 1fr) minmax(64px, 84px) 140px; column-gap: 8px; }
   #coachRaceBoard .crb-row { padding: 0 12px; }
   #coachRaceBoard .crb-row__rank b { min-width: 40px; height: 40px; font-size: 22px; }
   #coachRaceBoard .crb-row__avatar { flex-basis: 42px; width: 42px; height: 42px; font-size: 17px; }
@@ -36837,3 +36839,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceCeremony .crc__pod .crb-sc__dec { font-size: 0.8em; }
 /* 4위 이하 자동 순환 시: 스크롤바 숨기고 한 칸씩 위로 넘어감 */
 #coachRaceBoard .crb__list.crb__list--cycle { overflow: hidden; }
+
+@media (max-width: 1500px) { #coachRaceBoard .crb-row__score { padding-right: 12px; } }
