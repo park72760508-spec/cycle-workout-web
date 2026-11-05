@@ -1625,7 +1625,7 @@
       q.sort(function (a, b) { return (dir * a.st - dir * b.st) || ((b.t.at || 0) - (a.t.at || 0)); });
       for (var i = 1; i < q.length; i++) {
         var rear = q[i - 1], lead = q[i];
-        if (lead.st !== rear.st || lead.st + dir < 0 || lead.st + dir > last) continue;
+        if (lead.st !== rear.st || lead.t.term || lead.st + dir < 0 || lead.st + dir > last) continue;
         lead.from = lead.st; lead.st = null; lead.dep = Math.max(lead.t.at || 0, rear.t.at || 0) || now;
       }
     });
@@ -1641,7 +1641,7 @@
         g.goal = g.st;
         var age = g.t.at ? (now - g.t.at) / 1000 : 0;
         // 정차 후 SUB_DWELL_SEC 지나도 출발 기록이 없으면(기록 누락 대비) 그 시각을 출발로 보고 같은 단계 시계 적용
-        if (age > SUB_DWELL_SEC && age < 600 && g.st + g.dir >= 0 && g.st + g.dir <= last) {
+        if (!g.t.term && age > SUB_DWELL_SEC && age < 600 && g.st + g.dir >= 0 && g.st + g.dir <= last) {
           g.goal = g.st + g.dir * stage(age - SUB_DWELL_SEC, Math.min(g.st, g.st + g.dir));
           g.inferred = true;
         }
@@ -1743,7 +1743,7 @@
         var ur = dir * rear.p, ul = dir * lead.p;
         var sameSeg = Math.floor(ur + 1e-9) === Math.floor(ul + 1e-9);
         var leadAge = lead.g.t.at ? (now - lead.g.t.at) / 1000 : 0;
-        if (ur >= ul - 1e-6 || (sameSeg && leadAge > 120)) {
+        if (!lead.g.t.term && (ur >= ul - 1e-6 || (sameSeg && leadAge > 120))) {
           var tu = Math.min(subNextGrid(ur), n - 1);
           if (tu > ul + 1e-6) { lead.p = dir * tu; lead.g.t.forced = true; }
         }
@@ -1874,7 +1874,7 @@
         var tk = names.indexOf(subLiveName(t.to));
         var down = tk >= 0 ? tk > k : t.ud === '1';
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
-        trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0 });
+        trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: tk === k && String(t.s) === '1' });
         trainN++;
       });
       el.__names = names; el.__lnName = ln.n;
