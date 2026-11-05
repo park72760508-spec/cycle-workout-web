@@ -631,9 +631,10 @@
         var grid = $('bluetoothCoachPowerMeterGrid');
         if (grid) {
           var gr = grid.getBoundingClientRect();
-          left = Math.min(left, Math.round(gr.left + 7 * 176 + 6 * 3 + 4));
+          left = Math.min(left, Math.round(gr.left + 7 * 140 + 6 * 3 + 4)); // 2026-11-05 블록 최소폭 176→140: 노트북 해상도에서 보드가 과하게 넓어지지 않게
         }
-        left = Math.max(Math.round(window.innerWidth * 0.45), Math.min(left, window.innerWidth - 500));
+        var minBoardW = Math.round(Math.min(500, Math.max(430, window.innerWidth * 0.36))); // 해상도에 따라 보드 최소 폭도 유동적
+        left = Math.max(Math.round(window.innerWidth * 0.45), Math.min(left, window.innerWidth - minBoardW));
         var topY = Math.max(0, Math.round(sbr.top));
         scr.classList.toggle('crb-board-open', root.classList.contains('crb--open'));
         var key = left + '|' + topY + '|' + window.innerWidth + '|' + window.innerHeight;
