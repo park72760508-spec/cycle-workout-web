@@ -623,7 +623,7 @@
    * 카드 바탕색은 PC Coach 슬롯 정보창(updateBluetoothCoachInfoBarColor)과 같은 규칙:
    *   흰색 = 접속자 없음 / 연한 하늘색 = 접속했지만 10초 데이터 없음·훈련 전 / 초록 = 훈련 중 랩 달성 98.5% 이상 / 주황 = 미만
    * 카드를 누르면 그 슬롯을 선택하고 계기판 화면으로 돌아간다. */
-  var MONITOR_MAX = 20;
+  var MONITOR_MAX = 40; // 2026-11-05: 22명(백만킬로 아카데미) 이상도 표시 — 넘치면 카드 영역만 스크롤
   var MONITOR_LS = 'coachmMonitorMode';
   st.monitorMode = (function () { try { return localStorage.getItem(MONITOR_LS) === '1'; } catch (e) { return false; } })();
 
