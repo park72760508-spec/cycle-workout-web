@@ -20359,6 +20359,40 @@ function formatSegmentDurationLabel(seg) {
 }
 if (typeof window !== 'undefined') window.formatSegmentDurationLabel = formatSegmentDurationLabel;
 
+/**
+ * 2026-11-05: 그룹훈련 휴대폰(코치 모니터·참가자) 세그먼트 한 줄 문구 — "인터벌 FTP 100% (3분)"
+ * 현재 >> 다음 형식은 stelvioSegmentFlowText 로 조합.
+ */
+function stelvioSegmentLineText(seg) {
+  if (!seg) return '';
+  var label = seg.label || seg.name || seg.segment_type || '세그먼트';
+  var type = seg.target_type || 'ftp_pct';
+  var v = seg.target_value !== undefined && seg.target_value !== null ? seg.target_value : seg.target;
+  function num(x, d) { var n = parseFloat(String(x).replace('%', '').trim()); return isFinite(n) ? Math.round(n) : d; }
+  function pair(x) {
+    if (Array.isArray(x)) return [x[0], x[1]];
+    var s = String(x === undefined || x === null ? '' : x);
+    var sep = s.indexOf('~') >= 0 ? '~' : (s.indexOf('/') >= 0 ? '/' : (s.indexOf(',') >= 0 ? ',' : null));
+    return sep ? s.split(sep) : [s, undefined];
+  }
+  var tgt;
+  if (type === 'cadence_rpm') tgt = 'RPM ' + num(v, 0);
+  else if (type === 'dual') { var d = pair(v); tgt = 'FTP ' + num(d[0], 100) + '% / RPM ' + num(d[1], 0); }
+  else if (type === 'ftp_pctz') { var z = pair(v); tgt = 'FTP ' + num(z[0], 60) + ' ~ ' + num(z[1] !== undefined ? z[1] : z[0], 75) + '%'; }
+  else tgt = 'FTP ' + num(v, 100) + '%';
+  var dur = formatSegmentDurationLabel(seg);
+  return label + ' ' + tgt + (dur ? ' (' + dur + ')' : '');
+}
+function stelvioSegmentFlowText(segments, idx) {
+  if (!Array.isArray(segments) || !segments.length) return '';
+  var i = Math.max(0, Number(idx) || 0);
+  var cur = segments[i];
+  if (!cur) return '';
+  var next = segments[i + 1];
+  return stelvioSegmentLineText(cur) + (next ? ' >> ' + stelvioSegmentLineText(next) : '');
+}
+if (typeof window !== 'undefined') { window.stelvioSegmentLineText = stelvioSegmentLineText; window.stelvioSegmentFlowText = stelvioSegmentFlowText; }
+
 function formatMobileSegmentInfo(targetType, targetValue, segmentIndex) {
   if (!targetType || targetValue === undefined || targetValue === null) {
     return '준비 중';

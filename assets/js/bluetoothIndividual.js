@@ -3330,9 +3330,17 @@ function updateSpeedometerSegmentInfo() {
         return; // 다른 화면에서는 실행하지 않음
     }
     
+    // 2026-11-05: 그래프 하단 "현재 세그먼트 >> 다음 세그먼트" (속도계 안의 세그먼트 문구는 숨김)
+    try {
+        const flowEl = __indivEl('segment-flow');
+        if (flowEl && typeof window.stelvioSegmentFlowText === 'function') {
+            const segs = window.currentWorkout && window.currentWorkout.segments;
+            flowEl.textContent = segs && segs.length ? window.stelvioSegmentFlowText(segs, Math.max(0, currentSegmentIndex)) : '';
+        }
+    } catch (e) { /* ignore */ }
+
     const segmentInfoEl = __indivEl('segment-info');
     if (!segmentInfoEl) {
-        console.warn('[updateSpeedometerSegmentInfo] segment-info 요소를 찾을 수 없습니다.');
         return;
     }
     // 통합 블루투스 개인훈련: 세그먼트 표시 1/3 축소 (27→9)

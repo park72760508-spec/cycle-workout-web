@@ -215,7 +215,10 @@
     setText('coachm-ui-lap-time', textOf('bluetoothCoachLapCountdown') || '00:00');
 
     var w = cs.currentWorkout;
-    var segInfo = textOf('bluetoothCoachCurrentSegmentInfo');
+    // 2026-11-05: "현재 세그먼트 >> 다음 세그먼트" (예: 인터벌 FTP 100% (3분) >> 쿨다운 FTP 45% (5분))
+    var segInfo = (w && w.segments && w.segments.length && typeof window.stelvioSegmentFlowText === 'function')
+      ? window.stelvioSegmentFlowText(w.segments, cs.trainingState === 'idle' ? 0 : (cs.currentSegmentIndex || 0))
+      : textOf('bluetoothCoachCurrentSegmentInfo');
     setText('coachm-segment-info', w && w.segments && w.segments.length
       ? (segInfo || (w.title || '워크아웃'))
       : '워크아웃을 선택하세요');
