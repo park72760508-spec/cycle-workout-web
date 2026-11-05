@@ -36895,3 +36895,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   0%   { box-shadow: inset 0 18px 22px -18px rgba(250, 204, 21, 0.45); }
   100% { box-shadow: inset 0 18px 22px -18px rgba(250, 204, 21, 0); }
 }
+
+/* 2026-11-06 점수 칸: 정수 2자리 + 소수점 이하 폭을 항상 확보(1자리 점수여도 칸이 흔들리지 않음), 남는 폭은 '현재 구간'에 배정 */
+#coachRaceBoard .crb-sc__int { display: inline-block; min-width: 2ch; text-align: right; }
+#coachRaceBoard .crb-row__score { min-width: calc(2ch + 0.9em); white-space: nowrap; }
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1fr) minmax(0, 1.5fr) max-content !important;
+}
