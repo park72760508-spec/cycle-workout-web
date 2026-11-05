@@ -70,6 +70,7 @@ jobs:
         continue-on-error: true
         run: |
           node scripts/build-kr-bus.mjs --pbf "$RUNNER_TEMP/kr.osm.pbf"
+          node scripts/build-kr-bus-search.mjs
           if [ -n "$(git status --porcelain assets/data/kr-bus)" ]; then echo "changed=1" >> "$GITHUB_OUTPUT"; fi
 
       - name: 캐시 버전 올리고 커밋·푸시
