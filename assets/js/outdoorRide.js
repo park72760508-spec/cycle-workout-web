@@ -2441,7 +2441,7 @@
     if (q && /[^0-9a-z\-]/.test(q) && !el.__endsAll) busEndsLoad(el, list, true);
     if (cnt) {
       var vis = q ? Array.prototype.filter.call(el.querySelectorAll('[data-ll-bus]'), function (n) { return n.style.display !== 'none'; }).length : list.length;
-      cnt.textContent = q ? '검색 결과 ' + vis + '개' + (el.__endsAll ? '' : ' (노선명 불러오는 중…)') : '지도 중심 주변 ' + list.length + '개 노선 · 노선을 고르면 정류장 목록이 보입니다';
+      cnt.textContent = q ? '검색 결과 ' + vis + '개' + (el.__endsAll || !/[^0-9a-z\-]/.test(q) ? '' : ' (노선명 불러오는 중…)') : '지도 중심 주변 ' + list.length + '개 노선 · 노선을 고르면 정류장 목록이 보입니다';
     }
   }
   function busEndsLoad(el, list, all) {
