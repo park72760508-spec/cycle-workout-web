@@ -2422,13 +2422,59 @@
       });
       el.addEventListener('input', function (e) {
         if (!e.target.matches('[data-ll-q]')) return;
-        var q = e.target.value.replace(/\s+/g, '').toLowerCase();
-        Array.prototype.forEach.call(el.querySelectorAll('[data-ll-bus]'), function (n) {
-          n.style.display = !q || (n.getAttribute('data-ll-key') || '').indexOf(q) >= 0 ? '' : 'none';
-        });
+        busListFilter(el);
       });
     }
     return el;
+  }
+  /** 버스 노선 목록 검색: 노선번호 또는 노선명(양 끝 정류장 이름). 이름 검색이면 아직 안 불러온 노선의 양 끝 이름을 모두 불러온 뒤 걸러냄 */
+  function busListFilter(el) {
+    var inp = el.querySelector('[data-ll-q]');
+    var q = (inp ? inp.value : '').replace(/\s+/g, '').toLowerCase();
+    var list = el.__buses || [];
+    Array.prototype.forEach.call(el.querySelectorAll('[data-ll-bus]'), function (n) {
+      var o = list[Number(n.getAttribute('data-ll-bus'))];
+      var key = o ? (o.ref + (o.ends || '')).replace(/\s+/g, '').toLowerCase() : '';
+      n.style.display = !q || key.indexOf(q) >= 0 ? '' : 'none';
+    });
+    var cnt = el.querySelector('[data-ll-cnt]');
+    if (q && /[^0-9a-z\-]/.test(q) && !el.__endsAll) busEndsLoad(el, list, true);
+    if (cnt) {
+      var vis = q ? Array.prototype.filter.call(el.querySelectorAll('[data-ll-bus]'), function (n) { return n.style.display !== 'none'; }).length : list.length;
+      cnt.textContent = q ? '검색 결과 ' + vis + '개' + (el.__endsAll ? '' : ' (노선명 불러오는 중…)') : '지도 중심 주변 ' + list.length + '개 노선 · 노선을 고르면 정류장 목록이 보입니다';
+    }
+  }
+  function busEndsLoad(el, list, all) {
+    if (el.__endsBusy && !all) return;
+    var limit = all ? list.length : Math.min(list.length, 120);
+    if (all) el.__endsAllReq = true;
+    if (el.__endsRunner) return;
+    var idx = 0, active = 0, lastF = 0;
+    el.__endsRunner = true;
+    var pump = function () {
+      if (el.style.display === 'none' || el.__buses !== list) { el.__endsRunner = false; return; }
+      limit = el.__endsAllReq ? list.length : limit;
+      while (active < 6 && idx < limit) {
+        (function (k) {
+          var o = list[k];
+          if (o.ends != null) return;
+          active++;
+          loadBusRoute(o.ids[0]).then(function (d) {
+            o.ends = d && d.s && d.s.length ? d.s[0][0] + ' ↔ ' + d.s[d.s.length - 1][0] : '';
+            var n = el.querySelector('[data-ll-ends="' + k + '"]');
+            if (n && o.ends) n.textContent = o.ends;
+            active--;
+            if (el.__endsAllReq && Date.now() - lastF > 400) { lastF = Date.now(); busListFilter(el); }
+            pump();
+          });
+        })(idx++);
+      }
+      if (idx >= limit && active === 0) {
+        el.__endsRunner = false;
+        if (el.__endsAllReq) { el.__endsAll = true; busListFilter(el); }
+      }
+    };
+    pump();
   }
   function openLineListPopup(kind) {
     var el = lineListEl();
@@ -2481,24 +2527,15 @@
       list.sort(function (x, y) { return x.ref.localeCompare(y.ref, 'ko', { numeric: true }); });
       el.__buses = list;
       el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' +
-        '<div class="outd-busrt__head"><div class="outd-busrt__ttl"><b>버스 노선</b><span>지도 중심 주변 ' + list.length + '개 노선 · 노선을 고르면 정류장 목록이 보입니다</span></div>' +
+        '<div class="outd-busrt__head"><div class="outd-busrt__ttl"><b>버스 노선</b><span data-ll-cnt>지도 중심 주변 ' + list.length + '개 노선 · 노선을 고르면 정류장 목록이 보입니다</span></div>' +
         '<button type="button" class="coachm-picker__close" data-ll-close aria-label="닫기">✕</button></div>' +
-        '<input type="search" class="outd-lnls__q" data-ll-q placeholder="노선번호 검색" autocomplete="off">' +
+        '<input type="search" class="outd-lnls__q" data-ll-q placeholder="노선번호 또는 노선명(정류장 이름) 검색" autocomplete="off">' +
         '<div class="outd-lnls__list">' + (list.length ? list.map(function (o, k) {
           return '<button type="button" class="outd-lnls__row" data-ll-bus="' + k + '" data-ll-key="' + escHtml(o.ref.replace(/\s+/g, '').toLowerCase()) + '"><span class="outd-busrt__no outd-lnls__bus">' + escHtml(o.ref) + '</span>' +
             '<span class="outd-lnls__ends"><b data-ll-ends="' + k + '">&nbsp;</b></span><em>›</em></button>';
         }).join('') : '<p class="outd-busrt__loading">주변에 버스 노선 정보가 없습니다.</p>') + '</div></div>';
-      // 양 끝 정류장 이름은 보이는 순서대로 조금씩 채움(노선 파일 1개씩)
-      var idx = 0;
-      (function fill() {
-        if (el.style.display === 'none' || el.__buses !== list || idx >= Math.min(list.length, 120)) return;
-        var k = idx++, o = list[k];
-        loadBusRoute(o.ids[0]).then(function (d) {
-          var n = el.querySelector('[data-ll-ends="' + k + '"]');
-          if (n && d && d.s && d.s.length) n.textContent = d.s[0][0] + ' ↔ ' + d.s[d.s.length - 1][0];
-          setTimeout(fill, 30);
-        });
-      })();
+      el.__endsRunner = false; el.__endsAll = false; el.__endsAllReq = false;
+      busEndsLoad(el, list, false);
     };
     if (!bus.on) { bus.on = true; try { localStorage.setItem(BUS_PREF, '1'); } catch (e2) {} syncBusBtn(); }
     var need = function () {
