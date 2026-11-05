@@ -36913,3 +36913,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-06 순위 보드 헤더 라벨(순위·선수·현재 구간·점수) 가운데 정렬 */
 #coachRaceBoard .crb__cols span,
 #coachRaceBoard .crb__cols span:last-child { text-align: center !important; }
+
+/* 2026-11-06 전 순위 같은 라인 정렬: 점수 칸은 모든 행 동일 고정 폭 + 오른쪽 정렬, 현재 구간(막대·퍼센트)도 오른쪽 맞춤
+   (행마다 칸 폭이 달라지던 max-content 를 고정 폭으로 교체) */
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1.5fr) minmax(0, 1fr) clamp(104px, 30cqi, 170px) !important;
+}
+#coachRaceBoard .crb-row__score { min-width: 0 !important; text-align: right !important; justify-self: stretch; }
+#coachRaceBoard .crb-row__ach { align-items: flex-end !important; }
+#coachRaceBoard .crb-row__bar { align-self: stretch; }
+#coachRaceBoard .crb-row__ach em { align-self: flex-end; text-align: right !important; }
