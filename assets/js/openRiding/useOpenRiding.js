@@ -17,7 +17,7 @@ import {
   leaveRideTransaction,
   fetchRideById,
   subscribeRideById
-} from './openRidingService.js?v=admin-point-exempt-20261002';
+} from './openRidingService.js?v=admin-edit-20261106';
 
 /**
  * @param {import('firebase/firestore').Firestore | null} db

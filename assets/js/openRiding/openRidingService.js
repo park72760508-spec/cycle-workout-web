@@ -794,7 +794,16 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   const snap = await getDoc(rideRef);
   if (!snap.exists()) throw new Error('RIDE_NOT_FOUND');
   const data = snap.data();
-  if (String(data.hostUserId || '') !== String(hostUserId)) throw new Error('FORBIDDEN');
+  /* 2026-11-06: 사이트 관리자(grade=1)는 다른 사용자가 만든 모임도 수정 가능(firestore.rules 와 동일 조건).
+     이 경우 방장 연락처 맵 키는 관리자가 아니라 실제 방장 UID 로 유지한다. */
+  const isHostEditor = String(data.hostUserId || '').trim() === String(hostUserId || '').trim();
+  const isAdminEditor = (function () {
+    try {
+      return typeof window !== 'undefined' && typeof window.isStelvioAdminGrade === 'function' &&
+        typeof window.getLoginUserGrade === 'function' && window.isStelvioAdminGrade(window.getLoginUserGrade());
+    } catch (e) { return false; }
+  })();
+  if (!isHostEditor && !isAdminEditor) throw new Error('FORBIDDEN');
   if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
   const isPrivate = !!input.isPrivate;
   const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
@@ -839,7 +848,7 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
     category: normalizeOpenRideCategory(input.category != null ? input.category : data.category),
     updatedAt: serverTimestamp()
   };
-  const hostKeyForContact = String(hostUserId != null ? hostUserId : '').trim();
+  const hostKeyForContact = String(data.hostUserId != null ? data.hostUserId : '').trim();
   if (hostKeyForContact) {
     /* 정원 목록에 노출되는 방장 본인 행도 이 수정 폼의 공개/비공개 설정을 그대로 따르게
        한다 — createRide와 동일하게, 이 값을 안 맞춰주면 수정으로 비공개를 선택해도 정원
