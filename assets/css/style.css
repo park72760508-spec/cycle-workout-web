@@ -36759,3 +36759,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-dirf i { font-style: normal; color: #94a3b8; font-weight: 700; }
 #outdoorRideScreen .outd-dirf__b { border: 1.5px solid #cbd5e1; background: #fff; color: #475569; font: inherit; font-size: 13px; font-weight: 800; padding: 3px 10px; border-radius: 999px; cursor: pointer; line-height: 1.2; }
 #outdoorRideScreen .outd-dirf__b.is-on { background: var(--ln, #10b981); border-color: var(--ln, #10b981); color: #fff; }
+
+/* 2026-11-05 지하철·버스 노선 목록 화면(우측 버튼) */
+#outdoorRideScreen .outd-lnls__list { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; padding: 4px 0 8px; max-height: 60vh; }
+#outdoorRideScreen .outd-lnls__row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 6px; border: 0; border-bottom: 1px solid #eef2f7; background: transparent; text-align: left; font-family: inherit; cursor: pointer; color: #0f172a; }
+#outdoorRideScreen .outd-lnls__row:active { background: #f1f5f9; }
+#outdoorRideScreen .outd-lnls__row .outd-busrt__no { flex: 0 0 auto; min-width: 54px; text-align: center; }
+#outdoorRideScreen .outd-lnls__bus { background: #2563eb; color: #fff; }
+#outdoorRideScreen .outd-lnls__ends { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#outdoorRideScreen .outd-lnls__ends b { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#outdoorRideScreen .outd-lnls__ends small { font-size: 11.5px; color: #64748b; }
+#outdoorRideScreen .outd-lnls__row em { font-style: normal; color: #94a3b8; font-size: 20px; }
+#outdoorRideScreen .outd-lnls__q { box-sizing: border-box; width: 100%; margin: 4px 0 2px; padding: 9px 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font: inherit; font-size: 14px; background: #fff; color: #0f172a; }
