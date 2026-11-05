@@ -36909,3 +36909,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row {
   grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1.5fr) minmax(0, 1fr) max-content !important;
 }
+
+/* 2026-11-06 순위 보드 헤더 라벨(순위·선수·현재 구간·점수) 가운데 정렬 */
+#coachRaceBoard .crb__cols span,
+#coachRaceBoard .crb__cols span:last-child { text-align: center !important; }
