@@ -2364,16 +2364,41 @@ function updateSpeedometerListUI() {
           </div>
         </div>
         <svg class="straight-track-svg" viewBox="0 0 900 40" preserveAspectRatio="xMidYMid meet">
-          <!-- 트랙 배경 (잔디 느낌) - 우측 끝까지 채움 -->
-          <rect x="0" y="0" width="900" height="40" fill="#2d5016" opacity="0.2"/>
-          
-          <!-- 트랙 레인 (10개 레인) -->
-          ${generateTrackLanes()}
-          
-          <!-- 시작선 (좌측) -->
-          <line x1="35" y1="0" x2="35" y2="40" stroke="#ffffff" stroke-width="2" opacity="0.9"/>
-          
-          <!-- 종료선 (우측) - viewBox 끝까지 -->
+          <defs>
+            <linearGradient id="trk-asphalt-${speedometer.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#3b4350"/><stop offset="0.5" stop-color="#2a303a"/><stop offset="1" stop-color="#3b4350"/>
+            </linearGradient>
+            <linearGradient id="trk-grass-${speedometer.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#2f6b1f"/><stop offset="1" stop-color="#1d4a12"/>
+            </linearGradient>
+            <pattern id="trk-curb-${speedometer.id}" width="12" height="4" patternUnits="userSpaceOnUse">
+              <rect width="6" height="4" fill="#e11d2e"/><rect x="6" width="6" height="4" fill="#ffffff"/>
+            </pattern>
+            <pattern id="trk-check-${speedometer.id}" width="4" height="4" patternUnits="userSpaceOnUse">
+              <rect width="4" height="4" fill="#fff"/><rect width="2" height="2" fill="#111"/><rect x="2" y="2" width="2" height="2" fill="#111"/>
+            </pattern>
+            <linearGradient id="trk-gloss-${speedometer.id}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
+            </linearGradient>
+          </defs>
+          <!-- 외곽 잔디 -->
+          <rect x="0" y="0" width="900" height="40" fill="url(#trk-grass-${speedometer.id})"/>
+          <!-- 아스팔트 주로 -->
+          <rect x="35" y="4" width="865" height="32" fill="url(#trk-asphalt-${speedometer.id})"/>
+          <!-- 상·하단 연석(레드/화이트) -->
+          <rect x="35" y="0" width="865" height="4" fill="url(#trk-curb-${speedometer.id})"/>
+          <rect x="35" y="36" width="865" height="4" fill="url(#trk-curb-${speedometer.id})"/>
+          <!-- 중앙 점선 -->
+          <line x1="45" y1="20" x2="890" y2="20" stroke="#fde68a" stroke-width="1" stroke-dasharray="10,8" opacity="0.55"/>
+          <!-- 거리 눈금 (10% 단위) -->
+          ${[1,2,3,4,5,6,7,8,9].map(k => { const x = 35 + 865 * k / 10; return `<line x1="${x}" y1="4" x2="${x}" y2="8" stroke="#fff" stroke-width="0.8" opacity="0.45"/><line x1="${x}" y1="32" x2="${x}" y2="36" stroke="#fff" stroke-width="0.8" opacity="0.45"/>`; }).join('')}
+          <!-- 광택 -->
+          <rect x="35" y="4" width="865" height="32" fill="url(#trk-gloss-${speedometer.id})"/>
+          <!-- 출발선 (흰색 + 그리드 박스) -->
+          <rect x="33" y="4" width="4" height="32" fill="#ffffff" opacity="0.95"/>
+          <rect x="44" y="9" width="10" height="0.8" fill="#fff" opacity="0.5"/><rect x="44" y="30.2" width="10" height="0.8" fill="#fff" opacity="0.5"/>
+          <!-- 결승선 (체커 플래그) -->
+          <rect x="890" y="4" width="8" height="32" fill="url(#trk-check-${speedometer.id})"/>
           <line x1="900" y1="0" x2="900" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
           <!-- 거리 격차 표시 (결승선 우측) -->
