@@ -256,10 +256,17 @@
         finalizeSegment(S.seg, segments);
         S.seg = idx;
       }
+      // 2026-11-06: 쿨다운 세그먼트가 시작되면(점수 구간은 모두 확정) 훈련은 계속 진행하면서 1등 축하 세리머니를 오버레이로 표시
+      var segCd = segments[idx];
+      if (!S.cdCer && segCd && /cool|쿨다운|쿨링/.test(String((segCd.segment_type || '') + ' ' + (segCd.label || '') + ' ' + (segCd.type || '')).toLowerCase())) {
+        S.cdCer = true;
+        S.ceremony = true;
+      }
     } else if (st === 'finished' && !S.done && S.seg != null) {
       finalizeSegment(S.seg, segments);
       S.done = true;
-      S.ceremony = true; // 모든 세그먼트 종료 → PC 화면에서 1등 축하 세리머니
+      // 쿨다운에서 이미 세리머니를 보였으면 종료 시 다시 띄우지 않음(쿨다운이 없는 워크아웃만 종료 시 표시)
+      if (!S.cdCer) S.ceremony = true;
     }
 
     var pms = Array.isArray(cs.powerMeters) ? cs.powerMeters : [];
