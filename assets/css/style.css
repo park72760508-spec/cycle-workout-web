@@ -36950,3 +36950,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row__name { font-size: clamp(16px, 6.4cqi, 38px) !important; }
 #coachRaceBoard .crb-sc__int { font-size: clamp(18px, 5.6cqi, 34px) !important; }
 #coachRaceBoard .crb-sc__dec { font-size: clamp(11px, 3cqi, 18px) !important; }
+
+/* Indoor Race(STELVIO Race): 창분할 보기 토글 — 속도계 1줄 + 트랙1~5만 표시 */
+#rollerRaceDashboardScreen .enhanced-control-btn.split svg { display:block; pointer-events:none; }
+#rollerRaceDashboardScreen .enhanced-control-btn.split.active { border-color:#38bdf8; color:#38bdf8; }
+#rollerRaceDashboardScreen.rr-split #speedometerGrid > :nth-child(n+6),
+#rollerRaceDashboardScreen.rr-split #speedometerList > .speedometer-list-item:nth-child(n+6) { display:none !important; }

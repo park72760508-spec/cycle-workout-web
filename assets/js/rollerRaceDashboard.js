@@ -6658,3 +6658,13 @@ window.addEventListener('load', () => {
 
 
 
+
+// 창분할 보기 토글: 속도계 첫 줄 + 트랙1~5만 표시 / 다시 누르면 원래 화면
+window.toggleRaceSplitView = function () {
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  const btn = document.getElementById('btnSplitViewRace');
+  if (!scr) return;
+  const on = scr.classList.toggle('rr-split');
+  if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+};

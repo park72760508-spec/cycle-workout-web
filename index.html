@@ -4031,7 +4031,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261106roll7" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261106split" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35272,13 +35272,16 @@
   <div id="rollerRaceDashboardScreen" class="screen">
     <div class="dashboard-header">
       <h1 class="race-title-animated" style="flex: 1; text-align: center;">
-        <img src="assets/img/STELVIO AI.png" alt="Stelvio" class="race-title-icon" />
-        <span class="race-title-text">Indoor Race</span>
+        <img src="assets/img/stelvio_w.png" alt="Stelvio" class="race-title-icon" />
+        <span class="race-title-text">STELVIO Race</span>
       </h1>
       <div class="race-controls" style="margin-left: auto; flex-shrink: 0;">
         <button class="enhanced-control-btn play" id="btnStartRace" onclick="startRaceWithCountdown()" aria-label="시작"></button>
         <button class="enhanced-control-btn pause" id="btnPauseRace" onclick="pauseRace()" disabled aria-label="일시정지"></button>
         <button class="enhanced-control-btn stop" id="btnStopRace" onclick="stopRace()" disabled aria-label="종료"></button>
+        <button class="enhanced-control-btn split" id="btnSplitViewRace" onclick="toggleRaceSplitView()" aria-label="창분할 보기" aria-pressed="false" title="창분할 보기">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+        </button>
       </div>
     </div>
 
@@ -36514,7 +36517,7 @@
   <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
 
   <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js?v=20261010totalTime"></script>
+  <script src="assets/js/rollerRaceDashboard.js?v=20261106split"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js?v=20261104dur1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
