@@ -1244,6 +1244,7 @@ function saveTargetSettings() {
  * 타겟 설정 표시 업데이트 (속도계 목록 옆에 표시)
  */
 function updateTargetSettingsDisplay() {
+  try { updateTrackDistanceMarkers(); } catch (e) {}
   const settings = window.rollerRaceState.raceSettings;
   const targetDisplayEl = document.getElementById('targetSettingsDisplay');
   
@@ -2394,6 +2395,8 @@ function updateSpeedometerListUI() {
           ${[1,2,3,4,5,6,7,8,9].map(k => { const x = 35 + 865 * k / 10; return `<line x1="${x}" y1="4" x2="${x}" y2="8" stroke="#fff" stroke-width="0.8" opacity="0.45"/><line x1="${x}" y1="32" x2="${x}" y2="36" stroke="#fff" stroke-width="0.8" opacity="0.45"/>`; }).join('')}
           <!-- 광택 -->
           <rect x="35" y="4" width="865" height="32" fill="url(#trk-gloss-${speedometer.id})"/>
+          <!-- 대회 거리 표시(도로 바닥) -->
+          <g class="track-km-marks" id="track-km-marks-${speedometer.id}"></g>
           <!-- 출발선 (흰색 + 그리드 박스) -->
           <rect x="33" y="4" width="4" height="32" fill="#ffffff" opacity="0.95"/>
           <rect x="44" y="9" width="10" height="0.8" fill="#fff" opacity="0.5"/><rect x="44" y="30.2" width="10" height="0.8" fill="#fff" opacity="0.5"/>
@@ -2457,6 +2460,7 @@ function updateSpeedometerListUI() {
   
   // 초기 마스코트 위치 설정
   updateAllStraightTrackMascots();
+  updateTrackDistanceMarkers();
   
   // 모든 경기장 트랙의 너비를 동일하게 맞춤 (가장 작은 넓이 기준)
   // DOM 렌더링 완료 후 실행
@@ -6705,3 +6709,24 @@ window.toggleRaceSplitView = function () {
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
 };
+
+
+/**
+ * 대회 거리(목표 거리) 설정 시 도로 바닥에 연한 흰색 거리 표시(예: 10km 지점)
+ */
+function updateTrackDistanceMarkers() {
+  const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
+  const target = st && st.endByDistance ? Number(st.targetDistance) : 0;
+  let marks = '';
+  if (target > 0) {
+    const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+    const step = steps.find(v => target / v <= 9) || steps[steps.length - 1];
+    const fmt = v => (Math.round(v * 100) / 100).toString();
+    for (let d = step; d < target - step * 0.2; d += step) {
+      const x = 35 + 865 * (d / target);
+      marks += `<rect x="${x - 0.6}" y="5" width="1.2" height="30" fill="#fff" opacity="0.22"/>` +
+        `<text x="${x - 3}" y="20" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 ${x - 3} 20)" fill="#fff" opacity="0.38" font-size="7" font-weight="700" letter-spacing="0.5">${fmt(d)}km</text>`;
+    }
+  }
+  document.querySelectorAll('.track-km-marks').forEach(g => { g.innerHTML = marks; });
+}
