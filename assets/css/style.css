@@ -36866,3 +36866,32 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-sc__int { font-size: clamp(22px, 7.4cqi, 44px) !important; }
 #coachRaceBoard .crb-sc__dec { font-size: clamp(13px, 4cqi, 24px) !important; }
 #coachRaceBoard .crb-row__score { padding-right: clamp(8px, 2.6cqi, 16px) !important; }
+
+/* 2026-11-06 순위 보드 열 배분: 선수 칸 오른쪽 여유를 줄이고 '현재 구간' 칸에 폭을 더 배정 */
+#coachRaceBoard .crb__cols,
+#coachRaceBoard .crb-row {
+  grid-template-columns: clamp(40px, 11cqi, 70px) minmax(0, 1fr) minmax(0, 1.25fr) max-content !important;
+}
+#coachRaceBoard .crb__cols span:nth-child(3) { text-align: center; }
+#coachRaceBoard .crb-row__ach { align-items: stretch; padding: 0 clamp(2px, 1.2cqi, 8px); }
+#coachRaceBoard .crb-row__ach em { text-align: center; font-size: clamp(15px, 4.6cqi, 24px) !important; }
+#coachRaceBoard .crb-row__bar { height: clamp(8px, 1.8cqi, 12px); }
+
+/* 4위 이하 자동 순환 — 실제 경기 전광판 롤링 느낌: 가장자리 페이드 + 탄성 있는 이동 + 새 행 등장 번쩍임 */
+#coachRaceBoard .crb__list.crb__list--cycle {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 26px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 26px), transparent 100%);
+}
+#coachRaceBoard .crb__list--cycle .crb-row {
+  transition: transform 0.95s cubic-bezier(0.34, 1.35, 0.5, 1), opacity 0.6s ease, background 0.4s ease;
+}
+#coachRaceBoard .crb-row--enter { animation: crbEnter 1.2s ease-out; }
+@keyframes crbEnter {
+  0%   { background: linear-gradient(90deg, rgba(250, 204, 21, 0.55), rgba(250, 204, 21, 0) 90%); box-shadow: inset 0 0 22px rgba(250, 204, 21, 0.55); filter: brightness(1.6); }
+  100% { box-shadow: inset 0 0 0 rgba(250, 204, 21, 0); filter: brightness(1); }
+}
+#coachRaceBoard .crb__list--tick { animation: crbTick 0.9s ease-out; }
+@keyframes crbTick {
+  0%   { box-shadow: inset 0 18px 22px -18px rgba(250, 204, 21, 0.45); }
+  100% { box-shadow: inset 0 18px 22px -18px rgba(250, 204, 21, 0); }
+}

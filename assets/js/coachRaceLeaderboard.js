@@ -45,17 +45,34 @@
       if (!row) return;
       var pos = restPos(i, n);
       var prev = row.__pos;
-      if (prev !== undefined && Math.abs(pos - prev) > 1) {
-        // 위에서 아래(맨 끝)로 돌아가는 행은 애니메이션 없이 즉시 이동
+      var jumped = prev !== undefined && Math.abs(pos - prev) > 1;
+      if (jumped) {
+        // 위에서 아래(맨 끝)로 돌아가는 행: 투명 상태로 즉시 이동한 뒤 아래에서 번쩍이며 등장(전광판 롤링 효과)
         row.style.transition = 'none';
+        row.style.opacity = cycling ? '0' : '';
         row.style.transform = 'translateY(' + (pos * ROW_H) + 'px)';
         void row.offsetHeight;
         row.style.transition = '';
+        if (cycling) {
+          row.style.opacity = '1';
+          row.classList.remove('crb-row--enter');
+          void row.offsetWidth;
+          row.classList.add('crb-row--enter');
+          setTimeout(function () { row.classList.remove('crb-row--enter'); }, 1300);
+        }
       } else {
         row.style.transform = 'translateY(' + (pos * ROW_H) + 'px)';
+        if (cycling) row.style.opacity = pos < 0 ? '0' : '1'; // 위로 밀려난 행은 서서히 사라짐
       }
+      if (!cycling) row.style.opacity = '';
       row.__pos = pos;
     });
+    var list = document.getElementById('coachRaceBoardList');
+    if (list && cycling) {
+      list.classList.remove('crb__list--tick');
+      void list.offsetWidth;
+      list.classList.add('crb__list--tick');
+    }
   }
   setInterval(function () {
     try {
