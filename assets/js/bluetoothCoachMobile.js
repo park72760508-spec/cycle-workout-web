@@ -243,12 +243,20 @@
     updateSpeedArc(pm);
 
     var state = cs.trainingState || 'idle';
+    // 다른 PC·휴대폰 Coach 화면이 훈련을 시작했으면 시작/건너뛰기/종료 버튼 비활성화
+    var locked = typeof window.bluetoothCoachIsControlledByOther === 'function' && window.bluetoothCoachIsControlledByOther();
+    var scr = $(SCREEN_ID);
+    if (scr) {
+      scr.classList.toggle('coachm-ctl-locked', locked);
+      var mbtns = scr.querySelectorAll('.coachm-mctl');
+      Array.prototype.forEach.call(mbtns, function (b) { b.disabled = locked; });
+    }
     var img = $('coachmToggleImg');
     var icon = state === 'running' ? 'assets/img/pause0.png' : 'assets/img/play0.png';
     if (img && img.getAttribute('href') !== icon) img.setAttribute('href', icon);
     var pulse = $('coachmStartPulseWrap');
     if (pulse) {
-      var showPulse = state !== 'running' && !!(w && w.segments && w.segments.length);
+      var showPulse = !locked && state !== 'running' && !!(w && w.segments && w.segments.length);
       pulse.classList.toggle('pulse-active', showPulse);
       pulse.classList.toggle('pulse-hidden', !showPulse);
     }
@@ -992,17 +1000,25 @@
   }
 
   /* ---------- 계기판 버튼: 엔진 제어 그대로 ---------- */
+  function ctlLocked() {
+    if (typeof window.bluetoothCoachIsControlledByOther !== 'function' || !window.bluetoothCoachIsControlledByOther()) return false;
+    if (typeof showToast === 'function') showToast('다른 Coach 화면에서 훈련을 진행 중입니다. 해당 화면에서 조작해주세요.', 'error');
+    return true;
+  }
   window.handleCoachMobileToggle = function () {
+    if (ctlLocked()) return;
     if (typeof window.toggleStartPauseBluetoothCoachTraining === 'function') window.toggleStartPauseBluetoothCoachTraining();
     st.lastTextAt = 0;
   };
   window.handleCoachMobileSkip = function () {
     if (coachState().trainingState !== 'running') return;
+    if (ctlLocked()) return;
     if (typeof window.skipCurrentBluetoothCoachSegmentTraining === 'function') window.skipCurrentBluetoothCoachSegmentTraining();
   };
   window.handleCoachMobileStop = function () {
     var state = coachState().trainingState;
     if (state !== 'running' && state !== 'paused') return;
+    if (ctlLocked()) return;
     if (!confirm('훈련을 종료할까요?')) return;
     if (typeof window.stopBluetoothCoachTraining === 'function') window.stopBluetoothCoachTraining();
   };

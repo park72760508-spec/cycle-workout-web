@@ -37863,3 +37863,107 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .pmb .pmb__dot--low { background: #ff8c00; box-shadow: 0 0 4px rgba(255, 140, 0, .6); }
 .pmb .pmb__dot--wait { background: #38bdf8; box-shadow: 0 0 3px rgba(56, 189, 248, .45); }
 .pmb .pmb__gap { color: #5b6a88; font-style: italic; }
+
+/* ===== 그룹훈련 > 휴대폰용 Coach 모니터 화면(#bluetoothCoachMobileScreen): 사용자 훈련 화면 컨셉(STELVIO Race) 적용 ===== */
+#bluetoothCoachMobileScreen {
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #0a0f1f 0%, #070b18 100%) !important;
+}
+#bluetoothCoachMobileScreen .mobile-dashboard-header {
+  background: linear-gradient(90deg, #0b1020, #121a33) !important; border-bottom: 0 !important;
+  box-shadow: 0 2px 0 #ff3b3b, 0 6px 18px rgba(255, 59, 59, .18);
+}
+#bluetoothCoachMobileScreen #coachm-main-timer {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+  color: #f4f8ff !important; text-shadow: 0 0 14px rgba(34, 211, 238, .45); letter-spacing: .02em;
+}
+#bluetoothCoachMobileScreen .mobile-dashboard-user-name-wrap {
+  background: linear-gradient(180deg, #22d3ee, #0e7490) !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 5px 18px !important;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 800 !important; letter-spacing: .04em;
+}
+#bluetoothCoachMobileScreen .mobile-dashboard-user-name-wrap span { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+#bluetoothCoachMobileScreen .mobile-bluetooth-connect-btn {
+  background: linear-gradient(180deg, #5b6b8c, #2b3550) !important; border: 0 !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 7px 18px !important;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.28);
+}
+
+/* 계기판 숫자 폰트 + 글로우 */
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text#coachm-ui-lap-time,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text#coachm-ui-target-power,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text#coachm-ui-current-power,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg text#coachm-gauge-speed-dot-value,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg #coachm-gauge-labels text,
+#bluetoothCoachMobileScreen .mobile-gauge-container svg #coachm-gauge-speed-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+}
+#bluetoothCoachMobileScreen #coachm-ui-current-power { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
+#bluetoothCoachMobileScreen #coachm-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
+
+/* 존 표시: 원호 바깥 가장자리의 얇은 네온 포인트 라인(사용자 훈련 화면과 동일) */
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands { transform-origin: 100px 140px; transform: scale(1.075); filter: drop-shadow(0 0 2.5px rgba(255,255,255,.35)) saturate(1.3); }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone][stroke-width] { stroke-width: 3.2px; stroke-dasharray: none; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone]:not([stroke-width]) { display: none; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="0"][stroke-width] { stroke: #94a3b8; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="1"][stroke-width] { stroke: #38bdf8; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="2"][stroke-width] { stroke: #a3e635; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="3"][stroke-width] { stroke: #facc15; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="4"][stroke-width] { stroke: #fb923c; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="5"][stroke-width] { stroke: #ff3b3b; }
+#bluetoothCoachMobileScreen .stelvio-gauge-zone-bands path[data-zone="6"][stroke-width] { stroke: #c084fc; }
+
+/* 목표 띠(안쪽 원호): 달성 = 라임 / 미달성 = 주황 */
+#bluetoothCoachMobileScreen #coachm-gauge-target-arc { stroke: #ff8c00; stroke-width: 7.2px; filter: drop-shadow(0 0 4px rgba(255, 140, 0, .75)); transition: stroke .3s ease; }
+#bluetoothCoachMobileScreen #coachm-gauge-target-arc[stroke^="url"] { stroke: #a3e635; filter: drop-shadow(0 0 5px rgba(163, 230, 53, .8)); }
+#bluetoothCoachMobileScreen #coachm-ui-target-power { fill: #ff8c00; }
+#bluetoothCoachMobileScreen #coachm-ui-target-power[fill="#00d4aa"] { fill: #a3e635; filter: drop-shadow(0 0 6px rgba(163, 230, 53, .65)); }
+
+/* CADENCE / LAP AVG / HEART RATE 타일 */
+#bluetoothCoachMobileScreen .mobile-stats-footer { background: linear-gradient(180deg, #0a0f1f, #070b18) !important; border-top: 0 !important; gap: 8px; padding: 8px 10px !important; }
+#bluetoothCoachMobileScreen .mobile-stat-box {
+  --st: #22d3ee; position: relative; border: 0 !important; padding: 8px 4px 6px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%);
+  border-top: 3px solid var(--st) !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st); transition: border-color .3s ease;
+}
+#bluetoothCoachMobileScreen .mobile-stat-box:nth-child(1) { --st: #22d3ee; }
+#bluetoothCoachMobileScreen .mobile-stat-box:nth-child(2) { --st: #ff8c00; }
+#bluetoothCoachMobileScreen .mobile-stat-box:nth-child(3) { --st: #ff3b3b; }
+#bluetoothCoachMobileScreen .mobile-stat-label {
+  font: italic 800 0.78em/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; letter-spacing: .24em; color: #9fb0cc !important; text-transform: uppercase; margin-bottom: 4px !important;
+}
+#bluetoothCoachMobileScreen .mobile-stat-value {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+  font-size: 2.1em !important; line-height: 1; color: #f4f8ff !important; text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent);
+}
+#bluetoothCoachMobileScreen .mobile-stat-value .unit { font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; color: var(--st) !important; margin-left: 3px; text-transform: uppercase; }
+
+/* 상단 워크아웃 그래프 섹션: 카본 패널 + 3색 상단 포인트 라인 */
+#bluetoothCoachMobileScreen .mobile-segment-graph-section {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #0e1424 0%, #080c18 100%) !important;
+  border-bottom: 0 !important;
+  box-shadow: inset 0 -10px 16px -14px rgba(255,255,255,.25);
+}
+#bluetoothCoachMobileScreen .mobile-segment-graph-section::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; z-index: 11; pointer-events: none;
+  background: linear-gradient(90deg, #22d3ee 0%, #ff8c00 50%, #ff3b3b 100%);
+  box-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
+#bluetoothCoachMobileScreen .mobile-segment-info {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 700;
+  letter-spacing: .04em; color: #cfe3ff !important; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 8px rgba(34,211,238,.25);
+}
+
+/* 다른 PC·휴대폰 Coach 화면이 훈련을 시작한 경우: 건너뛰기·시작·종료 버튼 비활성화 */
+#bluetoothCoachMobileScreen.coachm-ctl-locked .svg-btn-group,
+#bluetoothCoachMobileScreen.coachm-ctl-locked .coachm-mctl { opacity: .3; filter: grayscale(1); pointer-events: none; cursor: not-allowed; }
+#bluetoothCoachMobileScreen.coachm-ctl-locked .mobile-start-pulse-wrap { display: none; }

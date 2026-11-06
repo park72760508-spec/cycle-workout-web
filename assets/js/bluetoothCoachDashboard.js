@@ -1403,6 +1403,7 @@ async function setupFirebaseSubscriptions() {
       const status = snapshot.val();
       if (status) {
         window.bluetoothCoachState._lastStatus = status;
+        bluetoothCoachTrackController(status);
         updateTrainingStatus(status);
       }
     } catch (e) {
@@ -2405,6 +2406,57 @@ function bluetoothCoachObserverCountdown(status) {
   } else if (!(status && status.state === 'running')) {
     el.style.display = 'none';
   }
+}
+
+/**
+ * 훈련 제어 잠금: 다른 PC·휴대폰 Coach 화면이 훈련을 시작했으면 이 화면의 시작/건너뛰기/종료 버튼을 막는다.
+ * - 시작한 화면은 status 에 controllerId(탭 고유 ID, 새로고침해도 유지) + controllerAt(하트비트)을 기록
+ * - 다른 화면은 하트비트가 바뀌는 것을 '수신 시각'으로 추적(기기 간 시계 차이 영향 없음)
+ * - 컨트롤러가 사라지면(하트비트 정지) 일정 시간 뒤 자동 해제 — 영구 잠금 방지
+ */
+function getBluetoothCoachClientId() {
+  const S = window.bluetoothCoachState;
+  if (S._clientId) return S._clientId;
+  let id = null;
+  try { id = sessionStorage.getItem('stelvioCoachClientId'); } catch (e) {}
+  if (!id) {
+    id = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    try { sessionStorage.setItem('stelvioCoachClientId', id); } catch (e) {}
+  }
+  S._clientId = id;
+  return id;
+}
+
+function bluetoothCoachTrackController(status) {
+  const S = window.bluetoothCoachState;
+  const key = (status && status.controllerId ? status.controllerId : '') + '|' + (status && status.controllerAt ? status.controllerAt : '') + '|' + (status && status.state ? status.state : '');
+  if (S._ctlKey !== key) {
+    S._ctlKey = key;
+    S._ctlSeenAt = Date.now();
+  }
+}
+
+function bluetoothCoachIsControlledByOther() {
+  const S = window.bluetoothCoachState;
+  const st = S && S._lastStatus;
+  if (!st) return false;
+  const state = st.state;
+  if (state !== 'countdown' && state !== 'running' && state !== 'paused') return false;
+  if (!st.controllerId || st.controllerId === getBluetoothCoachClientId()) return false;
+  if (S.startTime) return false; // 이 화면이 로컬 타이머를 구동 중 = 컨트롤러
+  const limit = state === 'paused' ? 10 * 60 * 1000 : 30 * 1000;
+  return (Date.now() - (S._ctlSeenAt || 0)) < limit;
+}
+window.bluetoothCoachIsControlledByOther = bluetoothCoachIsControlledByOther;
+
+function bluetoothCoachControllerFields() {
+  return { controllerId: getBluetoothCoachClientId(), controllerAt: Date.now() };
+}
+
+function bluetoothCoachBlockedByOther() {
+  if (!bluetoothCoachIsControlledByOther()) return false;
+  if (typeof showToast === 'function') showToast('다른 Coach 화면에서 훈련을 진행 중입니다. 해당 화면에서 조작해주세요.', 'error');
+  return true;
 }
 
 function updateTrainingStatus(status) {
@@ -3530,7 +3582,8 @@ function startBluetoothCoachTrainingWithCountdown() {
     // Firebase에 카운트다운 시작 신호 전송
     bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       countdownRemainingSec: countdown,
-      state: 'countdown' // 카운트다운 중임을 표시
+      state: 'countdown', // 카운트다운 중임을 표시
+      ...bluetoothCoachControllerFields()
     }).catch(e => console.warn('[Bluetooth Coach] 카운트다운 상태 전송 실패:', e));
     
     // 카운트다운 진행 중 Firebase 업데이트
@@ -3545,7 +3598,8 @@ function startBluetoothCoachTrainingWithCountdown() {
         // 카운트다운 종료 후 running 상태로 변경
         bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
           countdownRemainingSec: null,
-          state: 'running'
+          state: 'running',
+          ...bluetoothCoachControllerFields()
         }).catch(e => console.warn('[Bluetooth Coach] 훈련 시작 상태 전송 실패:', e));
       }
     }, 1000);
@@ -3645,6 +3699,7 @@ function startBluetoothCoachTrainingWithCountdown() {
  * 시작/일시정지 토글 (Indoor Training의 toggleStartPauseTraining 참고)
  */
 function toggleStartPauseBluetoothCoachTraining() {
+  if (bluetoothCoachBlockedByOther()) return;
   console.log('🎮 [진단] toggleStartPauseBluetoothCoachTraining 함수 호출됨');
   
   const state = window.bluetoothCoachState ? window.bluetoothCoachState.trainingState : 'idle';
@@ -3709,7 +3764,8 @@ function startBluetoothCoachTraining() {
     const updateData = {
       state: 'running',
       segmentIndex: 0,
-      elapsedTime: 0
+      elapsedTime: 0,
+      ...bluetoothCoachControllerFields()
     };
     
     // 첫 번째 세그먼트의 target_type과 target_value도 함께 설정
@@ -3790,7 +3846,8 @@ function pauseBluetoothCoachTraining() {
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
     bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
-      state: 'paused'
+      state: 'paused',
+      ...bluetoothCoachControllerFields()
     }).catch(e => console.warn('[Bluetooth Coach] 일시정지 상태 전송 실패:', e));
   }
   
@@ -3824,7 +3881,8 @@ function resumeBluetoothCoachTraining() {
   if (typeof db !== 'undefined') {
     const sessionId = getBluetoothCoachSessionId();
     bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
-      state: 'running'
+      state: 'running',
+      ...bluetoothCoachControllerFields()
     }).catch(e => console.warn('[Bluetooth Coach] 재개 상태 전송 실패:', e));
   }
   
@@ -3839,6 +3897,7 @@ function resumeBluetoothCoachTraining() {
  * 훈련 종료 (Indoor Training의 stopTraining 참고)
  */
 function stopBluetoothCoachTraining() {
+  if (bluetoothCoachIsControlledByOther()) { bluetoothCoachBlockedByOther(); return; }
   window.bluetoothCoachState.trainingState = 'idle';
   
   // 화면 꺼짐 방지 해제
@@ -3855,7 +3914,9 @@ function stopBluetoothCoachTraining() {
     bluetoothCoachRtdbUpdate(`sessions/${sessionId}/status`, {
       state: 'idle',
       segmentIndex: 0,
-      elapsedTime: 0
+      elapsedTime: 0,
+      controllerId: null,
+      controllerAt: null
     }).catch(e => console.warn('[Bluetooth Coach] 훈련 종료 상태 전송 실패:', e));
   }
   
@@ -3886,6 +3947,7 @@ function stopBluetoothCoachTraining() {
  * 세그먼트 건너뛰기 (Indoor Training의 skipCurrentSegmentTraining 참고)
  */
 function skipCurrentBluetoothCoachSegmentTraining() {
+  if (bluetoothCoachBlockedByOther()) return;
   if (!window.bluetoothCoachState.currentWorkout || !window.bluetoothCoachState.currentWorkout.segments) {
     return;
   }
@@ -4026,6 +4088,7 @@ function startBluetoothCoachTrainingTimer() {
     const currentSegment = segments[currentSegIndex];
     
     const updateData = {
+      ...bluetoothCoachControllerFields(), // 하트비트: 다른 Coach 화면이 이 화면을 컨트롤러로 인식
       elapsedTime: window.bluetoothCoachState.totalElapsedTime,
       segmentIndex: currentSegIndex,
       // 나중에 접속한 다른 Coach 화면(휴대폰 등)이 랩카운트다운을 같은 값으로 표시하도록 구간 내 경과도 기록
@@ -4255,12 +4318,15 @@ function updateBluetoothCoachTrainingButtons() {
     }
   }
   
+  const lockedByOther = bluetoothCoachIsControlledByOther();
+  if (toggleBtn) toggleBtn.disabled = lockedByOther;
+
   if (stopBtn) {
-    stopBtn.disabled = (state === 'idle');
+    stopBtn.disabled = (state === 'idle') || lockedByOther;
   }
   
   if (skipBtn) {
-    skipBtn.disabled = (state === 'idle' || state === 'finished');
+    skipBtn.disabled = (state === 'idle' || state === 'finished') || lockedByOther;
   }
 }
 
