@@ -37377,3 +37377,55 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .target-settings-compact .btn-success { background: linear-gradient(180deg, #fbbf24, #b45309) !important; color: #1a1200 !important; text-shadow: none; padding: 5px 18px !important; font-size: 13px !important; min-height: 28px; }
 #rollerRaceDashboardScreen .list-header-actions .btn-icon-image { filter: brightness(0) invert(1); }
 #rollerRaceDashboardScreen .list-item-actions .btn:disabled { filter: grayscale(.8) brightness(.7); }
+
+/* ===== STELVIO Race: 트랙 이름·선수 이름·순위 라벨 — 전광판 컨셉 ===== */
+/* 속도계 상단 '트랙N' 네임 + 선수 이름 */
+#rollerRaceDashboardScreen .speedometer-header { min-height: 26px; }
+#rollerRaceDashboardScreen .speedometer-header .speedometer-name {
+  --rr-c: #22d3ee;
+  position: absolute; left: 50%; transform: translateX(-50%); z-index: 1;
+  display: inline-flex; align-items: center; padding: 4px 16px 4px 12px;
+  font: italic 900 16px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 80%, #000) 0%, #101a33 70%);
+  border-left: 5px solid var(--rr-c); border-radius: 0;
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rr-c) 50%, transparent);
+}
+#rollerRaceDashboardScreen .speedometer-header .speedometer-pairing-name {
+  flex: 0 1 auto; max-width: 34%; min-width: 0; order: 1; text-align: left;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: italic 800 15px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .03em; text-transform: uppercase;
+  color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+/* 트랙 줄의 '트랙N' */
+#rollerRaceDashboardScreen .list-item-track-number .list-item-name {
+  --rr-c: #22d3ee;
+  display: inline-flex; align-items: center; padding: 6px 16px 6px 12px;
+  font: italic 900 17px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .08em; text-transform: uppercase;
+  color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 80%, #000) 0%, #101a33 70%);
+  border-left: 5px solid var(--rr-c);
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  box-shadow: none;
+}
+#rollerRaceDashboardScreen .list-item-id { font: italic 700 12px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .06em; color: #7f90b0; }
+/* 경기장 위 선수 이름: 전광판 이름 칩 */
+#rollerRaceDashboardScreen .track-name-inside { left: 50px; }
+#rollerRaceDashboardScreen .track-name-inside .track-name-text {
+  display: inline-block; padding: 3px 16px 3px 12px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font: italic 800 15px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; letter-spacing: .04em; text-transform: uppercase;
+  color: #fff !important; text-shadow: 0 1px 3px rgba(0,0,0,.7) !important; filter: none !important;
+  background: linear-gradient(90deg, rgba(8,12,26,.88), rgba(16,26,51,.72));
+  border-left: 4px solid var(--rr-c, #22d3ee);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+#rollerRaceDashboardScreen .track-name-inside .track-name-text:empty { display: none; }
+/* 경기장 순위 라벨: 1위 금빛 맥박 */
+#rollerRaceDashboardScreen #speedometerList g[id^="straight-rank-group-"] { transition: opacity .3s ease; }
+#rollerRaceDashboardScreen #speedometerList g.rr-rank-leader { animation: rrLeaderPulse 2s ease-in-out infinite; }
+#rollerRaceDashboardScreen #speedometerList g[id^="straight-rank-group-"] text { font-family: 'Barlow Semi Condensed', sans-serif; }
+#rollerRaceDashboardScreen .speedometer-header .speedometer-name {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 80%, #000) 0%, #101a33 70%) !important;
+  padding: 4px 16px 4px 12px !important; border-radius: 0 !important; display: inline-flex !important;
+}

@@ -246,8 +246,8 @@ function createSpeedometerElement(speedometer) {
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
-      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}" style="font-size: 12px !important; color: #ffffff !important; font-weight: 500 !important; flex: 0 0 auto !important; text-align: left !important; min-width: 80px !important; order: 1 !important;">${speedometer.pairingName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 600 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; padding: 6px 12px !important; border-radius: 8px !important; display: inline-block !important;">트랙${speedometer.id}</span>
+      <span class="speedometer-pairing-name" id="pairing-name-${speedometer.id}">${speedometer.pairingName || ''}</span>
+      <span class="speedometer-name" style="--rr-c:${getMascotColor(speedometer.id)}">트랙${speedometer.id}</span>
       <div class="connection-status-center" id="status-${speedometer.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
@@ -2226,14 +2226,14 @@ function updateSpeedometerListUI() {
     item.innerHTML = `
       <!-- 트랙번호 -->
       <div class="list-item-track-number">
-        <span class="list-item-name">${trackName}</span>
+        <span class="list-item-name" style="--rr-c:${getMascotColor(speedometer.id)}">${trackName}</span>
       </div>
       <!-- ID -->
       <div class="list-item-id-section">
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
       </div>
       <!-- 직선 경기장 트랙 -->
-      <div class="straight-track-container" id="straight-track-${speedometer.id}">
+      <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
         <!-- 이름 표시 (주황색 블럭 안 왼쪽) -->
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
@@ -2321,8 +2321,8 @@ function updateSpeedometerListUI() {
           
           <!-- 순위 표시 (출발선 왼쪽 녹색 바탕) -->
           <g id="straight-rank-group-${speedometer.id}" opacity="0">
-            <rect x="2" y="9" width="30" height="22" rx="11" ry="11" fill="#2d5016" stroke="rgba(255, 255, 255, 0.8)" stroke-width="1.5"/>
-            <text x="17" y="22" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
+            <polygon id="straight-rank-poly-${speedometer.id}" points="9,8 33,8 26,32 2,32" fill="#3a4560" stroke="rgba(255,255,255,0.55)" stroke-width="1"/>
+            <text x="16" y="21" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="900" font-style="italic" id="straight-rank-text-${speedometer.id}" dominant-baseline="middle">-</text>
           </g>
         </svg>
       </div>
@@ -2751,13 +2751,20 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
 function updateStraightTrackRank(speedometerId, rank) {
   const rankGroupEl = document.getElementById(`straight-rank-group-${speedometerId}`);
   const rankTextEl = document.getElementById(`straight-rank-text-${speedometerId}`);
+  const polyEl = document.getElementById(`straight-rank-poly-${speedometerId}`);
   if (!rankGroupEl || !rankTextEl) return;
   
   if (rank && rank > 0) {
-    rankTextEl.textContent = `${rank}위`;
+    const suf = rank === 1 ? 'ST' : rank === 2 ? 'ND' : rank === 3 ? 'RD' : 'TH';
+    rankTextEl.textContent = `${rank}${suf}`;
     rankGroupEl.style.opacity = '1';
-    // 순위별 텍스트 색상 (상자 배경색은 트랙번호 라벨과 동일하게 유지)
-    rankTextEl.style.fill = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : rank === 3 ? '#CD7F32' : '#ffffff';
+    // 전광판과 같은 순위 색: 1위 금, 2위 은, 3위 동, 이후 짙은 회색
+    const fill = rank === 1 ? '#f5b50f' : rank === 2 ? '#c4cdd9' : rank === 3 ? '#c9732b' : '#3a4560';
+    const txt = rank <= 3 ? '#14100a' : '#ffffff';
+    if (polyEl) polyEl.setAttribute('fill', fill);
+    rankTextEl.style.fill = txt;
+    rankTextEl.setAttribute('fill', txt);
+    rankGroupEl.classList.toggle('rr-rank-leader', rank === 1);
   } else {
     rankGroupEl.style.opacity = '0';
   }
