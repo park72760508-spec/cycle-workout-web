@@ -209,6 +209,7 @@ function createSpeedometerGrid() {
     }
   }
   rrApplySplitViewBox();
+  setTimeout(rrPlaceRankBadges, 50);
 }
 
 /**
@@ -6544,8 +6545,10 @@ window.toggleRaceSplitView = function () {
   const on = scr.classList.toggle('rr-split');
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   rrApplySplitViewBox();
+  rrPlaceRankBadges();
   rrAlignGridToTrack();
   setTimeout(rrFillSplitHeight, 50);
+  setTimeout(rrPlaceRankBadges, 120);
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
 };
 
@@ -6653,3 +6656,24 @@ function rrFillSplitHeight() {
 }
 window.addEventListener('resize', () => { clearTimeout(window.__rrFillT); window.__rrFillT = setTimeout(rrFillSplitHeight, 150); });
 setInterval(rrFillSplitHeight, 1500);
+
+
+// 순위 배지: 60km/h 방향(위쪽) 눈금 시작점과 바늘 중심원 사이의 중간 지점에 배치
+function rrPlaceRankBadges() {
+  document.querySelectorAll('#speedometerGrid .speedometer-dial').forEach(dial => {
+    const svg = dial.querySelector('.speedometer-svg');
+    const badge = dial.querySelector('.rank-display-bottom');
+    if (!svg || !badge) return;
+    const vb = (svg.getAttribute('viewBox') || '0 0 200 200').split(/\s+/).map(Number);
+    const d = dial.getBoundingClientRect(), r = svg.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const scale = Math.min(r.width / vb[2], r.height / vb[3]);
+    const offX = (r.width - vb[2] * scale) / 2, offY = (r.height - vb[3] * scale) / 2;
+    // 중심원 상단(y=133)과 60 눈금 시작(y=70)의 중간 = 약 y=101.5, x=100
+    const x = (r.left - d.left) + offX + (100 - vb[0]) * scale;
+    const y = (r.top - d.top) + offY + (101.5 - vb[1]) * scale;
+    badge.style.cssText = `position:absolute;left:${x}px;top:${y}px;bottom:auto;transform:translate(-50%,-50%);z-index:10;`;
+  });
+}
+window.addEventListener('resize', () => { clearTimeout(window.__rrBadgeT); window.__rrBadgeT = setTimeout(rrPlaceRankBadges, 150); });
+setInterval(rrPlaceRankBadges, 1500);
