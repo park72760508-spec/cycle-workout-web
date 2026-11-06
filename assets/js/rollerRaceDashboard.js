@@ -232,6 +232,7 @@ function rrApplySplitViewBox() {
       const rad = ((180 - (i * 20 / 120) * 180 + 180) * Math.PI) / 180;
       t.setAttribute('x', 100 + r * Math.cos(rad));
       t.setAttribute('y', 140 + r * Math.sin(rad));
+      t.setAttribute('font-size', split ? 15 : 10.5); // 일반 보기: 안쪽 눈금 숫자 30% 축소
     });
   });
 }
