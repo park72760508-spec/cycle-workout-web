@@ -223,11 +223,11 @@ function rrSetDigital(el, str) {
 
 // 창분할 보기: 속도계 원이 카드 좌우를 꽉 채우도록 viewBox 크롭
 function rrApplySplitViewBox() {
-  const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
+  const split = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
-    // 창분할: 눈금 호가 검은 바탕 좌우 끝까지 닿도록 크롭하고, 숫자 라벨은 호 안쪽으로 이동
-    svg.setAttribute('viewBox', on ? '14 52 172 116' : '0 0 200 200');
-    const r = on ? 55 : 98;
+    // 창분할 보기: 눈금 숫자는 호 바깥(기존 위치), 창분할 아님: 눈금 호가 검은 바탕 좌우 끝까지 닿도록 확대 + 숫자는 호 안쪽
+    svg.setAttribute('viewBox', split ? '-12 33 224 130' : '14 52 172 116');
+    const r = split ? 98 : 55;
     svg.querySelectorAll('.speedometer-labels text').forEach((t, i) => {
       const rad = ((180 - (i * 20 / 120) * 180 + 180) * Math.PI) / 180;
       t.setAttribute('x', 100 + r * Math.cos(rad));

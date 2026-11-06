@@ -37103,3 +37103,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 창분할: 카드(블럭) 크기 고정, 속도계 원은 좌우 여백 최소로 확대 */
 #rollerRaceDashboardScreen.rr-split .speedometer-container { padding-left: 2px; padding-right: 2px; }
 #rollerRaceDashboardScreen.rr-split .speedometer-header { padding: 0 4px; box-sizing: border-box; }
+
+/* 창분할 아님: 속도계 원이 검은 바탕 좌우 끝까지 닿도록 좌우 여백 제거 */
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-dial { padding: 8px 0 0; }
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-dial { height: auto; }
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-svg { display: block; width: 100%; height: auto; }
