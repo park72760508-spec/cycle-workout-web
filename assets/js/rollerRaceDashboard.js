@@ -2386,9 +2386,9 @@ function updateSpeedometerListUI() {
           <rect x="0" y="0" width="900" height="40" fill="url(#trk-grass-${speedometer.id})"/>
           <!-- 아스팔트 주로 -->
           <rect x="35" y="4" width="865" height="32" fill="url(#trk-asphalt-${speedometer.id})"/>
-          <!-- 상·하단 연석(레드/화이트) -->
-          <rect x="35" y="0" width="865" height="4" fill="url(#trk-curb-${speedometer.id})"/>
-          <rect x="35" y="36" width="865" height="4" fill="url(#trk-curb-${speedometer.id})"/>
+          <!-- 상·하단 차분한 흰색 테두리선 -->
+          <rect x="35" y="3" width="865" height="1.2" fill="#ffffff" opacity="0.35"/>
+          <rect x="35" y="35.8" width="865" height="1.2" fill="#ffffff" opacity="0.35"/>
           <!-- 중앙 점선 -->
           <line x1="45" y1="20" x2="890" y2="20" stroke="#fde68a" stroke-width="1" stroke-dasharray="10,8" opacity="0.55"/>
           <!-- 거리 눈금 (10% 단위) -->
@@ -6712,7 +6712,7 @@ window.toggleRaceSplitView = function () {
 
 
 /**
- * 대회 거리(목표 거리) 설정 시 도로 바닥에 연한 흰색 거리 표시(예: 10km 지점)
+ * 대회 거리(목표 거리) 설정 시 도로 바닥에 원 안에 숫자(km)로 거리 표시(진행 방향 기준 가독)
  */
 function updateTrackDistanceMarkers() {
   const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
@@ -6724,8 +6724,8 @@ function updateTrackDistanceMarkers() {
     const fmt = v => (Math.round(v * 100) / 100).toString();
     for (let d = step; d < target - step * 0.2; d += step) {
       const x = 35 + 865 * (d / target);
-      marks += `<rect x="${x - 0.6}" y="5" width="1.2" height="30" fill="#fff" opacity="0.22"/>` +
-        `<text x="${x - 3}" y="20" text-anchor="middle" dominant-baseline="middle" transform="rotate(-90 ${x - 3} 20)" fill="#fff" opacity="0.38" font-size="7" font-weight="700" letter-spacing="0.5">${fmt(d)}km</text>`;
+      marks += `<circle cx="${x}" cy="20" r="10" fill="#fff" fill-opacity="0.06" stroke="#fff" stroke-opacity="0.32" stroke-width="1"/>` +
+        `<text x="${x}" y="20.5" text-anchor="middle" dominant-baseline="middle" fill="#fff" fill-opacity="0.45" font-size="${fmt(d).length > 3 ? 7 : 9}" font-weight="800">${fmt(d)}</text>`;
     }
   }
   document.querySelectorAll('.track-km-marks').forEach(g => { g.innerHTML = marks; });
