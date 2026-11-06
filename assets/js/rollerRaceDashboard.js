@@ -299,6 +299,7 @@ function createSpeedometerElement(speedometer) {
       <!-- 순위 표시 (속도계 검은 바탕 하단 중앙) -->
       <div class="rank-display-bottom">
         <img class="rank-value-bottom" id="rank-value-${speedometer.id}" src="" alt="" style="display: none;" />
+        <span class="rr-sp-badge" id="rr-sp-badge-${speedometer.id}" style="display:none;"></span>
       </div>
     </div>
     <div class="speedometer-info disconnected">
@@ -653,6 +654,27 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   }
 }
 
+
+// 속도계 순위 라벨(전광판 스타일): 1ST/2ND/3RD/4TH, 순위 변동 시 번쩍임
+function rrSetSpeedoRankBadge(speedometerId, rank) {
+  const el = document.getElementById(`rr-sp-badge-${speedometerId}`);
+  if (!el) return;
+  if (!rank || rank < 1) { el.style.display = 'none'; el.dataset.rank = ''; return; }
+  const suf = rank === 1 ? 'ST' : rank === 2 ? 'ND' : rank === 3 ? 'RD' : 'TH';
+  const prev = Number(el.dataset.rank) || 0;
+  if (String(rank) !== el.dataset.rank) {
+    el.innerHTML = `<b>${rank}</b><i>${suf}</i>`;
+    el.dataset.rank = String(rank);
+    el.dataset.pos = rank <= 3 ? rank : 'n';
+    if (prev) {
+      el.classList.remove('rr-up', 'rr-down');
+      void el.offsetWidth;
+      el.classList.add(rank < prev ? 'rr-up' : 'rr-down');
+    }
+  }
+  el.style.display = 'inline-flex';
+}
+
 /**
  * 순위 업데이트
  */
@@ -680,6 +702,7 @@ function updateRankings() {
         rankEl.style.display = 'none';
       }
     }
+    rrSetSpeedoRankBadge(speedometer.id, rank);
     
     // 직선 트랙 순위 업데이트
     updateStraightTrackRank(speedometer.id, rank);
@@ -706,6 +729,7 @@ function updateRankings() {
       if (rankEl) {
         rankEl.style.display = 'none';
       }
+      rrSetSpeedoRankBadge(speedometer.id, null);
       // 직선 트랙 순위 숨김
       updateStraightTrackRank(speedometer.id, null);
       // 거리 격차 숨김
