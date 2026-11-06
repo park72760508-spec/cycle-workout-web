@@ -15,6 +15,10 @@
  *  - 랩파워는 참가자 화면에 표시되는 LAP(세그먼트 평균 파워)과 같은 값, 세그먼트 시작 5초 이후 값만 사용(이전 세그먼트 값 섞임 방지)
  *  - 2026-11-04 짧은 인터벌 보완: 제외 시간 = min(5초, 구간 길이 20%, 최소 2초) — 15초 구간 3초,
  *    30초 미만 구간은 수행도 = 근접도 70% + 유지 30%
+ *  - 2026-11-07 RPM 인터벌 반영:
+ *      · RPM 전용 구간(cadence_rpm): RPM 달성도(평균 RPM ÷ 목표 RPM·목표 ±5% 유지)로만 점수, W/kg 가중치 없음
+ *      · RPM + FTP 이중 구간(dual): 수행도 = FTP 달성도 70% + RPM 달성도 30%, 일반 인터벌과 같은 W/kg 가중치 적용
+ *      · RPM 달성도는 목표 초과 가산 없음(100% 상한) — 무작정 빠르게 돌리는 것 방지
  * 화면
  *  - 오른쪽 가장자리 손잡이로 펼치기/접기(상태 기억)
  *  - 순위·등락·아바타·이름·현재 세그먼트 달성률·누적 점수, 순위가 바뀌면 행이 미끄러지며 이동
@@ -138,16 +142,67 @@
    * @param minutes 점수에 반영할 시간(분) — 확정 시 구간 전체 길이, 진행 중이면 경과 시간
    * @param tiz 목표 구간 유지 집계 { n: 샘플 수, z: 인정 합 }
    */
-  function segScore(seg, lapW, u, tiz, minutes) {
+  /** 구간의 목표 RPM: cadence_rpm = target_value, dual = 두 번째 값("FTP%/RPM"), 그 밖 0 */
+  function segRpmTarget(seg) {
+    if (!seg) return 0;
+    var type = String(seg.target_type || '');
+    var v = seg.target_value !== undefined && seg.target_value !== null ? seg.target_value : seg.target;
+    if (type === 'cadence_rpm') return Math.max(0, num(Array.isArray(v) ? v[0] : String(v == null ? '' : v).replace(/[^\d.]/g, '')));
+    if (type === 'dual') {
+      var parts = Array.isArray(v) ? v : String(v == null ? '' : v).split(/[~\/,]/);
+      return parts.length >= 2 ? Math.max(0, num(String(parts[1]).replace(/[^\d.]/g, ''))) : 0;
+    }
+    return 0;
+  }
+  /** 점수 방식: 'rpm'(RPM 전용) · 'dual'(FTP 70% + RPM 30%) · 'power'(기존) */
+  function segMode(seg, u) {
+    var type = String((seg && seg.target_type) || '');
+    var rT = segRpmTarget(seg);
+    if (type === 'cadence_rpm') return { mode: rT > 0 ? 'rpm' : 'none', pT: 0, rT: rT };
+    var pT = segTarget(seg, u.ftp, u.reportedTarget);
+    if (type === 'dual' && rT > 0 && pT > 0) return { mode: 'dual', pT: pT, rT: rT };
+    return { mode: pT > 0 ? 'power' : 'none', pT: pT, rT: 0 };
+  }
+  /** 수행도 = 근접도 + 유지 블렌드(30초 미만 구간은 근접도 70%) */
+  function blendQuality(seg, prox, keep) {
+    var wProx = segDur(seg) > 0 && segDur(seg) < SHORT_SEG_SEC ? 0.7 : 0.5;
+    return wProx * prox + (1 - wProx) * keep;
+  }
+  /**
+   * RPM 달성도: rs = { n, sum, z } (1초 표본 수·RPM 합·목표 구간 유지 인정 합). 표본 없으면 null
+   * 근접도는 100% 상한(초과 가산 없음)
+   */
+  function rpmQuality(seg, rT, rs) {
+    if (!(rT > 0) || !rs || !(rs.n > 0)) return null;
+    var ach = Math.max(0, (rs.sum / rs.n) / rT);
+    var prox = Math.min(1, proximity(ach));
+    var keep = Math.max(0, Math.min(1, rs.z / rs.n));
+    return { ach: ach, quality: blendQuality(seg, prox, keep) };
+  }
+  /**
+   * 세그먼트 점수 (제외 구간이면 null)
+   * @param lapW 랩 평균 파워(없으면 null) · @param rs RPM 표본 집계(없으면 null)
+   */
+  function segScore(seg, lapW, u, tiz, minutes, rs) {
     if (isExcludedSegment(seg)) return null;
-    var target = segTarget(seg, u.ftp, u.reportedTarget);
-    if (!(target > 0)) return null;
-    var ach = Math.max(0, lapW / target);
+    var m = segMode(seg, u);
+    if (m.mode === 'none') return null;
+    if (m.mode === 'rpm') {
+      var rq = rpmQuality(seg, m.rT, rs);
+      if (!rq) return null;
+      // RPM 전용: FTP W/kg 가중치 없음
+      return { ach: rq.ach, quality: rq.quality, pts: Math.max(0, minutes) * rq.quality };
+    }
+    if (lapW == null) return null;
+    var ach = Math.max(0, lapW / m.pT);
     var prox = proximity(ach);
     var keep = tiz && tiz.n > 0 ? Math.max(0, Math.min(1, tiz.z / tiz.n)) : Math.min(1, prox);
-    // 30초 미만 구간: 유지 시간 표본이 적고 지연 영향이 커서 랩 평균(근접도) 70% · 유지 30%
-    var wProx = segDur(seg) > 0 && segDur(seg) < SHORT_SEG_SEC ? 0.7 : 0.5;
-    var quality = wProx * prox + (1 - wProx) * keep;
+    var quality = blendQuality(seg, prox, keep);
+    if (m.mode === 'dual') {
+      var rd = rpmQuality(seg, m.rT, rs);
+      // RPM 표본이 아직 없으면 파워 수행도와 같다고 보고(구간 초반 급락 방지), 있으면 FTP 70% + RPM 30%
+      quality = 0.7 * quality + 0.3 * (rd ? rd.quality : quality);
+    }
     return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * wkgWeight(u.ftp, u.weight) };
   }
   function segDur(seg) { return num(seg && (seg.duration_sec || seg.duration)); }
@@ -166,14 +221,14 @@
   }
   function storeKey(k) { return 'stelvioCoachRace:' + k; }
   function freshState(key) {
-    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, tiz: {}, users: {}, prevRank: {}, moves: {}, done: false };
+    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, tiz: {}, rpm: {}, users: {}, prevRank: {}, moves: {}, done: false };
   }
   function loadState(key) {
     try {
       var raw = sessionStorage.getItem(storeKey(key));
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.key === key) { o.moves = {}; o.tiz = o.tiz || {}; return o; }
+        if (o && o.key === key) { o.moves = {}; o.tiz = o.tiz || {}; o.rpm = o.rpm || {}; return o; }
       }
     } catch (e) {}
     return freshState(key);
@@ -189,12 +244,13 @@
   function finalizeSegment(k, segments) {
     var seg = segments[k];
     if (!seg) return;
-    Object.keys(S.lap).forEach(function (uid) {
+    Object.keys(S.users).forEach(function (uid) {
       var lp = S.lap[uid];
       var u = S.users[uid];
-      if (!lp || lp.seg !== k || !u) return;
+      var rsF = S.rpm[uid] && S.rpm[uid].seg === k ? S.rpm[uid] : null;
+      if (!u || ((!lp || lp.seg !== k) && !rsF)) return;
       var tz = S.tiz[uid] && S.tiz[uid].seg === k ? S.tiz[uid] : null;
-      var sc = segScore(seg, lp.w, u, tz, segDur(seg) / 60);
+      var sc = segScore(seg, lp && lp.seg === k ? lp.w : null, u, tz, segDur(seg) / 60, rsF);
       if (!sc) return;
       if (!S.final[uid]) S.final[uid] = {};
       S.final[uid][k] = Math.round(sc.pts * 100) / 100;
@@ -300,6 +356,23 @@
           }
         }
       }
+      // RPM 달성도: 진행 중·점수 구간에서 1초마다 현재 케이던스 표본(RPM 전용·FTP+RPM 이중 구간)
+      if (st === 'running' && segEl >= guard && segNow && !isExcludedSegment(segNow)) {
+        var rTgt = segRpmTarget(segNow);
+        var mdSample = rTgt > 0 ? segMode(segNow, u).mode : 'none';
+        if (mdSample === 'rpm' || mdSample === 'dual') {
+          var rs = S.rpm[uid];
+          if (!rs || rs.seg !== idx) rs = S.rpm[uid] = { seg: idx, n: 0, sum: 0, z: 0, at: 0 };
+          if (now - rs.at >= 900) {
+            rs.at = now;
+            var cad = fresh ? Math.max(0, num(pm.cadence)) : 0;
+            var devR = Math.abs(cad / rTgt - 1);
+            rs.n += 1;
+            rs.sum += cad;
+            rs.z += devR <= ZONE_FULL + 1e-9 ? 1 : devR <= ZONE_HALF + 1e-9 ? 0.5 : 0;
+          }
+        }
+      }
       if (pm.userId) fetchAvatar(String(pm.userId));
       present.push(uid);
     });
@@ -317,9 +390,10 @@
       });
       var liveAch = null;
       var lp = S.lap[uid];
-      if ((active || st === 'finished') && seg && lp && lp.seg === idx) {
+      var rsL = S.rpm[uid] && S.rpm[uid].seg === idx ? S.rpm[uid] : null;
+      if ((active || st === 'finished') && seg && ((lp && lp.seg === idx) || rsL)) {
         var tzL = S.tiz[uid] && S.tiz[uid].seg === idx ? S.tiz[uid] : null;
-        var sc = segScore(seg, lp.w, u, tzL, liveMin);
+        var sc = segScore(seg, lp && lp.seg === idx ? lp.w : null, u, tzL, liveMin, rsL);
         if (sc) {
           liveAch = sc.ach;
           if (active) total += sc.pts;
@@ -386,7 +460,7 @@
         '<div class="crb__cols"><span>순위</span><span>선수</span><span>현재 구간</span><span>점수</span></div>' +
         '<div class="crb__top" id="coachRaceBoardTop"></div>' +
         '<div class="crb__list" id="coachRaceBoardList"></div>' +
-        '<footer class="crb__foot">구간 1분당 1점 × 수행도(목표 근접 50% + 목표 ±5% 유지 50%) · W/kg 가산 · 워밍업·휴식·쿨다운 제외</footer>' +
+        '<footer class="crb__foot">구간 1분당 1점 × 수행도(목표 근접 50% + 목표 ±5% 유지 50%) · W/kg 가산 · RPM 구간은 RPM 달성도(FTP+RPM 구간은 FTP 70% : RPM 30%) · 워밍업·휴식·쿨다운 제외</footer>' +
       '</section>';
     scr.appendChild(root);
     root.querySelector('.crb__handle').addEventListener('click', function () { setOpen(!root.classList.contains('crb--open')); });
@@ -673,4 +747,5 @@
   window.addEventListener('resize', function () { var r = $('coachRaceBoard'); if (r) r.dataset.k = ''; });
   window.coachRaceBoardTick = tick;
   window.coachRaceBoardCompute = compute; // 디버그·검증용
+  window.coachRaceSegScore = segScore; // 검증용(순수 계산)
 })();
