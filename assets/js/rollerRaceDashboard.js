@@ -1478,8 +1478,10 @@ function startRaceWithCountdown() {
   
   let countdown = 5;
   numberEl.textContent = countdown;
-  numberEl.style.fontSize = '120px';
+  numberEl.style.fontSize = '66vh'; // 화면 높이의 2/3 (멀리서도 시인성)
+  numberEl.style.lineHeight = '1';
   numberEl.style.color = '#ffffff';
+  numberEl.style.textShadow = '0 0 40px rgba(255,255,255,0.45), 0 0 10px #000';
   
   // 첫 번째 비프음
   if (typeof playBeep === 'function') {
@@ -1498,7 +1500,7 @@ function startRaceWithCountdown() {
     } else {
       // "Go!" 표시
       numberEl.textContent = 'Go!';
-      numberEl.style.fontSize = '100px';
+      numberEl.style.fontSize = 'min(45vh, 38vw)';
       numberEl.style.color = '#00ff88';
       numberEl.style.textShadow = '0 0 20px rgba(0, 255, 136, 0.8), 0 0 40px rgba(0, 255, 136, 0.6)';
       
@@ -1513,6 +1515,8 @@ function startRaceWithCountdown() {
       setTimeout(() => {
         overlay.classList.add('hidden');
         overlay.style.display = 'none';
+        // 공통 오버레이이므로 Race 전용 스타일 해제
+        numberEl.style.fontSize = ''; numberEl.style.lineHeight = ''; numberEl.style.color = ''; numberEl.style.textShadow = '';
         startRace();
       }, 500);
     }
