@@ -37316,3 +37316,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb-row--top1 .crb-row__score { color: #22d3ee; text-shadow: 0 0 12px rgba(34, 211, 238, .55); }
 #coachRaceBoard .crb-row--top1 .crb-sc__int { text-shadow: 0 0 12px rgba(34, 211, 238, .6); }
 @media (prefers-reduced-motion: reduce) { #coachRaceBoard .crb-row::after, #coachRaceBoard .crb-row--top1 { animation: none; } }
+
+/* 그룹훈련 순위 전광판: 점수 숫자 8도 기울임 (오른쪽 정렬 라인 유지) */
+#coachRaceBoard .crb-row__score { transform: skewX(-8deg); transform-origin: right bottom; }
