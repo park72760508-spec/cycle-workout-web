@@ -37054,7 +37054,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .mascot-pulse-ring.blinking .rear-pulse.rp2 { animation-delay: .6s; }
 @keyframes rr-rear-pulse {
   0%   { transform: scale(1, 1);     opacity: .85; }
-  100% { transform: scale(3.2, 1.7); opacity: 0; }
+  100% { transform: scale(2.6, 1.6); opacity: 0; }
 }
 
 /* 트랙 페어링 화면: 이름 입력 텍스트 검정 */

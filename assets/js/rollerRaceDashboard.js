@@ -2434,8 +2434,8 @@ function updateSpeedometerListUI() {
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 펄스 효과용 빨간색 원 (깜빡임 끝에 퍼지는 효과) -->
             <g class="mascot-pulse-ring" id="mascot-pulse-ring-${speedometer.id}">
-              <ellipse class="rear-pulse rp1" cx="-14" cy="0" rx="2.4" ry="4.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
-              <ellipse class="rear-pulse rp2" cx="-14" cy="0" rx="2.4" ry="4.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
+              <ellipse class="rear-pulse rp1" cx="-16.5" cy="0" rx="4.2" ry="2.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
+              <ellipse class="rear-pulse rp2" cx="-16.5" cy="0" rx="4.2" ry="2.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
             </g>
             <!-- 탑뷰(하늘에서 내려다본) 사이클 선수 아바타: 진행 방향 → -->
             <ellipse cx="0.8" cy="1.2" rx="12" ry="4.6" fill="#000" opacity="0.28"/>
@@ -6755,4 +6755,4 @@ function rrSyncRearPulses() {
     el.classList.toggle('blinking', running && named);
   });
 }
-setInterval(rrSyncRearPulses, 400);
+setInterval(rrSyncRearPulses, 800);
