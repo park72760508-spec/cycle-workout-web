@@ -37829,3 +37829,33 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 700;
   letter-spacing: .04em; color: #cfe3ff !important; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 8px rgba(34,211,238,.25);
 }
+
+/* ===== 사용자 훈련 화면 미니 순위 전광판(.pmb): CADENCE/LAP AVG/HEART RATE 타일 컨셉 — 과하지 않게(훈련 집중용) ===== */
+.pmb .pmb__row {
+  position: relative; border-radius: 0 !important; padding: 0 4px 0 5px;
+  background: linear-gradient(90deg, rgba(14, 20, 36, .72), rgba(8, 12, 24, .5)) !important;
+  border-left: 2px solid #475569; color: #cfd8ea;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+.pmb .pmb__row.pmb__t1 { border-left-color: #f5b50f; }
+.pmb .pmb__row.pmb__t2 { border-left-color: #c4cdd9; }
+.pmb .pmb__row.pmb__t3 { border-left-color: #c9732b; }
+.pmb .pmb__row.pmb__me { background: linear-gradient(90deg, rgba(34, 211, 238, .22), rgba(8, 12, 24, .55)) !important; border-left-color: #22d3ee; }
+.pmb .pmb__row b {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; color: #8fa0c0; font-variant-numeric: tabular-nums;
+}
+.pmb .pmb__t1 b { color: #f5b50f; } .pmb .pmb__t2 b { color: #dbe3ee; } .pmb .pmb__t3 b { color: #e0904f; }
+.pmb .pmb__me b { color: #22d3ee; }
+.pmb .pmb__nm {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 700; letter-spacing: .02em; color: #e8eef9;
+}
+.pmb .pmb__row em.pmb__dg {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; color: #f0f5ff; font-variant-numeric: tabular-nums;
+}
+.pmb .pmb__int { font-size: 1.1em; font-weight: 800; }
+.pmb .pmb__dec { font-size: .74em; font-weight: 700; opacity: .8; }
+.pmb .pmb__wait { font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; color: #6f7fa0 !important; }
+.pmb .pmb__dot--ok { background: #a3e635; box-shadow: 0 0 4px rgba(163, 230, 53, .6); }
+.pmb .pmb__dot--low { background: #ff8c00; box-shadow: 0 0 4px rgba(255, 140, 0, .6); }
+.pmb .pmb__dot--wait { background: #38bdf8; box-shadow: 0 0 3px rgba(56, 189, 248, .45); }
+.pmb .pmb__gap { color: #5b6a88; font-style: italic; }
