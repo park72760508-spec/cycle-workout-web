@@ -37629,9 +37629,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothIndividualScreen #indiv-ui-current-power { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
 #bluetoothIndividualScreen #indiv-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
 
-/* 속도계 원호 Zone 띠: 레이싱 RPM LED 바 — 네온 컬러 + 분절(LED) 표시, 현재 존 강조는 기존 로직 유지 */
-#bluetoothIndividualScreen .stelvio-gauge-zone-bands { filter: saturate(1.35) brightness(1.18) drop-shadow(0 0 3px rgba(255,255,255,.18)); }
-#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone][stroke-width] { stroke-dasharray: 3.2 1.1; }
+/* 속도계 원호 Zone 띠: 하단 정보 타일의 '포인트 라인'처럼 — 원호 바깥 가장자리에 얇은 네온 라인으로 존 표시
+   (현재 파워가 있는 존은 기존 로직대로 더 선명하게) */
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands {
+  transform-origin: 100px 140px; transform: scale(1.075);
+  filter: drop-shadow(0 0 2.5px rgba(255,255,255,.35)) saturate(1.3);
+}
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone][stroke-width] { stroke-width: 3.2px; stroke-dasharray: none; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone]:not([stroke-width]) { display: none; }
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="0"][stroke-width] { stroke: #94a3b8; }
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="1"][stroke-width] { stroke: #38bdf8; }
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="2"][stroke-width] { stroke: #a3e635; }
@@ -37639,8 +37644,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="4"][stroke-width] { stroke: #fb923c; }
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="5"][stroke-width] { stroke: #ff3b3b; }
 #bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="6"][stroke-width] { stroke: #c084fc; }
-#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="0"]:not([stroke-width]) { fill: #94a3b8; }
-#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="6"]:not([stroke-width]) { fill: #c084fc; }
 
 /* CADENCE / LAP AVG / HEART RATE: 레이싱 타일 */
 #bluetoothIndividualScreen .indiv-stats-footer {
@@ -37667,3 +37670,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #bluetoothIndividualScreen .indiv-c-cadence, #bluetoothIndividualScreen .indiv-c-target, #bluetoothIndividualScreen .indiv-c-hr { color: #f4f8ff; }
 #bluetoothIndividualScreen .indiv-unit { font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; color: var(--st) !important; margin-left: 3px; text-transform: uppercase; }
+/* 속도계 안 목표값(주황)·현재 파워·랩 시간(민트): 상단 경과시간과 같은 폰트로 고정 */
+#bluetoothIndividualScreen .indiv-gauge-container svg text#indiv-ui-target-power,
+#bluetoothIndividualScreen .indiv-gauge-container svg text#indiv-ui-current-power,
+#bluetoothIndividualScreen .indiv-gauge-container svg text#indiv-ui-lap-time {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important;
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
