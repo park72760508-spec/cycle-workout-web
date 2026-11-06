@@ -225,7 +225,7 @@ function rrSetDigital(el, str) {
 function rrApplySplitViewBox() {
   const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
-    svg.setAttribute('viewBox', on ? '1 34 198 140' : '0 0 200 200');
+    svg.setAttribute('viewBox', on ? '-10 26 220 156' : '0 0 200 200');
   });
 }
 
