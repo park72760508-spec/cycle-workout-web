@@ -37108,3 +37108,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen:not(.rr-split) .speedometer-dial { padding: 8px 0 0; }
 #rollerRaceDashboardScreen:not(.rr-split) .speedometer-dial { height: auto; }
 #rollerRaceDashboardScreen:not(.rr-split) .speedometer-svg { display: block; width: 100%; height: auto; }
+
+/* 일반 보기: 트랙 우측 끝에 맞춰 그리드 폭이 줄어도 카드가 넘치지 않도록 5열 균등 + 정보 숫자 폭 비례 */
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-container { min-width: 0; }
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-info { container-type: inline-size; gap: 4px; padding-left: 8px; padding-right: 8px; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-stat-value,
+#rollerRaceDashboardScreen:not(.rr-split) .distance-value { font-size: min(calc(1.3 * 25.92px), 15cqi); white-space: nowrap; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-value { font-size: min(calc(1.3 * 43.2px), 24cqi); white-space: nowrap; }
+
+/* 일반 보기: 트랙 끝에 맞춰 카드가 좁아져도 정보 줄이 넘치지 않도록 평속/이동거리/속도 3열 배치 */
+#rollerRaceDashboardScreen:not(.rr-split) .speed-stat-max { display: none !important; }
+#rollerRaceDashboardScreen:not(.rr-split) .speedometer-info { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: end; text-align: center; gap: 2px; padding: 8px 4px; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-display-left,
+#rollerRaceDashboardScreen:not(.rr-split) .speed-display-center,
+#rollerRaceDashboardScreen:not(.rr-split) .distance-display-right { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: none; min-width: 0; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-stat-row { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-stat-label-wrapper { display: flex; flex-direction: row; gap: 3px; align-items: baseline; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-stat-label,
+#rollerRaceDashboardScreen:not(.rr-split) .speed-unit-bottom { font-size: 10px; color: #000; font-weight: 500; white-space: nowrap; }
+#rollerRaceDashboardScreen:not(.rr-split) .distance-display-right .speed-unit-bottom::before { content: "속도 "; }
+#rollerRaceDashboardScreen:not(.rr-split) .speed-display-center .speed-unit-bottom::before { content: "이동거리 "; }

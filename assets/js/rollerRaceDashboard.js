@@ -2489,6 +2489,7 @@ function updateSpeedometerListUI() {
   // DOM 렌더링 완료 후 실행
   setTimeout(() => {
     normalizeTrackWidths();
+    rrAlignGridToTrack();
   }, 100);
 }
 
@@ -6721,6 +6722,7 @@ window.toggleRaceSplitView = function () {
   const on = scr.classList.toggle('rr-split');
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   rrApplySplitViewBox();
+  rrAlignGridToTrack();
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
 };
 
@@ -6760,3 +6762,22 @@ function rrSyncRearPulses() {
   });
 }
 setInterval(rrSyncRearPulses, 800);
+
+
+// 일반 보기: 속도계 블럭 그리드의 우측 끝을 트랙 경기장 우측 끝에 맞춤
+function rrAlignGridToTrack() {
+  const grid = document.getElementById('speedometerGrid');
+  if (!grid) return;
+  grid.style.marginRight = '';
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  if (!scr || scr.classList.contains('rr-split')) return;
+  const tc = document.querySelector('#speedometerList .straight-track-container');
+  if (!tc) return;
+  const t = tc.getBoundingClientRect();
+  const g = grid.getBoundingClientRect();
+  if (!t.width || !g.width) return;
+  const diff = g.right - t.right;
+  if (diff > 0.5) grid.style.marginRight = diff + 'px';
+}
+window.addEventListener('resize', () => { clearTimeout(window.__rrAlignT); window.__rrAlignT = setTimeout(rrAlignGridToTrack, 120); });
+setInterval(rrAlignGridToTrack, 1500);
