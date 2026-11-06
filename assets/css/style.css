@@ -37028,3 +37028,22 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-split .speed-stat-value,
 #rollerRaceDashboardScreen.rr-split .distance-value { font-size: clamp(14px, 1.45vw, 24px); white-space: nowrap; }
 #rollerRaceDashboardScreen.rr-split .speed-value { font-size: clamp(16px, 1.7vw, 28px); white-space: nowrap; }
+
+/* 창분할 보기 v2: 카드 높이 +10%, 원 5% 축소(상단·우측 잘림 방지), 하단 정보 3열 재배치 */
+#rollerRaceDashboardScreen.rr-split .speedometer-dial { height: 229px; display: flex; align-items: center; justify-content: center; }
+#rollerRaceDashboardScreen.rr-split .speedometer-svg { width: 100%; height: auto; max-height: 100%; }
+#rollerRaceDashboardScreen.rr-split .speed-stat-max { display: none !important; }
+#rollerRaceDashboardScreen.rr-split .speedometer-info { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; text-align: center; }
+#rollerRaceDashboardScreen.rr-split .speed-display-left,
+#rollerRaceDashboardScreen.rr-split .speed-display-center,
+#rollerRaceDashboardScreen.rr-split .distance-display-right { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: none; min-width: 0; }
+#rollerRaceDashboardScreen.rr-split .speed-stat-row { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+#rollerRaceDashboardScreen.rr-split .speed-stat-label-wrapper { display: flex; flex-direction: row; gap: 3px; align-items: baseline; }
+#rollerRaceDashboardScreen.rr-split .speed-stat-label,
+#rollerRaceDashboardScreen.rr-split .speed-stat-label-wrapper .speed-unit-bottom,
+#rollerRaceDashboardScreen.rr-split .speed-unit-bottom { font-size: 10px; color: #000; font-weight: 500; white-space: nowrap; }
+#rollerRaceDashboardScreen.rr-split .distance-display-right .speed-unit-bottom { font-size: 10px; }
+#rollerRaceDashboardScreen.rr-split .distance-display-right .speed-unit-bottom::before { content: "속도 "; }
+#rollerRaceDashboardScreen.rr-split .speed-display-center .speed-unit-bottom::before { content: "이동거리 "; }
+/* 평속·속도 글자 크기 유지, 이동거리는 30% 확대 */
+#rollerRaceDashboardScreen.rr-split .speed-value { font-size: calc(1.3 * clamp(14px, 1.45vw, 24px)); }

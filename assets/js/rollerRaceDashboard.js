@@ -225,7 +225,7 @@ function rrSetDigital(el, str) {
 function rrApplySplitViewBox() {
   const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
-    svg.setAttribute('viewBox', on ? '6 38 188 134' : '0 0 200 200');
+    svg.setAttribute('viewBox', on ? '1 34 198 140' : '0 0 200 200');
   });
 }
 
@@ -305,7 +305,7 @@ function createSpeedometerElement(speedometer) {
         <div class="speed-stat-row speed-stat-avg">
           <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
           <div class="speed-stat-label-wrapper">
-            <span class="speed-stat-label">평균</span>
+            <span class="speed-stat-label">평속</span>
             <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
