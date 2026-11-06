@@ -37586,3 +37586,84 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-variant-numeric: tabular-nums; letter-spacing: 0;
 }
 #coachRaceBoard .crb-sc__dec, #coachRaceCeremony .crb-sc__dec { opacity: .9; }
+
+/* ===== 그룹훈련 > 사용자 훈련 화면: STELVIO Race 컨셉 적용 ===== */
+#bluetoothIndividualScreen.indiv-screen-wrap {
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #0a0f1f 0%, #070b18 100%) !important;
+}
+/* 상단 헤더 */
+#bluetoothIndividualScreen .indiv-header {
+  background: linear-gradient(90deg, #0b1020, #121a33) !important; border-bottom: 0 !important; position: relative;
+  box-shadow: 0 2px 0 #ff3b3b, 0 6px 18px rgba(255, 59, 59, .18);
+}
+#bluetoothIndividualScreen .indiv-timer, #bluetoothIndividualScreen #indiv-main-timer {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: #f4f8ff; text-shadow: 0 0 14px rgba(34, 211, 238, .45); letter-spacing: .02em;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-user-name-wrap {
+  background: linear-gradient(180deg, #22d3ee, #0e7490) !important; border: 0 !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 6px 18px !important;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 800; letter-spacing: .04em;
+}
+#bluetoothIndividualScreen .indiv-bluetooth-user-name-wrap span { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.5); }
+#bluetoothIndividualScreen .indiv-bluetooth-connect-btn {
+  background: linear-gradient(180deg, #5b6b8c, #2b3550) !important; border: 0 !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 7px 18px !important;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.28);
+}
+#bluetoothIndividualScreen .indiv-bluetooth-connect-btn.has-connection { background: linear-gradient(180deg, #a3e635, #4d7c0f) !important; color: #0b1400 !important; }
+
+/* 계기판 숫자 폰트 + 바늘 글로우 */
+#bluetoothIndividualScreen #indiv-ui-lap-time,
+#bluetoothIndividualScreen #indiv-ui-target-power,
+#bluetoothIndividualScreen #indiv-ui-current-power,
+#bluetoothIndividualScreen #indiv-gauge-speed-dot-value,
+#bluetoothIndividualScreen #indiv-ui-target-label,
+#bluetoothIndividualScreen #indiv-gauge-labels text,
+#bluetoothIndividualScreen #indiv-gauge-speed-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+#bluetoothIndividualScreen #indiv-ui-current-power { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
+#bluetoothIndividualScreen #indiv-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
+
+/* 속도계 원호 Zone 띠: 레이싱 RPM LED 바 — 네온 컬러 + 분절(LED) 표시, 현재 존 강조는 기존 로직 유지 */
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands { filter: saturate(1.35) brightness(1.18) drop-shadow(0 0 3px rgba(255,255,255,.18)); }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone][stroke-width] { stroke-dasharray: 3.2 1.1; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="0"][stroke-width] { stroke: #94a3b8; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="1"][stroke-width] { stroke: #38bdf8; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="2"][stroke-width] { stroke: #a3e635; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="3"][stroke-width] { stroke: #facc15; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="4"][stroke-width] { stroke: #fb923c; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="5"][stroke-width] { stroke: #ff3b3b; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="6"][stroke-width] { stroke: #c084fc; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="0"]:not([stroke-width]) { fill: #94a3b8; }
+#bluetoothIndividualScreen .stelvio-gauge-zone-bands path[data-zone="6"]:not([stroke-width]) { fill: #c084fc; }
+
+/* CADENCE / LAP AVG / HEART RATE: 레이싱 타일 */
+#bluetoothIndividualScreen .indiv-stats-footer {
+  background: linear-gradient(180deg, #0a0f1f, #070b18) !important; border-top: 0 !important; gap: 8px; padding: 8px 10px;
+}
+#bluetoothIndividualScreen .indiv-stat-box {
+  --st: #22d3ee; position: relative; border: 0 !important; padding: 8px 4px 6px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%);
+  border-top: 3px solid var(--st) !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#bluetoothIndividualScreen .indiv-stat-box:nth-child(1) { --st: #22d3ee; }
+#bluetoothIndividualScreen .indiv-stat-box:nth-child(2) { --st: #ff8c00; }
+#bluetoothIndividualScreen .indiv-stat-box:nth-child(3) { --st: #ff3b3b; }
+#bluetoothIndividualScreen .indiv-stat-label {
+  font: italic 800 0.78em/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; letter-spacing: .24em; color: #9fb0cc !important; text-transform: uppercase; margin-bottom: 4px;
+}
+#bluetoothIndividualScreen .indiv-stat-value {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+  font-size: 2.1em; line-height: 1; text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent);
+}
+#bluetoothIndividualScreen .indiv-c-cadence, #bluetoothIndividualScreen .indiv-c-target, #bluetoothIndividualScreen .indiv-c-hr { color: #f4f8ff; }
+#bluetoothIndividualScreen .indiv-unit { font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; color: var(--st) !important; margin-left: 3px; text-transform: uppercase; }
