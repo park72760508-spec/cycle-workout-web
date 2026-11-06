@@ -6595,7 +6595,10 @@ window.toggleRaceSplitView = function () {
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   rrApplySplitViewBox();
   rrPlaceRankBadges();
+  // 창분할/미분할 모두 동일한 트랙 너비 계산 로직 적용 (레이아웃 변경 후 재측정)
+  try { normalizeTrackWidths(); } catch (e) {}
   rrAlignGridToTrack();
+  setTimeout(() => { try { normalizeTrackWidths(); rrAlignGridToTrack(); } catch (e) {} }, 60);
   setTimeout(rrFillSplitHeight, 50);
   setTimeout(rrPlaceRankBadges, 120);
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
