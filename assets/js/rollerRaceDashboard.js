@@ -6727,6 +6727,7 @@ window.toggleRaceSplitView = function () {
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
   rrApplySplitViewBox();
   rrAlignGridToTrack();
+  setTimeout(rrFillSplitHeight, 50);
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
 };
 
@@ -6785,3 +6786,21 @@ function rrAlignGridToTrack() {
 }
 window.addEventListener('resize', () => { clearTimeout(window.__rrAlignT); window.__rrAlignT = setTimeout(rrAlignGridToTrack, 120); });
 setInterval(rrAlignGridToTrack, 1500);
+
+
+// 창분할 보기: 하단 설정 메뉴 줄 아래 남는 여백만큼 경과시간(전광판) 블럭 높이를 늘려 메뉴 줄이 화면 맨 아래에 붙게 함
+function rrFillSplitHeight() {
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  const sb = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
+  if (!scr || !sb) return;
+  sb.style.minHeight = '';
+  if (!scr.classList.contains('rr-split')) return;
+  const bar = document.querySelector('#rollerRaceDashboardScreen .speedometer-list-section > .list-header');
+  if (!bar || !bar.offsetParent) return;
+  const free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
+  if (free <= 1) return;
+  const zoom = parseFloat(getComputedStyle(sb).zoom) || 1;
+  sb.style.minHeight = ((sb.getBoundingClientRect().height + free) / zoom) + 'px';
+}
+window.addEventListener('resize', () => { clearTimeout(window.__rrFillT); window.__rrFillT = setTimeout(rrFillSplitHeight, 150); });
+setInterval(rrFillSplitHeight, 1500);
