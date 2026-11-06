@@ -37050,8 +37050,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 아바타 뒷바퀴 타원 펄스 (경기 진행 중) */
 .mascot-pulse-ring .rear-pulse { transform-box: fill-box; transform-origin: right center; opacity: 0; }
-.mascot-pulse-ring.blinking .rear-pulse { animation: rr-rear-pulse 2s ease-out infinite; }
-.mascot-pulse-ring.blinking .rear-pulse.rp2 { animation-delay: 1s; }
+.mascot-pulse-ring.blinking .rear-pulse { animation: rr-rear-pulse 4s ease-out infinite; }
+.mascot-pulse-ring.blinking .rear-pulse.rp2 { animation-delay: 2s; }
 /* 루트맵 내 위치 펄스(outdMePulseStrong)와 동일한 톤·타이밍을 가로형 타원으로 적용 */
 @keyframes rr-rear-pulse {
   0%   { transform: scale(1);   opacity: 0.95; }
