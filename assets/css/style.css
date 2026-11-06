@@ -37761,3 +37761,71 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #mobileDashboardScreen .mobile-stat-value .unit { font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; color: var(--st) !important; margin-left: 3px; text-transform: uppercase; }
 /* 목표 띠·상한 띠 두께: 그룹훈련 사용자 화면과 동일(존 라인 7.2 안쪽) */
 #mobileDashboardScreen #mobile-gauge-target-arc, #mobileDashboardScreen #mobile-gauge-max-arc { stroke-width: 7.2px; }
+
+/* ===== 하단 목표값 조절 + 상단 워크아웃 그래프: CADENCE/LAP AVG/HEART RATE 타일 컨셉 ===== */
+/* 목표값 조절 타일 (그룹훈련 사용자 화면 + 개인훈련 모바일 훈련 화면) */
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-container,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-container {
+  --st: #38bdf8; position: relative; margin: 0 10px 8px; padding: 10px 14px 8px !important; gap: 6px !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%) !important;
+  border: 0 !important; border-top: 3px solid var(--st) !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-label,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-label {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800;
+  font-size: 12px !important; letter-spacing: .24em !important; color: #9fb0cc !important; text-transform: uppercase;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-value,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-value {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+  font-size: 22px !important; line-height: 1; text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent);
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-min,
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-max,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-min,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-max {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; font-size: 13px !important; color: #7f90b0 !important;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider {
+  height: 6px !important; border-radius: 0 !important;
+  background: linear-gradient(90deg, rgba(56,189,248,.18), rgba(56,189,248,.5)) !important;
+  box-shadow: 0 0 8px rgba(56,189,248,.3);
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider::-webkit-slider-thumb,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 12px; height: 22px; border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff, #38bdf8); border: 0; transform: skewX(-14deg);
+  box-shadow: 0 0 10px rgba(56,189,248,.85); cursor: pointer;
+}
+#bluetoothIndividualScreen .indiv-individual-intensity-adjustment-slider::-moz-range-thumb,
+#mobileDashboardScreen .mobile-individual-intensity-adjustment-slider::-moz-range-thumb {
+  width: 12px; height: 22px; border-radius: 2px; background: linear-gradient(180deg, #ffffff, #38bdf8); border: 0;
+  box-shadow: 0 0 10px rgba(56,189,248,.85); cursor: pointer;
+}
+
+/* 상단 워크아웃 그래프 섹션: 타일과 같은 카본 패널 + 3색(시안·주황·빨강) 상단 포인트 라인 */
+#bluetoothIndividualScreen .indiv-segment-graph-section,
+#mobileDashboardScreen .mobile-segment-graph-section {
+  position: relative;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #0e1424 0%, #080c18 100%) !important;
+  border-bottom: 0 !important;
+  box-shadow: inset 0 -10px 16px -14px rgba(255,255,255,.25);
+}
+#bluetoothIndividualScreen .indiv-segment-graph-section::before,
+#mobileDashboardScreen .mobile-segment-graph-section::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; z-index: 11; pointer-events: none;
+  background: linear-gradient(90deg, #22d3ee 0%, #ff8c00 50%, #ff3b3b 100%);
+  box-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
+#bluetoothIndividualScreen .indiv-segment-flow,
+#mobileDashboardScreen .mobile-segment-info {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 700;
+  letter-spacing: .04em; color: #cfe3ff !important; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 8px rgba(34,211,238,.25);
+}
