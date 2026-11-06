@@ -37013,3 +37013,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .5; }
   #rollerRaceDashboardScreen.rr-split .dashboard-header { min-height: 44px; }
 }
+
+/* 창분할 보기: 속도계 원 확장(카드 내 좌우 여백 최소화) + 하단 정보 디지털 숫자 */
+#rollerRaceDashboardScreen.rr-split .speedometer-container { padding: 4px 4px 6px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-dial { padding: 0; margin-top: 0; }
+#rollerRaceDashboardScreen.rr-split .speedometer-svg { display: block; }
+#rollerRaceDashboardScreen.rr-split .speedometer-info { padding: 6px 8px; gap: 6px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-int,
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-dec {
+  font-family: 'DSEG7', ui-monospace, Menlo, monospace; letter-spacing: 0.02em;
+}
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-int { font-weight: 700; font-size: 1em; }
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-dec { font-weight: 400; font-size: 0.6em; opacity: .85; margin-left: 1px; }
+#rollerRaceDashboardScreen.rr-split .speed-stat-value,
+#rollerRaceDashboardScreen.rr-split .distance-value { font-size: clamp(14px, 1.45vw, 24px); white-space: nowrap; }
+#rollerRaceDashboardScreen.rr-split .speed-value { font-size: clamp(16px, 1.7vw, 28px); white-space: nowrap; }

@@ -208,11 +208,27 @@ function createSpeedometerGrid() {
       updateSpeedometerConnectionStatus(speedometer.id, false, 'ready');
     }
   }
+  rrApplySplitViewBox();
 }
 
 /**
  * 속도계 요소 생성
  */
+// 디지털 숫자 표시: 정수는 크게, 소수점 이하는 작게
+function rrSetDigital(el, str) {
+  const i = String(str).indexOf('.');
+  el.innerHTML = i < 0 ? `<span class="rr-int">${str}</span>`
+    : `<span class="rr-int">${str.slice(0, i)}</span><small class="rr-dec">${str.slice(i)}</small>`;
+}
+
+// 창분할 보기: 속도계 원이 카드 좌우를 꽉 채우도록 viewBox 크롭
+function rrApplySplitViewBox() {
+  const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
+  document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
+    svg.setAttribute('viewBox', on ? '6 38 188 134' : '0 0 200 200');
+  });
+}
+
 function createSpeedometerElement(speedometer) {
   const container = document.createElement('div');
   container.className = 'speedometer-container';
@@ -280,14 +296,14 @@ function createSpeedometerElement(speedometer) {
       <!-- 좌측: 최대속도, 평균속도 (2줄) -->
       <div class="speed-display-left">
         <div class="speed-stat-row speed-stat-max">
-          <span class="speed-stat-value" id="max-speed-value-${speedometer.id}">0.0</span>
+          <span class="speed-stat-value" id="max-speed-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
           <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">최대</span>
             <span class="speed-unit-bottom">km/h</span>
           </div>
         </div>
         <div class="speed-stat-row speed-stat-avg">
-          <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}">0.0</span>
+          <span class="speed-stat-value" id="avg-speed-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
           <div class="speed-stat-label-wrapper">
             <span class="speed-stat-label">평균</span>
             <span class="speed-unit-bottom">km/h</span>
@@ -297,14 +313,14 @@ function createSpeedometerElement(speedometer) {
       <!-- 중앙: 거리 (단위는 하단에 표시) -->
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
-          <span class="speed-value" id="distance-value-${speedometer.id}">0.0</span>
+          <span class="speed-value" id="distance-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
           <div class="speed-unit-bottom">km</div>
         </div>
       </div>
       <!-- 우측: 현재속도 -->
       <div class="distance-display-right">
         <div class="speed-value-wrapper">
-          <span class="distance-value" id="speed-value-${speedometer.id}">0</span>
+          <span class="distance-value" id="speed-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
           <div class="speed-unit-bottom">km/h</div>
         </div>
       </div>
@@ -788,13 +804,13 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   
   if (speedValueEl) {
     // 우측에 속도 표시 (속도가 0이어도 즉시 "0.0"으로 표시)
-    speedValueEl.textContent = speed.toFixed(1);
+    rrSetDigital(speedValueEl, speed.toFixed(1));
   }
-  if (maxSpeedValueEl) maxSpeedValueEl.textContent = speedometer.maxSpeed.toFixed(1);
-  if (avgSpeedValueEl) avgSpeedValueEl.textContent = speedometer.averageSpeed.toFixed(1);
+  if (maxSpeedValueEl) rrSetDigital(maxSpeedValueEl, speedometer.maxSpeed.toFixed(1));
+  if (avgSpeedValueEl) rrSetDigital(avgSpeedValueEl, speedometer.averageSpeed.toFixed(1));
   if (distanceValueEl) {
     // 중앙에 거리 표시
-    distanceValueEl.textContent = distance.toFixed(2);
+    rrSetDigital(distanceValueEl, distance.toFixed(2));
   }
   
   // 직선 트랙 내 속도 및 거리 표시 업데이트
@@ -6707,6 +6723,7 @@ window.toggleRaceSplitView = function () {
   if (!scr) return;
   const on = scr.classList.toggle('rr-split');
   if (btn) { btn.classList.toggle('active', on); btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  rrApplySplitViewBox();
   try { window.dispatchEvent(new Event('resize')); } catch (e) {}
 };
 
