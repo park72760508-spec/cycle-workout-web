@@ -6764,14 +6764,14 @@ function rrSyncRearPulses() {
 setInterval(rrSyncRearPulses, 800);
 
 
-// 일반 보기: 속도계 블럭 그리드의 우측 끝을 트랙 경기장 우측 끝에 맞춤
+// 일반 보기: 속도계 블럭 그리드의 우측 끝을 트랙 줄(삭제 버튼 테두리 블럭) 우측 끝에 맞춤
 function rrAlignGridToTrack() {
   const grid = document.getElementById('speedometerGrid');
   if (!grid) return;
   grid.style.marginRight = '';
   const scr = document.getElementById('rollerRaceDashboardScreen');
   if (!scr || scr.classList.contains('rr-split')) return;
-  const tc = document.querySelector('#speedometerList .straight-track-container');
+  const tc = document.querySelector('#speedometerList .speedometer-list-item'); // 삭제 버튼을 감싼 테두리 블럭 끝에 맞춤
   if (!tc) return;
   const t = tc.getBoundingClientRect();
   const g = grid.getBoundingClientRect();
