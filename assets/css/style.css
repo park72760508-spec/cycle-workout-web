@@ -37129,3 +37129,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen:not(.rr-split) .speed-unit-bottom { font-size: 10px; color: #000; font-weight: 500; white-space: nowrap; }
 #rollerRaceDashboardScreen:not(.rr-split) .distance-display-right .speed-unit-bottom::before { content: "속도 "; }
 #rollerRaceDashboardScreen:not(.rr-split) .speed-display-center .speed-unit-bottom::before { content: "이동거리 "; }
+
+/* 창분할 보기: 하단 설정 메뉴 줄을 화면 맨 아래에 붙여 표시 */
+#rollerRaceDashboardScreen.rr-split .speedometer-list-section > .list-header {
+  display: flex !important;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+  margin: 0; padding: 8px 16px;
+  background: rgba(10, 14, 39, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+}
+#rollerRaceDashboardScreen.rr-split { padding-bottom: 64px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list { margin-bottom: 60px; }
+@media (min-height: 900px) and (max-height: 1049px) {
+  #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .6; }
+}
