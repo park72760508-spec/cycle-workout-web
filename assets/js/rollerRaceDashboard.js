@@ -6730,7 +6730,7 @@ function updateTrackDistanceMarkers() {
     const fmt = v => (Math.round(v * 100) / 100).toString();
     for (let d = step; d < target - step * 0.2; d += step) {
       const x = 35 + 865 * (d / target);
-      marks += `<circle cx="${x}" cy="20" r="10" fill="#fff" fill-opacity="0.06" stroke="#fff" stroke-opacity="0.32" stroke-width="1"/>` +
+      marks += `<circle cx="${x}" cy="20" r="10" fill="#343b47" stroke="#fff" stroke-opacity="0.32" stroke-width="1"/>` +
         `<text x="${x}" y="20.5" text-anchor="middle" dominant-baseline="middle" fill="#fff" fill-opacity="0.45" font-size="${fmt(d).length > 3 ? 7 : 9}" font-weight="800">${fmt(d)}</text>`;
     }
   }

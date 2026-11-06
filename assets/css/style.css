@@ -37067,3 +37067,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 경기 트랙 우측: 이동거리만 표시, 숫자 2배(11px→22px), 단위 크기 유지 */
 .track-stats-inside .track-stat-value { font-size: 22px; line-height: 1; }
 .track-stats-inside .track-stat-unit { font-size: 11px; }
+
+/* 속도계 블럭 위쪽 바깥 여백 2배 (기존 전광판 하단 여백 20px / 창분할 6px 만큼 추가) */
+#rollerRaceDashboardScreen #speedometerGrid { margin-top: 20px; }
+#rollerRaceDashboardScreen.rr-split #speedometerGrid { margin-top: 6px; }
