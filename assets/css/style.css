@@ -37152,3 +37152,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   position: sticky; left: auto; right: auto; bottom: 0;
   margin: 4px 0 0; padding: 6px 12px; border-radius: 8px;
 }
+
+/* 창분할: 전광판은 줌 없이 실제 크기로, 숫자 크기는 JS(rrFillSplitHeight)가 블럭 크기에 맞춰 확대 */
+#rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: 1 !important; align-items: center; }
+#rollerRaceDashboardScreen.rr-split .scoreboard-item { justify-content: center; }
+#rollerRaceDashboardScreen.rr-split .scoreboard-label { margin-bottom: 2px; line-height: 1.1; }
+#rollerRaceDashboardScreen.rr-split .scoreboard-value, #rollerRaceDashboardScreen.rr-split .scoreboard-value .digital-number, #rollerRaceDashboardScreen.rr-split .scoreboard-unit { line-height: 1; }

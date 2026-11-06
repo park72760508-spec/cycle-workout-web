@@ -6788,19 +6788,50 @@ window.addEventListener('resize', () => { clearTimeout(window.__rrAlignT); windo
 setInterval(rrAlignGridToTrack, 1500);
 
 
-// 창분할 보기: 하단 설정 메뉴 줄 아래 남는 여백만큼 경과시간(전광판) 블럭 높이를 늘려 메뉴 줄이 화면 맨 아래에 붙게 함
+// 창분할 보기: 하단 설정 메뉴 줄 아래 남는 여백만큼 경과시간(전광판) 블럭 높이를 늘려 메뉴 줄이 화면 맨 아래에 붙게 하고,
+// 블럭 크기에 맞춰 누적거리·경과시간 숫자를 최대한 확대
 function rrFillSplitHeight() {
   const scr = document.getElementById('rollerRaceDashboardScreen');
   const sb = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
   if (!scr || !sb) return;
+  const vals = sb.querySelectorAll('.scoreboard-value');
+  const units = sb.querySelectorAll('.scoreboard-unit');
+  const setFs = fs => {
+    vals.forEach(v => { v.style.fontSize = fs ? fs + 'px' : ''; v.style.lineHeight = fs ? '1' : ''; });
+    units.forEach(u => { u.style.fontSize = fs ? (fs * 0.5) + 'px' : ''; });
+  };
   sb.style.minHeight = '';
+  setFs(0);
   if (!scr.classList.contains('rr-split')) return;
   const bar = document.querySelector('#rollerRaceDashboardScreen .speedometer-list-section > .list-header');
   if (!bar || !bar.offsetParent) return;
+  setFs(28); // 측정용 기준 크기
   const free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
-  if (free <= 1) return;
-  const zoom = parseFloat(getComputedStyle(sb).zoom) || 1;
-  sb.style.minHeight = ((sb.getBoundingClientRect().height + free) / zoom) + 'px';
+  const base = sb.getBoundingClientRect().height;
+  const T = free > 1 ? base + free : base;
+  if (free > 1) sb.style.minHeight = T + 'px';
+  // 높이 기준 최대 글자 크기: 블럭 높이 - (패딩 + 라벨 영역)
+  const label = sb.querySelector('.scoreboard-label');
+  const labelH = label ? label.getBoundingClientRect().height + 2 : 16;
+  const padV = parseFloat(getComputedStyle(sb).paddingTop) + parseFloat(getComputedStyle(sb).paddingBottom);
+  let fsH = (T - padV - labelH) / 1.05;
+  // 폭 기준 최대 글자 크기: 경과시간(가장 긴 문자열)이 항목 폭 안에 들어가도록
+  const timeEl = sb.querySelector('#scoreboardTime');
+  let fsW = Infinity;
+  if (timeEl) {
+    const item = timeEl.closest('.scoreboard-item');
+    const w28 = timeEl.getBoundingClientRect().width / 28;
+    if (item && w28 > 0) fsW = (item.getBoundingClientRect().width * 0.94) / w28;
+  }
+  let fs = Math.max(28, Math.min(fsH, fsW, 260));
+  setFs(Math.floor(fs));
+  // 실제 내용 높이가 블럭을 넘으면 비율로 줄여 맞춤
+  for (let i = 0; i < 6; i++) {
+    const h = sb.scrollHeight, c = sb.clientHeight;
+    if (h <= c + 0.5) break;
+    fs = Math.max(20, Math.floor(fs * (c / h) * 0.97));
+    setFs(fs);
+  }
 }
 window.addEventListener('resize', () => { clearTimeout(window.__rrFillT); window.__rrFillT = setTimeout(rrFillSplitHeight, 150); });
 setInterval(rrFillSplitHeight, 1500);
