@@ -281,7 +281,7 @@ function createSpeedometerElement(speedometer) {
                 stroke="#ff0000" 
                 stroke-width="3" 
                 stroke-linecap="round"
-                transform="rotate(270)"/>
+                transform="rotate(-90)"/>
         </g>
         
         <!-- 바늘 중심 원: 바늘 위에 그려 바늘 시작부가 원 테두리 밖/안으로 비치지 않게 함 -->
@@ -437,221 +437,58 @@ function generateSpeedometerLabels() {
  * 바늘 중심: 원의 중심 (100, 140) - 원지름의 1/4만큼 아래로 이동
  * 60km/h 경계를 넘어갈 때 반대로 돌아가지 않도록 연속적인 각도 추적
 
-function updateSpeedometerNeedle(speedometerId, speed) {
-  const needle = document.getElementById(`needle-${speedometerId}`);
-  if (!needle) return;
-  
-  // 바늘 각도 계산 (공통 함수 사용)
-  const targetAngle = calculateNeedleAngle(speed);
-  
-  // 이전 각도 가져오기 (연속적인 각도 값 유지)
-  let previousAngle = window.rollerRaceState.needleAngles[speedometerId];
-  
-  if (previousAngle === undefined) {
-    // 첫 번째 업데이트인 경우, 목표 각도로 초기화
-    previousAngle = targetAngle;
-    window.rollerRaceState.needleAngles[speedometerId] = previousAngle;
-  }
-  
-  // 이전 속도 가져오기 (속도 변화 방향 판단용)
-  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
-  const previousSpeed = speedometer?.previousSpeed ?? speed;
-  speedometer.previousSpeed = speed;
-  
-  // 속도 변화 방향에 따라 각도 변화 방향 결정
-  const speedDiff = speed - previousSpeed;
-  
-  // 이전 각도 정규화
-  let normalizedPrevious = previousAngle;
-  while (normalizedPrevious >= 360) normalizedPrevious -= 360;
-  while (normalizedPrevious < 0) normalizedPrevious += 360;
-  
-  // 각도 차이 계산
-  let angleDiff = targetAngle - normalizedPrevious;
-  
-  // 180도 이상 차이나는 경우 최단 경로 선택
-  if (Math.abs(angleDiff) > 180) {
-    if (speedDiff > 0) {
-      // 속도 증가: 각도 증가 방향
-      if (angleDiff < 0) angleDiff += 360;
-    } else if (speedDiff < 0) {
-      // 속도 감소: 각도 감소 방향
-      if (angleDiff > 0) angleDiff -= 360;
-    } else {
-      // 속도 변화 없음: 최단 경로 선택
-      if (angleDiff > 180) {
-        angleDiff -= 360;
-      } else if (angleDiff < -180) {
-        angleDiff += 360;
-      }
-    }
-  }
-  
-  // 이전 각도에서 연속적으로 이동한 새로운 각도 계산
-  let newAngle = normalizedPrevious + angleDiff;
-  
-  // 각도를 0~360도 범위로 정규화 (표시용)
-  let displayAngle = newAngle;
-  while (displayAngle >= 360) displayAngle -= 360;
-  while (displayAngle < 0) displayAngle += 360;
-  
-  // 이전 각도 저장 (정규화된 값으로 저장)
-  window.rollerRaceState.needleAngles[speedometerId] = displayAngle;
-  
-  // 부드러운 애니메이션을 위해 transition 적용
-  // 그룹이 이미 translate(100, 140)로 이동되어 있으므로, 바늘은 원점(0,0) 기준으로 회전
-  needle.style.transition = 'transform 0.3s ease-out';
-  needle.setAttribute('transform', `rotate(${displayAngle})`);
-  
-  // 바늘 행적선 업데이트
-  updateSpeedometerNeedlePath(speedometerId, speed);
-}
  */
+
+
+
+
 
 
 
 
 /**
- * 가민 스타일: 속도계 바늘 업데이트 (최고 수준 애니메이션)
- * - 물리 기반 애니메이션 (관성 및 감쇠)
- * - 가속도 기반 동적 애니메이션 속도
- * - 부드러운 전환 (cubic-bezier 최적화)
- * - 60km/h 경계값 부드럽게 처리
+ * 속도계 바늘 업데이트 — 모바일 훈련 화면의 파워 게이지 로직과 동일하게 동작
+ * (파워값 대신 속도값 사용): 목표값을 저장하고, 매 프레임 표시값이 목표를 0.15 비율로 따라가며(보간)
+ * 각도 = -90 + (표시값/120) * 180 로 바늘을 직접 회전(transition 없음). 0km/h → 왼쪽(0 눈금) 시작.
  */
 function updateSpeedometerNeedle(speedometerId, speed) {
-  const needle = document.getElementById(`needle-${speedometerId}`);
-  if (!needle) return;
-  
-  const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
-  if (!speedometer) return;
-  
-  const now = Date.now();
-  
-  // 1. 목표 각도 계산
-  const targetAngle = calculateNeedleAngle(speed);
-  speedometer.needleTargetAngle = targetAngle;
-  
-  // 2. 현재 각도 상태 가져오기
-  let currentAngle = window.rollerRaceState.needleAngles[speedometerId];
-  if (currentAngle === undefined) {
-    currentAngle = targetAngle;
-    window.rollerRaceState.needleAngles[speedometerId] = currentAngle;
-    speedometer.needleCurrentAngle = currentAngle;
-    speedometer.needleVelocity = 0;
-    speedometer.lastNeedleUpdateTime = now;
-  }
-  
-  speedometer.needleCurrentAngle = currentAngle;
-  
-  // 3. 가민 스타일: 최단 경로 회전 계산 (360도 회전 방지)
-  let normalizedCurrent = currentAngle % 360;
-  if (normalizedCurrent < 0) normalizedCurrent += 360;
-  
-  let normalizedTarget = targetAngle % 360;
-  if (normalizedTarget < 0) normalizedTarget += 360;
-  
-  let angleDiff = normalizedTarget - normalizedCurrent;
-  
-  // 최단 경로 선택
-  if (angleDiff > 180) {
-    angleDiff -= 360;
-  } else if (angleDiff < -180) {
-    angleDiff += 360;
-  }
-  
-  // 4. 가민 스타일: 물리 기반 애니메이션 (관성 및 감쇠)
-  const timeSinceLastUpdate = (now - (speedometer.lastNeedleUpdateTime || now)) / 1000.0; // 초 단위
-  const maxTimeDiff = 0.1; // 최대 100ms 간격
-  
-  if (timeSinceLastUpdate > 0 && timeSinceLastUpdate < maxTimeDiff) {
-    // 각속도 계산 (도/초)
-    const targetVelocity = angleDiff / timeSinceLastUpdate;
-    
-    // 가민 스타일: 감쇠 적용 (관성 효과)
-    const damping = 0.85; // 감쇠 계수
-    speedometer.needleVelocity = (speedometer.needleVelocity * damping) + (targetVelocity * (1 - damping));
-    
-    // 속도 제한 (너무 빠른 움직임 방지)
-    const maxVelocity = 720; // 도/초 (2회전/초)
-    if (Math.abs(speedometer.needleVelocity) > maxVelocity) {
-      speedometer.needleVelocity = speedometer.needleVelocity > 0 ? maxVelocity : -maxVelocity;
-    }
-    
-    // 각도 업데이트
-    const angleChange = speedometer.needleVelocity * timeSinceLastUpdate;
-    currentAngle += angleChange;
-    
-    // 목표 각도에 가까워지면 감쇠 증가
-    const remainingDiff = normalizedTarget - (currentAngle % 360);
-    if (Math.abs(remainingDiff) < 5) {
-      speedometer.needleVelocity *= 0.7; // 더 빠른 감쇠
-    }
-  } else {
-    // 시간 간격이 너무 크면 즉시 목표 각도로 이동
-    currentAngle = targetAngle;
-    speedometer.needleVelocity = 0;
-  }
-  
-  // 5. 가민 스타일: 동적 애니메이션 속도 (속도 변화량 기반)
-  const previousSpeed = speedometer.previousSpeed ?? 0;
-  const speedChange = Math.abs(speed - previousSpeed);
-  
-  let animationDuration;
-  let easingFunction;
-  
-  if (speedChange > 10) {
-    // 급격한 속도 변화: 빠른 애니메이션
-    animationDuration = 0.25; // 250ms
-    easingFunction = 'cubic-bezier(0.4, 0.0, 0.2, 1)'; // 빠른 시작, 빠른 끝
-  } else if (speedChange > 5) {
-    // 중간 속도 변화: 보통 애니메이션
-    animationDuration = 0.35; // 350ms
-    easingFunction = 'cubic-bezier(0.25, 0.1, 0.25, 1)'; // 부드러운 전환
-  } else {
-    // 완만한 속도 변화: 느린 애니메이션
-    animationDuration = 0.45; // 450ms
-    easingFunction = 'cubic-bezier(0.2, 0.0, 0.2, 1)'; // 매우 부드러운 전환
-  }
-  
-  // 6. 각도 정규화 및 저장
-  while (currentAngle >= 360) currentAngle -= 360;
-  while (currentAngle < 0) currentAngle += 360;
-  
-  window.rollerRaceState.needleAngles[speedometerId] = currentAngle;
-  speedometer.needleCurrentAngle = currentAngle;
-  speedometer.lastNeedleUpdateTime = now;
-  
-  // 7. 가민 스타일: 부드러운 애니메이션 적용
-  needle.style.transition = `transform ${animationDuration}s ${easingFunction}`;
-  needle.setAttribute('transform', `rotate(${currentAngle})`);
-  
-  // 8. 가민 스타일: 바늘 궤적선 업데이트 (속도 변화 방향 기반)
-  const isAccelerating = speed > previousSpeed;
-  const isDecelerating = speed < previousSpeed;
-  
-  if (isDecelerating) {
-    // 감속 시: 목표 속도를 기준으로 즉시 궤적 업데이트
-    updateSpeedometerNeedlePath(speedometerId, speed);
-  } else if (isAccelerating) {
-    // 가속 시: 현재 각도 기준으로 궤적 업데이트
-    const currentNeedleSpeed = calculateSpeedFromAngle(currentAngle);
-    updateSpeedometerNeedlePath(speedometerId, currentNeedleSpeed);
-    
-    // 애니메이션 완료 후 목표 속도까지 궤적 업데이트
-    setTimeout(() => {
-      updateSpeedometerNeedlePath(speedometerId, speed);
-    }, animationDuration * 1000);
-  } else {
-    // 속도 변화 없음: 현재 속도 기준으로 업데이트
-    updateSpeedometerNeedlePath(speedometerId, speed);
-  }
-  
-  // 9. 속도 저장 (다음 비교용)
-  speedometer.previousSpeed = speed;
+  const sp = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
+  if (!sp) return;
+  sp.needleTargetSpeed = Math.max(0, Number(speed) || 0);
+  if (sp.needleDisplaySpeed === undefined) sp.needleDisplaySpeed = 0;
+  rrStartNeedleLoop();
 }
 
-
-
+let rrNeedleRaf = null;
+function rrStartNeedleLoop() {
+  if (rrNeedleRaf !== null) return;
+  const loop = () => {
+    const scr = document.getElementById('rollerRaceDashboardScreen');
+    if (!scr || getComputedStyle(scr).display === 'none') { rrNeedleRaf = null; return; } // 화면이 숨겨지면 중지
+    let moving = false;
+    window.rollerRaceState.speedometers.forEach(sp => {
+      if (!sp) return;
+      const target = sp.needleTargetSpeed || 0;
+      const cur = sp.needleDisplaySpeed || 0;
+      const diff = target - cur;
+      let next;
+      if (Math.abs(diff) > 0.1) { next = cur + diff * 0.15; moving = true; } else { next = target; }
+      if (next === sp.needleDisplaySpeed && sp.needleDrawn) return;
+      sp.needleDisplaySpeed = next;
+      sp.needleDrawn = true;
+      const needle = document.getElementById(`needle-${sp.id}`);
+      if (!needle) return;
+      needle.style.transition = 'none';
+      needle.setAttribute('transform', `rotate(${calculateNeedleAngle(next)})`);
+      window.rollerRaceState.needleAngles[sp.id] = calculateNeedleAngle(next);
+      // 궤적선: 2.5km/h 단계가 바뀔 때만 갱신
+      const step = Math.floor(next / 2.5);
+      if (step !== sp.needleTrailStep) { sp.needleTrailStep = step; updateSpeedometerNeedlePath(sp.id, next); }
+    });
+    rrNeedleRaf = moving ? requestAnimationFrame(loop) : null;
+  };
+  rrNeedleRaf = requestAnimationFrame(loop);
+}
 
 /**
  * 속도에 따른 바늘 각도 계산 (공통 함수)
@@ -664,19 +501,9 @@ function updateSpeedometerNeedle(speedometerId, speed) {
  * - speed = 120 → angle = 360 - 180 = 180도 (하단 오른쪽)
  */
 function calculateNeedleAngle(speed) {
-  const maxSpeed = 120;
-  
-  // 단일 공식으로 연속성 보장 (눈금 생성 로직과 일치)
-  // speed = 0 → angle = 360도 (정규화하면 0도)
-  // speed = 60 → angle = 270도
-  // speed = 120 → angle = 180도
-  let angle = 360 - (speed / maxSpeed) * 180;
-  
-  // 각도를 0~360도 범위로 정규화
-  while (angle >= 360) angle -= 360;
-  while (angle < 0) angle += 360;
-  
-  return angle;
+  // 모바일 훈련 화면 파워 게이지와 동일: 비율(0~1)로 -90°(왼쪽, 0km/h) ~ +90°(오른쪽, 120km/h)
+  const ratio = Math.min(Math.max((Number(speed) || 0) / 120, 0), 1);
+  return -90 + ratio * 180;
 }
 
 /**
@@ -692,22 +519,8 @@ function calculateNeedleAngle(speed) {
  * - angle = 180도 → speed = 120
  */
 function calculateSpeedFromAngle(angle) {
-  const maxSpeed = 120;
-  
-  // 각도를 0~360도 범위로 정규화
-  let normalizedAngle = angle;
-  while (normalizedAngle >= 360) normalizedAngle -= 360;
-  while (normalizedAngle < 0) normalizedAngle += 360;
-  
-  // 단일 역함수 공식 사용 (연속성 보장)
-  // speed = (360 - angle) * maxSpeed / 180
-  let speed = ((360 - normalizedAngle) / 180) * maxSpeed;
-  
-  // 속도 범위 제한
-  if (speed < 0) speed = 0;
-  if (speed > maxSpeed) speed = maxSpeed;
-  
-  return speed;
+  const ratio = Math.min(Math.max((angle + 90) / 180, 0), 1);
+  return ratio * 120;
 }
 
 /**
@@ -1591,11 +1404,12 @@ function startRace() {
     
     window.rollerRaceState.needleAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
-      window.rollerRaceState.needleAngles[s.id] = 270;
+      window.rollerRaceState.needleAngles[s.id] = -90;
+      s.needleTargetSpeed = 0; s.needleDisplaySpeed = 0; s.needleTrailStep = undefined; s.needleDrawn = false;
       const needle = document.getElementById(`needle-${s.id}`);
       if (needle) {
         needle.style.transition = 'none';
-        needle.setAttribute('transform', 'rotate(270)');
+        needle.setAttribute('transform', 'rotate(-90)');
       }
       const pathGroup = document.getElementById(`needle-path-${s.id}`);
       if (pathGroup) pathGroup.innerHTML = '';
