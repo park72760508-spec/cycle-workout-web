@@ -37071,3 +37071,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 속도계 블럭 위쪽 바깥 여백 2배 (기존 전광판 하단 여백 20px / 창분할 6px 만큼 추가) */
 #rollerRaceDashboardScreen #speedometerGrid { margin-top: 20px; }
 #rollerRaceDashboardScreen.rr-split #speedometerGrid { margin-top: 6px; }
+
+/* 창분할 하단 정보: 평속·속도 = 기존 이동거리 크기(1.3배), 이동거리 = 그 1.5배 */
+#rollerRaceDashboardScreen.rr-split .speed-stat-value,
+#rollerRaceDashboardScreen.rr-split .distance-value { font-size: calc(1.3 * clamp(14px, 1.45vw, 24px)); }
+#rollerRaceDashboardScreen.rr-split .speed-value { font-size: calc(1.95 * clamp(14px, 1.45vw, 24px)); }
+#rollerRaceDashboardScreen.rr-split .speedometer-info { grid-template-columns: 1fr 1.7fr 1fr; }
+#rollerRaceDashboardScreen.rr-split .speedometer-info { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 2px; padding: 6px 4px; }
+#rollerRaceDashboardScreen.rr-split .speed-display-center { overflow: visible; }
