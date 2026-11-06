@@ -37482,3 +37482,97 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 미수신/대기 상태: 숫자 톤다운 → 수신 중일 때만 선명 */
 #rollerRaceDashboardScreen .speedometer-info:not(.connected) .rr-int,
 #rollerRaceDashboardScreen .speedometer-info:not(.connected) .rr-dec { opacity: .55; }
+
+/* ===== 그룹훈련 > PC 모니터링 화면: STELVIO Race 디자인 톤 적용 ===== */
+/* 상단 전광판 (Total Time / Lap Time) */
+#bluetoothTrainingCoachScreen .scoreboard-display {
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px),
+    linear-gradient(135deg, #0a0f1f 0%, #0d1530 60%, #131c3a 100%);
+  border: 0; border-left: 4px solid #ff3b3b; border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5), inset 0 0 40px rgba(255, 59, 59, .06);
+  position: relative;
+}
+#bluetoothTrainingCoachScreen .scoreboard-display::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, #ff3b3b, rgba(255,59,59,0) 70%);
+}
+#bluetoothTrainingCoachScreen .scoreboard-label {
+  font: italic 800 clamp(11px, 1.05vw, 14px)/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .28em; color: #9fb0cc;
+  text-shadow: none; text-transform: uppercase;
+}
+#bluetoothTrainingCoachScreen .scoreboard-label::before { content: "▍"; color: #ff3b3b; margin-right: 6px; letter-spacing: 0; }
+#bluetoothTrainingCoachScreen .scoreboard-value,
+#bluetoothTrainingCoachScreen .scoreboard-value .digital-number,
+#bluetoothTrainingCoachScreen .scoreboard-unit {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+#bluetoothTrainingCoachScreen .scoreboard-value .digital-number { color: #f4f8ff; text-shadow: 0 0 18px rgba(34, 211, 238, .35); }
+#bluetoothTrainingCoachScreen .dashboard-header .race-title-text { font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; letter-spacing: .04em; text-shadow: 0 0 14px rgba(255, 59, 59, .45); }
+
+/* 카드(속도계) 상단: 트랙 번호 배지 + 사용자 이름 */
+#bluetoothCoachPowerMeterGrid .speedometer-header .speedometer-name {
+  --rr-c: #22d3ee;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 80%, #000) 0%, #101a33 70%) !important;
+  border-left: 5px solid var(--rr-c); border-radius: 0 !important;
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 900 !important; letter-spacing: .06em;
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--rr-c) 45%, transparent); text-shadow: 0 1px 2px rgba(0,0,0,.6);
+}
+#bluetoothCoachPowerMeterGrid .speedometer-user-name {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800 !important;
+  letter-spacing: .03em; text-transform: uppercase; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+}
+
+/* 하단 정보바: 카본 다크 패널 + 상태색 — 대기=하늘색, 목표 달성=연두, 미달성=주황 */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info {
+  --st: #64748b;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 16%, #0e1424) 0%, #080c18 100%) !important;
+  border: 0 !important; border-top: 3px solid var(--st) !important;
+  box-shadow: inset 0 8px 14px -10px var(--st), 0 4px 14px color-mix(in srgb, var(--st) 24%, transparent);
+  transition: border-color .3s ease, box-shadow .3s ease, background .3s ease;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info[data-ach-state="waiting"] { --st: #38bdf8; }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info[data-ach-state="ok"] { --st: #a3e635; }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info[data-ach-state="low"] { --st: #ff8c00; }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speedometer-info[data-ach-state="idle"] { --st: #475569; }
+/* 정보바 숫자: 속도계 정보 표시와 같은 폰트(Barlow Semi Condensed 이탤릭 800, 고정폭 숫자) */
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-value,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-value,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .distance-value {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+}
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-stat-value { color: #cbd5e1 !important; text-shadow: none; }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-value { color: #ffffff !important; text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent); }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .distance-value { color: var(--st) !important; text-shadow: 0 0 10px color-mix(in srgb, var(--st) 50%, transparent); }
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-unit-small,
+#bluetoothTrainingCoachScreen #bluetoothCoachPowerMeterGrid .speed-unit-bottom { color: #8fa0c0 !important; font-style: italic; letter-spacing: .04em; }
+/* 계기판 안 숫자(현재 파워·목표 파워)도 같은 폰트 */
+#bluetoothCoachPowerMeterGrid text[id^="current-power-value"],
+#bluetoothCoachPowerMeterGrid text[id^="target-power-value"],
+#bluetoothCoachPowerMeterGrid text[id^="ftp-percent"] { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* 하단 환경 설정 버튼: 레이싱 스타일 */
+#bluetoothTrainingCoachScreen .list-header-actions .btn {
+  position: relative; overflow: hidden; border: 0 !important; border-radius: 0 !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  padding: 7px 20px !important; min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font: italic 800 14px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; letter-spacing: .08em; text-transform: uppercase;
+  color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.28);
+  transition: filter .15s ease, transform .1s ease;
+}
+#bluetoothTrainingCoachScreen .list-header-actions .btn::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 35%; left: -50%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.3), transparent); transition: left .5s ease;
+}
+#bluetoothTrainingCoachScreen .list-header-actions .btn:hover::after { left: 120%; }
+#bluetoothTrainingCoachScreen .list-header-actions .btn:hover { filter: brightness(1.18) saturate(1.1); }
+#bluetoothTrainingCoachScreen .list-header-actions .btn:active { transform: translateY(1px) scale(.98); }
+#bluetoothTrainingCoachScreen .list-header-actions .btn-primary { background: linear-gradient(180deg, #22d3ee, #0e7490) !important; }
+#bluetoothTrainingCoachScreen .list-header-actions .btn-secondary { background: linear-gradient(180deg, #5b6b8c, #2b3550) !important; }
+#bluetoothTrainingCoachScreen .list-header-actions .btn-icon-image { filter: brightness(0) invert(1); }
+#bluetoothTrainingCoachScreen .list-header-actions .btn-icon-image,
+#rollerRaceDashboardScreen .list-header-actions .btn-icon-image { filter: none; }

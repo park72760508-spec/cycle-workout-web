@@ -725,13 +725,14 @@ function createPowerMeterElement(powerMeter) {
   container.dataset.powerMeterId = powerMeter.id;
   
   // 트랙 버튼은 표시만 하고 클릭 이벤트는 없음 (Coach 모니터는 읽기 전용)
-  const trackButtonStyle = 'background: rgba(0, 212, 170, 0.5) !important; color: #ffffff !important; cursor: default !important;';
+  const trackButtonStyle = 'color: #ffffff !important; cursor: default !important;';
+  const rrTrackColor = (typeof getMascotColor === 'function') ? getMascotColor(((Number(powerMeter.id) - 1) % 10 + 10) % 10 + 1) : '#22d3ee';
   
   container.innerHTML = `
     <div class="speedometer-header" style="display: flex !important; justify-content: space-between !important; align-items: center !important; width: 100% !important; position: relative !important;">
       <span class="speedometer-user-name" id="user-icon-${powerMeter.id}" 
             style="display: ${powerMeter.userName ? 'inline-block' : 'none'} !important; font-size: var(--coach-hdr-fs, 13px) !important; color: #ffffff !important; font-weight: 500 !important; text-align: left !important; cursor: default !important; order: 1 !important;">${powerMeter.userName || ''}</span>
-      <span class="speedometer-name" style="position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 700 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: var(--coach-badge-fs, 18px) !important; line-height: 1.2 !important; min-width: 2em !important; font-variant-numeric: tabular-nums !important; ${trackButtonStyle} padding: var(--coach-badge-pad, 2px 12px) !important; border-radius: 8px !important; display: inline-block !important;">${powerMeter.id}</span>
+      <span class="speedometer-name" style="--rr-c:${rrTrackColor}; position: absolute !important; left: 50% !important; transform: translateX(-50%) !important; font-weight: 700 !important; text-align: center !important; order: 2 !important; z-index: 1 !important; font-size: var(--coach-badge-fs, 18px) !important; line-height: 1.2 !important; min-width: 2em !important; font-variant-numeric: tabular-nums !important; ${trackButtonStyle} padding: var(--coach-badge-pad, 2px 12px) !important; display: inline-block !important;">${powerMeter.id}</span>
       <div class="connection-status-center" id="status-${powerMeter.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; display: flex !important; align-items: center !important; gap: 6px !important;">
         <span id="device-icons-${powerMeter.id}" style="display: none !important; align-items: center !important; gap: 4px !important;"></span>
         <span class="status-dot disconnected" id="status-dot-${powerMeter.id}"></span>
@@ -1582,23 +1583,10 @@ function updateBluetoothCoachInfoBarColor(powerMeter) {
   if (infoEl.dataset.achState === state) return;
   infoEl.dataset.achState = state;
   infoEl.classList.remove('connected', 'disconnected', 'warning');
-  if (state === 'ok') {
-    infoEl.style.backgroundColor = '#22c55e';
-    infoEl.style.borderColor = '#22c55e';
-    infoEl.style.color = '#ffffff';
-  } else if (state === 'low') {
-    infoEl.style.backgroundColor = '#ff8c00';
-    infoEl.style.borderColor = '#ff8c00';
-    infoEl.style.color = '#ffffff';
-  } else if (state === 'waiting') {
-    infoEl.style.backgroundColor = '#c2e9fd'; // 연한 하늘색(#e0f2fe)을 30% 더 진하게
-    infoEl.style.borderColor = '#93d5fb';
-    infoEl.style.color = '#334155';
-  } else {
-    infoEl.style.backgroundColor = '#ffffff';
-    infoEl.style.borderColor = '#e2e8f0';
-    infoEl.style.color = '#334155';
-  }
+  // 색상은 CSS([data-ach-state])가 담당: waiting=하늘색, ok=연두, low=주황, idle=슬레이트 (STELVIO Race 디자인 톤)
+  infoEl.style.backgroundColor = '';
+  infoEl.style.borderColor = '';
+  infoEl.style.color = '';
 }
 
 /** Coach PC 속도계 슬롯: 접속자 없는 슬롯은 휴대폰 Coach 모니터의 빈 슬롯처럼 어둡게(2026-11-01) */
