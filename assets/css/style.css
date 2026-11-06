@@ -37056,3 +37056,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   0%   { transform: scale(1, 1);     opacity: .85; }
   100% { transform: scale(3.2, 1.7); opacity: 0; }
 }
+
+/* 트랙 페어링 화면: 이름 입력 텍스트 검정 */
+#addSpeedometerModal input[type="text"], #speedometerName { color: #000 !important; background-color: #fff !important; -webkit-text-fill-color: #000; }
+#addSpeedometerModal input::placeholder { color: #888; -webkit-text-fill-color: #888; }

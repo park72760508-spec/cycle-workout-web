@@ -2875,12 +2875,7 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   const mascotRingEl = document.getElementById(`mascot-color-ring-${speedometerId}`);
   const mascotPulseEl = document.getElementById(`mascot-pulse-ring-${speedometerId}`);
   if (mascotRingEl) {
-    const moving = speed > 0;
-    mascotRingEl.classList.toggle('blinking', moving);
-    // 뒷바퀴 타원 펄스: 경기 진행 중 + 주행 중일 때만
-    if (mascotPulseEl) {
-      mascotPulseEl.classList.toggle('blinking', moving && window.rollerRaceState.raceState === 'running');
-    }
+    mascotRingEl.classList.toggle('blinking', speed > 0);
   }
 }
 
@@ -6745,3 +6740,19 @@ function updateTrackDistanceMarkers() {
   }
   document.querySelectorAll('.track-km-marks').forEach(g => { g.innerHTML = marks; });
 }
+
+
+// 뒷바퀴 타원 펄스: 경기 시작(진행 중) 상태이고 트랙에 이름이 입력된 경우 동작
+function rrSyncRearPulses() {
+  const st = window.rollerRaceState;
+  if (!st || !st.speedometers) return;
+  const running = st.raceState === 'running';
+  st.speedometers.forEach(sp => {
+    if (!sp) return;
+    const el = document.getElementById(`mascot-pulse-ring-${sp.id}`);
+    if (!el) return;
+    const named = !!(sp.pairingName && String(sp.pairingName).trim());
+    el.classList.toggle('blinking', running && named);
+  });
+}
+setInterval(rrSyncRearPulses, 400);
