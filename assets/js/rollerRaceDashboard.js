@@ -2372,10 +2372,6 @@ function updateSpeedometerListUI() {
         <!-- 속도 및 이동거리 표시 (주황색 블럭 안 오른쪽 끝) -->
         <div class="track-stats-inside">
           <div class="track-stats-item">
-            <span class="track-stat-value" id="straight-speed-text-${speedometer.id}">0</span>
-            <span class="track-stat-unit">km/h</span>
-          </div>
-          <div class="track-stats-item">
             <span class="track-stat-value" id="straight-distance-text-${speedometer.id}">0.00</span>
             <span class="track-stat-unit">km</span>
           </div>

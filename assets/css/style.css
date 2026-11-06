@@ -37063,3 +37063,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 트랙 페어링 화면: 이름 입력 텍스트 검정 */
 #addSpeedometerModal input[type="text"], #speedometerName { color: #000 !important; background-color: #fff !important; -webkit-text-fill-color: #000; }
 #addSpeedometerModal input::placeholder { color: #888; -webkit-text-fill-color: #888; }
+
+/* 경기 트랙 우측: 이동거리만 표시, 숫자 2배(11px→22px), 단위 크기 유지 */
+.track-stats-inside .track-stat-value { font-size: 22px; line-height: 1; }
+.track-stats-inside .track-stat-unit { font-size: 11px; }
