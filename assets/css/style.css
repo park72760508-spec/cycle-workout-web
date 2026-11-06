@@ -38035,3 +38035,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 워크아웃 그래프 영역: 미선택 안내 막대·문구도 Race 톤 */
 #bluetoothCoachMobileScreen .coachm-graph-placeholder__bars > div { background: linear-gradient(180deg, #67e8f9, #0e7490) !important; border-radius: 1px 1px 0 0 !important; }
 #bluetoothCoachMobileScreen .coachm-graph-placeholder__bars { opacity: .35; }
+
+/* Coach 휴대폰 그래프 X축 하단 "현재 >> 다음 세그먼트": 사용자 훈련 화면(.indiv-segment-flow)과 동일한 위치·크기 */
+#bluetoothCoachMobileScreen .mobile-segment-info {
+  position: absolute; bottom: 4px; left: 0; right: 0; z-index: 10; text-align: center;
+  font-size: 12px; padding: 0 8px; min-height: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
+}

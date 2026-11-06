@@ -791,7 +791,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // coachmSegmentGraph: Live Training Room 휴대폰 Coach 화면 — 모바일 훈련 화면과 같은 그래프 스타일
   const isIndividualDashboardCanvas = canvasId === 'individualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph';
   // STELVIO Race 컨셉 그래프: 그룹훈련 사용자 훈련 화면 + 개인훈련 모바일 훈련 화면 전용(2026-11-06)
-  const raceGraph = canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph';
+  const raceGraph = canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph';
   
   // 사용자 FTP 가져오기
   // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
