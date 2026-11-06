@@ -610,7 +610,7 @@
           '<span class="coachm-rank-item__rank">' + r.rank + '</span>' +
           '<span class="coachm-slot-item__name">' + escapeText(r.name) + '</span>' +
           '<span class="coachm-rank-item__ach coachm-rank-item__ach--' + achCls + '">' + achTxt + '</span>' +
-          '<span class="coachm-rank-item__score">' + r.total.toFixed(1) + '</span>' +
+          '<span class="coachm-rank-item__score">' + (function (t) { var pt = Number(t || 0).toFixed(1).split('.'); return '<span class="coachm-sc__int">' + pt[0] + '</span><span class="coachm-sc__dec">.' + pt[1] + '</span>'; })(r.total) + '</span>' +
           '</div>';
       }).join('');
     Array.prototype.forEach.call(list.querySelectorAll('.coachm-slot-item[data-track]'), function (row) {

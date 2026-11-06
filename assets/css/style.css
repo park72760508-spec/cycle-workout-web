@@ -38041,3 +38041,49 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   position: absolute; bottom: 4px; left: 0; right: 0; z-index: 10; text-align: center;
   font-size: 12px; padding: 0 8px; min-height: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; pointer-events: none;
 }
+
+/* ===== Coach 휴대폰 메뉴 > 순위 목록: STELVIO Race 컨셉 (사용자 훈련 화면 미니 순위 전광판과 같은 타일 톤) ===== */
+#bluetoothCoachMobileScreen .coachm-menu { background: linear-gradient(180deg, #0e1424, #080c18) !important; border: 0 !important; border-top: 3px solid #22d3ee !important; border-radius: 0 !important; }
+#bluetoothCoachMobileScreen .coachm-rank-head {
+  font: italic 800 11px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .24em; color: #9fb0cc; text-transform: uppercase; padding: 8px 14px 6px;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item {
+  position: relative; margin: 0 8px 3px; padding: 7px 8px 7px 9px !important; color: #e8eef9;
+  background: linear-gradient(90deg, rgba(14, 20, 36, .85), rgba(8, 12, 24, .6));
+  border-left: 3px solid #475569;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+#bluetoothCoachMobileScreen .coachm-rank-item--top1 { border-left-color: #f5b50f; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top2 { border-left-color: #c4cdd9; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top3 { border-left-color: #c9732b; }
+#bluetoothCoachMobileScreen .coachm-rank-item.selected,
+#bluetoothCoachMobileScreen .coachm-rank-item:active { background: linear-gradient(90deg, rgba(34, 211, 238, .24), rgba(8, 12, 24, .6)); border-left-color: #22d3ee; }
+#bluetoothCoachMobileScreen .coachm-rank-item__rank {
+  width: auto; height: auto; min-width: 22px; border-radius: 0; background: none !important;
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-size: 18px; color: #8fa0c0;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item--top1 .coachm-rank-item__rank { color: #f5b50f; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top2 .coachm-rank-item__rank { color: #dbe3ee; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top3 .coachm-rank-item__rank { color: #e0904f; }
+#bluetoothCoachMobileScreen .coachm-rank-item .coachm-slot-item__name {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 700; letter-spacing: .02em; color: #e8eef9;
+}
+/* 현재 달성도 배지: 라임(달성) / 주황(미달성) — 사선 칩 */
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok,
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under {
+  border-radius: 0; box-shadow: none; padding: 3px 8px; color: #07101f;
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-size: 13px;
+  clip-path: polygon(4px 0, 100% 0, calc(100% - 4px) 100%, 0 100%);
+}
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok { background: #a3e635; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under { background: #ff8c00; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--none { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; color: #6f7fa0; }
+/* 점수 숫자: 정수는 크고 굵게, 소수는 작고 가늘게 — Barlow 이탤릭 */
+#bluetoothCoachMobileScreen .coachm-rank-item__score {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0;
+  color: #f0f5ff; text-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
+#bluetoothCoachMobileScreen .coachm-sc__int { font-size: 20px; font-weight: 800; }
+#bluetoothCoachMobileScreen .coachm-sc__dec { font-size: 13px; font-weight: 700; opacity: .8; }
+#bluetoothCoachMobileScreen .coachm-rank-item--top1 .coachm-rank-item__score { color: #f5b50f; text-shadow: 0 0 10px rgba(245, 181, 15, .4); }
+#bluetoothCoachMobileScreen .coachm-rank-item { grid-template-columns: 30px 1fr 54px 62px; }
