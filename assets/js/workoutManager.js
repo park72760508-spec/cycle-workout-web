@@ -790,6 +790,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 통합 블루투스 개인훈련(indiv-individualSegmentGraph) = individualSegmentGraph와 동일 처리
   // coachmSegmentGraph: Live Training Room 휴대폰 Coach 화면 — 모바일 훈련 화면과 같은 그래프 스타일
   const isIndividualDashboardCanvas = canvasId === 'individualSegmentGraph' || canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph' || canvasId === 'coachmSegmentGraph';
+  // STELVIO Race 컨셉 그래프: 그룹훈련 사용자 훈련 화면 + 개인훈련 모바일 훈련 화면 전용(2026-11-06)
+  const raceGraph = canvasId === 'indiv-individualSegmentGraph' || canvasId === 'mobileIndividualSegmentGraph';
   
   // 사용자 FTP 가져오기
   // 개인 대시보드의 경우 individual.js의 userFTP 변수 사용
@@ -898,13 +900,15 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   
   /* 안드로이드 훈련화면(모바일, 블루투스 개인훈련) 한글 폰트 통일 (블루투스 Coach 통합화면 제외) */
   const isTrainingScreenCanvas = isIndividualDashboardCanvas || canvasId === 'segmentPreviewGraph';
-  const textFontFamily = isTrainingScreenCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif';
+  const textFontFamily = raceGraph ? '"Barlow Semi Condensed", "Noto Sans KR", sans-serif' : (isTrainingScreenCanvas ? '"Noto Sans KR", "Pretendard", sans-serif' : 'sans-serif');
   
   // 배경 그리기
   if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fillRect(0, 0, graphWidth, graphHeight);
+    // 훈련 화면용 및 개인 대시보드용: 검정 투명 배경 (Race 컨셉 그래프는 카본 패널 배경이 보이도록 투명)
+    if (!raceGraph) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, graphWidth, graphHeight);
+    }
   } else if (canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
     // 훈련 준비 / 훈련 스케줄 상세: 흰색 배경
     ctx.fillStyle = '#FFFFFF';
@@ -927,7 +931,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 축 그리기 (부드러운 색상)
   ctx.shadowColor = 'transparent'; // 축에는 그림자 제거
   if (canvasId === 'trainingSegmentGraph' || isIndividualDashboardCanvas || canvasId === 'selectedWorkoutSegmentGraphCanvas') {
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
+    ctx.strokeStyle = raceGraph ? 'rgba(143, 160, 192, 0.35)' : 'rgba(255, 255, 255, 0.4)'; // 훈련 화면 및 개인 대시보드: 밝은 색상
   } else if (canvasId === 'segmentPreviewGraph' || canvasId === 'scheduleDetailGraphCanvas') {
     ctx.strokeStyle = '#E5E7EB'; // 훈련 준비 / 훈련 스케줄 상세: 연한 회색 가이드선
   } else {
@@ -999,9 +1003,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]); // 점선
   } else if (isIndividualDashboardCanvas) {
-    // 개인 대시보드 및 모바일 대시보드: 흰색 얇은 실선, 투명도 50%
+    // 개인 대시보드 및 모바일 대시보드: 흰색 얇은 실선, 투명도 50% (Race 컨셉: 시안 포인트 라인)
     ctx.shadowColor = 'transparent';
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.strokeStyle = raceGraph ? 'rgba(34, 211, 238, 0.55)' : 'rgba(255, 255, 255, 0.5)';
     ctx.lineWidth = 1;
     ctx.setLineDash([]); // 실선
   } else if (canvasId === 'segmentPreviewGraph') {
@@ -1049,11 +1053,12 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const circleR = Math.max(textWidth / 2, textHeight / 2) + boxPadding + 1;
       const cx = padding.left + chartWidth - circleR - 2;
       const cy = ftpY;
-      ctx.fillStyle = '#cbd5e1'; // 연한 회색
+      ctx.fillStyle = raceGraph ? '#0b1020' : '#cbd5e1'; // 연한 회색 (Race 컨셉: 카본 + 시안 링)
       ctx.beginPath();
       ctx.arc(cx, cy, circleR, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#0f172a';
+      if (raceGraph) { ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 1.2; ctx.stroke(); }
+      ctx.fillStyle = raceGraph ? '#22d3ee' : '#0f172a';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(rpm90Text, cx, cy);
@@ -1407,7 +1412,58 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         }
       }
       
-      if (useCardBarDesign) {
+      if (raceGraph) {
+        // STELVIO Race 컨셉(데이터 수신/미수신 정보 패널과 같은 톤): 카본 다크 패널 + Zone 색 포인트 띠(상단)
+        // 현재 구간 = 선명(활성), 지난 구간 = 톤다운, 다음 구간 = 기본. Zone 색상 톤은 그대로 유지.
+        const zoneHexR = STELVIO_CARD_ZONE_COLORS[getSegmentZoneFromFtpPercent(seg)] || STELVIO_CARD_ZONE_COLORS[1];
+        const zrR = parseInt(zoneHexR.slice(1, 3), 16), zgR = parseInt(zoneHexR.slice(3, 5), 16), zbR = parseInt(zoneHexR.slice(5, 7), 16);
+        color = `rgba(${zrR}, ${zgR}, ${zbR}, 1)`;
+        const isCur = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
+        const isDone = (currentSegmentIndex >= 0 && index < currentSegmentIndex);
+        const gapR = barWidth > 2 ? 0.5 : 0;
+        const bxR = x + gapR;
+        const bwR = Math.max(0.5, barWidth - gapR * 2);
+        const bhR = Math.max(barHeight, 4);
+        const byR = padding.top + chartHeight - bhR;
+        const slant = Math.min(3, bwR / 4);
+        const bodyTint = isCur ? 0.42 : (isDone ? 0.14 : 0.24);
+        const bodyGrad = ctx.createLinearGradient(0, byR, 0, byR + bhR);
+        bodyGrad.addColorStop(0, `rgba(${Math.round(zrR * bodyTint + 14 * (1 - bodyTint))}, ${Math.round(zgR * bodyTint + 20 * (1 - bodyTint))}, ${Math.round(zbR * bodyTint + 36 * (1 - bodyTint))}, 0.96)`);
+        bodyGrad.addColorStop(1, 'rgba(8, 12, 24, 0.96)');
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.moveTo(bxR + slant, byR);
+        ctx.lineTo(bxR + bwR, byR);
+        ctx.lineTo(bxR + bwR - slant, byR + bhR);
+        ctx.lineTo(bxR, byR + bhR);
+        ctx.closePath();
+        ctx.fill();
+        // 상단 Zone 포인트 띠 (현재 구간은 글로우)
+        const bandH = Math.min(3, bhR);
+        ctx.save();
+        if (isCur) { ctx.shadowColor = zoneHexR; ctx.shadowBlur = 9; }
+        ctx.globalAlpha = isDone ? 0.55 : 1;
+        ctx.fillStyle = zoneHexR;
+        ctx.beginPath();
+        ctx.moveTo(bxR + slant, byR);
+        ctx.lineTo(bxR + bwR, byR);
+        ctx.lineTo(bxR + bwR - slant * (bandH / bhR), byR + bandH);
+        ctx.lineTo(bxR + slant * (1 - bandH / bhR), byR + bandH);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+        // 대각선 카본 질감(은은하게)
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(bxR + slant, byR); ctx.lineTo(bxR + bwR, byR); ctx.lineTo(bxR + bwR - slant, byR + bhR); ctx.lineTo(bxR, byR + bhR); ctx.closePath();
+        ctx.clip();
+        ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+        ctx.lineWidth = 1;
+        for (let hx = bxR - bhR; hx < bxR + bwR; hx += 5) {
+          ctx.beginPath(); ctx.moveTo(hx, byR + bhR); ctx.lineTo(hx + bhR, byR); ctx.stroke();
+        }
+        ctx.restore();
+      } else if (useCardBarDesign) {
         // 워크아웃 목록 카드 그래프와 동일: Zone 원색 단색 막대(존 훈련은 상한까지 한 막대), 막대 사이 1px, 위 모서리 4px
         const zoneHex = STELVIO_CARD_ZONE_COLORS[getSegmentZoneFromFtpPercent(seg)] || STELVIO_CARD_ZONE_COLORS[1];
         const zr = parseInt(zoneHex.slice(1, 3), 16);
@@ -1532,7 +1588,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       const isCurrentSegment = (currentSegmentIndex >= 0 && index === currentSegmentIndex);
       
       // ftp_pctz 타입일 때는 하한과 상한 구간 모두에 테두리 그리기 (카드 디자인은 한 막대라 일반 테두리)
-      if (!useCardBarDesign && isFtpPctz && minPower > 0 && maxPower > minPower) {
+      if (raceGraph) {
+        // Race 컨셉: 막대 자체의 포인트 띠로 표시하므로 별도 테두리/네온 외곽선은 그리지 않음
+      } else if (!useCardBarDesign && isFtpPctz && minPower > 0 && maxPower > minPower) {
         const minBarHeight = Math.max(2, (minPower / maxTargetPower) * chartHeight);
         const minY = padding.top + chartHeight - minBarHeight;
         const maxBarHeight = barHeight;
