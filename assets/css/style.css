@@ -36987,28 +36987,29 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .race-logo-spin { animation:none; } }
 
-/* 창분할 보기: 속도계 1줄 + 트랙 5개가 한 화면에 들어오도록 상하 여백/크기 압축 */
-#rollerRaceDashboardScreen.rr-split { padding: 8px 16px; }
-#rollerRaceDashboardScreen.rr-split .dashboard-header { min-height: 48px; margin-bottom: 8px; gap: 8px; }
+/* 창분할 보기: 속도계(원 크기 유지) 1줄 + 트랙 5개를 한 화면에 — 여백만 압축, 하단 설정 줄 숨김 */
+#rollerRaceDashboardScreen.rr-split { padding: 6px 16px; }
+#rollerRaceDashboardScreen.rr-split .dashboard-header { min-height: 48px; margin-bottom: 6px; gap: 8px; }
 #rollerRaceDashboardScreen.rr-split .enhanced-control-btn { width: 44px !important; height: 44px !important; }
 #rollerRaceDashboardScreen.rr-split .race-title-animated { font-size: 28px; }
-#rollerRaceDashboardScreen.rr-split .scoreboard-display { margin-bottom: 8px; padding: 4px 24px; zoom: .7; }
-#rollerRaceDashboardScreen.rr-split .speedometer-grid { gap: 10px; margin-bottom: 8px; }
-#rollerRaceDashboardScreen.rr-split #speedometerGrid > * { zoom: .62; }
-#rollerRaceDashboardScreen.rr-split .speedometer-list-section { padding: 8px 12px; margin-bottom: 8px; }
-#rollerRaceDashboardScreen.rr-split .speedometer-list { gap: 6px; }
-#rollerRaceDashboardScreen.rr-split .speedometer-list-item { padding: 3px 10px; gap: 8px; }
-#rollerRaceDashboardScreen.rr-split .speedometer-list-section > .list-header { margin-top: 8px; }
+#rollerRaceDashboardScreen.rr-split .scoreboard-display { margin-bottom: 6px; padding: 2px 24px; zoom: .7; }
+#rollerRaceDashboardScreen.rr-split .speedometer-grid { gap: 8px; margin-bottom: 6px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-container { padding: 6px 12px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list-section { padding: 0; margin: 0; background: none; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list-section > .list-header { display: none !important; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list { gap: 5px; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list-item { padding: 2px 10px; gap: 8px; }
 @media (min-height: 900px) {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .85; }
-  #rollerRaceDashboardScreen.rr-split #speedometerGrid > * { zoom: .78; }
   #rollerRaceDashboardScreen.rr-split .speedometer-list { gap: 10px; }
 }
-@media (min-height: 1050px) {
+@media (min-height: 1000px) {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: 1; }
-  #rollerRaceDashboardScreen.rr-split #speedometerGrid > * { zoom: 1; }
 }
-@media (max-height: 740px) {
-  #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .6; }
-  #rollerRaceDashboardScreen.rr-split #speedometerGrid > * { zoom: .52; }
+@media (min-width: 900px) {
+  #rollerRaceDashboardScreen.rr-split .speedometer-grid { grid-template-columns: repeat(5, 1fr) !important; }
+}
+@media (max-height: 799px) {
+  #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .5; }
+  #rollerRaceDashboardScreen.rr-split .dashboard-header { min-height: 44px; }
 }
