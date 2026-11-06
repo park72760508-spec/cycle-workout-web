@@ -5799,9 +5799,12 @@ function startConnectionStatusCheck() {
 
         // 예상 시간보다 1.5배 지연되면 즉시 감속 시작
         // [보완] 지수적 감쇠 처리 (바늘이 스르륵 멈추도록)
-        if (timeSinceLastEvent > Math.max(expectedInterval * 1.5, 800)) {
-            // 200ms마다 고정 비율이 아닌, 경과 시간에 따른 자연스러운 감속
-            const decayFactor = Math.pow(0.5, (now - speedometer.lastDecelerationCheck) / 300); // 300ms마다 반감
+        // [수정] 센서 이벤트 지터(패킷 지연)로 인한 순간 0 급락 방지: 임계값 상향(예상 간격 2배, 최소 1.2초)
+        if (timeSinceLastEvent > Math.max(expectedInterval * 2.0, 1200)) {
+            // 경과 시간에 따른 자연스러운 감속. 직전 체크 이후 시간(dt)을 상한(400ms)으로 제한해
+            // 오래된 기준점(lastDecelerationCheck) 때문에 한 번에 0으로 떨어지는 문제 제거
+            const dt = Math.min(Math.max(now - (speedometer.lastDecelerationCheck || now), 0), 400);
+            const decayFactor = Math.pow(0.5, (dt || 200) / 400); // 400ms마다 반감
             let predictedSpeed = speedometer.currentSpeed * decayFactor;
             
             if (predictedSpeed < 1.0) predictedSpeed = 0;
@@ -6327,6 +6330,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
+    speedometer.lastDecelerationCheck = now; // 새 이벤트 수신 시 감속 기준점 초기화
     speedometer.lastSpeedUpdateTime = now;
     speedometer.lastAcceleration = speedometer.acceleration;
     speedometer.previousSpeed = finalSpeed;
