@@ -1428,9 +1428,13 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         const topA = isCur ? 1 : (isDone ? 0.5 : 0.82);
         const botA = isCur ? 0.78 : (isDone ? 0.3 : 0.5);
         const lighten = (c) => Math.min(255, Math.round(c + (255 - c) * 0.28));
-        const bodyGrad = ctx.createLinearGradient(0, byR, 0, byR + bhR);
+        // 2026-11-07: 그라데이션 기준 = 차트 전체 높이(Y축 0 = 맨 아래). 0 값에 가까울수록 흰색 톤으로 옅어짐
+        // (막대 높이가 달라도 같은 높이에서는 같은 톤 → 높은 막대일수록 Zone 색이 길게 유지)
+        const whiteA = isCur ? 0.95 : (isDone ? 0.42 : 0.78);
+        const bodyGrad = ctx.createLinearGradient(0, padding.top, 0, padding.top + chartHeight);
         bodyGrad.addColorStop(0, `rgba(${lighten(zrR)}, ${lighten(zgR)}, ${lighten(zbR)}, ${topA})`);
-        bodyGrad.addColorStop(1, `rgba(${zrR}, ${zgR}, ${zbR}, ${botA})`);
+        bodyGrad.addColorStop(0.55, `rgba(${zrR}, ${zgR}, ${zbR}, ${(topA + botA) / 2})`);
+        bodyGrad.addColorStop(1, `rgba(255, 255, 255, ${whiteA})`);
         ctx.fillStyle = bodyGrad;
         ctx.fillRect(bxR, byR, bwR, bhR);
         // 상단 Zone 포인트 띠 (밝은 톤, 현재 구간은 글로우)
