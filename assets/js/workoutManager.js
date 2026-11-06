@@ -1413,8 +1413,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       }
       
       if (raceGraph) {
-        // STELVIO Race 컨셉(데이터 수신/미수신 정보 패널과 같은 톤): 카본 다크 패널 + Zone 색 포인트 띠(상단)
-        // 현재 구간 = 선명(활성), 지난 구간 = 톤다운, 다음 구간 = 기본. Zone 색상 톤은 그대로 유지.
+        // STELVIO Race 컨셉 — 밝고 가벼운 톤: Zone 색(기존 톤 유지)을 선명하게 채우고 상단에 밝은 포인트 띠.
+        // 현재 구간 = 가장 선명 + 글로우, 지난 구간 = 옅게, 다음 구간 = 기본. 막대는 똑바로(기울임 없음).
         const zoneHexR = STELVIO_CARD_ZONE_COLORS[getSegmentZoneFromFtpPercent(seg)] || STELVIO_CARD_ZONE_COLORS[1];
         const zrR = parseInt(zoneHexR.slice(1, 3), 16), zgR = parseInt(zoneHexR.slice(3, 5), 16), zbR = parseInt(zoneHexR.slice(5, 7), 16);
         color = `rgba(${zrR}, ${zgR}, ${zbR}, 1)`;
@@ -1425,43 +1425,21 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         const bwR = Math.max(0.5, barWidth - gapR * 2);
         const bhR = Math.max(barHeight, 4);
         const byR = padding.top + chartHeight - bhR;
-        const slant = Math.min(3, bwR / 4);
-        const bodyTint = isCur ? 0.42 : (isDone ? 0.14 : 0.24);
+        const topA = isCur ? 1 : (isDone ? 0.5 : 0.82);
+        const botA = isCur ? 0.78 : (isDone ? 0.3 : 0.5);
+        const lighten = (c) => Math.min(255, Math.round(c + (255 - c) * 0.28));
         const bodyGrad = ctx.createLinearGradient(0, byR, 0, byR + bhR);
-        bodyGrad.addColorStop(0, `rgba(${Math.round(zrR * bodyTint + 14 * (1 - bodyTint))}, ${Math.round(zgR * bodyTint + 20 * (1 - bodyTint))}, ${Math.round(zbR * bodyTint + 36 * (1 - bodyTint))}, 0.96)`);
-        bodyGrad.addColorStop(1, 'rgba(8, 12, 24, 0.96)');
+        bodyGrad.addColorStop(0, `rgba(${lighten(zrR)}, ${lighten(zgR)}, ${lighten(zbR)}, ${topA})`);
+        bodyGrad.addColorStop(1, `rgba(${zrR}, ${zgR}, ${zbR}, ${botA})`);
         ctx.fillStyle = bodyGrad;
-        ctx.beginPath();
-        ctx.moveTo(bxR + slant, byR);
-        ctx.lineTo(bxR + bwR, byR);
-        ctx.lineTo(bxR + bwR - slant, byR + bhR);
-        ctx.lineTo(bxR, byR + bhR);
-        ctx.closePath();
-        ctx.fill();
-        // 상단 Zone 포인트 띠 (현재 구간은 글로우)
-        const bandH = Math.min(3, bhR);
+        ctx.fillRect(bxR, byR, bwR, bhR);
+        // 상단 Zone 포인트 띠 (밝은 톤, 현재 구간은 글로우)
+        const bandH = Math.min(4, bhR);
         ctx.save();
-        if (isCur) { ctx.shadowColor = zoneHexR; ctx.shadowBlur = 9; }
-        ctx.globalAlpha = isDone ? 0.55 : 1;
-        ctx.fillStyle = zoneHexR;
-        ctx.beginPath();
-        ctx.moveTo(bxR + slant, byR);
-        ctx.lineTo(bxR + bwR, byR);
-        ctx.lineTo(bxR + bwR - slant * (bandH / bhR), byR + bandH);
-        ctx.lineTo(bxR + slant * (1 - bandH / bhR), byR + bandH);
-        ctx.closePath();
-        ctx.fill();
-        ctx.restore();
-        // 대각선 카본 질감(은은하게)
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(bxR + slant, byR); ctx.lineTo(bxR + bwR, byR); ctx.lineTo(bxR + bwR - slant, byR + bhR); ctx.lineTo(bxR, byR + bhR); ctx.closePath();
-        ctx.clip();
-        ctx.strokeStyle = 'rgba(255,255,255,0.045)';
-        ctx.lineWidth = 1;
-        for (let hx = bxR - bhR; hx < bxR + bwR; hx += 5) {
-          ctx.beginPath(); ctx.moveTo(hx, byR + bhR); ctx.lineTo(hx + bhR, byR); ctx.stroke();
-        }
+        if (isCur) { ctx.shadowColor = zoneHexR; ctx.shadowBlur = 8; }
+        ctx.globalAlpha = isDone ? 0.6 : 1;
+        ctx.fillStyle = `rgb(${lighten(zrR)}, ${lighten(zgR)}, ${lighten(zbR)})`;
+        ctx.fillRect(bxR, byR, bwR, bandH);
         ctx.restore();
       } else if (useCardBarDesign) {
         // 워크아웃 목록 카드 그래프와 동일: Zone 원색 단색 막대(존 훈련은 상한까지 한 막대), 막대 사이 1px, 위 모서리 4px
