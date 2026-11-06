@@ -37047,3 +37047,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-split .speed-display-center .speed-unit-bottom::before { content: "이동거리 "; }
 /* 평속·속도 글자 크기 유지, 이동거리는 30% 확대 */
 #rollerRaceDashboardScreen.rr-split .speed-value { font-size: calc(1.3 * clamp(14px, 1.45vw, 24px)); }
+
+/* 아바타 뒷바퀴 타원 펄스 (경기 진행 중) */
+.mascot-pulse-ring .rear-pulse { transform-box: fill-box; transform-origin: right center; opacity: 0; }
+.mascot-pulse-ring.blinking .rear-pulse { animation: rr-rear-pulse 1.2s ease-out infinite; }
+.mascot-pulse-ring.blinking .rear-pulse.rp2 { animation-delay: .6s; }
+@keyframes rr-rear-pulse {
+  0%   { transform: scale(1, 1);     opacity: .85; }
+  100% { transform: scale(3.2, 1.7); opacity: 0; }
+}

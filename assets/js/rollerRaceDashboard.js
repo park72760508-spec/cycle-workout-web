@@ -2433,7 +2433,10 @@ function updateSpeedometerListUI() {
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
             <!-- 펄스 효과용 빨간색 원 (깜빡임 끝에 퍼지는 효과) -->
-            <circle cx="0" cy="0" r="7" class="mascot-pulse-ring" id="mascot-pulse-ring-${speedometer.id}" fill="#ff0000" opacity="0"/>
+            <g class="mascot-pulse-ring" id="mascot-pulse-ring-${speedometer.id}">
+              <ellipse class="rear-pulse rp1" cx="-14" cy="0" rx="2.4" ry="4.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
+              <ellipse class="rear-pulse rp2" cx="-14" cy="0" rx="2.4" ry="4.2" fill="rgba(255,60,40,0.35)" stroke="#ff5a3c" stroke-width="0.8" opacity="0"/>
+            </g>
             <!-- 탑뷰(하늘에서 내려다본) 사이클 선수 아바타: 진행 방향 → -->
             <ellipse cx="0.8" cy="1.2" rx="12" ry="4.6" fill="#000" opacity="0.28"/>
             <ellipse cx="-8" cy="0" rx="4.3" ry="1.3" fill="#111" stroke="#e5e7eb" stroke-width="0.6"/>
@@ -2872,16 +2875,11 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   const mascotRingEl = document.getElementById(`mascot-color-ring-${speedometerId}`);
   const mascotPulseEl = document.getElementById(`mascot-pulse-ring-${speedometerId}`);
   if (mascotRingEl) {
-    if (speed > 0) {
-      mascotRingEl.classList.add('blinking');
-      if (mascotPulseEl) {
-        mascotPulseEl.classList.add('blinking');
-      }
-    } else {
-      mascotRingEl.classList.remove('blinking');
-      if (mascotPulseEl) {
-        mascotPulseEl.classList.remove('blinking');
-      }
+    const moving = speed > 0;
+    mascotRingEl.classList.toggle('blinking', moving);
+    // 뒷바퀴 타원 펄스: 경기 진행 중 + 주행 중일 때만
+    if (mascotPulseEl) {
+      mascotPulseEl.classList.toggle('blinking', moving && window.rollerRaceState.raceState === 'running');
     }
   }
 }
