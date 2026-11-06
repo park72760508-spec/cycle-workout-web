@@ -37052,10 +37052,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .mascot-pulse-ring .rear-pulse { transform-box: fill-box; transform-origin: right center; opacity: 0; }
 .mascot-pulse-ring.blinking .rear-pulse { animation: rr-rear-pulse 2s ease-out infinite; }
 .mascot-pulse-ring.blinking .rear-pulse.rp2 { animation-delay: 1s; }
+/* 루트맵 내 위치 펄스(outdMePulseStrong)와 동일한 톤·타이밍을 가로형 타원으로 적용 */
 @keyframes rr-rear-pulse {
-  0%   { transform: scale(1, 1);     opacity: .85; }
-  100% { transform: scale(2.6, 1.6); opacity: 0; }
+  0%   { transform: scale(1);   opacity: 0.95; }
+  55%  { opacity: 0.55; }
+  100% { transform: scale(3.6); opacity: 0; }
 }
+
 
 /* 트랙 페어링 화면: 이름 입력 텍스트 검정 */
 #addSpeedometerModal input[type="text"], #speedometerName { color: #000 !important; background-color: #fff !important; -webkit-text-fill-color: #000; }
