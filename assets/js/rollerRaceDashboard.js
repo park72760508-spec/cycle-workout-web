@@ -225,7 +225,14 @@ function rrSetDigital(el, str) {
 function rrApplySplitViewBox() {
   const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
-    svg.setAttribute('viewBox', on ? '-12 33 224 130' : '0 0 200 200');
+    // 창분할: 눈금 호가 검은 바탕 좌우 끝까지 닿도록 크롭하고, 숫자 라벨은 호 안쪽으로 이동
+    svg.setAttribute('viewBox', on ? '14 52 172 116' : '0 0 200 200');
+    const r = on ? 55 : 98;
+    svg.querySelectorAll('.speedometer-labels text').forEach((t, i) => {
+      const rad = ((180 - (i * 20 / 120) * 180 + 180) * Math.PI) / 180;
+      t.setAttribute('x', 100 + r * Math.cos(rad));
+      t.setAttribute('y', 140 + r * Math.sin(rad));
+    });
   });
 }
 
