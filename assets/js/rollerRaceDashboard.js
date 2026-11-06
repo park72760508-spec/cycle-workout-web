@@ -724,6 +724,73 @@ function updateRankings() {
 
 
 
+
+// ===== 레이스 전광판(타이밍 타워) 행 렌더링 =====
+const RR_RANK_ITEM_HTML = `
+  <div class="rank-item-content">
+    <span class="rr-pos">-</span>
+    <span class="rr-bar"></span>
+    <span class="rank-name">-</span>
+    <span class="rr-chg"></span>
+    <span class="rank-distance"><b class="rr-val">0.00</b><small class="rr-unit">km</small></span>
+  </div>`;
+
+function rrFormatGap(gapKm) {
+  if (gapKm < 0.0005) return '+0m';
+  if (gapKm < 1) return '+' + Math.round(gapKm * 1000) + 'm';
+  return '+' + gapKm.toFixed(2) + 'km';
+}
+
+// item: .rank-item, sp: 속도계, rank: 1부터, leaderDist: 1위 누적거리(km)
+function rrFillRankItem(item, sp, rank, leaderDist) {
+  const posEl = item.querySelector('.rr-pos');
+  const barEl = item.querySelector('.rr-bar');
+  const nameEl = item.querySelector('.rank-name');
+  const chgEl = item.querySelector('.rr-chg');
+  const valEl = item.querySelector('.rr-val');
+  const unitEl = item.querySelector('.rr-unit');
+  if (!sp) {
+    if (posEl) posEl.textContent = '-';
+    if (nameEl) nameEl.textContent = '-';
+    if (valEl) valEl.textContent = '0.00';
+    if (unitEl) unitEl.textContent = 'km';
+    if (chgEl) chgEl.textContent = '';
+    item.dataset.pos = '';
+    item.style.removeProperty('--rr-c');
+    item.classList.remove('rr-leader', 'rr-up', 'rr-down');
+    return;
+  }
+  const gap = Math.max(0, leaderDist - sp.totalDistance);
+  if (posEl) posEl.textContent = rank;
+  if (barEl) barEl.style.background = getMascotColor(sp.id);
+  item.style.setProperty('--rr-c', getMascotColor(sp.id));
+  if (nameEl) nameEl.textContent = sp.pairingName || sp.name || '-';
+  if (rank === 1) {
+    if (valEl) valEl.textContent = sp.totalDistance.toFixed(2);
+    if (unitEl) unitEl.textContent = 'km';
+  } else {
+    const g = rrFormatGap(gap);
+    if (valEl) valEl.textContent = g.replace(/(m|km)$/, '');
+    if (unitEl) unitEl.textContent = /km$/.test(g) ? 'km' : 'm';
+  }
+  item.dataset.pos = rank <= 3 ? rank : 'n';
+  item.classList.toggle('rr-leader', rank === 1);
+  // 순위 변동 표시 (▲ 상승 / ▼ 하락) — 같은 선수의 직전 순위와 비교
+  const st = window.rollerRaceState;
+  st.rrLastRank = st.rrLastRank || {};
+  const prev = st.rrLastRank[sp.id];
+  if (prev !== undefined && prev !== rank) {
+    const up = rank < prev;
+    if (chgEl) chgEl.textContent = up ? '▲' : '▼';
+    item.classList.remove('rr-up', 'rr-down');
+    void item.offsetWidth;
+    item.classList.add(up ? 'rr-up' : 'rr-down');
+    clearTimeout(item.__rrChgT);
+    item.__rrChgT = setTimeout(() => { item.classList.remove('rr-up', 'rr-down'); if (chgEl) chgEl.textContent = ''; }, 3000);
+  }
+  st.rrLastRank[sp.id] = rank;
+}
+
 /**
  * 전광판 순위 목록 생성 및 업데이트
  * @param {Array} sorted - 정렬된 속도계 목록
@@ -744,13 +811,7 @@ function updateScoreboardRankings(sorted, updateDisplay = false) {
       const rankItem = document.createElement('div');
       rankItem.className = 'rank-item';
       rankItem.dataset.slotIndex = i;
-      rankItem.innerHTML = `
-        <div class="rank-item-content">
-          <img class="rank-number" src="" alt="" style="display: none;" />
-          <span class="rank-name">-</span>
-          <span class="rank-distance">0.0km</span>
-        </div>
-      `;
+      rankItem.innerHTML = RR_RANK_ITEM_HTML;
       ranksContainer.appendChild(rankItem);
     }
   }
@@ -761,32 +822,13 @@ function updateScoreboardRankings(sorted, updateDisplay = false) {
     const targetIndex = (currentStartIndex + i) % sorted.length;
     const item = visibleItems[i];
     if (item) {
-      const nameEl = item.querySelector('.rank-name');
-      const distanceEl = item.querySelector('.rank-distance');
-      const numberEl = item.querySelector('.rank-number');
-      
+      const leaderDist = sorted.length ? sorted[0].totalDistance : 0;
       if (sorted.length > 0 && sorted[targetIndex]) {
-        const speedometer = sorted[targetIndex];
-        const rank = targetIndex + 1;
-        // 페어링 이름을 우선 사용, 없으면 기본 이름 사용
-        if (nameEl) nameEl.textContent = speedometer.pairingName || speedometer.name || '-';
-        if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
-        if (numberEl) {
-          if (rank >= 1 && rank <= 10) {
-            numberEl.src = `assets/img/${rank}.png`;
-            numberEl.alt = `${rank}위`;
-            numberEl.style.display = 'inline-block';
-          } else {
-            numberEl.style.display = 'none';
-          }
-        }
-        item.classList.add('rank-item-visible');
+        rrFillRankItem(item, sorted[targetIndex], targetIndex + 1, leaderDist);
       } else {
-        if (nameEl) nameEl.textContent = '-';
-        if (distanceEl) distanceEl.textContent = '0.0km';
-        if (numberEl) numberEl.style.display = 'none';
-        item.classList.add('rank-item-visible');
+        rrFillRankItem(item, null, 0, 0);
       }
+      item.classList.add('rank-item-visible');
     }
   }
   
@@ -836,34 +878,10 @@ function updateRankDisplay(withAnimation = true) {
     let targetIndex = startIndex + i;
     
     if (totalRanks > 0 && targetIndex < totalRanks) {
-      // 표시할 순위가 있는 경우
-      const speedometer = sorted[targetIndex];
-      const nameEl = item.querySelector('.rank-name');
-      const distanceEl = item.querySelector('.rank-distance');
-      const numberEl = item.querySelector('.rank-number');
-      
-      const rank = targetIndex + 1;
-      if (nameEl) nameEl.textContent = speedometer.pairingName || speedometer.name || '-';
-      if (distanceEl) distanceEl.textContent = speedometer.totalDistance.toFixed(2) + 'km';
-      if (numberEl) {
-        if (rank >= 1 && rank <= 10) {
-          numberEl.src = `assets/img/${rank}.png`;
-          numberEl.alt = `${rank}위`;
-          numberEl.style.display = 'inline-block';
-        } else {
-          numberEl.style.display = 'none';
-        }
-      }
-      
+      rrFillRankItem(item, sorted[targetIndex], targetIndex + 1, sorted[0].totalDistance);
       item.classList.add('rank-item-visible');
     } else {
-      // 순위가 없거나 해당 인덱스에 데이터가 없는 경우 (빈 상자)
-      const nameEl = item.querySelector('.rank-name');
-      const distanceEl = item.querySelector('.rank-distance');
-      const numberEl = item.querySelector('.rank-number');
-      if (nameEl) nameEl.textContent = '-';
-      if (distanceEl) distanceEl.textContent = '0.0km';
-      if (numberEl) numberEl.style.display = 'none';
+      rrFillRankItem(item, null, 0, 0);
       item.classList.add('rank-item-visible'); // 항상 표시
     }
   }
