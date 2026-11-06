@@ -37967,3 +37967,71 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothCoachMobileScreen.coachm-ctl-locked .svg-btn-group,
 #bluetoothCoachMobileScreen.coachm-ctl-locked .coachm-mctl { opacity: .3; filter: grayscale(1); pointer-events: none; cursor: not-allowed; }
 #bluetoothCoachMobileScreen.coachm-ctl-locked .mobile-start-pulse-wrap { display: none; }
+
+/* ===== Coach 휴대폰 모니터 대시보드: LAP 카운트 · 사용자별 카드 · 워크아웃 그래프 영역 — 모바일 훈련 화면(STELVIO Race) 컨셉 확대 적용 ===== */
+/* LAP 카운트다운: 하단 정보 타일과 같은 카본 타일 + 포인트 라인 */
+#bluetoothCoachMobileScreen .coachm-monitor__lap {
+  --st: #22d3ee; position: relative; align-self: center; flex-direction: row; gap: 12px; padding: 7px 26px 6px;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%);
+  border-top: 3px solid var(--st);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#bluetoothCoachMobileScreen .coachm-monitor__lap-label {
+  font: italic 800 13px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .24em; color: #9fb0cc; text-transform: uppercase;
+}
+#bluetoothCoachMobileScreen .coachm-monitor__lap-time {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
+  letter-spacing: 0; color: #f4f8ff; text-shadow: 0 0 14px color-mix(in srgb, var(--st) 55%, transparent);
+}
+
+/* 사용자별 정보 카드: 카본 타일 + 상태색 포인트 라인 (대기=하늘 / 달성=라임 / 미달성=주황 / 빈 슬롯=슬레이트) */
+#bluetoothCoachMobileScreen .coachm-mcard {
+  --st: #38bdf8; border-radius: 0; padding: 6px 6px 5px; color: #f4f8ff;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%) !important;
+  border-top: 3px solid var(--st);
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+  transition: border-color .3s ease, background .3s ease, opacity .3s ease;
+}
+#bluetoothCoachMobileScreen .coachm-mcard::before { display: none; }
+#bluetoothCoachMobileScreen .coachm-mcard--ok { --st: #a3e635; color: #f4f8ff; }
+#bluetoothCoachMobileScreen .coachm-mcard--low { --st: #ff8c00; color: #f4f8ff; }
+#bluetoothCoachMobileScreen .coachm-mcard--waiting { --st: #38bdf8; color: #f4f8ff; }
+#bluetoothCoachMobileScreen .coachm-mcard--idle { --st: #475569; color: #94a3b8; opacity: .45; }
+#bluetoothCoachMobileScreen .coachm-mcard.is-selected { box-shadow: inset 0 8px 14px -10px var(--st), inset 0 0 0 1px rgba(255,255,255,.55), 0 0 10px rgba(255,255,255,.3); }
+#bluetoothCoachMobileScreen .coachm-mcard__no,
+#bluetoothCoachMobileScreen .coachm-mcard--waiting .coachm-mcard__no,
+#bluetoothCoachMobileScreen .coachm-mcard--idle .coachm-mcard__no {
+  border-radius: 0; background: var(--st); color: #07101f; text-shadow: none;
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 900;
+  clip-path: polygon(3px 0, 100% 0, calc(100% - 3px) 100%, 0 100%);
+}
+#bluetoothCoachMobileScreen .coachm-mcard__name {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 700; letter-spacing: .02em; color: #e8eef9;
+}
+#bluetoothCoachMobileScreen .coachm-mcard--idle .coachm-mcard__name { color: #7f90b0; }
+#bluetoothCoachMobileScreen .coachm-mcard__pw {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; color: #fff;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent);
+}
+#bluetoothCoachMobileScreen .coachm-mcard__power small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; color: var(--st); opacity: 1; }
+#bluetoothCoachMobileScreen .coachm-mcard__stats,
+#bluetoothCoachMobileScreen .coachm-mcard--ok .coachm-mcard__stats,
+#bluetoothCoachMobileScreen .coachm-mcard--low .coachm-mcard__stats { border-top: 1px solid rgba(159,176,204,.22); }
+#bluetoothCoachMobileScreen .coachm-mcard__row i { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: .12em; color: #9fb0cc; opacity: 1; }
+#bluetoothCoachMobileScreen .coachm-mcard__row b { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; color: #f0f5ff; }
+
+/* 하단 건너뛰기·시작·종료 줄: 정보 타일 영역과 같은 어두운 패널 */
+#bluetoothCoachMobileScreen.coachm-monitor-on .coachm-monitor-controls {
+  background: linear-gradient(180deg, #0a0f1f, #070b18); border-top: 0; box-shadow: inset 0 3px 0 #22d3ee, inset 0 10px 14px -12px rgba(34,211,238,.5);
+}
+#bluetoothCoachMobileScreen .coachm-mctl--main { box-shadow: 0 0 0 3px #070b18, 0 0 0 5px #22d3ee, 0 0 16px rgba(34, 211, 238, .55); }
+
+/* 워크아웃 그래프 영역: 미선택 안내 막대·문구도 Race 톤 */
+#bluetoothCoachMobileScreen .coachm-graph-placeholder__bars > div { background: linear-gradient(180deg, #67e8f9, #0e7490) !important; border-radius: 1px 1px 0 0 !important; }
+#bluetoothCoachMobileScreen .coachm-graph-placeholder__bars { opacity: .35; }
