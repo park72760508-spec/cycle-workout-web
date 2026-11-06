@@ -37576,3 +37576,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothTrainingCoachScreen .list-header-actions .btn-icon-image { filter: brightness(0) invert(1); }
 #bluetoothTrainingCoachScreen .list-header-actions .btn-icon-image,
 #rollerRaceDashboardScreen .list-header-actions .btn-icon-image { filter: none; }
+
+/* 그룹훈련 순위 전광판 점수: 속도계 정보 숫자와 같은 폰트(Barlow Semi Condensed 이탤릭 800, 고정폭 숫자)로 통일 */
+#coachRaceBoard .crb-sc__int,
+#coachRaceBoard .crb-sc__dec,
+#coachRaceCeremony .crb-sc__int,
+#coachRaceCeremony .crb-sc__dec {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800;
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
+}
+#coachRaceBoard .crb-sc__dec, #coachRaceCeremony .crb-sc__dec { opacity: .9; }
