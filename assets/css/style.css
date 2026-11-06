@@ -37144,3 +37144,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (min-height: 900px) and (max-height: 1049px) {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .6; }
 }
+
+/* 창분할: 트랙5 바로 아래에 설정 메뉴 줄 밀착(최소 여백). 화면이 낮으면 하단에 고정 */
+#rollerRaceDashboardScreen.rr-split .speedometer-list { margin-bottom: 0; }
+#rollerRaceDashboardScreen.rr-split { padding-bottom: 0; }
+#rollerRaceDashboardScreen.rr-split .speedometer-list-section > .list-header {
+  position: sticky; left: auto; right: auto; bottom: 0;
+  margin: 4px 0 0; padding: 6px 12px; border-radius: 8px;
+}
