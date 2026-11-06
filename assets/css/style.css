@@ -37079,3 +37079,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-split .speedometer-info { grid-template-columns: 1fr 1.7fr 1fr; }
 #rollerRaceDashboardScreen.rr-split .speedometer-info { grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 2px; padding: 6px 4px; }
 #rollerRaceDashboardScreen.rr-split .speed-display-center { overflow: visible; }
+
+/* Race 속도계 정보 블럭(평속·이동거리·속도) 숫자 폰트: Barlow Semi Condensed 이탤릭 800 + 고정폭 숫자 (폰트만 변경) */
+#rollerRaceDashboardScreen .speedometer-info .rr-int,
+#rollerRaceDashboardScreen .speedometer-info .rr-dec,
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-int,
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-dec {
+  font-family: 'Barlow Semi Condensed', sans-serif;
+  font-style: italic;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
