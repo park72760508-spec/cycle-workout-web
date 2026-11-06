@@ -225,7 +225,7 @@ function rrSetDigital(el, str) {
 function rrApplySplitViewBox() {
   const on = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
-    svg.setAttribute('viewBox', on ? '-10 26 220 156' : '0 0 200 200');
+    svg.setAttribute('viewBox', on ? '-15.5 22 231 164' : '0 0 200 200');
   });
 }
 
@@ -260,9 +260,6 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerLabels()}
         </g>
         
-        <!-- 바늘 중심 원 (고정) -->
-        <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
-        
         <!-- 바늘 행적선 (바늘 밑에 위치) -->
         <g id="needle-path-${speedometer.id}" class="speedometer-needle-path" transform="translate(100, 140)">
         </g>
@@ -278,6 +275,9 @@ function createSpeedometerElement(speedometer) {
                 stroke-linecap="round"
                 transform="rotate(270)"/>
         </g>
+        
+        <!-- 바늘 중심 원: 바늘 위에 그려 바늘 시작부가 원 테두리 밖/안으로 비치지 않게 함 -->
+        <circle cx="100" cy="140" r="7" fill="#000000" stroke="#ff0000" stroke-width="2"/>
         
         <!-- km/h 라벨 (바늘 중심 아래, 바늘에 붙지 않게 간격 유지, 문자 높이의 1/2만큼 아래로 이동) -->
         <text x="100" y="155" 
