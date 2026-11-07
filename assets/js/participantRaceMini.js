@@ -234,9 +234,11 @@
     if (!pr || !pr.width || !br.width) return;
     var bs = boards(box);
     // 속도계와 겹치지 않게: 좌우 가장자리·아래쪽(현재 파워 숫자 아래선)에 붙이고 폭은 최소화
-    var rh = 23;
+    // 2026-11-08: 순위 줄 높이 23 → 17px(간격 축소), 좌·우 보드 모두 아래로 내려 4위·8위 줄이 RANK 탭 줄(하단 통계 줄 윗변)에 오도록 배치
+    var rh = 17;
     var h = rh * 4 + 3;
-    var bottom = pr.bottom - br.top;
+    var footer0 = act.scr.querySelector('.indiv-stats-footer');
+    var bottom = footer0 ? footer0.getBoundingClientRect().top - br.top - 2 : pr.bottom - br.top;
     var top = bottom - h;
     // 고정 폭(최소 폭): 3글자 이름 + 순위 + 원 + 점수가 들어가는 최소 폭 = 화면 폭의 29.5%(390px 기준 115px) — 파워 3자리 숫자와 겹치지 않음
     var wBoard = Math.round(br.width * 0.295);
@@ -258,7 +260,7 @@
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
-    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', Math.max(9, Math.min(12, rh * 0.5)) + 'px'); }
+    function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', 11 + 'px'); }
     place(bs[0], 2, wBoard);
     place(bs[1], br.width - wBoard - 2, wBoard);
     bs[0].innerHTML = left.map(function (x) { return rowHtml(x.r, x.rank, me && me.rank === x.rank, waiting, excl); }).join('');
