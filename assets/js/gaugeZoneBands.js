@@ -98,14 +98,14 @@
   /** 존 세그먼트 구간(하한~상한) 띠 색 — 미달 주황(#ff8c00) / 달성 민트(#00d4aa) 보다 15% 진한 색, 불투명, 존 띠 두께(2026-11-07) */
   window.stelvioStyleZoneArc = function (arc, ok) {
     if (!arc) return;
-    // 목표 원호의 실제 색(미달 주황 / 달성 라임)보다 30% 진하게, 두께는 목표 원호와 동일(2026-11-07)
+    // 목표 원호의 실제 색(미달 주황 / 달성 라임)보다 30% 밝게(흰색 쪽으로 30% 혼합), 두께는 목표 원호와 동일(2026-11-07)
     var base = ok ? [163, 230, 53] : [255, 140, 0];
     try {
       var t = arc.id ? document.getElementById(arc.id.replace('max-arc', 'target-arc')) : null;
       var m = t && /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(getComputedStyle(t).stroke);
       if (m) base = [+m[1], +m[2], +m[3]];
     } catch (e) {}
-    arc.setAttribute('stroke', 'rgb(' + base.map(function (v) { return Math.round(v * 0.7); }).join(', ') + ')');
+    arc.setAttribute('stroke', 'rgb(' + base.map(function (v) { return Math.round(v + (255 - v) * 0.3); }).join(', ') + ')');
     arc.setAttribute('stroke-opacity', '1');
     arc.setAttribute('stroke-linecap', 'butt');
     arc.style.strokeWidth = '';

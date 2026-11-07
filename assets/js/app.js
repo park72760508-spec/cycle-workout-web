@@ -18335,7 +18335,7 @@ function updateMobileTargetPowerArc() {
   
   // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
   // 2026-11-07: 존 세그먼트는 목표 원호를 존 하한까지만 그리고, 존 구간(하한~상한)은 진한 색 띠로 따로 표시
-  // 2026-11-07(수정): 존 세그먼트는 목표 원호를 존 상한까지 그리고, 존 하한~상한 부분만 30% 진한 색으로 덧그림
+  // 2026-11-07(수정): 존 세그먼트는 목표 원호를 존 상한까지 그리고, 존 하한~상한 부분만 30% 밝은 색으로 덧그림
   const __zMinP = Number(((window.mobileTrainingState && window.mobileTrainingState.currentSegmentMinPower) || window.currentSegmentMinPower)) || 0;
   const __zMaxP = Number(((window.mobileTrainingState && window.mobileTrainingState.currentSegmentMaxPower) || window.currentSegmentMaxPower)) || 0;
   const arcEndPower = (isFtpPctz && __zMaxP > targetPower) ? __zMaxP : targetPower;

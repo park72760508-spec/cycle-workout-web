@@ -167,7 +167,7 @@
   }
 
   /** 목표 파워 원호 — LAP AVG/목표 ≥ 98.5% 면 민트, 아니면 주황 (모바일 훈련 화면과 동일).
-   *  존 세그먼트: 목표 원호는 존 상한까지, 존 하한~상한 부분은 30% 진한 색 (2026-11-07) */
+   *  존 세그먼트: 목표 원호는 존 상한까지, 존 하한~상한 부분은 30% 밝은 색 (2026-11-07) */
   function updateTargetArc(target, lap, ftp, pm) {
     var arc = $('coachm-gauge-target-arc');
     var maxArc = $('coachm-gauge-max-arc');
