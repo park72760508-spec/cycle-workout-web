@@ -38207,3 +38207,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     radial-gradient(100% 100% at 50% 50%, transparent 55%, rgba(0,0,0,.45) 100%);
 }
 #bluetoothIndividualScreen .indiv-main-content > * { position: relative; }
+
+/* 2026-11-08: Coach 휴대폰 순위 목록 헤더 — 칼럼명(순위·이름·현재·점수) 모두 가로 한 줄 표기 */
+#bluetoothCoachMobileScreen .coachm-rank-head,
+#bluetoothCoachMobileScreen .coachm-rank-item { grid-template-columns: 34px minmax(4.6em, 1fr) auto auto; }
+#bluetoothCoachMobileScreen .coachm-rank-head { letter-spacing: .06em; }
+#bluetoothCoachMobileScreen .coachm-rank-head span {
+  white-space: nowrap; writing-mode: horizontal-tb; word-break: keep-all; overflow-wrap: normal; text-orientation: mixed;
+}
+#bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(3) { min-width: 40px; text-align: center; }
+#bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(4) { min-width: 52px; text-align: right; }
