@@ -45,9 +45,12 @@
     ".pmb__tab span{font:italic 800 10px/1 'Barlow Semi Condensed',sans-serif;letter-spacing:.1em}" +
     '.pmb__tab i{display:block;width:6px;height:6px;border-right:2px solid #f5b50f;border-bottom:2px solid #f5b50f;transform:rotate(45deg);margin-top:-2px;transition:transform .5s cubic-bezier(.22,1,.36,1),margin .5s}' +
     '.pmb__tab--closed i{transform:rotate(-135deg);margin-top:2px}' +
-    '.pmb{transform-origin:50% 100%;transition:transform .55s cubic-bezier(.22,1,.36,1),opacity .45s ease,visibility 0s}' +
-    '.pmb--closed{transform:scaleY(0);opacity:0;visibility:hidden;transition:transform .55s cubic-bezier(.65,0,.35,1),opacity .4s ease .1s,visibility 0s .55s}' +
-    '@media (prefers-reduced-motion:reduce){.pmb,.pmb--closed{transition:none}}' +
+    /* 2026-11-08: 순위 한 줄씩 순차 애니메이션 — 펼치기: 아래 줄부터 한 줄씩 떠오름(탭 줄에서 위로), 접기: 위 줄부터 한 줄씩 아래로 가라앉으며 사라짐 */
+    '.pmb__row{transition:transform .62s cubic-bezier(.16,1,.3,1) var(--o,0ms),opacity .5s ease var(--o,0ms),filter .5s ease var(--o,0ms)}' +
+    '.pmb__row:nth-last-child(1){--o:0ms;--c:210ms}.pmb__row:nth-last-child(2){--o:90ms;--c:140ms}.pmb__row:nth-last-child(3){--o:180ms;--c:70ms}.pmb__row:nth-last-child(4){--o:270ms;--c:0ms}' +
+    '.pmb--closed{visibility:hidden;transition:visibility 0s .95s}' +
+    '.pmb--closed .pmb__row,.pmb--closed .pmb__gap{opacity:0;transform:translateY(22px) scale(.94);filter:blur(2px);transition:transform .5s cubic-bezier(.5,0,.75,0) var(--c,0ms),opacity .38s ease var(--c,0ms),filter .4s ease var(--c,0ms)}' +
+    '@media (prefers-reduced-motion:reduce){.pmb__row,.pmb--closed .pmb__row,.pmb--closed .pmb__gap{transition:none}}' +
     '.pmb__gap{flex:0 0 var(--rh,20px);height:var(--rh,20px);display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
   document.head.appendChild(css);
 
@@ -176,8 +179,7 @@
       function toggle(e) {
         e.stopPropagation();
         setCollapsed(!isCollapsed());
-        box.__pmbSig = '';
-        tick();
+        tick(); // 행을 다시 그리지 않아야(sig 유지) 줄별 전환이 보인다
       }
       t.addEventListener('touchend', function (e) { lastTouch = Date.now(); e.preventDefault(); toggle(e); }, { passive: false });
       t.addEventListener('click', function (e) { if (Date.now() - lastTouch < 700) { e.stopPropagation(); return; } toggle(e); });
