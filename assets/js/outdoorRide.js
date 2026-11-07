@@ -2038,7 +2038,7 @@
     if (transit.loading && transit.loadingRg === rg) return transit.loading;
     transit.loadingRg = rg;
     transit.loading = Promise.all([
-      fetch('assets/data/kr-bus/graph/' + rg + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }),
+      fetchGzJson('assets/data/kr-bus/graph/' + rg + '.json.gz?v=' + BUS_DATA_V),
       loadSubwayLines()
     ]).then(function (res) {
       transit.loading = null;
@@ -2442,7 +2442,7 @@
   var busSearchCache = {};
   function loadBusSearchTile(k) {
     if (busSearchCache[k]) return busSearchCache[k];
-    return (busSearchCache[k] = fetch('assets/data/kr-bus/search/' + k + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }));
+    return (busSearchCache[k] = fetchGzJson('assets/data/kr-bus/search/' + k + '.json.gz?v=' + BUS_DATA_V));
   }
   function busListEnsureNames(el, list) {
     if (el.__namesState) return;
@@ -2616,7 +2616,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261107pack';
+  var BUS_DATA_V = '20261107gz';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -2791,6 +2791,20 @@
     el.style.display = 'flex';
   }
   /** 2026-11-03 노선번호 탭 → 그 노선의 정류장 목록(운행 순서, 방향별 탭, 지금 정류장 강조) */
+  /* 2026-11-07: 버스 데이터 큰 JSON(search·graph·routes 묶음)은 .json.gz 로 올려 배포 크기를 줄임.
+   * 받은 바이트가 gzip(1f 8b)이면 DecompressionStream 으로 풀고, 이미 풀려서 왔거나 일반 JSON 이면 그대로 파싱(서버가 Content-Encoding 으로 풀어 보내는 경우 대비). */
+  function fetchGzJson(url) {
+    return fetch(url).then(function (r) { return r.ok ? r.arrayBuffer() : null; }).then(function (buf) {
+      if (!buf) return null;
+      var u = new Uint8Array(buf);
+      if (u.length > 2 && u[0] === 0x1f && u[1] === 0x8b) {
+        if (typeof DecompressionStream !== 'function') return null; // 아주 오래된 브라우저(iOS 16.3 이하 등)는 지원 안 함
+        var ds = new Response(new Blob([u]).stream().pipeThrough(new DecompressionStream('gzip')));
+        return ds.json();
+      }
+      return JSON.parse(new TextDecoder().decode(u));
+    }).catch(function () { return null; });
+  }
   var busRouteCache = {};
   /* 2026-11-07: 노선 3만 7천 개를 낱개로 두면 Pages 배포가 시간 초과로 실패해 800개 묶음(routes/b{k}.json)으로 합침.
    * 묶음 번호 = 노선 id 의 FNV-1a 32비트 해시 % 800 (scripts/pack-kr-bus-routes.mjs 와 같아야 함). 받은 묶음은 통째로 캐시. */
@@ -2805,8 +2819,7 @@
     id = String(id);
     if (busRouteCache[id]) return Promise.resolve(busRouteCache[id]);
     var b = busBundleOf(id);
-    var p = busBundlePending[b] || (busBundlePending[b] = fetch('assets/data/kr-bus/routes/b' + b + '.json?v=' + BUS_DATA_V)
-      .then(function (r) { return r.ok ? r.json() : null; })
+    var p = busBundlePending[b] || (busBundlePending[b] = fetchGzJson('assets/data/kr-bus/routes/b' + b + '.json.gz?v=' + BUS_DATA_V)
       .then(function (d) { if (d) for (var k in d) busRouteCache[k] = d[k]; else delete busBundlePending[b]; return d; })
       .catch(function () { delete busBundlePending[b]; return null; }));
     return p.then(function () { return busRouteCache[id] || null; });
