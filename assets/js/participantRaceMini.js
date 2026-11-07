@@ -43,8 +43,11 @@
     'clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 100%,0 100%);box-shadow:inset 0 6px 10px -8px #f5b50f;white-space:nowrap}' +
     '.pmb__tab:active{filter:brightness(1.3)}.pmb__tab svg{display:block}' +
     ".pmb__tab span{font:italic 800 10px/1 'Barlow Semi Condensed',sans-serif;letter-spacing:.1em}" +
-    '.pmb__tab i{display:block;width:6px;height:6px;border-right:2px solid #f5b50f;border-bottom:2px solid #f5b50f;transform:rotate(45deg);margin-top:-2px;transition:transform .25s}' +
+    '.pmb__tab i{display:block;width:6px;height:6px;border-right:2px solid #f5b50f;border-bottom:2px solid #f5b50f;transform:rotate(45deg);margin-top:-2px;transition:transform .5s cubic-bezier(.22,1,.36,1),margin .5s}' +
     '.pmb__tab--closed i{transform:rotate(-135deg);margin-top:2px}' +
+    '.pmb{transform-origin:50% 100%;transition:transform .55s cubic-bezier(.22,1,.36,1),opacity .45s ease,visibility 0s}' +
+    '.pmb--closed{transform:scaleY(0);opacity:0;visibility:hidden;transition:transform .55s cubic-bezier(.65,0,.35,1),opacity .4s ease .1s,visibility 0s .55s}' +
+    '@media (prefers-reduced-motion:reduce){.pmb,.pmb--closed{transition:none}}' +
     '.pmb__gap{flex:0 0 var(--rh,20px);height:var(--rh,20px);display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
   document.head.appendChild(css);
 
@@ -256,8 +259,10 @@
       tab.style.right = 'auto';
       tab.classList.toggle('pmb__tab--closed', collapsed);
     }
-    if (collapsed) { bs[0].style.display = bs[1].style.display = 'none'; return; }
+    // 접기: 순위가 아래(탭 줄)로 접히고, 펼치기: 아래에서 위로 펼쳐짐 (CSS transform scaleY, 원점=아래). 접힌 동안에도 내용은 계속 갱신
     bs[0].style.display = bs[1].style.display = '';
+    bs[0].classList.toggle('pmb--closed', collapsed);
+    bs[1].classList.toggle('pmb--closed', collapsed);
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
     function place(el, l, w) { el.style.left = l + 'px'; el.style.width = Math.max(40, w) + 'px'; el.style.top = top + 'px'; el.style.height = h + 'px'; el.style.setProperty('--rh', rh + 'px'); el.style.setProperty('--fs', 11 + 'px'); }
