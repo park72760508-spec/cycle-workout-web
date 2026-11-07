@@ -38147,3 +38147,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .track-stats-inside .track-stat-unit {
   font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.85);
 }
+
+/* 2026-11-07: Race 속도계 눈금 숫자 — Barlow Semi Condensed */
+#rollerRaceDashboardScreen .speedometer-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
+}
