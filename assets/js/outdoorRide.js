@@ -2616,7 +2616,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261103live';
+  var BUS_DATA_V = '20261107pack';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
@@ -2792,10 +2792,24 @@
   }
   /** 2026-11-03 노선번호 탭 → 그 노선의 정류장 목록(운행 순서, 방향별 탭, 지금 정류장 강조) */
   var busRouteCache = {};
+  /* 2026-11-07: 노선 3만 7천 개를 낱개로 두면 Pages 배포가 시간 초과로 실패해 800개 묶음(routes/b{k}.json)으로 합침.
+   * 묶음 번호 = 노선 id 의 FNV-1a 32비트 해시 % 800 (scripts/pack-kr-bus-routes.mjs 와 같아야 함). 받은 묶음은 통째로 캐시. */
+  var BUS_BUNDLES = 800;
+  function busBundleOf(id) {
+    var h = 0x811c9dc5;
+    for (var i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h % BUS_BUNDLES;
+  }
+  var busBundlePending = {};
   function loadBusRoute(id) {
+    id = String(id);
     if (busRouteCache[id]) return Promise.resolve(busRouteCache[id]);
-    return fetch('assets/data/kr-bus/routes/' + id + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d) busRouteCache[id] = d; return d; }).catch(function () { return null; });
+    var b = busBundleOf(id);
+    var p = busBundlePending[b] || (busBundlePending[b] = fetch('assets/data/kr-bus/routes/b' + b + '.json?v=' + BUS_DATA_V)
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) for (var k in d) busRouteCache[k] = d[k]; else delete busBundlePending[b]; return d; })
+      .catch(function () { delete busBundlePending[b]; return null; }));
+    return p.then(function () { return busRouteCache[id] || null; });
   }
   /* ---------- 노선도 실시간 위치 (2026-11-03) ----------
    * 팝업이 열려 있는 동안 20초마다 Edge Function transit-live 호출(서버가 노선별 20초 저장·공유, 키는 서버에만).
