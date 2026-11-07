@@ -38138,3 +38138,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-diag-foot button { cursor: pointer; padding: 8px 16px; font: italic 800 13px 'Barlow Semi Condensed','Noto Sans KR',sans-serif; letter-spacing: .06em; color: #e8eef9; background: #1a2440; border: 1px solid #2f4170; }
 .rr-diag-foot .rr-diag-ok { background: #22d3ee; border-color: #22d3ee; color: #04121c; }
 @media (max-width: 480px) { .rr-diag-row { grid-template-columns: 50px minmax(0,1fr) 56px 60px; } .rr-diag-bar { display: none; } }
+
+/* 2026-11-07: Race 경기장 트랙 우측 누적거리 — Race 테마 폰트 (Barlow Semi Condensed 이탤릭) */
+#rollerRaceDashboardScreen .track-stats-inside .track-stat-value {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
+  font-size: 26px; line-height: 1; letter-spacing: .01em; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.45), 0 0 10px rgba(255,255,255,.25);
+}
+#rollerRaceDashboardScreen .track-stats-inside .track-stat-unit {
+  font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.85);
+}
