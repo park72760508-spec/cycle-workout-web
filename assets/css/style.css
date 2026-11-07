@@ -38152,3 +38152,22 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speedometer-labels text {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
 }
+
+/* 2026-11-07: Coach 휴대폰 순위 목록 — 행 간격 촘촘히 + 이름 최소 3글자 보장(flex → grid, 이름 칸 최소폭) */
+#bluetoothCoachMobileScreen .coachm-menu { min-width: 280px; }
+#bluetoothCoachMobileScreen .coachm-rank-head { padding: 6px 14px 4px; }
+#bluetoothCoachMobileScreen .coachm-rank-head,
+#bluetoothCoachMobileScreen .coachm-rank-item {
+  display: grid !important; grid-template-columns: 24px minmax(4.6em, 1fr) auto auto; column-gap: 6px; align-items: center;
+}
+#bluetoothCoachMobileScreen .coachm-rank-item { margin: 0 8px 1px; padding: 3px 8px 3px 9px !important; min-height: 0; line-height: 1.1; }
+#bluetoothCoachMobileScreen .coachm-rank-item__rank { font-size: 16px; min-width: 0; }
+#bluetoothCoachMobileScreen .coachm-rank-item .coachm-slot-item__name { font-size: 15px; min-width: 4.6em; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--ok,
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--under { padding: 2px 6px; font-size: 12px; min-width: 40px; text-align: center; }
+#bluetoothCoachMobileScreen .coachm-rank-item__ach--none { min-width: 40px; text-align: center; }
+#bluetoothCoachMobileScreen .coachm-rank-item__score { min-width: 52px; text-align: right; }
+#bluetoothCoachMobileScreen .coachm-sc__int { font-size: 18px; }
+#bluetoothCoachMobileScreen .coachm-sc__dec { font-size: 12px; }
+#bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(3) { min-width: 40px; }
+#bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(4) { min-width: 52px; }
