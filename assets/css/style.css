@@ -38252,3 +38252,186 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (prefers-reduced-motion: reduce) {
   #bluetoothCoachMobileScreen .coachm-menu, #bluetoothCoachMobileScreen .coachm-menu * { transition: none !important; }
 }
+
+/* ===== 2026-11-08 개인훈련 > 태블릿(노트북) 훈련 화면(#trainingScreen): STELVIO Race 테마 적용 =====
+   모바일 훈련 화면(#mobileDashboardScreen)과 같은 톤(카본 패널·시안/주황/빨강 포인트·Barlow Semi Condensed 이탤릭)을
+   워크아웃 그래프·속도계·숫자·문자·타일 전부에 적용. 모바일에 없는 항목(Total Time·다음 세그먼트·세그먼트 남은시간·
+   TSS/칼로리/속도/거리·심박/파워 스파크라인·컨트롤 버튼 등)은 태블릿 크기에 맞게 확대 적용. */
+#trainingScreen {
+  background:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.02) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, #0a0f1f 0%, #070b18 100%) !important;
+}
+/* 공통 폰트 */
+#trainingScreen .enhanced-time-value, #trainingScreen .enhanced-countdown-value, #trainingScreen .enhanced-avg-value,
+#trainingScreen .enhanced-metric-value, #trainingScreen .enhanced-next-value, #trainingScreen .intensity-adjustment-value,
+#trainingScreen .enhanced-current-segment-name, #trainingScreen .enhanced-progress-labels, #trainingScreen .chart-stats,
+#trainingScreen .chart-time-labels, #trainingScreen #userInfo {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-variant-numeric: tabular-nums;
+}
+/* 라벨류: 작은 대문자 · 넓은 자간 */
+#trainingScreen .enhanced-time-label, #trainingScreen .enhanced-next-label, #trainingScreen .enhanced-countdown-label,
+#trainingScreen .enhanced-avg-label, #trainingScreen .enhanced-panel-header, #trainingScreen .enhanced-metric-label,
+#trainingScreen .intensity-adjustment-label, #trainingScreen .erg-mode-label, #trainingScreen .chart-header {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800 !important;
+  letter-spacing: .24em !important; color: #9fb0cc !important; text-transform: uppercase;
+}
+#trainingScreen .enhanced-metric-unit, #trainingScreen .enhanced-avg-unit {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 800 !important; letter-spacing: .14em; text-transform: uppercase;
+}
+
+/* 1) 상단 헤더 */
+#trainingScreen .enhanced-training-user-info {
+  background: linear-gradient(90deg, #0b1020, #121a33) !important; border: 0 !important; border-radius: 0 !important;
+  box-shadow: 0 2px 0 #ff3b3b, 0 6px 18px rgba(255, 59, 59, .18);
+}
+#trainingScreen .enhanced-training-user-info #userInfo {
+  display: inline-block; background: linear-gradient(180deg, #22d3ee, #0e7490); color: #fff !important; font-weight: 800; letter-spacing: .04em;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 6px 22px; text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+#trainingScreen .enhanced-training-user-info #userInfo::before { display: none; }
+#trainingScreen .mobile-bluetooth-connect-btn {
+  background: linear-gradient(180deg, #5b6b8c, #2b3550) !important; border: 0 !important; border-radius: 0 !important;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%); padding: 8px 22px !important;
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.28);
+}
+#trainingScreen .mobile-bluetooth-connect-btn.has-connection { background: linear-gradient(180deg, #a3e635, #4d7c0f) !important; color: #0b1400 !important; }
+
+/* 2) 시간 정보 · 강도 조절 · ERG · 다음 세그먼트: 타일 */
+#trainingScreen .enhanced-time-elapsed, #trainingScreen .enhanced-next-segment-info,
+#trainingScreen .intensity-adjustment-container, #trainingScreen .erg-mode-container {
+  --st: #22d3ee; position: relative; border: 0 !important; border-radius: 0 !important; border-top: 3px solid var(--st) !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%) !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#trainingScreen .enhanced-next-segment-info { --st: #ff8c00; }
+#trainingScreen .intensity-adjustment-container { --st: #38bdf8; }
+#trainingScreen .erg-mode-container { --st: #a3e635; }
+#trainingScreen .enhanced-time-value {
+  font-size: 40px; font-weight: 800; color: #f4f8ff !important; letter-spacing: .02em; text-shadow: 0 0 14px rgba(34, 211, 238, .45);
+}
+#trainingScreen .enhanced-next-value { font-size: 20px; font-weight: 800; color: #ffb454 !important; text-shadow: 0 0 10px rgba(255, 140, 0, .35); }
+#trainingScreen .intensity-adjustment-value { font-size: 26px; font-weight: 800 !important; text-shadow: 0 0 12px rgba(56, 189, 248, .55); }
+#trainingScreen .intensity-adjustment-min, #trainingScreen .intensity-adjustment-max {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic; font-weight: 700; color: #7f90b0 !important;
+}
+#trainingScreen .intensity-adjustment-slider {
+  height: 6px !important; border-radius: 0 !important; background: linear-gradient(90deg, rgba(56,189,248,.18), rgba(56,189,248,.5)) !important; box-shadow: 0 0 8px rgba(56,189,248,.3);
+}
+#trainingScreen .intensity-adjustment-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14px; height: 26px; border-radius: 2px;
+  background: linear-gradient(180deg, #ffffff, #38bdf8); border: 0; transform: skewX(-14deg); box-shadow: 0 0 10px rgba(56,189,248,.85); cursor: pointer;
+}
+#trainingScreen .intensity-adjustment-slider::-moz-range-thumb {
+  width: 14px; height: 26px; border-radius: 2px; background: linear-gradient(180deg, #ffffff, #38bdf8); border: 0; box-shadow: 0 0 10px rgba(56,189,248,.85); cursor: pointer;
+}
+
+/* 3) 좌·우·중앙 패널: 카본 패널 + 상단 3색 포인트 라인 */
+#trainingScreen .enhanced-metric-panel {
+  border: 0 !important; border-radius: 0 !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #0e1424 0%, #080c18 100%) !important;
+  box-shadow: inset 0 -10px 16px -14px rgba(255,255,255,.25);
+}
+#trainingScreen .enhanced-metric-panel::before {
+  height: 3px !important; opacity: 1 !important; background: linear-gradient(90deg, #22d3ee 0%, #ff8c00 50%, #ff3b3b 100%) !important; box-shadow: 0 0 10px rgba(34, 211, 238, .35);
+}
+#trainingScreen .enhanced-metric-item {
+  --st: #22d3ee; position: relative; padding: 10px 6px 8px; margin-bottom: 10px !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%);
+  border-top: 3px solid var(--st);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(1) { --st: #22d3ee; }
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(2) { --st: #ff8c00; }
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(3) { --st: #a3e635; }
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(4) { --st: #38bdf8; }
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(5) { --st: #facc15; }
+#trainingScreen .enhanced-left-panel .enhanced-metric-item:nth-of-type(6) { --st: #c084fc; }
+#trainingScreen .enhanced-right-panel .enhanced-metric-item:nth-of-type(1) { --st: #ff3b3b; }
+#trainingScreen .enhanced-right-panel .enhanced-metric-item:nth-of-type(2) { --st: #22d3ee; }
+#trainingScreen .enhanced-metric-value {
+  font-weight: 800 !important; color: #f4f8ff; text-shadow: 0 0 12px color-mix(in srgb, var(--st, #22d3ee) 55%, transparent);
+}
+#trainingScreen .enhanced-left-panel .enhanced-metric-value, #trainingScreen .enhanced-right-panel .enhanced-metric-value { font-size: 40px !important; line-height: 1; }
+#trainingScreen .enhanced-metric-unit { color: var(--st, #22d3ee) !important; font-size: 13px !important; }
+#trainingScreen .enhanced-panel-header { font-size: 12px; margin-bottom: 12px; }
+
+/* 4) 속도계 박스: 녹색 바탕 → 카본 패널 */
+#trainingScreen .laptop-gauge-box {
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #0e1424 0%, #080c18 100%) !important;
+  border: 0 !important; border-radius: 0 !important; border-top: 3px solid #22d3ee !important; box-shadow: inset 0 8px 14px -10px #22d3ee !important;
+}
+#trainingScreen .enhanced-countdown-label { font-size: 12px; }
+#trainingScreen .enhanced-countdown-value {
+  font-size: 56px; font-weight: 800; color: #f4f8ff !important; text-shadow: 0 0 14px rgba(34, 211, 238, .45);
+}
+/* 속도계 숫자·문자 */
+#trainingScreen .laptop-gauge-svg text#laptop-ui-target-label, #trainingScreen .laptop-gauge-svg text#laptop-ui-target-rpm-unit,
+#trainingScreen .laptop-gauge-svg text#laptop-ui-target-power, #trainingScreen .laptop-gauge-svg text#laptop-ui-current-power,
+#trainingScreen .laptop-gauge-svg #laptop-gauge-labels text, #trainingScreen .laptop-gauge-svg #laptop-gauge-speed-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+}
+#trainingScreen #laptop-ui-current-power { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
+#trainingScreen #laptop-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
+/* 존 표시: 원호 바깥 얇은 네온 라인 */
+#trainingScreen .stelvio-gauge-zone-bands { transform-origin: 100px 140px; transform: scale(1.075); filter: drop-shadow(0 0 2.5px rgba(255,255,255,.35)) saturate(1.3); }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone][stroke-width] { stroke-width: 3.2px; stroke-dasharray: none; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone]:not([stroke-width]) { display: none; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="0"][stroke-width] { stroke: #94a3b8; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="1"][stroke-width] { stroke: #38bdf8; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="2"][stroke-width] { stroke: #a3e635; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="3"][stroke-width] { stroke: #facc15; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="4"][stroke-width] { stroke: #fb923c; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="5"][stroke-width] { stroke: #ff3b3b; }
+#trainingScreen .stelvio-gauge-zone-bands path[data-zone="6"][stroke-width] { stroke: #c084fc; }
+/* 목표 띠: 달성 = 라임 / 미달 = 주황 */
+#trainingScreen #laptop-gauge-target-arc { stroke: #ff8c00; filter: drop-shadow(0 0 4px rgba(255, 140, 0, .75)); transition: stroke .3s ease; stroke-width: 7.2px; }
+#trainingScreen #laptop-gauge-max-arc { stroke-width: 7.2px; }
+#trainingScreen #laptop-gauge-target-arc[stroke^="url"] { stroke: #a3e635; filter: drop-shadow(0 0 5px rgba(163, 230, 53, .8)); }
+#trainingScreen #laptop-ui-target-power { fill: #ff8c00; }
+
+/* 세그먼트 평균 · 달성도 진행바 */
+#trainingScreen .laptop-gauge-box .enhanced-segment-avg-power.laptop-gauge-inside-avg,
+#trainingScreen .laptop-gauge-box .enhanced-power-progress.laptop-gauge-below-progress {
+  --st: #38bdf8; border: 0 !important; border-radius: 0 !important; border-top: 3px solid var(--st) !important;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424) 0%, #080c18 100%) !important;
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%); box-shadow: inset 0 8px 14px -10px var(--st) !important;
+}
+#trainingScreen .laptop-gauge-box .enhanced-power-progress.laptop-gauge-below-progress { --st: #a3e635; }
+#trainingScreen .enhanced-avg-value { color: #f4f8ff !important; font-weight: 800 !important; text-shadow: 0 0 12px rgba(56, 189, 248, .55); }
+#trainingScreen .enhanced-avg-label, #trainingScreen .enhanced-avg-rpm { color: #9fb0cc !important; font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; }
+#trainingScreen .enhanced-power-progress-bar { border-radius: 0 !important; clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%); box-shadow: 0 0 8px rgba(163, 230, 53, .5); }
+#trainingScreen .laptop-gauge-box .laptop-gauge-below-progress .enhanced-progress-labels { font-size: 15px; font-weight: 800; color: #f4f8ff !important; letter-spacing: .06em; }
+
+/* 현재 세그먼트 이름 · 스파크라인 · 하단 컨트롤 */
+#trainingScreen .enhanced-current-segment-name {
+  border: 0 !important; border-radius: 0 !important; border-left: 3px solid #22d3ee !important; font-size: 20px; font-weight: 800; letter-spacing: .04em;
+  color: #cfe3ff !important; background: linear-gradient(90deg, rgba(34,211,238,.16), rgba(8,12,24,.4)) !important; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 8px rgba(34,211,238,.25);
+}
+#trainingScreen .chart-card { border: 0 !important; border-radius: 0 !important; border-top: 3px solid #22d3ee !important; background: linear-gradient(180deg, #0e1424, #080c18) !important; }
+#trainingScreen .chart-card:nth-of-type(2) { border-top-color: #ff8c00 !important; }
+#trainingScreen .chart-card .chart-header { padding: 6px 10px 0; font-size: 12px; }
+#trainingScreen .chart-card .chart-header .chart-stats { color: #f4f8ff !important; letter-spacing: .04em; font-weight: 800; font-size: 14px; text-transform: none; }
+#trainingScreen .chart-time-labels { color: #7f90b0; font-weight: 700; }
+#trainingScreen .enhanced-control-btn {
+  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif !important; font-style: italic; font-weight: 800; letter-spacing: .08em;
+}
+#trainingScreen .training-segment-graph-container .segment-graph-container {
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px),
+    linear-gradient(180deg, #0e1424 0%, #080c18 100%) !important; border: 0 !important; border-radius: 0 !important;
+  border-top: 3px solid transparent !important; border-image: linear-gradient(90deg, #22d3ee, #ff8c00, #ff3b3b) 1; box-shadow: inset 0 -10px 16px -14px rgba(255,255,255,.25);
+}
