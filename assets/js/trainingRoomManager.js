@@ -6672,19 +6672,46 @@ function stelvioRtdbBaseUrl() {
   } catch (e) {}
   return STELVIO_RTDB_URL;
 }
-async function stelvioRtdbIdToken() {
-  var u = (window.authV9 && window.authV9.currentUser) ||
+function stelvioRtdbCurrentUser() {
+  return (window.authV9 && window.authV9.currentUser) ||
     (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+}
+/** 2026-11-08: 앱 복귀·새로고침 직후 Auth 세션 복원이 늦어 currentUser 가 잠시 null 인 경우를 최대 waitMs 기다린다 */
+async function stelvioRtdbWaitUser(waitMs) {
+  var u = stelvioRtdbCurrentUser();
+  if (u) return u;
+  var end = Date.now() + (Number(waitMs) > 0 ? Number(waitMs) : 6000);
+  try {
+    if (window.authV9 && typeof window.authV9.authStateReady === 'function') {
+      await Promise.race([window.authV9.authStateReady(), new Promise(function (r) { setTimeout(r, waitMs || 6000); })]);
+    }
+  } catch (e) {}
+  while (!(u = stelvioRtdbCurrentUser()) && Date.now() < end) {
+    await new Promise(function (r) { setTimeout(r, 250); });
+  }
+  return u;
+}
+async function stelvioRtdbIdToken(forceRefresh) {
+  var u = await stelvioRtdbWaitUser(6000);
   if (!u || typeof u.getIdToken !== 'function') {
     var e = new Error('PERMISSION_DENIED (로그인 세션 없음)');
     e.code = 'PERMISSION_DENIED';
     throw e;
   }
-  return u.getIdToken();
+  try {
+    return await u.getIdToken(!!forceRefresh);
+  } catch (err) {
+    // 토큰 갱신 네트워크 일시 실패 → 1회 재시도(캐시 토큰이 유효하면 그대로 사용)
+    if (!forceRefresh) {
+      await new Promise(function (r) { setTimeout(r, 600); });
+      return u.getIdToken(false);
+    }
+    throw err;
+  }
 }
 /** method: GET | PUT | PATCH | DELETE, path: 'sessions/1/users' (앞뒤 슬래시 없이) */
-async function stelvioRtdbRest(method, path, body, ms) {
-  var token = await stelvioRtdbIdToken();
+async function stelvioRtdbRestOnce(method, path, body, ms, forceRefresh) {
+  var token = await stelvioRtdbIdToken(forceRefresh);
   var ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
   var limit = Number(ms) > 0 ? Number(ms) : 10000;
   var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, limit);
@@ -6701,7 +6728,7 @@ async function stelvioRtdbRest(method, path, body, ms) {
       pe.code = 'PERMISSION_DENIED';
       throw pe;
     }
-    if (!res.ok) throw new Error('RTDB_REST_HTTP_' + res.status);
+    if (!res.ok) { var he = new Error('RTDB_REST_HTTP_' + res.status); he.status = res.status; throw he; }
     var text = await res.text();
     return text ? JSON.parse(text) : null;
   } catch (err) {
@@ -6715,16 +6742,55 @@ async function stelvioRtdbRest(method, path, body, ms) {
     clearTimeout(timer);
   }
 }
-/** REST 우선 → 실패(권한 오류 제외) 시 SDK once() 10초 제한 폴백 */
-async function stelvioRtdbGet(path, db) {
+/** 2026-11-08: 일시 오류 자동 재시도 — 권한 오류는 토큰 강제 갱신 후 1회, 네트워크/타임아웃/5xx 는 짧은 대기 후 1회 */
+async function stelvioRtdbRest(method, path, body, ms) {
   try {
-    return await stelvioRtdbRest('GET', path, undefined, 8000);
-  } catch (restErr) {
-    if (String(restErr && restErr.code) === 'PERMISSION_DENIED' || !db || typeof db.ref !== 'function') throw restErr;
-    console.warn('[RTDB] REST 실패 → SDK 폴백:', path, restErr && restErr.message);
-    var snap = await stelvioRtdbCall(db.ref(path).once('value'), path, 10000);
-    return snap && typeof snap.val === 'function' ? snap.val() : null;
+    return await stelvioRtdbRestOnce(method, path, body, ms, false);
+  } catch (err1) {
+    var code = String((err1 && err1.code) || '');
+    var transient = code === 'RTDB_TIMEOUT' || (err1 && (err1.status >= 500 || err1.name === 'TypeError'));
+    if (code === 'PERMISSION_DENIED') {
+      // 만료된 토큰일 수 있으므로 강제 갱신 후 1회만 재시도(로그인 세션 없음 오류는 그대로)
+      if (String(err1.message).indexOf('세션 없음') !== -1) throw err1;
+      return stelvioRtdbRestOnce(method, path, body, ms, true);
+    }
+    if (!transient) throw err1;
+    await new Promise(function (r) { setTimeout(r, 700); });
+    return stelvioRtdbRestOnce(method, path, body, (Number(ms) || 10000) + 4000, false);
   }
+}
+/** REST 우선 → 3초 내 응답 없거나 실패(권한 오류 제외)하면 SDK once() 를 동시에 시작(먼저 성공한 쪽 채택) */
+async function stelvioRtdbGet(path, db) {
+  var canSdk = !!(db && typeof db.ref === 'function');
+  var restP = stelvioRtdbRest('GET', path, undefined, 8000);
+  if (!canSdk) return restP;
+  var sdkP = null;
+  var startSdk = function () {
+    if (!sdkP) {
+      console.warn('[RTDB] SDK 병행 조회 시작:', path);
+      try { stelvioRtdbKick(db); } catch (e) {}
+      sdkP = stelvioRtdbCall(db.ref(path).once('value'), path, 12000).then(function (snap) {
+        return snap && typeof snap.val === 'function' ? snap.val() : null;
+      });
+    }
+    return sdkP;
+  };
+  return new Promise(function (resolve, reject) {
+    var done = false, restErr = null, sdkErr = null;
+    var ok = function (v) { if (!done) { done = true; clearTimeout(hedge); resolve(v); } };
+    var fail = function () {
+      if (done) return;
+      if (restErr && sdkErr) { done = true; clearTimeout(hedge); reject(String(restErr.code) === 'PERMISSION_DENIED' ? restErr : (restErr || sdkErr)); }
+    };
+    var hedge = setTimeout(function () {
+      startSdk().then(ok, function (e) { sdkErr = e; fail(); });
+    }, 3000);
+    restP.then(ok, function (e) {
+      restErr = e;
+      if (String(e && e.code) === 'PERMISSION_DENIED') { if (!done) { done = true; clearTimeout(hedge); reject(e); } return; }
+      startSdk().then(ok, function (e2) { sdkErr = e2; fail(); });
+    });
+  });
 }
 /** REST 우선 쓰기(PUT=set, DELETE=remove) → 실패(권한 오류 제외) 시 SDK 폴백 */
 async function stelvioRtdbSet(path, value, db) {
@@ -7090,7 +7156,7 @@ async function renderBluetoothPlayerList() {
       var msgText = (typeof fastFailErr !== 'undefined' && fastFailErr && String(fastFailErr.code || fastFailErr.message || '').toUpperCase().indexOf('PERMISSION') !== -1)
         ? stelvioRtdbErrorMessage(fastFailErr)
         : '트랙 정보를 불러오는 중 연결이 지연되고 있습니다. 표시된 트랙은 실제 신청 현황과 다를 수 있습니다.';
-      banner.innerHTML = '<span id="bluetoothPlayerListLoadErrorMsg"></span><button type="button" style="flex-shrink:0;padding:6px 10px;border-radius:6px;border:none;background:#ea580c;color:#fff;font-weight:700;cursor:pointer;" onclick="renderBluetoothPlayerList()">다시 시도</button>';
+      banner.innerHTML = '<span id="bluetoothPlayerListLoadErrorMsg"></span><button type="button" style="flex-shrink:0;padding:6px 10px;border-radius:6px;border:none;background:#ea580c;color:#fff;font-weight:700;cursor:pointer;" onclick="retryBluetoothPlayerList(this)">다시 시도</button>';
       playerListContent.insertBefore(banner, playerListContent.firstChild);
       var msgEl = document.getElementById('bluetoothPlayerListLoadErrorMsg');
       if (msgEl) msgEl.textContent = msgText;
@@ -7145,6 +7211,70 @@ async function renderBluetoothPlayerList() {
     }, 0);
   }
 }
+
+/**
+ * 2026-11-08: '다시 시도' — 3초 빠른 실패 없이 충분한 시간(최대 3회, 연결 재수립·토큰 갱신 포함)으로 트랙 정보를 다시 불러온다.
+ * 진행 중 버튼 비활성·상태 문구 표시, 성공하면 실제 목록으로 교체, 실패해도 배너·버튼을 유지해 다시 시도 가능.
+ */
+var __btPlayerListRetrying = false;
+async function retryBluetoothPlayerList(btn) {
+  if (__btPlayerListRetrying) return;
+  var container = document.getElementById('bluetoothPlayerListContent');
+  if (!container) return;
+  var roomId = null;
+  try {
+    if (currentSelectedTrainingRoom && currentSelectedTrainingRoom.id) roomId = currentSelectedTrainingRoom.id;
+    else if (window.currentTrainingRoomId) roomId = String(window.currentTrainingRoomId);
+    else roomId = localStorage.getItem('currentTrainingRoomId') || container.getAttribute('data-room-id');
+  } catch (e) {}
+  if (!roomId) { renderBluetoothPlayerList(); return; }
+  __btPlayerListRetrying = true;
+  var msgEl = document.getElementById('bluetoothPlayerListLoadErrorMsg');
+  if (btn) { btn.disabled = true; btn.style.opacity = '.6'; btn.textContent = '불러오는 중...'; }
+  if (msgEl) msgEl.textContent = '트랙 정보를 다시 불러오는 중입니다...';
+  var fresh = null, lastErr = null;
+  try {
+    for (var attempt = 0; attempt < 3 && !fresh; attempt++) {
+      if (attempt > 0) await new Promise(function (r) { setTimeout(r, 1200 * attempt); });
+      var dbRef = getBluetoothPlayerListDb();
+      stelvioRtdbKick(dbRef);
+      try {
+        fresh = await fetchBluetoothTrackData(dbRef, roomId);
+      } catch (e) {
+        lastErr = e;
+        // 권한 오류: 토큰을 강제 갱신해 1회 더 확인(그래도 실패면 중단)
+        if (String((e && (e.code || e.message)) || '').toUpperCase().indexOf('PERMISSION') !== -1) {
+          try { var u = stelvioRtdbCurrentUser(); if (u) await u.getIdToken(true); } catch (e2) {}
+          if (attempt >= 1) break;
+        }
+      }
+    }
+    if (fresh && fresh.tracks && fresh.tracks.length > 0) {
+      var c2 = document.getElementById('bluetoothPlayerListContent');
+      if (c2) renderBluetoothPlayerListToContainer(c2, fresh);
+      try { sessionStorage.setItem('bluetoothPlayerListCache', JSON.stringify({ tracks: fresh.tracks, maxTrackNumber: fresh.maxTrackNumber, roomId: fresh.roomId, timestamp: Date.now() })); } catch (e) {}
+      return;
+    }
+    var m = document.getElementById('bluetoothPlayerListLoadErrorMsg');
+    if (m) m.textContent = stelvioRtdbErrorMessage(lastErr) + ' (트랙 정보를 불러오지 못했습니다)';
+  } finally {
+    __btPlayerListRetrying = false;
+    var b = document.querySelector('#bluetoothPlayerListLoadError button');
+    if (b) { b.disabled = false; b.style.opacity = ''; b.textContent = '다시 시도'; }
+  }
+}
+window.retryBluetoothPlayerList = retryBluetoothPlayerList;
+
+// 네트워크 복구·앱 복귀 시: 오류 배너가 떠 있으면 자동으로 다시 불러온다
+(function () {
+  function auto() {
+    if (document.hidden) return;
+    var banner = document.getElementById('bluetoothPlayerListLoadError');
+    if (banner && !__btPlayerListRetrying) retryBluetoothPlayerList(banner.querySelector('button'));
+  }
+  window.addEventListener('online', auto);
+  document.addEventListener('visibilitychange', auto);
+})();
 
 /**
  * 입장 버튼 클릭 핸들러 (애니메이션 적용)
