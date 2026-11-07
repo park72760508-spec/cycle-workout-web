@@ -167,7 +167,7 @@
   }
 
   /** 목표 파워 원호 — LAP AVG/목표 ≥ 98.5% 면 민트, 아니면 주황 (모바일 훈련 화면과 동일).
-   *  존 세그먼트: 목표 원호는 존 하한까지, 존 구간(하한~상한)은 15% 진한 색 띠 (2026-11-07) */
+   *  존 세그먼트: 목표 원호는 존 상한까지, 존 하한~상한 부분은 30% 진한 색 (2026-11-07) */
   function updateTargetArc(target, lap, ftp, pm) {
     var arc = $('coachm-gauge-target-arc');
     var maxArc = $('coachm-gauge-max-arc');
@@ -181,7 +181,7 @@
     }
     var ok = lap / target >= 0.985;
     var zr = zoneRange(pm, ftp);
-    var endP = zr && zr.min < target ? zr.min : target;
+    var endP = zr && zr.max > target ? zr.max : target;
     function pt(p) {
       var r = Math.min(Math.max(p / (ftp * 2), 0), 1);
       var rad = ((180 + r * 180) * Math.PI) / 180;
@@ -194,9 +194,9 @@
     arc.setAttribute('stroke-opacity', ok ? '0.92' : '1');
     arc.style.display = 'block';
     if (maxArc) {
-      if (zr && zr.max > endP) {
-        var e1 = pt(zr.max);
-        maxArc.setAttribute('d', 'M ' + e0.x + ' ' + e0.y + ' A 80 80 0 0 1 ' + e1.x + ' ' + e1.y);
+      if (zr && zr.max >= endP && zr.min < endP) {
+        var zs = pt(zr.min);
+        maxArc.setAttribute('d', 'M ' + zs.x + ' ' + zs.y + ' A 80 80 0 0 1 ' + e0.x + ' ' + e0.y);
         maxArc.style.display = 'block';
         if (typeof window.stelvioStyleZoneArc === 'function') window.stelvioStyleZoneArc(maxArc, ok);
       } else {

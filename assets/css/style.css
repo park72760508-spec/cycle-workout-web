@@ -38093,3 +38093,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important;
   letter-spacing: .24em; fill: #9fb0cc !important;
 }
+
+/* 2026-11-07: 모든 훈련 화면 — 목표 달성 시 원호·목표값 색 = 라임(#a3e635) (그룹 사용자·노트북 포함) */
+#bluetoothIndividualScreen #indiv-gauge-target-arc[stroke^="url"],
+#bluetoothIndividualScreen #indiv-gauge-target-arc[stroke="#00d4aa"],
+#trainingScreen #laptop-gauge-target-arc[stroke="#00d4aa"] { stroke: #a3e635 !important; filter: drop-shadow(0 0 5px rgba(163, 230, 53, .8)); }
+#bluetoothIndividualScreen #indiv-ui-target-power[fill="#00d4aa"],
+#trainingScreen #laptop-ui-target-power[fill="#00d4aa"] { fill: #a3e635; filter: drop-shadow(0 0 6px rgba(163, 230, 53, .65)); }

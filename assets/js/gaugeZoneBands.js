@@ -98,18 +98,17 @@
   /** 존 세그먼트 구간(하한~상한) 띠 색 — 미달 주황(#ff8c00) / 달성 민트(#00d4aa) 보다 15% 진한 색, 불투명, 존 띠 두께(2026-11-07) */
   window.stelvioStyleZoneArc = function (arc, ok) {
     if (!arc) return;
-    // 같은 화면의 목표 원호가 실제로 칠해진 색(computed)보다 15% 진하게 — 화면별 달성색(라임 #a3e635 / 민트 #00d4aa) 차이를 그대로 따른다
-    var base = ok ? '#00d4aa' : '#ff8c00';
+    // 목표 원호의 실제 색(미달 주황 / 달성 라임)보다 30% 진하게, 두께는 목표 원호와 동일(2026-11-07)
+    var base = ok ? [163, 230, 53] : [255, 140, 0];
     try {
       var t = arc.id ? document.getElementById(arc.id.replace('max-arc', 'target-arc')) : null;
       var m = t && /rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/.exec(getComputedStyle(t).stroke);
-      if (m) base = [m[1], m[2], m[3]];
+      if (m) base = [+m[1], +m[2], +m[3]];
     } catch (e) {}
-    var rgb = Array.isArray(base) ? base.map(Number) : [parseInt(base.slice(1, 3), 16), parseInt(base.slice(3, 5), 16), parseInt(base.slice(5, 7), 16)];
-    arc.setAttribute('stroke', 'rgb(' + rgb.map(function (v) { return Math.round(v * 0.85); }).join(', ') + ')');
+    arc.setAttribute('stroke', 'rgb(' + base.map(function (v) { return Math.round(v * 0.7); }).join(', ') + ')');
     arc.setAttribute('stroke-opacity', '1');
     arc.setAttribute('stroke-linecap', 'butt');
-    arc.style.strokeWidth = ZONE_BAND_WIDTH + 'px';
+    arc.style.strokeWidth = '';
   };
 
   function syncUnderlay(arc) {

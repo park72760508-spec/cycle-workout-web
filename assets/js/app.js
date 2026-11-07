@@ -18335,8 +18335,10 @@ function updateMobileTargetPowerArc() {
   
   // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
   // 2026-11-07: 존 세그먼트는 목표 원호를 존 하한까지만 그리고, 존 구간(하한~상한)은 진한 색 띠로 따로 표시
+  // 2026-11-07(수정): 존 세그먼트는 목표 원호를 존 상한까지 그리고, 존 하한~상한 부분만 30% 진한 색으로 덧그림
   const __zMinP = Number(((window.mobileTrainingState && window.mobileTrainingState.currentSegmentMinPower) || window.currentSegmentMinPower)) || 0;
-  const arcEndPower = (isFtpPctz && __zMinP > 0 && __zMinP < targetPower) ? __zMinP : targetPower;
+  const __zMaxP = Number(((window.mobileTrainingState && window.mobileTrainingState.currentSegmentMaxPower) || window.currentSegmentMaxPower)) || 0;
+  const arcEndPower = (isFtpPctz && __zMaxP > targetPower) ? __zMaxP : targetPower;
   const minRatio = Math.min(Math.max(arcEndPower / maxPower, 0), 1);
   
   // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
@@ -18389,9 +18391,9 @@ function updateMobileTargetPowerArc() {
     const maxEndX = centerX + radius * Math.cos(maxEndRad);
     const maxEndY = centerY + radius * Math.sin(maxEndRad);
     
-    const maxAngleDiff = maxEndAngle - minEndAngle;
-    const maxLargeArcFlag = maxAngleDiff > 180 ? 1 : 0;
-    const maxPathData = `M ${minEndX} ${minEndY} A ${radius} ${radius} 0 ${maxLargeArcFlag} 1 ${maxEndX} ${maxEndY}`;
+    const __zs = (__zMinP > 0 && __zMinP < maxPowerValue) ? __zMinP : targetPower;
+    const __zsRad = ((180 + Math.min(Math.max(__zs / maxPower, 0), 1) * 180) * Math.PI) / 180;
+    const maxPathData = `M ${centerX + radius * Math.cos(__zsRad)} ${centerY + radius * Math.sin(__zsRad)} A ${radius} ${radius} 0 0 1 ${maxEndX} ${maxEndY}`;
     
     // 상한값 원호 요소 가져오기
     const maxArc = safeGetElement('mobile-gauge-max-arc');
