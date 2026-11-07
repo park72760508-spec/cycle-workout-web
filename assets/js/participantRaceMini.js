@@ -38,7 +38,7 @@
     '.pmb__row em{flex:0 0 auto;font-style:normal;font-weight:700;color:#e8eaed}' +
     '.pmb__me{background:rgba(0,212,170,.2);color:#fff}.pmb__me b{color:#00d4aa}' +
     '.pmb__wait{color:#7d838c!important;font-weight:400!important;font-size:9px}' +
-    '.pmb__tab{position:absolute;z-index:5;pointer-events:auto;display:flex;align-items:center;gap:4px;height:26px;padding:0 9px 0 11px;border:0;cursor:pointer;color:#f5b50f;-webkit-tap-highlight-color:transparent;' +
+    '.pmb__tab{position:absolute;z-index:5;pointer-events:auto;display:flex;align-items:center;gap:4px;height:30px;padding:0 10px 0 12px;touch-action:manipulation;border:0;cursor:pointer;color:#f5b50f;-webkit-tap-highlight-color:transparent;' +
     'background:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 5px),linear-gradient(180deg,#1f2937,#0b1220);border-top:2px solid #f5b50f;' +
     'clip-path:polygon(8px 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 6px 10px -8px #f5b50f}' +
     '.pmb__tab:active{filter:brightness(1.3)}.pmb__tab svg{display:block}' +
@@ -147,8 +147,14 @@
   }
   /* 2026-11-07: 순위 펼치기/접기 탭 (PC Coach 순위 전광판의 오른쪽 트로피 탭과 같은 개념, Race 디자인). 상태는 기기에 기억 */
   var LS_KEY = 'pmbCollapsed';
-  function isCollapsed() { try { return localStorage.getItem(LS_KEY) === '1'; } catch (e) { return false; } }
-  function setCollapsed(v) { try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) {} }
+  // 메모리 값을 우선 사용(앱 WebView 에서 localStorage 쓰기가 막혀도 접기/펼치기는 동작), 저장은 보조
+  var collapsedMem = null;
+  function isCollapsed() {
+    if (collapsedMem !== null) return collapsedMem;
+    try { collapsedMem = localStorage.getItem(LS_KEY) === '1'; } catch (e) { collapsedMem = false; }
+    return collapsedMem;
+  }
+  function setCollapsed(v) { collapsedMem = !!v; try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) {} }
   var TROPHY = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3v3c0 2.2-1.6 4-3.7 4.4A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1a5 5 0 0 1-3.3-3.5C5.6 12 4 10.2 4 8V5h3V3zm-1 4v1c0 1 .6 1.8 1.4 2.2A9 9 0 0 1 7 7H6zm12 0h-1c0 1.2-.1 2.3-.4 3.2.8-.4 1.4-1.2 1.4-2.2V7z"/></svg>';
   function tabOf(box) {
     var t = box.querySelector('.pmb__tab');
@@ -159,12 +165,16 @@
       t.className = 'pmb__tab';
       t.setAttribute('aria-label', '순위 표시 펼치기/접기');
       t.innerHTML = TROPHY + '<span>RANK</span><i></i>';
-      t.addEventListener('click', function (e) {
+      // iOS WebView: touchend 로 즉시 처리하고(뒤따르는 합성 click 은 무시), 마우스·키보드는 click 으로 처리
+      var lastTouch = 0;
+      function toggle(e) {
         e.stopPropagation();
         setCollapsed(!isCollapsed());
         box.__pmbSig = '';
         tick();
-      });
+      }
+      t.addEventListener('touchend', function (e) { lastTouch = Date.now(); e.preventDefault(); toggle(e); }, { passive: false });
+      t.addEventListener('click', function (e) { if (Date.now() - lastTouch < 700) { e.stopPropagation(); return; } toggle(e); });
       box.appendChild(t);
     }
     return t;
@@ -232,7 +242,7 @@
     var tab = tabOf(box), collapsed = isCollapsed();
     tab.style.display = '';
     tab.style.right = '2px';
-    tab.style.top = Math.max(0, Math.round(top - 30)) + 'px';
+    tab.style.top = Math.max(0, Math.round(top - 34)) + 'px';
     tab.classList.toggle('pmb__tab--closed', collapsed);
     if (collapsed) { bs[0].style.display = bs[1].style.display = 'none'; return; }
     bs[0].style.display = bs[1].style.display = '';
