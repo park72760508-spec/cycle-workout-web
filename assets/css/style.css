@@ -38100,3 +38100,41 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #trainingScreen #laptop-gauge-target-arc[stroke="#00d4aa"] { stroke: #a3e635 !important; filter: drop-shadow(0 0 5px rgba(163, 230, 53, .8)); }
 #bluetoothIndividualScreen #indiv-ui-target-power[fill="#00d4aa"],
 #trainingScreen #laptop-ui-target-power[fill="#00d4aa"] { fill: #a3e635; filter: drop-shadow(0 0 6px rgba(163, 230, 53, .65)); }
+
+/* ===== 2026-11-07: Race '진단하기' 버튼 + ANT+ 수신 진단 패널 (Race 컨셉) ===== */
+.rr-diag-btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border: 0; color: #e8f6ff;
+  padding: 7px 16px 7px 14px; font: italic 800 14px/1 'Barlow Semi Condensed','Noto Sans KR',sans-serif; letter-spacing: .06em;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.05) 0 2px, transparent 2px 5px), linear-gradient(180deg, #14304a, #0a1626);
+  border-top: 3px solid #22d3ee; clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+  box-shadow: inset 0 8px 14px -10px #22d3ee;
+}
+.rr-diag-btn:hover { filter: brightness(1.2); }
+.rr-diag-btn:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
+.rr-diag-modal { position: fixed; inset: 0; z-index: 100001; background: rgba(3,6,14,.78); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.rr-diag-panel {
+  width: min(560px, 100%); max-height: 92vh; overflow: auto; color: #e8eef9; font-family: 'Noto Sans KR', sans-serif;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.025) 0 2px, transparent 2px 5px), linear-gradient(180deg, #0e1730, #070b18);
+  border-top: 3px solid #22d3ee; border-bottom: 3px solid #ff3b3b; padding: 14px 16px 16px;
+}
+.rr-diag-head { display: flex; justify-content: space-between; align-items: center; font: italic 800 20px 'Barlow Semi Condensed',sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+.rr-diag-x { background: none; border: 0; color: #9fb0cc; font-size: 18px; cursor: pointer; }
+.rr-diag-guide { margin-top: 10px; padding: 10px 12px; background: rgba(163,230,53,.1); border-left: 3px solid #a3e635; font-size: 14px; }
+.rr-diag-guide b { color: #a3e635; font: italic 800 17px 'Barlow Semi Condensed',sans-serif; }
+.rr-diag-sub { margin: 6px 0 10px; font-size: 12px; color: #8fa0c0; line-height: 1.5; }
+.rr-diag-rows { display: grid; gap: 6px; }
+.rr-diag-row { --st: #a3e635; display: grid; grid-template-columns: 56px minmax(0,1fr) 90px 62px 66px; align-items: center; gap: 8px; padding: 6px 8px; border-left: 3px solid var(--st); background: rgba(255,255,255,.04); }
+.rr-diag-low { --st: #ff8c00; } .rr-diag-high { --st: #38bdf8; } .rr-diag-none { --st: #ff3b3b; }
+.rr-diag-trk { font: italic 800 14px 'Barlow Semi Condensed',sans-serif; color: #f0f5ff; }
+.rr-diag-nm { font-size: 12px; color: #b8c6e0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rr-diag-bar { position: relative; height: 8px; background: #1a2440; }
+.rr-diag-bar i { position: absolute; inset: 0 auto 0 0; background: var(--st); }
+.rr-diag-bar b { position: absolute; top: -2px; bottom: -2px; width: 1px; background: #fff; opacity: .6; }
+.rr-diag-val { font: italic 800 18px 'Barlow Semi Condensed',sans-serif; font-variant-numeric: tabular-nums; text-align: right; color: var(--st); }
+.rr-diag-val small { font-size: 11px; color: #8fa0c0; margin-left: 1px; }
+.rr-diag-chip { font: italic 800 12px 'Barlow Semi Condensed','Noto Sans KR',sans-serif; text-align: center; padding: 3px 0; color: #07101c; background: var(--st); }
+.rr-diag-empty { padding: 18px 8px; font-size: 13px; color: #8fa0c0; text-align: center; }
+.rr-diag-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.rr-diag-foot button { cursor: pointer; padding: 8px 16px; font: italic 800 13px 'Barlow Semi Condensed','Noto Sans KR',sans-serif; letter-spacing: .06em; color: #e8eef9; background: #1a2440; border: 1px solid #2f4170; }
+.rr-diag-foot .rr-diag-ok { background: #22d3ee; border-color: #22d3ee; color: #04121c; }
+@media (max-width: 480px) { .rr-diag-row { grid-template-columns: 50px minmax(0,1fr) 56px 60px; } .rr-diag-bar { display: none; } }

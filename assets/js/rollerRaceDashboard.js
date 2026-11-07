@@ -116,6 +116,68 @@ function rrAntDiagRender() {
 }
 setInterval(rrAntDiagRender, 1000);
 
+/* ===== 진단하기 패널 (2026-11-07): Shift+Alt+D 와 같은 진단을 켜고, 트랙별 수신률을 실시간으로 보여준다 ===== */
+const RR_DIAG_MIN = 3.5, RR_DIAG_MAX = 4.1;
+function rrDiagRates() {
+  const now = Date.now();
+  return ((window.rollerRaceState && window.rollerRaceState.speedometers) || [])
+    .filter(s => s.id >= 1 && s.id <= 10 && s.deviceId)
+    .map(s => {
+      const ts = s.pktTimes || [];
+      let n = 0;
+      for (let i = ts.length - 1; i >= 0 && now - ts[i] <= 5000; i--) n++;
+      const rate = n / 5;
+      let st = 'ok', label = '정상';
+      if (rate === 0) { st = 'none'; label = '수신 없음'; }
+      else if (rate < RR_DIAG_MIN) { st = 'low'; label = '낮음'; }
+      else if (rate > RR_DIAG_MAX) { st = 'high'; label = '높음'; }
+      return { id: s.id, name: s.pairingName || '', deviceId: s.deviceId, rate, st, label };
+    });
+}
+function rrRenderAntDiag() {
+  const box = document.getElementById('rrDiagRows');
+  if (!box) return;
+  const rows = rrDiagRates();
+  if (!rows.length) { box.innerHTML = '<div class="rr-diag-empty">센서가 지정된 트랙이 없습니다. 속도계 목록에서 센서 ID를 먼저 지정해 주세요.</div>'; return; }
+  box.innerHTML = rows.map(r => {
+    const pct = Math.min(100, r.rate / 5 * 100);
+    return `<div class="rr-diag-row rr-diag-${r.st}">
+      <span class="rr-diag-trk">트랙${r.id}</span>
+      <span class="rr-diag-nm">${(r.name || ('ID ' + r.deviceId)).replace(/</g, '&lt;')}</span>
+      <span class="rr-diag-bar"><i style="width:${pct}%"></i><b style="left:${RR_DIAG_MIN / 5 * 100}%"></b><b style="left:${RR_DIAG_MAX / 5 * 100}%"></b></span>
+      <span class="rr-diag-val">${r.rate.toFixed(1)}<small>/s</small></span>
+      <span class="rr-diag-chip">${r.label}</span>
+    </div>`;
+  }).join('');
+}
+function rrCloseAntDiag() {
+  const m = document.getElementById('rrDiagModal');
+  if (m) m.remove();
+  if (window.__rrDiagTimer) { clearInterval(window.__rrDiagTimer); window.__rrDiagTimer = null; }
+}
+function rrOpenAntDiag() {
+  window.rrAntDiagToggle(true); // Shift+Alt+D 와 같은 진단 ON (로그 + 트랙별 수신률 표시)
+  rrCloseAntDiag();
+  const m = document.createElement('div');
+  m.id = 'rrDiagModal';
+  m.className = 'rr-diag-modal';
+  m.innerHTML = `<div class="rr-diag-panel" role="dialog" aria-label="ANT+ 수신 진단">
+    <div class="rr-diag-head"><span>ANT+ 수신 진단</span><button type="button" class="rr-diag-x" aria-label="닫기">✕</button></div>
+    <div class="rr-diag-guide">트랙별 수신률이 <b>3.5~4.1/s</b>이면 정상입니다.</div>
+    <div class="rr-diag-sub">참가 선수가 페달링하는 상태에서 확인하세요. 최근 5초 평균이며 센서 정상값은 약 4.03/s 입니다.</div>
+    <div id="rrDiagRows" class="rr-diag-rows"></div>
+    <div class="rr-diag-foot"><button type="button" class="rr-diag-off">진단 끄기</button><button type="button" class="rr-diag-ok">닫기</button></div>
+  </div>`;
+  document.body.appendChild(m);
+  m.addEventListener('click', e => { if (e.target === m) rrCloseAntDiag(); });
+  m.querySelector('.rr-diag-x').onclick = rrCloseAntDiag;
+  m.querySelector('.rr-diag-ok').onclick = rrCloseAntDiag;
+  m.querySelector('.rr-diag-off').onclick = () => { window.rrAntDiagToggle(false); rrCloseAntDiag(); if (typeof showToast === 'function') showToast('ANT+ 수신률 진단 OFF'); };
+  rrRenderAntDiag();
+  window.__rrDiagTimer = setInterval(rrRenderAntDiag, 1000);
+}
+window.rrOpenAntDiag = rrOpenAntDiag;
+
 class SpeedometerData {
   constructor(id, name, deviceId = null) {
     this.id = id;
