@@ -1980,11 +1980,14 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       ctx.stroke();
     }
 
-    // 메인 빨간색 원
+    // 메인 빨간색 원 + 흰색 구분 띠(테두리) — 펄스 링·그래프 선과 겹쳐도 점이 또렷하게 (2026-11-08)
     ctx.beginPath();
     ctx.arc(mascotX, mascotY, mascotRadius * 0.85, 0, Math.PI * 2);
     ctx.fillStyle = '#ef4444';
     ctx.fill();
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = '#ffffff';
+    ctx.stroke();
 
     ctx.restore();
   }
