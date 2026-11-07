@@ -38,9 +38,9 @@
     '.pmb__row em{flex:0 0 auto;font-style:normal;font-weight:700;color:#e8eaed}' +
     '.pmb__me{background:rgba(0,212,170,.2);color:#fff}.pmb__me b{color:#00d4aa}' +
     '.pmb__wait{color:#7d838c!important;font-weight:400!important;font-size:9px}' +
-    '.pmb__tab{position:absolute;z-index:5;pointer-events:auto;display:flex;align-items:center;gap:4px;height:30px;padding:0 10px 0 12px;touch-action:manipulation;border:0;cursor:pointer;color:#f5b50f;-webkit-tap-highlight-color:transparent;' +
+    '.pmb__tab{position:absolute;z-index:5;pointer-events:auto;display:flex;align-items:center;gap:4px;height:26px;padding:0 14px;touch-action:manipulation;border:0;cursor:pointer;color:#f5b50f;-webkit-tap-highlight-color:transparent;' +
     'background:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 5px),linear-gradient(180deg,#1f2937,#0b1220);border-top:2px solid #f5b50f;' +
-    'clip-path:polygon(8px 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 6px 10px -8px #f5b50f}' +
+    'clip-path:polygon(9px 0,calc(100% - 9px) 0,100% 100%,0 100%);box-shadow:inset 0 6px 10px -8px #f5b50f;white-space:nowrap}' +
     '.pmb__tab:active{filter:brightness(1.3)}.pmb__tab svg{display:block}' +
     ".pmb__tab span{font:italic 800 10px/1 'Barlow Semi Condensed',sans-serif;letter-spacing:.1em}" +
     '.pmb__tab i{display:block;width:6px;height:6px;border-right:2px solid #f5b50f;border-bottom:2px solid #f5b50f;transform:rotate(45deg);margin-top:-2px;transition:transform .25s}' +
@@ -156,13 +156,16 @@
   }
   function setCollapsed(v) { collapsedMem = !!v; try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) {} }
   var TROPHY = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3v3c0 2.2-1.6 4-3.7 4.4A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1a5 5 0 0 1-3.3-3.5C5.6 12 4 10.2 4 8V5h3V3zm-1 4v1c0 1 .6 1.8 1.4 2.2A9 9 0 0 1 7 7H6zm12 0h-1c0 1.2-.1 2.3-.4 3.2.8-.4 1.4-1.2 1.4-2.2V7z"/></svg>';
-  function tabOf(box) {
-    var t = box.querySelector('.pmb__tab');
-    if (!t) {
-      if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+  /** 탭은 LAP AVG 타일 바로 위(하단 통계 줄의 윗변)에 붙인다 — 속도계·파워 숫자와 겹치지 않는 빈 띠 */
+  function tabOf(box, footer) {
+    var t = box.__pmbTab;
+    if (!t || !t.isConnected) {
+      if (getComputedStyle(footer).position === 'static') footer.style.position = 'relative';
+      footer.style.overflow = 'visible';
       t = document.createElement('button');
       t.type = 'button';
       t.className = 'pmb__tab';
+      box.__pmbTab = t;
       t.setAttribute('aria-label', '순위 표시 펼치기/접기');
       t.innerHTML = TROPHY + '<span>RANK</span><i></i>';
       // iOS WebView: touchend 로 즉시 처리하고(뒤따르는 합성 click 은 무시), 마우스·키보드는 click 으로 처리
@@ -175,12 +178,12 @@
       }
       t.addEventListener('touchend', function (e) { lastTouch = Date.now(); e.preventDefault(); toggle(e); }, { passive: false });
       t.addEventListener('click', function (e) { if (Date.now() - lastTouch < 700) { e.stopPropagation(); return; } toggle(e); });
-      box.appendChild(t);
+      footer.appendChild(t);
     }
     return t;
   }
   function hide(box) {
-    var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r'), T = box.querySelector('.pmb__tab');
+    var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r'), T = box.__pmbTab;
     if (L) L.style.display = 'none';
     if (R) R.style.display = 'none';
     if (T) T.style.display = 'none';
@@ -239,11 +242,18 @@
     var wBoard = Math.round(br.width * 0.295);
     var sig = JSON.stringify([waiting, excl, left, right, uid, Math.round(wBoard), Math.round(top), Math.round(h)]);
     // 펼치기/접기 탭: 오른쪽 보드 바로 위 오른쪽 끝에 고정, 접으면 보드만 숨기고 탭은 남김
-    var tab = tabOf(box), collapsed = isCollapsed();
-    tab.style.display = '';
-    tab.style.right = '2px';
-    tab.style.top = Math.max(0, Math.round(top - 34)) + 'px';
-    tab.classList.toggle('pmb__tab--closed', collapsed);
+    var footer = act.scr.querySelector('.indiv-stats-footer');
+    var tab = footer ? tabOf(box, footer) : null, collapsed = isCollapsed();
+    if (tab) {
+      var lapBox = footer.children[1] || footer;
+      var fr = footer.getBoundingClientRect(), lr = lapBox.getBoundingClientRect();
+      tab.style.display = '';
+      tab.style.left = Math.round(lr.left - fr.left + lr.width / 2 - tab.offsetWidth / 2) + 'px';
+      tab.style.bottom = '100%';
+      tab.style.top = 'auto';
+      tab.style.right = 'auto';
+      tab.classList.toggle('pmb__tab--closed', collapsed);
+    }
     if (collapsed) { bs[0].style.display = bs[1].style.display = 'none'; return; }
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
