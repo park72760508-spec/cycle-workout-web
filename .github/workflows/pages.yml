@@ -46,3 +46,6 @@ jobs:
 
       - id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # 파일 동기화(syncing_files)가 느린 날이 있어 기본 10분 → 30분까지 기다림
+          timeout: 1800000
