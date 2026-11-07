@@ -1,0 +1,48 @@
+# GitHub Pages 배포 (2026-11-07) — 저장소 설정 Pages > Source 를 "GitHub Actions" 로 두고 이 워크플로가 직접 배포한다.
+# 기존 "branch(main) 자동 빌드" 방식은 파일 동기화(syncing_files)에서 시간 초과로 자주 실패했다.
+# 서버 전용 폴더(functions·supabase·scripts)는 사이트에 올리지 않아 배포 크기를 줄인다. 사이트가 참조하지 않는 폴더만 제외.
+name: Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 연달아 푸시하면 이전 배포는 취소하고 최신 커밋만 배포
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 사이트 파일만 모으기
+        run: |
+          mkdir -p _site
+          rsync -a \
+            --exclude='.git' --exclude='.github' --exclude='_site' --exclude='.cache' --exclude='.claude' --exclude='.playwright-mcp' \
+            --exclude='node_modules' --exclude='/functions' --exclude='/supabase' --exclude='/scripts' \
+            ./ _site/
+          touch _site/.nojekyll
+          echo "files: $(find _site -type f | wc -l), size: $(du -sh _site | cut -f1)"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
