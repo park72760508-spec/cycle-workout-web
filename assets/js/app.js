@@ -18334,7 +18334,10 @@ function updateMobileTargetPowerArc() {
   }
   
   // 목표 파워 비율 계산 (0 ~ 1) - 하한값 기준
-  const minRatio = Math.min(Math.max(targetPower / maxPower, 0), 1);
+  // 2026-11-07: 존 세그먼트는 목표 원호를 존 하한까지만 그리고, 존 구간(하한~상한)은 진한 색 띠로 따로 표시
+  const __zMinP = Number(((window.mobileTrainingState && window.mobileTrainingState.currentSegmentMinPower) || window.currentSegmentMinPower)) || 0;
+  const arcEndPower = (isFtpPctz && __zMinP > 0 && __zMinP < targetPower) ? __zMinP : targetPower;
+  const minRatio = Math.min(Math.max(arcEndPower / maxPower, 0), 1);
   
   // 각도 계산: 180도(왼쪽 상단)에서 시작하여 각도가 증가하는 방향으로
   const startAngle = 180;
@@ -18399,6 +18402,8 @@ function updateMobileTargetPowerArc() {
       maxArc.setAttribute('d', maxPathData);
       maxArc.setAttribute('stroke', 'rgba(255, 140, 0, 0.2)'); // 더 투명한 주황색
       maxArc.style.display = 'block';
+      // 2026-11-07: 존 구간 띠 = 미달 주황 / 달성 민트보다 15% 진한 색(불투명, 존 띠 두께)
+      if (typeof window.stelvioStyleZoneArc === 'function') window.stelvioStyleZoneArc(maxArc, arcOk);
     }
   } else {
     // ftp_pctz가 아니거나 상한값이 없으면 상한 원호 숨김
@@ -18909,13 +18914,13 @@ function updateMobileTargetPower() {
       maxPercent = Number(targetValue[1]) || 75;
     }
     
-    // 하한값을 목표 파워값으로 사용
-    targetPower = Math.round(ftp * (minPercent / 100));
-    console.log('[Mobile Dashboard] ftp_pctz 계산: FTP', ftp, '* 하한', minPercent, '% =', targetPower, 'W (상한:', maxPercent, '%)');
+    // 2026-11-07: 존 상·하한의 중간값을 목표 파워값으로 사용(그룹훈련 사용자·Coach 화면과 동일)
+    targetPower = Math.round(ftp * ((minPercent + maxPercent) / 2 / 100));
+    console.log('[Mobile Dashboard] ftp_pctz 계산: FTP', ftp, '* 중간', (minPercent + maxPercent) / 2, '% =', targetPower, 'W (하한:', minPercent, '% 상한:', maxPercent, '%)');
     
-    // 상한값을 전역 변수에 저장 (모바일 전용 상태에도 저장)
+    // 상·하한값을 전역 변수에 저장 (모바일 전용 상태에도 저장)
     window.currentSegmentMaxPower = Math.round(ftp * (maxPercent / 100));
-    window.currentSegmentMinPower = targetPower;
+    window.currentSegmentMinPower = Math.round(ftp * (minPercent / 100));
     
     // 모바일 전용 상태에도 저장 (독립적으로 구동)
     const mts = window.mobileTrainingState || {};

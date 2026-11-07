@@ -150,27 +150,59 @@
   }
 
   /** 목표 파워 원호 — LAP AVG/목표 ≥ 98.5% 면 민트, 아니면 주황 (모바일 훈련 화면과 동일) */
-  function updateTargetArc(target, lap, ftp) {
+  /** 현재 세그먼트가 존(ftp_pctz)이면 { min, max } 파워(W), 아니면 null (2026-11-07) */
+  function zoneRange(pm, ftp) {
+    var cs = coachState();
+    var fbS = st.fbStatus || {};
+    var w = cs.currentWorkout;
+    var segs = Array.isArray(st.fbPlan) && st.fbPlan.length ? st.fbPlan : (w && w.segments);
+    if (!(ftp > 0) || !Array.isArray(segs) || !segs.length) return null;
+    var idx = typeof fbS.segmentIndex === 'number' ? fbS.segmentIndex : (cs.currentSegmentIndex || 0);
+    var seg = segs[idx] || segs[0];
+    if (!seg || (seg.target_type || 'ftp_pct') !== 'ftp_pctz') return null;
+    var v = seg.target_value || seg.target || '';
+    var z = String(Array.isArray(v) ? v.join('~') : v).replace(/%/g, '').split(/[~\/,]/).map(function (n) { return Number(n.trim()); }).filter(function (n) { return n > 0; });
+    if (z.length < 2 || !(z[1] > z[0])) return null;
+    return { min: ftp * z[0] / 100, max: ftp * z[1] / 100 };
+  }
+
+  /** 목표 파워 원호 — LAP AVG/목표 ≥ 98.5% 면 민트, 아니면 주황 (모바일 훈련 화면과 동일).
+   *  존 세그먼트: 목표 원호는 존 하한까지, 존 구간(하한~상한)은 15% 진한 색 띠 (2026-11-07) */
+  function updateTargetArc(target, lap, ftp, pm) {
     var arc = $('coachm-gauge-target-arc');
+    var maxArc = $('coachm-gauge-max-arc');
     var targetEl = $('coachm-ui-target-power');
     if (!arc) return;
     if (!(target > 0)) {
       arc.style.display = 'none';
+      if (maxArc) maxArc.style.display = 'none';
       if (targetEl) targetEl.setAttribute('fill', '#ff8c00');
       return;
     }
     var ok = lap / target >= 0.985;
-    var ratio = Math.min(Math.max(target / (ftp * 2), 0), 1);
-    var endRad = ((180 + ratio * 180) * Math.PI) / 180;
-    var sx = 100 + 80 * Math.cos(Math.PI);
-    var sy = 140 + 80 * Math.sin(Math.PI);
-    var ex = 100 + 80 * Math.cos(endRad);
-    var ey = 140 + 80 * Math.sin(endRad);
-    arc.setAttribute('d', 'M ' + sx + ' ' + sy + ' A 80 80 0 0 1 ' + ex + ' ' + ey);
+    var zr = zoneRange(pm, ftp);
+    var endP = zr && zr.min < target ? zr.min : target;
+    function pt(p) {
+      var r = Math.min(Math.max(p / (ftp * 2), 0), 1);
+      var rad = ((180 + r * 180) * Math.PI) / 180;
+      return { x: 100 + 80 * Math.cos(rad), y: 140 + 80 * Math.sin(rad) };
+    }
+    var s0 = pt(0), e0 = pt(endP);
+    arc.setAttribute('d', 'M ' + s0.x + ' ' + s0.y + ' A 80 80 0 0 1 ' + e0.x + ' ' + e0.y);
     // 달성 시 원호는 아웃도어 속도계와 같은 녹색 그라데이션(index.html #stelvioGaugeGreenGrad, 2026-10-21), 미달은 주황
     arc.setAttribute('stroke', ok ? 'url(#stelvioGaugeGreenGrad)' : '#ff8c00');
     arc.setAttribute('stroke-opacity', ok ? '0.92' : '1');
     arc.style.display = 'block';
+    if (maxArc) {
+      if (zr && zr.max > endP) {
+        var e1 = pt(zr.max);
+        maxArc.setAttribute('d', 'M ' + e0.x + ' ' + e0.y + ' A 80 80 0 0 1 ' + e1.x + ' ' + e1.y);
+        maxArc.style.display = 'block';
+        if (typeof window.stelvioStyleZoneArc === 'function') window.stelvioStyleZoneArc(maxArc, ok);
+      } else {
+        maxArc.style.display = 'none';
+      }
+    }
     if (targetEl) targetEl.setAttribute('fill', ok ? '#00d4aa' : '#ff8c00');
   }
 
@@ -239,7 +271,7 @@
     var ftpKnown = Number(pm && pm.userFTP) > 0;
     var ftp = ftpKnown ? Number(pm.userFTP) : 200; // 바늘·원호 배율 계산용(눈금 숫자는 모르면 배수로 표시)
     ensureGaugeScale(ftpKnown ? ftp : 0);
-    updateTargetArc(target, lap, ftp);
+    updateTargetArc(target, lap, ftp, pm);
     updateSpeedArc(pm);
 
     var state = cs.trainingState || 'idle';

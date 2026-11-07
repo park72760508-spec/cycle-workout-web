@@ -4032,7 +4032,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261107coachm4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261107watts" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -8247,7 +8247,7 @@
           <text id="mobile-ui-target-label" x="100" y="93" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
           <text id="mobile-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
           <text id="mobile-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
-          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
           
           <text id="mobile-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
         
@@ -35148,8 +35148,8 @@
 <script src="assets/js/trainingTimerModule.js"></script>
 <script src="assets/js/stelvioWakeLock.js?v=20261021rnkeep"></script>
 <script src="assets/js/wakeLockManager.js"></script>
-<script src="assets/js/bluetoothIndividual.js?v=20261105sync1"></script>
-<script src="assets/js/gaugeZoneBands.js?v=20261030nowhite"></script>
+<script src="assets/js/bluetoothIndividual.js?v=20261107zone"></script>
+<script src="assets/js/gaugeZoneBands.js?v=20261107zone"></script>
 <!-- Bluetooth Training 모듈 -->
 <script src="assets/js/bluetoothTrainingManager.js?v=20261010rtdbRest"></script>
 <!-- AI 분석 공통: 컨디션 점수 모듈 (50~100, 1점 단위 객관 산출) -->
@@ -35160,7 +35160,7 @@
   <script src="assets/js/deviceBridgeStorage.js"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261019scan"></script>
-  <script src="assets/js/app.js?v=20261105segflow"></script>
+  <script src="assets/js/app.js?v=20261107zone"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
@@ -35920,7 +35920,7 @@
           <text id="indiv-ui-target-label" x="100" y="93" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
           <text id="indiv-ui-target-rpm-unit" x="100" y="98" text-anchor="middle" fill="#888" font-size="5" style="display: none;">RPM</text>
           <text id="indiv-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
-          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
           <text id="indiv-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
           <text id="indiv-segment-info" x="100" y="215" text-anchor="middle" fill="#ccc" font-size="9" style="display:none">준비 중</text>
           <g id="indiv-gauge-needle" transform="translate(100, 140) rotate(-90)">
@@ -36072,6 +36072,7 @@
         <svg viewBox="-15 0 230 260" style="width:100%; height:100%;">
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
           <path id="coachm-gauge-target-arc" fill="none" stroke-width="12" stroke-linecap="round" style="display: none;"></path>
+          <path id="coachm-gauge-max-arc" fill="none" stroke-width="12" stroke-linecap="butt" style="display: none;"></path>
           <path id="coachm-gauge-speed-arc" d="M 180 140 A 80 80 0 0 0 20 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
           <g id="coachm-gauge-ticks"></g>
           <g id="coachm-gauge-labels"></g>
@@ -36079,7 +36080,7 @@
           <text id="coachm-ui-lap-time" x="100" y="34" text-anchor="middle" fill="#00d4aa" font-size="20" font-weight="bold">00:00</text>
           <text x="100" y="93" text-anchor="middle" fill="#888" font-size="6">TARGET</text>
           <text id="coachm-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
-          <text x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
+          <text class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">WATTS</text>
           <text id="coachm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
           <g id="coachm-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
@@ -36526,7 +36527,7 @@
   <script src="assets/js/coachRaceLeaderboard.js?v=20261107rpm"></script>
   <script src="assets/js/participantRaceMini.js?v=20261104minirank14"></script>
   <!-- Live Training Room Coach 휴대폰 전용 화면 (Coach 엔진 이후 로드) -->
-  <script src="assets/js/bluetoothCoachMobile.js?v=20261107rank"></script>
+  <script src="assets/js/bluetoothCoachMobile.js?v=20261107zone"></script>
   <!-- GPS 위치 추적: 배치 저장 + Supabase/Firestore 스위치 (설정: firebaseConfig.js STELVIO_TRACKING_CONFIG) -->
   <script src="assets/js/locationTrackingService.js?v=shared-mint-20260928"></script>
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->

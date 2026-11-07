@@ -38087,3 +38087,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothCoachMobileScreen .coachm-sc__dec { font-size: 13px; font-weight: 700; opacity: .8; }
 #bluetoothCoachMobileScreen .coachm-rank-item--top1 .coachm-rank-item__score { color: #f5b50f; text-shadow: 0 0 10px rgba(245, 181, 15, .4); }
 #bluetoothCoachMobileScreen .coachm-rank-item { grid-template-columns: 30px 1fr 54px 62px; }
+
+/* 2026-11-07: 훈련 화면 속도계 단위(WATTS) — Race 테마 폰트 (모바일 훈련 / 그룹 사용자 / Coach 휴대폰) */
+.gauge-unit-watts {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important;
+  letter-spacing: .24em; fill: #9fb0cc !important;
+}

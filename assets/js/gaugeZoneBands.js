@@ -95,6 +95,15 @@
     if (m) arc.setAttribute('stroke', 'rgb(' + m[1] + ', ' + m[2] + ', ' + m[3] + ')');
   }
 
+  /** 존 세그먼트 구간(하한~상한) 띠 색 — 미달 주황(#ff8c00) / 달성 민트(#00d4aa) 보다 15% 진한 색, 불투명, 존 띠 두께(2026-11-07) */
+  window.stelvioStyleZoneArc = function (arc, ok) {
+    if (!arc) return;
+    arc.setAttribute('stroke', ok ? '#00b491' : '#d97700');
+    arc.setAttribute('stroke-opacity', '1');
+    arc.setAttribute('stroke-linecap', 'butt');
+    arc.style.strokeWidth = ZONE_BAND_WIDTH + 'px';
+  };
+
   function syncUnderlay(arc) {
     var parent = arc.parentNode;
     if (!parent) return;
