@@ -80,6 +80,42 @@ const ANT_CHANNEL_CONFIG = {
 };
 
 // 속도계 데이터 구조
+/* ===== 2026-11-07: ANT+ 수신 핫패스 로그 게이트 + 트랙별 수신률 진단 =====
+ * 센서 10대면 초당 40패킷 이상이 들어오므로 패킷마다 console.log 를 찍으면 브라우저가 느려진다.
+ * 평소엔 로그를 끄고, 필요할 때만 localStorage.rrAntDiag='1' 또는 Shift+Alt+D 로 켠다(로그 + 트랙별 수신률 표시). */
+function rrAntDiagOn() { try { return window.RR_ANT_DEBUG === true || localStorage.getItem('rrAntDiag') === '1'; } catch (e) { return !!window.RR_ANT_DEBUG; } }
+function rrAntLog() { if (rrAntDiagOn()) console.log.apply(console, arguments); }
+window.rrAntDiagToggle = function (on) {
+  try { localStorage.setItem('rrAntDiag', on ? '1' : '0'); } catch (e) {}
+  window.RR_ANT_DEBUG = !!on;
+  rrAntDiagRender();
+};
+document.addEventListener('keydown', function (e) {
+  if (e.shiftKey && e.altKey && (e.key === 'D' || e.key === 'd' || e.code === 'KeyD')) {
+    window.rrAntDiagToggle(!rrAntDiagOn());
+    if (typeof showToast === 'function') showToast('ANT+ 수신률 진단 ' + (rrAntDiagOn() ? 'ON' : 'OFF'));
+  }
+});
+// 트랙별 최근 5초 수신 패킷 수 → 초당 패킷(속도 센서 정상 약 4.0/s)과 예상 유실률
+function rrAntDiagRender() {
+  const on = rrAntDiagOn();
+  const now = Date.now();
+  const sp = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
+  sp.forEach(s => {
+    const el = document.getElementById('pps-' + s.id);
+    if (!el) return;
+    if (!on || !s.deviceId) { if (el.textContent) el.textContent = ''; return; }
+    const ts = s.pktTimes || [];
+    let n = 0;
+    for (let i = ts.length - 1; i >= 0 && now - ts[i] <= 5000; i--) n++;
+    const rate = n / 5;
+    const loss = Math.max(0, 1 - rate / 4.03);
+    el.textContent = rate.toFixed(1) + '/s' + (rate > 0 ? ' · 유실≈' + Math.round(loss * 100) + '%' : '');
+    el.style.color = rate === 0 ? '#ff3b3b' : (loss > 0.1 ? '#ff8c00' : '#a3e635');
+  });
+}
+setInterval(rrAntDiagRender, 1000);
+
 class SpeedometerData {
   constructor(id, name, deviceId = null) {
     this.id = id;
@@ -251,6 +287,7 @@ function createSpeedometerElement(speedometer) {
       <div class="connection-status-center" id="status-${speedometer.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
+        <span class="rr-pps" id="pps-${speedometer.id}" style="margin-left:6px;font:italic 800 10px 'Barlow Semi Condensed',sans-serif;letter-spacing:.04em"></span>
       </div>
     </div>
     <div class="speedometer-dial">
@@ -3642,7 +3679,7 @@ async function receiveANTMessage() {
     // 동기화 바이트 이전 데이터 제거
     if (syncIndex > 0) {
       // 동기화 바이트 이전의 잘못된 데이터 제거
-      console.log(`[ANT+] 동기화 바이트 이전 ${syncIndex}바이트 제거`);
+      rrAntLog(`[ANT+] 동기화 바이트 이전 ${syncIndex}바이트 제거`);
       window.antState.messageBuffer = window.antState.messageBuffer.slice(syncIndex);
     }
     
@@ -3679,7 +3716,7 @@ async function receiveANTMessage() {
     
     // Length가 9 이상이면 로그만 출력하고 계속 진행 (확장 메시지일 수 있음)
     if (length > 8) {
-      console.log('[ANT+] 확장 메시지 감지 (Length > 8):', length);
+      rrAntLog('[ANT+] 확장 메시지 감지 (Length > 8):', length);
     }
     
     // 메시지 전체 길이 확인 (Sync + Length + MessageID + Data + Checksum)
@@ -3707,7 +3744,7 @@ async function receiveANTMessage() {
     
     // 디버깅: 원시 메시지 로그 (중요한 메시지만)
     if (messageId === 0x51 || messageId === 0x4E || messageId === 0x43) {
-      console.log('[ANT+] 메시지 파싱:', {
+      rrAntLog('[ANT+] 메시지 파싱:', {
         messageId: '0x' + messageId.toString(16).toUpperCase(),
         length: length,
         dataLength: dataLength,
@@ -3738,7 +3775,7 @@ async function receiveANTMessage() {
       // 중요한 메시지들은 체크섬 오류가 있어도 처리
       if (messageId === 0x51) {
         // Channel ID Response는 매우 중요하므로 체크섬 오류가 있어도 처리
-        console.log('[ANT+] Channel ID Response (체크섬 오류 무시)', debugInfo);
+        rrAntLog('[ANT+] Channel ID Response (체크섬 오류 무시)', debugInfo);
         return { messageId, data: messageData };
       }
       
@@ -3746,7 +3783,7 @@ async function receiveANTMessage() {
           messageId === 0x46 || messageId === 0x47) {
         // Channel Event, Broadcast Data, Acknowledged Data, 
         // Burst Data, Extended Broadcast Data는 처리
-        console.log('[ANT+] 중요 메시지 (체크섬 오류 무시)', debugInfo);
+        rrAntLog('[ANT+] 중요 메시지 (체크섬 오류 무시)', debugInfo);
         return { messageId, data: messageData };
       }
       
@@ -3754,7 +3791,7 @@ async function receiveANTMessage() {
       if (messageId === 0xAE) {
         // Capabilities 메시지는 너무 자주 오므로 로그 최소화
         if (!window.antState.lastCapabilitiesLog || Date.now() - window.antState.lastCapabilitiesLog > 5000) {
-          console.log('[ANT+] Capabilities 메시지 (체크섬 오류 무시)', debugInfo);
+          rrAntLog('[ANT+] Capabilities 메시지 (체크섬 오류 무시)', debugInfo);
           window.antState.lastCapabilitiesLog = Date.now();
         }
         return { messageId, data: messageData };
@@ -3789,7 +3826,7 @@ async function scanANTDevices() {
     throw new Error('ANT+ USB 스틱이 연결되어 있지 않습니다.');
   }
   
-  console.log('[ANT+ 스캔] Continuous Scanning Mode 진입 시작...');
+  rrAntLog('[ANT+ 스캔] Continuous Scanning Mode 진입 시작...');
   
   // 기존 검색 결과 초기화
   window.antState.foundDevices = [];
@@ -3820,7 +3857,7 @@ async function scanANTDevices() {
     await sendANTMessage(0x51, [channelNumber, 0x00, 0x00, 0x00, 0x00, 0x00]);
     await new Promise(r => setTimeout(r, 100));
 
-    console.log('[ANT+ 스캔] LibConfig 설정 (Device ID 포함 요청)');
+    rrAntLog('[ANT+ 스캔] LibConfig 설정 (Device ID 포함 요청)');
     await sendANTMessage(0x6E, [0x00, 0xE0]); // Channel 0, Enable ID, RSSI, Timestamp
     await new Promise(r => setTimeout(r, 100));
     
@@ -3832,12 +3869,12 @@ async function scanANTDevices() {
     // 이 명령어가 '채널 열기(0x4B)'를 대체하며, 스틱을 '고성능 스캔 모드'로 만듭니다.
     // 데이터 패킷 1: [0x00] (채널 0번을 스캔 모드로)
     // 주의: 일부 구형 스틱은 0x4B를 써야하지만, 다중 연결을 위해선 0x5B가 필수입니다.
-    console.log('[ANT+ 스캔] Open Rx Scan Mode (0x5B) 명령 전송');
+    rrAntLog('[ANT+ 스캔] Open Rx Scan Mode (0x5B) 명령 전송');
     // 메시지 구조: [Sync, Len, 0x5B, ChannelNum, Sync]
     await sendANTMessage(0x5B, [0x00]); 
     await new Promise(r => setTimeout(r, 100));
     
-    console.log('[ANT+ 스캔] 메시지 리스너 시작');
+    rrAntLog('[ANT+ 스캔] 메시지 리스너 시작');
     startANTMessageListener();
 
     // 7. 검색 루프 (30초)
@@ -3845,7 +3882,7 @@ async function scanANTDevices() {
     for (let i = 0; i < 30; i++) {
       if (!window.antState.isScanning) break;
       await new Promise(resolve => setTimeout(resolve, 1000));
-      if (i % 5 === 0) console.log(`[ANT+ 스캔] 진행 중... ${i}/30초`);
+      if (i % 5 === 0) rrAntLog(`[ANT+ 스캔] 진행 중... ${i}/30초`);
     }
 
   } catch (error) {
@@ -3884,7 +3921,7 @@ async function startANTMessageListener() {
       
       // [디버깅용] 들어오는 모든 데이터를 콘솔에 출력
       // 예: 0xA4 0x03 0x40 0x00 ...
-      console.log('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
+      rrAntLog('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
       // 현재 화면 확인 (Race 모드와 Training 모드 분리)
       const currentScreen = document.querySelector('.screen.active');
@@ -3893,7 +3930,7 @@ async function startANTMessageListener() {
       
       // Training 화면일 때는 Training의 processBuffer 사용 (Race와 독립적으로 구동)
       if (isTrainingScreen && typeof window.processBuffer === 'function') {
-        console.log('[Training] window.processBuffer 함수 호출, data.length=', data.length);
+        rrAntLog('[Training] window.processBuffer 함수 호출, data.length=', data.length);
         try {
           window.processBuffer(data);
         } catch (e) {
@@ -3906,49 +3943,49 @@ async function startANTMessageListener() {
       
       // Race 화면일 때는 Race의 processMasterBuffer 사용
       if (isRaceScreen) {
-        console.log('[Race] startANTMessageListener: 함수 확인 시작');
-        console.log('[Race] typeof processBuffer:', typeof processBuffer);
-        console.log('[Race] typeof processIncomingData:', typeof processIncomingData);
-        console.log('[Race] typeof processMasterBuffer:', typeof processMasterBuffer);
-        console.log('[Race] typeof window.processBuffer:', typeof window.processBuffer);
-        console.log('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
+        rrAntLog('[Race] startANTMessageListener: 함수 확인 시작');
+        rrAntLog('[Race] typeof processBuffer:', typeof processBuffer);
+        rrAntLog('[Race] typeof processIncomingData:', typeof processIncomingData);
+        rrAntLog('[Race] typeof processMasterBuffer:', typeof processMasterBuffer);
+        rrAntLog('[Race] typeof window.processBuffer:', typeof window.processBuffer);
+        rrAntLog('[Race] typeof window.processMasterBuffer:', typeof window.processMasterBuffer);
         
         // processMasterBuffer를 우선적으로 호출 (routeANTMessage를 직접 호출)
         if (typeof processMasterBuffer === 'function') {
-          console.log('[Race] processMasterBuffer 함수 호출 시도, data.length=', data.length);
+          rrAntLog('[Race] processMasterBuffer 함수 호출 시도, data.length=', data.length);
           try {
             processMasterBuffer(data);
-            console.log('[Race] processMasterBuffer 함수 호출 완료');
+            rrAntLog('[Race] processMasterBuffer 함수 호출 완료');
           } catch (e) {
             console.error('[Race] processMasterBuffer 함수 호출 에러:', e);
           }
         } else if (typeof processBuffer === 'function') {
-          console.log('[Race] processBuffer 함수 호출 시도, data.length=', data.length);
+          rrAntLog('[Race] processBuffer 함수 호출 시도, data.length=', data.length);
           try {
             processBuffer(data);
-            console.log('[Race] processBuffer 함수 호출 완료');
+            rrAntLog('[Race] processBuffer 함수 호출 완료');
           } catch (e) {
             console.error('[Race] processBuffer 함수 호출 에러:', e);
           }
         } else if (typeof processIncomingData === 'function') {
-          console.log('[Race] processIncomingData 함수 호출 시도');
+          rrAntLog('[Race] processIncomingData 함수 호출 시도');
           try {
             processIncomingData(data);
           } catch (e) {
             console.error('[Race] processIncomingData 함수 호출 에러:', e);
           }
         } else if (typeof window.processMasterBuffer === 'function') {
-          console.log('[Race] window.processMasterBuffer 함수 호출 시도');
+          rrAntLog('[Race] window.processMasterBuffer 함수 호출 시도');
           window.processMasterBuffer(data);
         } else {
           console.error('[Race] processBuffer, processIncomingData, processMasterBuffer 함수를 모두 찾을 수 없습니다!');
           // 직접 패킷 처리 시도
-          console.log('[Race] 직접 패킷 처리 시도');
+          rrAntLog('[Race] 직접 패킷 처리 시도');
           if (data.length >= 4 && data[0] === 0xA4) {
             const msgId = data[2];
             if (msgId === 0x4E) {
               const payload = data.slice(3, data.length - 1);
-              console.log('[Race] 직접 handleBroadcastData 호출 시도, payload.length=', payload.length);
+              rrAntLog('[Race] 직접 handleBroadcastData 호출 시도, payload.length=', payload.length);
               if (typeof handleBroadcastData === 'function') {
                 handleBroadcastData(payload);
               } else {
@@ -3998,7 +4035,7 @@ async function startANTMessageListener() {
 let packetBuffer = new Uint8Array(0);
 
 function processIncomingData(newData) {
-  console.log(`[Race] processIncomingData 호출: newData.length=${newData?.length}, packetBuffer.length=${packetBuffer?.length}`);
+  rrAntLog(`[Race] processIncomingData 호출: newData.length=${newData?.length}, packetBuffer.length=${packetBuffer?.length}`);
   
   const combined = new Uint8Array(packetBuffer.length + newData.length);
   combined.set(packetBuffer);
@@ -4038,7 +4075,7 @@ function processIncomingData(newData) {
 
         if (packet.length > innerSyncIndex && packet[innerSyncIndex] === 0xA4) {
             // 포장지 뜯고 내부 데이터만 다시 처리
-            console.log('[ANT+] Tacx 포장지 해제 -> 재처리');
+            rrAntLog('[ANT+] Tacx 포장지 해제 -> 재처리');
             const innerData = packet.slice(innerSyncIndex); // 0xA4부터 끝까지
             
             // 재귀 호출로 내부 패킷 처리
@@ -4106,7 +4143,7 @@ function handleChannelEvent(data) {
     return;
   }
   
-  console.log('[ANT+] Channel Event:', {
+  rrAntLog('[ANT+] Channel Event:', {
     channel: channelNumber,
     messageId: '0x' + messageId.toString(16).toUpperCase(),
     eventCode: '0x' + messageCode.toString(16).toUpperCase(),
@@ -4178,7 +4215,7 @@ function processBuffer(newData) {
       return;
     }
     
-    console.log(`[Race] processBuffer 호출: newData.length=${newData.length}, rxBuf.length=${rxBuf?.length || 0}`);
+    rrAntLog(`[Race] processBuffer 호출: newData.length=${newData.length}, rxBuf.length=${rxBuf?.length || 0}`);
     
     // 1. 기존 버퍼에 새 데이터 추가
     const tmp = new Uint8Array((rxBuf?.length || 0) + newData.length);
@@ -4203,7 +4240,7 @@ function processBuffer(newData) {
     
     // Sync 이전의 쓰레기 데이터 제거
     if (syncIndex > 0) {
-      console.log(`[Race] processBuffer: Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
+      rrAntLog(`[Race] processBuffer: Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
       rxBuf = rxBuf.slice(syncIndex);
       continue;
     }
@@ -4222,7 +4259,7 @@ function processBuffer(newData) {
     
     processedCount++;
     const msgId = pkt[2];
-    console.log(`[Race] processBuffer: 패킷 추출 (${processedCount}번째), msgId=0x${msgId?.toString(16)}, packet.length=${pkt.length}`);
+    rrAntLog(`[Race] processBuffer: 패킷 추출 (${processedCount}번째), msgId=0x${msgId?.toString(16)}, packet.length=${pkt.length}`);
     
     // [중요] 추출한 패킷 처리 핸들러 호출
     if (typeof handleANTMessage === 'function') {
@@ -4233,7 +4270,7 @@ function processBuffer(newData) {
   }
   
     if (processedCount > 0) {
-      console.log(`[Race] processBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${rxBuf.length}바이트`);
+      rrAntLog(`[Race] processBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${rxBuf.length}바이트`);
     }
   } catch (error) {
     console.error('[Race] processBuffer 에러:', error);
@@ -4261,7 +4298,7 @@ function processBuffer(newData) {
  * Tacx Wrapper 해제 및 표준 메시지 분배를 하나로 관리
  */
 function handleANTMessage(packet) {
-  console.log('[Race] handleANTMessage 호출됨, packet.length=', packet?.length);
+  rrAntLog('[Race] handleANTMessage 호출됨, packet.length=', packet?.length);
   
   // 패킷 형태 확인 및 messageId 추출
   let messageId, data;
@@ -4277,11 +4314,11 @@ function handleANTMessage(packet) {
     data = packet.data;
   }
   
-  console.log(`[Race] handleANTMessage: messageId=0x${messageId?.toString(16)}, data.length=${data?.length}`);
+  rrAntLog(`[Race] handleANTMessage: messageId=0x${messageId?.toString(16)}, data.length=${data?.length}`);
 
   // 1. Tacx T2028 전용 포장지(0xAE) 처리
   if (messageId === 0xAE && data && data.length > 1 && data[1] === 0xA4) {
-      console.log('[Race] Tacx Wrapper 감지, 내부 데이터 재처리');
+      rrAntLog('[Race] Tacx Wrapper 감지, 내부 데이터 재처리');
       // 포장지를 벗기고 내부의 진짜 ANT+ 데이터를 다시 처리 루프에 넣음
       if (typeof processBuffer === 'function') {
           processBuffer(data.slice(1)); 
@@ -4293,14 +4330,14 @@ function handleANTMessage(packet) {
 
   // 2. Broadcast Data (0x4E) 처리 - routeANTMessage로 전달
   if (messageId === 0x4E) {
-    console.log('[Race] Broadcast Data (0x4E) 감지, routeANTMessage 호출');
+    rrAntLog('[Race] Broadcast Data (0x4E) 감지, routeANTMessage 호출');
     if (typeof routeANTMessage === 'function') {
       routeANTMessage(packet);
     } else {
       console.error('[Race] routeANTMessage 함수가 정의되지 않았습니다!');
       // fallback: handleBroadcastData 직접 호출
       if (typeof handleBroadcastData === 'function') {
-        console.log('[Race] fallback: handleBroadcastData 직접 호출');
+        rrAntLog('[Race] fallback: handleBroadcastData 직접 호출');
         handleBroadcastData(data);
       }
     }
@@ -4325,7 +4362,7 @@ function handleANTMessage(packet) {
       break;
       
     default:
-      console.log(`[Race] handleANTMessage: 처리되지 않은 메시지 ID: 0x${messageId?.toString(16)}`);
+      rrAntLog(`[Race] handleANTMessage: 처리되지 않은 메시지 ID: 0x${messageId?.toString(16)}`);
       break;
   }
 }
@@ -5552,14 +5589,14 @@ function processMasterBuffer(newData) {
     masterRxBuffer = masterRxBuffer.slice(totalLen);
     
     processedCount++;
-    console.log(`[Race] 패킷 추출: msgId=0x${packet[2]?.toString(16)}, packet.length=${packet.length}, 처리된 패킷 수=${processedCount}`);
+    rrAntLog(`[Race] 패킷 추출: msgId=0x${packet[2]?.toString(16)}, packet.length=${packet.length}, 처리된 패킷 수=${processedCount}`);
 
     // [핵심] 메시지 처리기로 전달
     routeANTMessage(packet);
   }
   
   if (processedCount > 0) {
-    console.log(`[Race] processMasterBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${masterRxBuffer.length}바이트`);
+    rrAntLog(`[Race] processMasterBuffer 완료: ${processedCount}개 패킷 처리, 남은 버퍼=${masterRxBuffer.length}바이트`);
   }
 }
 
@@ -5573,18 +5610,18 @@ function routeANTMessage(packet) {
   const msgId = packet[2];
   const payload = packet.slice(3, packet.length - 1);
   
-  console.log(`[Race] routeANTMessage: msgId=0x${msgId.toString(16)}, payload.length=${payload.length}, packet.length=${packet.length}`);
+  rrAntLog(`[Race] routeANTMessage: msgId=0x${msgId.toString(16)}, payload.length=${payload.length}, packet.length=${packet.length}`);
 
   // Tacx Wrapper (0xAE) 해제
   if (msgId === 0xAE && payload.length > 1 && payload[1] === 0xA4) {
-      console.log('[Race] Wrapper 해제');
+      rrAntLog('[Race] Wrapper 해제');
       processMasterBuffer(payload.slice(1)); // 내부 데이터 재처리
       return;
   }
 
   // 센서 데이터 (0x4E) 처리
   if (msgId === 0x4E) {
-      console.log(`[Race] Broadcast Data (0x4E) 처리: payload.length=${payload.length}`);
+      rrAntLog(`[Race] Broadcast Data (0x4E) 처리: payload.length=${payload.length}`);
       
       // 현재 화면 확인 (Training 화면이면 Training의 parseIndoorSensorPayload 호출)
       const currentScreen = document.querySelector('.screen.active');
@@ -5597,7 +5634,7 @@ function routeANTMessage(packet) {
         handleBroadcastData(payload);
       }
   } else {
-      console.log(`[Race] 알 수 없는 메시지 ID: 0x${msgId.toString(16)}`);
+      rrAntLog(`[Race] 알 수 없는 메시지 ID: 0x${msgId.toString(16)}`);
   }
 }
 
@@ -5731,6 +5768,10 @@ function updateSpeedometerDataInternal(deviceId, antData) {
   if (speedometer) {
     // 센서 데이터를 받으면 연결됨 상태로 업데이트 (초록색)
     speedometer.lastPacketTime = Date.now();
+    // 수신률 진단용: 최근 10초 패킷 시각 (가벼운 배열, 트랙당 약 40개)
+    const __pt = speedometer.pktTimes || (speedometer.pktTimes = []);
+    __pt.push(speedometer.lastPacketTime);
+    while (__pt.length && speedometer.lastPacketTime - __pt[0] > 10000) __pt.shift();
     speedometer.connected = true;
     if(typeof updateSpeedometerConnectionStatus === 'function') {
       updateSpeedometerConnectionStatus(speedometer.id, true, 'connected');
