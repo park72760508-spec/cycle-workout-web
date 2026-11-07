@@ -38183,3 +38183,27 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .device-scan-del:focus-visible { outline: 2px solid #ef4444; outline-offset: 1px; }
 .device-scan-del.is-confirm { background: #ef4444; color: #fff; gap: 4px; }
 .device-scan-del.is-confirm::after { content: attr(data-label); font-size: 12px; font-weight: 700; }
+
+/* 그룹훈련 참석자 훈련화면: 속도계 블록 바탕 = 블랙 카본 패턴(2026-11-08)
+   - 4px 격자 능직(트윌) 느낌의 아주 낮은 대비 패턴 + 상단 은은한 광택. 게이지·숫자 위에는 영향 없음(배경 전용). */
+#bluetoothIndividualScreen .indiv-main-content,
+#bluetoothIndividualScreen .indiv-stats-footer {
+  background-color: #0b0b0d;
+  background-image:
+    linear-gradient(135deg, rgba(255,255,255,.055) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255,255,255,.055) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(0,0,0,.45) 25%, transparent 25%),
+    linear-gradient(45deg, rgba(0,0,0,.45) 25%, transparent 25%);
+  background-size: 6px 6px;
+  background-position: 0 0, 3px 0, 3px -3px, 0 3px;
+}
+#bluetoothIndividualScreen .indiv-main-content::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 70% at 50% 0%, rgba(255,255,255,.07), transparent 60%),
+    radial-gradient(100% 100% at 50% 50%, transparent 55%, rgba(0,0,0,.45) 100%);
+}
+#bluetoothIndividualScreen .indiv-main-content > * { position: relative; }
