@@ -307,7 +307,30 @@
       var li = document.createElement('li');
       li.dataset.deviceId = deviceId;
       li.classList.add('device-scan-item-saved');
-      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id">' + escapeHtml(deviceId) + '</span>';
+      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id" title="' + escapeHtml(deviceId) + '">' + escapeHtml(shortDeviceId(deviceId)) + '</span>' +
+        '<button type="button" class="device-scan-del" aria-label="저장된 센서 삭제" title="저장된 센서 삭제">' +
+        '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>';
+      // 삭제 아이콘: 첫 탭 = "삭제?" 확인 상태, 한 번 더 탭하면 저장된 센서 삭제 (3초 안에 다시 안 누르면 원복)
+      var delBtn = li.querySelector('.device-scan-del');
+      delBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        if (!delBtn.classList.contains('is-confirm')) {
+          delBtn.classList.add('is-confirm');
+          delBtn.setAttribute('data-label', '삭제?');
+          setTimeout(function () { delBtn.classList.remove('is-confirm'); delBtn.removeAttribute('data-label'); }, 3000);
+          return;
+        }
+        var api = global.StelvioDeviceBridgeStorage;
+        var key = storageKeyOfType(deviceType);
+        if (api && typeof api.removeDevice === 'function') {
+          api.removeDevice(key);
+          if (key === 'smartrola') api.removeDevice('trainer'); // 스마트로라는 trainer 키로도 저장될 수 있음
+        }
+        addedDeviceIds.delete(deviceId);
+        if (li.parentNode) li.parentNode.removeChild(li);
+        if (typeof refreshDeviceSettingCards === 'function') refreshDeviceSettingCards();
+        if (typeof global.showToast === 'function') global.showToast('저장된 센서를 삭제했습니다.');
+      });
       li.addEventListener('click', function () {
         var id = li.dataset.deviceId;
         var typeToConnect = savedTargetType;
@@ -560,6 +583,22 @@
     }
   }
 
+  /**
+   * 2026-11-07: 기기 ID 표기 — 긴 UUID/MAC 대신 끝 6자리만 "ID 790D02" 로 짧게(가민 연결 화면처럼 기기명 + 짧은 ID).
+   * 숫자만 있는 ID(ANT+ 등)는 그대로 표시. 전체 ID 는 길게 눌렀을 때 title 로 확인.
+   */
+  function shortDeviceId(id) {
+    var raw = String(id == null ? '' : id).trim();
+    if (!raw) return '';
+    if (/^\d{1,8}$/.test(raw)) return 'ID ' + raw;
+    var hex = raw.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+    return 'ID ' + (hex.length > 6 ? hex.slice(-6) : hex);
+  }
+  /** 저장 키(타입) 정규화: heartRate→hr, powerMeter→power, 그 외 그대로 */
+  function storageKeyOfType(deviceType) {
+    return (deviceType === 'heartRate' || deviceType === 'hr') ? 'hr' : (deviceType === 'powerMeter' || deviceType === 'power') ? 'power' : deviceType;
+  }
+
   function escapeHtml(s) {
     var div = document.createElement('div');
     div.textContent = s;
@@ -584,7 +623,7 @@
     var li = document.createElement('li');
     li.dataset.deviceId = idStr;
     if (opts.rssi != null) li.dataset.rssi = String(opts.rssi);
-    li.innerHTML = signalBars(opts.rssi) + '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id">' + escapeHtml(idStr) + '</span>';
+    li.innerHTML = signalBars(opts.rssi) + '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id" title="' + escapeHtml(idStr) + '">' + escapeHtml(shortDeviceId(idStr)) + '</span>';
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
@@ -658,7 +697,7 @@
       statusEl.style.color = '#00d4aa';
     }
     if (idEl) {
-      var nameToShow = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : (deviceId ? String(deviceId) : '');
+      var nameToShow = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : (deviceId ? shortDeviceId(deviceId) : '');
       idEl.textContent = nameToShow;
       idEl.style.display = nameToShow ? 'block' : 'none';
     }
@@ -680,7 +719,7 @@
       statusEl.style.color = '#9ca3af';
     }
     if (idEl && (deviceId || deviceName)) {
-      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : shortDeviceId(deviceId);
       idEl.style.display = 'block';
     }
     setDeviceCardIconAndLabel(deviceType, false);
@@ -702,7 +741,7 @@
       statusEl.style.color = '#00d4aa';
     }
     if (idEl && (deviceId || (deviceName && String(deviceName).trim()))) {
-      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : String(deviceId || '');
+      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : shortDeviceId(deviceId);
       idEl.style.display = 'block';
     }
     setDeviceCardIconAndLabel(deviceType, false);

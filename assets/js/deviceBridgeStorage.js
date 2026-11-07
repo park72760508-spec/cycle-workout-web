@@ -71,6 +71,22 @@
     }
   }
 
+  /** 단일 타입 저장 기기 삭제(ID·이름 모두) (2026-11-07) */
+  function removeDevice(deviceType) {
+    if (!deviceType) return;
+    try {
+      var saved = loadSavedDevices();
+      delete saved[deviceType];
+      localStorage.setItem(STELVIO_SAVED_DEVICES_KEY, JSON.stringify(saved));
+      var names = loadSavedDeviceNames();
+      delete names[deviceType];
+      localStorage.setItem(STELVIO_SAVED_DEVICES_NAMES_KEY, JSON.stringify(names));
+      try { global.dispatchEvent(new CustomEvent('stelvio-bridge-devices-updated', { detail: saved })); } catch (evErr) { /* no-op */ }
+    } catch (e) {
+      console.warn('[deviceBridgeStorage] removeDevice failed:', e);
+    }
+  }
+
   // 앱에서 보낼 수 있는 deviceType → 저장 키 매핑 (요구 포맷 hr, power, trainer, speed). smartrola → trainer
   var DEVICE_TYPE_TO_KEY = {
     hr: 'hr',
@@ -161,6 +177,7 @@
     loadSavedDevices: loadSavedDevices,
     loadSavedDeviceNames: loadSavedDeviceNames,
     saveDevice: saveDevice,
+    removeDevice: removeDevice,
     clearSavedDevices: clearSavedDevices,
     setupDeviceConnectedBridge: setupDeviceConnectedBridge,
     teardownDeviceConnectedBridge: teardownDeviceConnectedBridge

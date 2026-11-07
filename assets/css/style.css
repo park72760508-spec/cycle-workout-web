@@ -38171,3 +38171,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothCoachMobileScreen .coachm-sc__dec { font-size: 12px; }
 #bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(3) { min-width: 40px; }
 #bluetoothCoachMobileScreen .coachm-rank-head span:nth-child(4) { min-width: 52px; }
+
+/* 2026-11-07: 기기 검색 — 짧은 ID 표기 + 저장된 센서 삭제 아이콘 */
+.device-scan-list li .device-scan-id { font-size: 12px; font-weight: 700; color: #64748b; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+.device-scan-list li.device-scan-item-saved { padding-right: 56px; }
+.device-scan-del {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center;
+  min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: #ef4444; cursor: pointer;
+}
+.device-scan-del:hover { background: #fee2e2; }
+.device-scan-del:focus-visible { outline: 2px solid #ef4444; outline-offset: 1px; }
+.device-scan-del.is-confirm { background: #ef4444; color: #fff; gap: 4px; }
+.device-scan-del.is-confirm::after { content: attr(data-label); font-size: 12px; font-weight: 700; }
