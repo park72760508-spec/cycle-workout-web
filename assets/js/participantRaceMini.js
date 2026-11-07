@@ -153,14 +153,10 @@
   }
   /* 2026-11-07: 순위 펼치기/접기 탭 (PC Coach 순위 전광판의 오른쪽 트로피 탭과 같은 개념, Race 디자인). 상태는 기기에 기억 */
   var LS_KEY = 'pmbCollapsed';
-  // 메모리 값을 우선 사용(앱 WebView 에서 localStorage 쓰기가 막혀도 접기/펼치기는 동작), 저장은 보조
-  var collapsedMem = null;
-  function isCollapsed() {
-    if (collapsedMem !== null) return collapsedMem;
-    try { collapsedMem = localStorage.getItem(LS_KEY) === '1'; } catch (e) { collapsedMem = false; }
-    return collapsedMem;
-  }
-  function setCollapsed(v) { collapsedMem = !!v; try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) {} }
+  // 2026-11-08: 훈련 화면에 들어올 때마다 기본은 '펼침'. 접은 상태는 그 화면을 보는 동안만 기억(저장하지 않음)
+  var collapsedMem = false, screenWasActive = false;
+  function isCollapsed() { return collapsedMem; }
+  function setCollapsed(v) { collapsedMem = !!v; }
   var TROPHY = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3v3c0 2.2-1.6 4-3.7 4.4A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1a5 5 0 0 1-3.3-3.5C5.6 12 4 10.2 4 8V5h3V3zm-1 4v1c0 1 .6 1.8 1.4 2.2A9 9 0 0 1 7 7H6zm12 0h-1c0 1.2-.1 2.3-.4 3.2.8-.4 1.4-1.2 1.4-2.2V7z"/></svg>';
   /** 탭은 LAP AVG 타일 바로 위(하단 통계 줄의 윗변)에 붙인다 — 속도계·파워 숫자와 겹치지 않는 빈 띠 */
   function tabOf(box, footer) {
@@ -202,7 +198,8 @@
       if (!act && visible(scr)) act = { t: t, scr: scr };
     });
     dbg.screen = act ? act.t.screen : null;
-    if (!act) return;
+    if (!act) { screenWasActive = false; return; }
+    if (!screenWasActive) { screenWasActive = true; collapsedMem = false; } // 화면에 (다시) 접속하면 순위를 펼친 상태로 시작
     var sid = sessionId();
     if (sid !== lastSid) { lastSid = sid; data = null; seenT = null; }
     var box = act.scr.querySelector(act.t.box);
