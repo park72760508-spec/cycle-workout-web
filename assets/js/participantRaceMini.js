@@ -38,6 +38,13 @@
     '.pmb__row em{flex:0 0 auto;font-style:normal;font-weight:700;color:#e8eaed}' +
     '.pmb__me{background:rgba(0,212,170,.2);color:#fff}.pmb__me b{color:#00d4aa}' +
     '.pmb__wait{color:#7d838c!important;font-weight:400!important;font-size:9px}' +
+    '.pmb__tab{position:absolute;z-index:5;pointer-events:auto;display:flex;align-items:center;gap:4px;height:26px;padding:0 9px 0 11px;border:0;cursor:pointer;color:#f5b50f;-webkit-tap-highlight-color:transparent;' +
+    'background:repeating-linear-gradient(45deg,rgba(255,255,255,.05) 0 2px,transparent 2px 5px),linear-gradient(180deg,#1f2937,#0b1220);border-top:2px solid #f5b50f;' +
+    'clip-path:polygon(8px 0,100% 0,100% 100%,0 100%);box-shadow:inset 0 6px 10px -8px #f5b50f}' +
+    '.pmb__tab:active{filter:brightness(1.3)}.pmb__tab svg{display:block}' +
+    ".pmb__tab span{font:italic 800 10px/1 'Barlow Semi Condensed',sans-serif;letter-spacing:.1em}" +
+    '.pmb__tab i{display:block;width:6px;height:6px;border-right:2px solid #f5b50f;border-bottom:2px solid #f5b50f;transform:rotate(45deg);margin-top:-2px;transition:transform .25s}' +
+    '.pmb__tab--closed i{transform:rotate(-135deg);margin-top:2px}' +
     '.pmb__gap{flex:0 0 var(--rh,20px);height:var(--rh,20px);display:flex;align-items:center;justify-content:center;color:#6b717a;font-size:10px;line-height:1}';
   document.head.appendChild(css);
 
@@ -138,10 +145,35 @@
     }
     return [L, R];
   }
+  /* 2026-11-07: 순위 펼치기/접기 탭 (PC Coach 순위 전광판의 오른쪽 트로피 탭과 같은 개념, Race 디자인). 상태는 기기에 기억 */
+  var LS_KEY = 'pmbCollapsed';
+  function isCollapsed() { try { return localStorage.getItem(LS_KEY) === '1'; } catch (e) { return false; } }
+  function setCollapsed(v) { try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch (e) {} }
+  var TROPHY = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3v3c0 2.2-1.6 4-3.7 4.4A5 5 0 0 1 13 15.9V18h3v3H8v-3h3v-2.1a5 5 0 0 1-3.3-3.5C5.6 12 4 10.2 4 8V5h3V3zm-1 4v1c0 1 .6 1.8 1.4 2.2A9 9 0 0 1 7 7H6zm12 0h-1c0 1.2-.1 2.3-.4 3.2.8-.4 1.4-1.2 1.4-2.2V7z"/></svg>';
+  function tabOf(box) {
+    var t = box.querySelector('.pmb__tab');
+    if (!t) {
+      if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
+      t = document.createElement('button');
+      t.type = 'button';
+      t.className = 'pmb__tab';
+      t.setAttribute('aria-label', '순위 표시 펼치기/접기');
+      t.innerHTML = TROPHY + '<span>RANK</span><i></i>';
+      t.addEventListener('click', function (e) {
+        e.stopPropagation();
+        setCollapsed(!isCollapsed());
+        box.__pmbSig = '';
+        tick();
+      });
+      box.appendChild(t);
+    }
+    return t;
+  }
   function hide(box) {
-    var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r');
+    var L = box.querySelector('.pmb--l'), R = box.querySelector('.pmb--r'), T = box.querySelector('.pmb__tab');
     if (L) L.style.display = 'none';
     if (R) R.style.display = 'none';
+    if (T) T.style.display = 'none';
   }
 
   function tick() {
@@ -196,6 +228,13 @@
     // 고정 폭(최소 폭): 3글자 이름 + 순위 + 원 + 점수가 들어가는 최소 폭 = 화면 폭의 29.5%(390px 기준 115px) — 파워 3자리 숫자와 겹치지 않음
     var wBoard = Math.round(br.width * 0.295);
     var sig = JSON.stringify([waiting, excl, left, right, uid, Math.round(wBoard), Math.round(top), Math.round(h)]);
+    // 펼치기/접기 탭: 오른쪽 보드 바로 위 오른쪽 끝에 고정, 접으면 보드만 숨기고 탭은 남김
+    var tab = tabOf(box), collapsed = isCollapsed();
+    tab.style.display = '';
+    tab.style.right = '2px';
+    tab.style.top = Math.max(0, Math.round(top - 30)) + 'px';
+    tab.classList.toggle('pmb__tab--closed', collapsed);
+    if (collapsed) { bs[0].style.display = bs[1].style.display = 'none'; return; }
     bs[0].style.display = bs[1].style.display = '';
     if (box.__pmbSig === sig) return;
     box.__pmbSig = sig;
