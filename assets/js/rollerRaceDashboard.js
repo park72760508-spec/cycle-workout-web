@@ -1669,6 +1669,7 @@ async function releaseWakeLock() {
  */
 function startRace() {
   if (window.rollerRaceState.raceState === 'running') return;
+  try { rrWelcomePopupHide(); } catch (e) {} // 경기 시작 시 환영 팝업 자동 닫힘
   
   console.log('[경기 시작]');
   
@@ -7186,3 +7187,89 @@ window.rrOpenProfile = function (tid, ev) {
   rrProfileTimer = setInterval(rrProfileRender, 500);
   document.addEventListener('keydown', rrProfileKey, true);
 };
+
+
+/* ===== 2026-11-08: 환영 팝업 — 경기 시작 전 화면 가운데에 환영 이미지를 크게 게시 ===== */
+var RR_WP_KEY = 'rrWelcomePopupImg';
+function rrWpGet() { try { return localStorage.getItem(RR_WP_KEY) || ''; } catch (e) { return ''; } }
+function rrWpRefreshMenu() {
+  var has = !!rrWpGet();
+  var pub = document.getElementById('rrWpPublish');
+  var del = document.getElementById('rrWpDelete');
+  var shown = !!document.getElementById('rrWelcomePopup');
+  if (pub) { pub.textContent = shown ? '내리기' : '게시'; pub.disabled = !has; pub.classList.toggle('is-on', shown); }
+  if (del) del.hidden = !has;
+}
+function rrWelcomePopupHide() {
+  var el = document.getElementById('rrWelcomePopup');
+  if (el) { el.remove(); }
+  document.removeEventListener('keydown', rrWpKey, true);
+  rrWpRefreshMenu();
+}
+function rrWpKey(e) { if (e.key === 'Escape') rrWelcomePopupHide(); }
+function rrWelcomePopupShow() {
+  var src = rrWpGet();
+  if (!src) { if (typeof showToast === 'function') showToast('먼저 환영팝업 이미지를 등록해 주세요', 'warning'); return; }
+  rrWelcomePopupHide();
+  var el = document.createElement('div');
+  el.id = 'rrWelcomePopup';
+  el.className = 'rrwp';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', '환영 이미지');
+  el.innerHTML = '<div class="rrwp__card"><img alt="환영 이미지"><button type="button" class="rrwp__x" aria-label="닫기">✕</button></div>';
+  el.querySelector('img').src = src;
+  el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
+  el.querySelector('.rrwp__x').addEventListener('click', rrWelcomePopupHide);
+  document.body.appendChild(el);
+  document.addEventListener('keydown', rrWpKey, true);
+  rrWpRefreshMenu();
+}
+function rrWelcomePopupToggle() {
+  if (document.getElementById('rrWelcomePopup')) rrWelcomePopupHide(); else rrWelcomePopupShow();
+}
+function rrWelcomePopupDelete() {
+  rrWelcomePopupHide();
+  try { localStorage.removeItem(RR_WP_KEY); } catch (e) {}
+  rrWpRefreshMenu();
+  if (typeof showToast === 'function') showToast('환영팝업 이미지를 삭제했습니다');
+}
+function rrWpFromFile(file) {
+  if (!file || !/^image\//.test(file.type)) return;
+  var fr = new FileReader();
+  fr.onload = function () {
+    var img = new Image();
+    img.onload = function () {
+      var max = 1600, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+      var c = document.createElement('canvas');
+      c.width = Math.round(w * k); c.height = Math.round(h * k);
+      var ctx = c.getContext('2d');
+      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
+      var q = 0.88, data = c.toDataURL('image/jpeg', q);
+      while (data.length > 2400000 && q > 0.4) { q -= 0.12; data = c.toDataURL('image/jpeg', q); }
+      try {
+        localStorage.setItem(RR_WP_KEY, data);
+        if (typeof showToast === 'function') showToast('환영팝업 이미지를 등록했습니다 — "게시"를 누르면 화면에 표시됩니다');
+      } catch (e) {
+        if (typeof showToast === 'function') showToast('이미지가 너무 커서 저장하지 못했습니다. 더 작은 이미지를 사용해 주세요', 'error');
+      }
+      rrWpRefreshMenu();
+    };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(file);
+}
+(function rrWpInit() {
+  function init() {
+    var f = document.getElementById('rrWpFile');
+    if (f && !f.dataset.bound) {
+      f.dataset.bound = '1';
+      f.addEventListener('change', function () { rrWpFromFile(f.files && f.files[0]); f.value = ''; });
+    }
+    rrWpRefreshMenu();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+window.rrWelcomePopupToggle = rrWelcomePopupToggle;
+window.rrWelcomePopupDelete = rrWelcomePopupDelete;
+window.rrWelcomePopupHide = rrWelcomePopupHide;
