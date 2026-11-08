@@ -38455,11 +38455,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* ===== 2026-11-08 STELVIO Race: 환영 문구(상단 왼쪽, 붓글씨체) · 환영 문구 입력란 · 아바타 수동 업로드 ===== */
 #rollerRaceDashboardScreen .dashboard-header { position: relative; }
 #rollerRaceDashboardScreen .rr-welcome {
-  position: absolute; left: 18px; top: 50%; transform: translateY(-50%); max-width: 30%; z-index: 3; pointer-events: none;
+  position: absolute; left: 18px; top: 50%; transform: translateY(-50%); max-width: 34%; z-index: 3; pointer-events: none;
 }
 #rollerRaceDashboardScreen .rr-welcome__text {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-family: 'East Sea Dokdo', 'Nanum Brush Script', cursive; font-size: 30px; line-height: 1.1; letter-spacing: .02em;
+  font-family: 'East Sea Dokdo', 'Nanum Brush Script', cursive; font-size: 38px; line-height: 1.1; letter-spacing: .02em;
   background: linear-gradient(90deg, #ffffff 0%, #ffd27a 55%, #ff8c00 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 6px rgba(255, 140, 0, .35)); transform: rotate(-2deg); transform-origin: left center; padding: 2px 4px;
 }
@@ -38471,4 +38471,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   width: 260px; max-width: 40vw; padding: 5px 8px; border: 1px solid #2f4170; background: #0b1020; color: #fff; font: 500 13px 'Noto Sans KR', sans-serif; letter-spacing: 0; text-transform: none;
 }
 #rollerRaceDashboardScreen .rr-avatar-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
-@media (max-width: 900px) { #rollerRaceDashboardScreen .rr-welcome__text { font-size: 22px; } }
+@media (max-width: 900px) { #rollerRaceDashboardScreen .rr-welcome__text { font-size: 28px; } }
+
+/* 환영 문구 애니메이션: 입장 시 떠오르며 나타남 → 빛이 좌→우로 흐르는 쉬머 + 부드러운 둥실거림 + 글로우 맥박 */
+#rollerRaceDashboardScreen .rr-welcome__text {
+  background: linear-gradient(100deg, #ff8c00 0%, #ffd27a 25%, #ffffff 40%, #ffd27a 55%, #ff8c00 75%, #ff8c00 100%);
+  background-size: 250% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: rrWelcomeIn .9s cubic-bezier(.16,1,.3,1) both, rrWelcomeShine 3.6s linear .9s infinite, rrWelcomeFloat 4.2s ease-in-out .9s infinite;
+}
+@keyframes rrWelcomeIn { from { opacity: 0; transform: translateY(14px) rotate(-2deg) scale(.94); filter: blur(4px) drop-shadow(0 2px 6px rgba(255,140,0,.35)); } to { opacity: 1; transform: translateY(0) rotate(-2deg) scale(1); filter: blur(0) drop-shadow(0 2px 6px rgba(255,140,0,.35)); } }
+@keyframes rrWelcomeShine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+@keyframes rrWelcomeFloat {
+  0%, 100% { transform: translateY(0) rotate(-2deg); filter: drop-shadow(0 2px 6px rgba(255,140,0,.30)); }
+  50% { transform: translateY(-3px) rotate(-1.4deg); filter: drop-shadow(0 4px 12px rgba(255,140,0,.65)); }
+}
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rr-welcome__text { animation: none; } }
