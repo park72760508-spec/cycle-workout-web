@@ -6991,8 +6991,30 @@ function rrWelcomeApply() {
   var t = rrWelcomeGet().trim();
   var box = document.getElementById('rrWelcome'), el = document.getElementById('rrWelcomeText');
   if (!box || !el) return;
-  el.textContent = t;
+  rrWelcomeBuild(el, t);
   box.style.display = t ? '' : 'none';
+}
+/** 글자 한 자씩 굴러 들어오며 채워지는 애니메이션: 글자별 span + 순차 지연(CSS 애니메이션) */
+function rrWelcomeBuild(el, t) {
+  el.textContent = '';
+  el.setAttribute('aria-label', t);
+  var i = 0;
+  Array.from(t).forEach(function (ch) {
+    var sp = document.createElement('span');
+    sp.className = 'rr-ch' + (ch === ' ' ? ' rr-ch--sp' : '');
+    sp.setAttribute('aria-hidden', 'true');
+    sp.textContent = ch === ' ' ? '\u00a0' : ch;
+    sp.style.setProperty('--i', String(i++));
+    el.appendChild(sp);
+  });
+}
+/** 화면이 다시 보일 때마다 처음부터 다시 굴러 들어오도록 재생 */
+function rrWelcomeReplay() {
+  var el = document.getElementById('rrWelcomeText');
+  if (!el) return;
+  el.classList.remove('rr-welcome--play');
+  void el.offsetWidth;
+  el.classList.add('rr-welcome--play');
 }
 (function rrWelcomeInit() {
   function init() {
@@ -7007,6 +7029,11 @@ function rrWelcomeApply() {
     };
     inp.addEventListener('input', save);
     inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+    inp.addEventListener('change', rrWelcomeReplay);
+    var box = document.getElementById('rrWelcome');
+    if (box && typeof IntersectionObserver !== 'undefined') {
+      new IntersectionObserver(function (en) { if (en[0] && en[0].isIntersecting) rrWelcomeReplay(); }).observe(box);
+    } else rrWelcomeReplay();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
