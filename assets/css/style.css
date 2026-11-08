@@ -38447,8 +38447,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 트랙: 주황(선수색) 테두리 블럭의 왼쪽 끝 */
 #rollerRaceDashboardScreen .straight-track-container { position: relative; }
 #rollerRaceDashboardScreen .rr-av--track {
-  position: absolute; left: 6px; top: 50%; transform: translateY(-50%); z-index: 11; width: 32px; height: 32px; pointer-events: none;
+  position: absolute; left: 6px; top: 50%; transform: translateY(-50%); z-index: 11; width: 32px; height: 32px; pointer-events: auto; cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
 }
+#rollerRaceDashboardScreen .rr-av--track:hover { transform: translateY(-50%) scale(1.12); }
+#rollerRaceDashboardScreen .rr-av--track:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
 /* LIVE 순위: 순위 번호 · 색 막대 다음, 이름 앞 */
 #rollerRaceDashboardScreen .rank-item .rr-av { width: 26px; height: 26px; font-size: 13px; border-width: 2px; }
 

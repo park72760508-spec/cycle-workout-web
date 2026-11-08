@@ -900,6 +900,11 @@ function rrSetAvatar(el, name, tid) {
   if (tid != null) el.dataset.tid = String(tid);
   else tid = el.dataset.tid != null && el.dataset.tid !== '' ? el.dataset.tid : null;
   var hasOv = tid != null && !!rrAvatarOverrides()[String(tid)];
+  if (!nm && !hasOv && el.classList.contains('rr-av--track')) {
+    // 이름이 없는 트랙도 클릭해서 사진을 지정할 수 있도록 '+' 자리표시자 표시
+    el.style.display = ''; el.dataset.k = 'plus'; el.textContent = '+';
+    return;
+  }
   if (!nm && !hasOv) { el.style.display = 'none'; el.innerHTML = ''; el.dataset.k = ''; return; }
   var url = rrAvatarUrl(nm, tid);
   var want = url ? 'i:' + url.length + url.slice(-24) : 't:' + nm.charAt(0);
@@ -951,9 +956,9 @@ function rrAvatarModalRefresh() {
   box.style.display = 'inline-flex';
   if (del) del.style.display = ov ? '' : 'none';
 }
-window.rrAvatarPick = function (input) {
+window.rrAvatarPick = function (input, tidArg) {
   var f = input && input.files && input.files[0];
-  var tid = window.currentTargetSpeedometerId;
+  var tid = tidArg != null ? tidArg : window.currentTargetSpeedometerId;
   if (!f || tid == null) return;
   rrAvatarFromFile(f).then(function (url) {
     if (!rrAvatarSetOverride(tid, url)) { if (typeof showToast === 'function') showToast('사진을 저장하지 못했습니다(저장 공간 부족).', 'error'); return; }
@@ -962,6 +967,20 @@ window.rrAvatarPick = function (input) {
     if (typeof showToast === 'function') showToast('아바타 사진이 적용되었습니다.');
   }).catch(function (e) { if (typeof showToast === 'function') showToast(e.message || '사진 처리 실패', 'error'); });
   input.value = '';
+};
+/** 트랙의 아바타를 클릭 → 파일 선택 → 해당 트랙 사진 교체 */
+window.rrAvatarPickForTrack = function (tid, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  var inp = document.getElementById('rrTrackAvatarFile');
+  if (!inp) {
+    inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.id = 'rrTrackAvatarFile'; inp.style.display = 'none';
+    inp.addEventListener('change', function () { window.rrAvatarPick(inp, Number(inp.dataset.tid)); });
+    document.body.appendChild(inp);
+  }
+  inp.dataset.tid = String(tid);
+  inp.value = '';
+  inp.click();
 };
 window.rrAvatarRemove = function () {
   var tid = window.currentTargetSpeedometerId;
@@ -2460,7 +2479,7 @@ function updateSpeedometerListUI() {
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
         <!-- 아바타 (트랙 왼쪽 끝) -->
-        <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" data-name="${String(pairingName).replace(/"/g, '&quot;')}"></span>
+        <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" role="button" tabindex="0" title="클릭하여 아바타 사진 변경" data-name="${String(pairingName).replace(/"/g, '&quot;')}" onclick="rrAvatarPickForTrack(${speedometer.id}, event)" onkeydown="if(event.key==='Enter'||event.key===' ')rrAvatarPickForTrack(${speedometer.id}, event)"></span>
         <!-- 이름 표시 (주황색 블럭 안 왼쪽) -->
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
