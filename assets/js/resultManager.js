@@ -199,6 +199,7 @@ async function saveTrainingResult(extra = {}) {
      
      // 세션 통계 계산 (함수 시작 부분에서 정의)
      const stats = calculateSessionStats();
+     window.__pendingTrainingPayload = null;
 
      // 1. 로컬 스토리지에 즉시 백업 (최우선)
      let localSaveSuccess = false;
@@ -487,7 +488,11 @@ async function saveTrainingResult(extra = {}) {
 
           const resolvedSegments = await resolveWorkoutSegmentsForSave(workoutId, window.currentWorkout);
 
+          // 세션 고유 키: 같은 훈련을 재전송해도 한 번만 저장(멱등)
+          const __sessStart = state.currentTrainingSession && state.currentTrainingSession.startTime;
+          const __saveKey = currentUserId + '_' + (__sessStart ? new Date(__sessStart).getTime() : Date.now());
           const trainingData = {
+            save_key: __saveKey,
             // 필수 필드
             duration: totalSeconds,
             weighted_watts: finalNP,
@@ -528,6 +533,7 @@ async function saveTrainingResult(extra = {}) {
             powerDataCount: trainingData.powerData?.length || 0
           });
           // Android 등 모바일에서 네트워크 불안정 시 재시도 (최대 3회, 1초 간격)
+          window.__pendingTrainingPayload = { userId: currentUserId, trainingData: trainingData, queuedAt: Date.now() };
           var saveResult = null;
           var lastErr = null;
           for (var attempt = 1; attempt <= 3; attempt++) {
@@ -616,6 +622,7 @@ async function saveTrainingResult(extra = {}) {
 
      // 4. 결과 처리 및 반환
      if (firebaseSuccess) {
+       try { window.stelvioShowSaveStatus && window.stelvioShowSaveStatus('saved'); } catch (e) {}
        console.log('[saveTrainingResult] 🎉 Firebase 저장 성공 + 로컬 백업 완료');
        return { 
          success: true, 
@@ -626,6 +633,9 @@ async function saveTrainingResult(extra = {}) {
          mileageUpdate: window.lastMileageUpdate || null
        };
      } else if (localSaveSuccess) {
+       // 서버 저장 실패: 미전송 큐에 보관 → 로그인/앱 시작/네트워크 복구 시 자동 재전송
+       try { if (window.__pendingTrainingPayload) { window.stelvioQueuePendingTraining(window.__pendingTrainingPayload); } } catch (e) {}
+       try { window.stelvioShowSaveStatus && window.stelvioShowSaveStatus('pending'); } catch (e) {}
        console.log('[saveTrainingResult] 📱 Firebase 저장 실패, 로컬 데이터로 계속 진행');
        return { 
          success: true, 

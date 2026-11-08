@@ -8844,7 +8844,6 @@
 
     <!-- 액션 버튼들 -->
     <div class="btn-row mt-20">
-      <button class="btn btn-success" id="btnSaveResult" onclick="saveTrainingResult()">💾 결과 저장</button>
       <button class="btn btn-secondary" id="btnShareResult">📤 공유하기</button>
     </div>
 
@@ -10880,7 +10879,7 @@
     (async function() {
       let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
       try {
-        var mod = await import('./assets/js/trainingResultService.js?v=20261014missionPass');
+        var mod = await import('./assets/js/trainingResultService.js?v=20261108save');
         if (mod && typeof mod === 'object') {
           saveTrainingSession = mod.saveTrainingSession;
           getUserTrainingLogs = mod.getUserTrainingLogs;
@@ -35129,7 +35128,8 @@
 <script src="assets/js/stelvioRtss.js"></script>
 <script src="assets/js/stravaManager.js"></script>
 <script src="assets/js/trainingResultsManager.js?v=20261020outdoor"></script>
-<script src="assets/js/resultManager.js?v=segments-robust-lookup-20260820a"></script>
+<script src="assets/js/resultManager.js?v=20261108save"></script>
+<script src="assets/js/trainingPendingQueue.js?v=20261108save"></script>
 <script src="assets/js/bluetooth.js?v=20261101recon"></script>
 <script src="assets/js/ErgController.js"></script>
 <script src="assets/js/ergMode.js"></script>

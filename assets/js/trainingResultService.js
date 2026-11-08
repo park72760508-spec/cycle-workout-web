@@ -624,6 +624,28 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       
       var rawUserData = userDoc.data() || {};
       const userData = rawUserData;
+
+      // 중복 저장 방지(멱등): 같은 세션(save_key)이 이미 저장돼 있으면 포인트·로그를 다시 쓰지 않고 성공으로 반환
+      // → 재시도/미전송 기록 자동 재전송 시 이중 적립·중복 로그가 생기지 않는다.
+      const __saveKey = trainingData.save_key ? String(trainingData.save_key).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 120) : null;
+      const __fixedLogRef = __saveKey ? doc(collection(db, 'users', userId, 'logs'), 'tr_' + __saveKey) : null;
+      if (__fixedLogRef) {
+        const __ex = await transaction.get(__fixedLogRef);
+        if (__ex.exists()) {
+          return {
+            success: true,
+            duplicate: true,
+            userUpdateData: {
+              acc_points: Number(userData.acc_points || 0),
+              rem_points: Number(userData.rem_points || 0),
+              expiry_date: userData.expiry_date
+            },
+            earnedPoints: 0,
+            extendedDays: 0,
+            trainingLogId: __ex.id
+          };
+        }
+      }
       
       // 현재 값 가져오기 (기본값 설정)
       const currentFTP = userData.ftp || 200;
@@ -861,7 +883,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       
       // 7. 트랜잭션 내에서 로그 문서 저장 (실패 시 user 업데이트도 롤백 → 재시도 시 포인트 중복 없음)
       const userLogsRef = collection(db, 'users', userId, 'logs');
-      const logRef = doc(userLogsRef);
+      const logRef = __fixedLogRef || doc(userLogsRef);
       transaction.set(logRef, trainingLogData);
       
       return {
@@ -874,6 +896,20 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       };
     });
     
+    if (result.duplicate) {
+      console.log('[saveTrainingSession] ℹ️ 이미 저장된 세션(중복 방지):', result.trainingLogId);
+      return {
+        success: true,
+        duplicate: true,
+        earnedPoints: 0,
+        extendedDays: 0,
+        newRemPoints: result.userUpdateData.rem_points,
+        newAccPoints: result.userUpdateData.acc_points,
+        newExpiryDate: result.userUpdateData.expiry_date,
+        trainingLogId: result.trainingLogId
+      };
+    }
+
     console.log('[saveTrainingSession] ✅ 저장 완료:', {
       userId,
       earnedPoints: result.earnedPoints,
