@@ -7222,9 +7222,9 @@ function rrWelcomePopupShow() {
   el.className = 'rrwp';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '환영 이미지');
-  el.innerHTML = '<img class="rrwp__img" alt="환영 이미지"><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
-  el.querySelector('img').src = src;
-  el.querySelector('img').addEventListener('click', rrWelcomePopupHide);
+  el.innerHTML = '<img class="rrwp__img" alt="환영 이미지"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
+  el.querySelector('.rrwp__img').src = src;
+  el.querySelector('.rrwp__img').addEventListener('click', rrWelcomePopupHide);
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
   el.querySelector('.rrwp__x').addEventListener('click', rrWelcomePopupHide);
   try { rrWsClose(); } catch (e) {}
