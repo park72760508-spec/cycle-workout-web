@@ -7243,8 +7243,9 @@ function rrWelcomePopupDelete() {
 }
 /* 배경 제거(가장자리에서 시작해 배경색과 비슷한 영역을 투명 처리 + 경계 부드럽게) */
 function rrWpOpt() {
-  try { var o = JSON.parse(localStorage.getItem('rrWelcomePopupOpt') || 'null'); if (o) return { bg: o.bg !== false, tol: Number(o.tol) || 40 }; } catch (e) {}
-  return { bg: true, tol: 40 };
+  var def = { bg: true, tol: 40, tint: true, color: '#ffc58a', alpha: 35 };
+  try { var o = JSON.parse(localStorage.getItem('rrWelcomePopupOpt') || 'null'); if (o) return { bg: o.bg !== false, tol: Number(o.tol) || 40, tint: o.tint !== false, color: o.color || def.color, alpha: o.alpha != null ? Number(o.alpha) : def.alpha }; } catch (e) {}
+  return def;
 }
 function rrWpSetOpt(o) { try { localStorage.setItem('rrWelcomePopupOpt', JSON.stringify(o)); } catch (e) {} }
 function rrWpRemoveBg(canvas, tol) {
@@ -7293,6 +7294,15 @@ function rrWpProcess(srcData, done) {
     c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
     var o = rrWpOpt();
     if (o.bg) { try { rrWpRemoveBg(c, o.tol); } catch (e) { console.warn('[환영팝업] 배경 제거 실패', e); } }
+    // 제거된(투명) 영역에 선택한 색을 설정한 강도(불투명도)로 채움
+    if (o.tint && o.alpha > 0) {
+      var c2 = document.createElement('canvas'); c2.width = c.width; c2.height = c.height;
+      var x2 = c2.getContext('2d');
+      x2.globalAlpha = Math.min(1, Math.max(0, o.alpha / 100));
+      x2.fillStyle = o.color; x2.fillRect(0, 0, c2.width, c2.height);
+      x2.globalAlpha = 1; x2.drawImage(c, 0, 0);
+      c = c2;
+    }
     var out = c.toDataURL('image/webp', 0.92);
     if (out.indexOf('data:image/webp') !== 0) out = c.toDataURL('image/png');
     done(out);
@@ -7340,13 +7350,21 @@ function rrWpReprocess() {
       f.addEventListener('change', function () { rrWpFromFile(f.files && f.files[0]); f.value = ''; });
     }
     var cb = document.getElementById('rrWpAutoBg'), rg = document.getElementById('rrWpTol');
+    var tb = document.getElementById('rrWpTint'), tc = document.getElementById('rrWpTintColor'), ta = document.getElementById('rrWpTintAlpha');
     if (cb && !cb.dataset.bound) {
       cb.dataset.bound = '1';
       var o = rrWpOpt(); cb.checked = o.bg; if (rg) rg.value = o.tol;
+      if (tb) tb.checked = o.tint; if (tc) tc.value = o.color; if (ta) ta.value = o.alpha;
       var t = null;
-      var apply = function () { rrWpSetOpt({ bg: cb.checked, tol: rg ? Number(rg.value) : 40 }); if (rg) rg.disabled = !cb.checked; clearTimeout(t); t = setTimeout(rrWpReprocess, 200); };
-      cb.addEventListener('change', apply);
-      if (rg) { rg.disabled = !cb.checked; rg.addEventListener('input', apply); }
+      var apply = function () {
+        rrWpSetOpt({ bg: cb.checked, tol: rg ? Number(rg.value) : 40, tint: tb ? tb.checked : false, color: tc ? tc.value : '#ffc58a', alpha: ta ? Number(ta.value) : 35 });
+        if (rg) rg.disabled = !cb.checked;
+        if (tc) tc.disabled = !(tb && tb.checked); if (ta) ta.disabled = !(tb && tb.checked);
+        clearTimeout(t); t = setTimeout(rrWpReprocess, 200);
+      };
+      [cb, rg, tb, tc, ta].forEach(function (el) { if (el) el.addEventListener(el.type === 'checkbox' ? 'change' : 'input', apply); });
+      if (rg) rg.disabled = !cb.checked;
+      if (tc) tc.disabled = !(tb && tb.checked); if (ta) ta.disabled = !(tb && tb.checked);
     }
     rrWpRefreshMenu();
   }

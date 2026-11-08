@@ -38666,3 +38666,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .rrws__thumb { background-image: linear-gradient(45deg, #1a2238 25%, transparent 25%), linear-gradient(-45deg, #1a2238 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a2238 75%), linear-gradient(-45deg, transparent 75%, #1a2238 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
 #rollerRaceDashboardScreen .rrws__opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd9ec; }
 #rollerRaceDashboardScreen .rrws__opt input[type=range] { flex: 1; accent-color: #ff8c00; }
+#rollerRaceDashboardScreen .rrws__opt input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #2f4170; background: none; cursor: pointer; }
+#rollerRaceDashboardScreen .rrws__opt input:disabled { opacity: .4; }
