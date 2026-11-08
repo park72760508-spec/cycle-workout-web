@@ -38629,20 +38629,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .rr-wp-btn[hidden] { display: none; }
 .rrwp {
   position: fixed; inset: 0; z-index: 2147483000; display: flex; align-items: center; justify-content: center;
-  padding: 3vh 3vw; background: radial-gradient(120% 90% at 50% 40%, rgba(10,14,24,.78), rgba(0,0,0,.92));
-  backdrop-filter: blur(4px); animation: rrwpIn .35s ease-out;
+  padding: 3vh 3vw; background: transparent; cursor: pointer;
 }
-.rrwp__card {
-  position: relative; max-width: 94vw; max-height: 94vh; display: flex; border: 3px solid #ff8c00;
-  box-shadow: 0 0 0 1px rgba(255,255,255,.2), 0 0 40px rgba(255,140,0,.45), 0 20px 60px rgba(0,0,0,.7); background: #000;
-  animation: rrwpPop .45s cubic-bezier(.2,.9,.3,1.2);
+.rrwp__img {
+  display: block; max-width: 92vw; max-height: 92vh; object-fit: contain; background: none; border: 0;
+  filter: drop-shadow(0 0 14px rgba(255,140,0,.55)) drop-shadow(0 12px 28px rgba(0,0,0,.65));
+  animation: rrwpPop .55s cubic-bezier(.2,.9,.3,1.2), rrwpFloat 4.5s ease-in-out .6s infinite;
 }
-.rrwp__card img { display: block; max-width: 94vw; max-height: 94vh; object-fit: contain; }
 .rrwp__x {
-  position: absolute; top: 8px; right: 8px; width: 40px; height: 40px; border: 0; border-radius: 50%; cursor: pointer;
-  background: rgba(0,0,0,.6); color: #fff; font-size: 20px; line-height: 1;
+  position: absolute; top: 14px; right: 14px; width: 40px; height: 40px; border: 0; border-radius: 50%; cursor: pointer;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 20px; line-height: 1;
 }
 .rrwp__x:hover { background: #ff3b3b; }
+@keyframes rrwpFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
 @keyframes rrwpIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rrwpPop { from { transform: scale(.88); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
@@ -38663,3 +38662,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .rrws__thumb { height: 150px; display: flex; align-items: center; justify-content: center; background: #070b18; border: 1px dashed #2f4170; color: #8fa0c0; font-size: 13px; overflow: hidden; }
 #rollerRaceDashboardScreen .rrws__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
 #rollerRaceDashboardScreen .rrws .rr-wp-menu { flex-wrap: wrap; }
+
+#rollerRaceDashboardScreen .rrws__thumb { background-image: linear-gradient(45deg, #1a2238 25%, transparent 25%), linear-gradient(-45deg, #1a2238 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a2238 75%), linear-gradient(-45deg, transparent 75%, #1a2238 75%); background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0; }
+#rollerRaceDashboardScreen .rrws__opt { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #cfd9ec; }
+#rollerRaceDashboardScreen .rrws__opt input[type=range] { flex: 1; accent-color: #ff8c00; }

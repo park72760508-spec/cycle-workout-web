@@ -7222,8 +7222,9 @@ function rrWelcomePopupShow() {
   el.className = 'rrwp';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '환영 이미지');
-  el.innerHTML = '<div class="rrwp__card"><img alt="환영 이미지"><button type="button" class="rrwp__x" aria-label="닫기">✕</button></div>';
+  el.innerHTML = '<img class="rrwp__img" alt="환영 이미지"><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
   el.querySelector('img').src = src;
+  el.querySelector('img').addEventListener('click', rrWelcomePopupHide);
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
   el.querySelector('.rrwp__x').addEventListener('click', rrWelcomePopupHide);
   try { rrWsClose(); } catch (e) {}
@@ -7240,31 +7241,96 @@ function rrWelcomePopupDelete() {
   rrWpRefreshMenu();
   if (typeof showToast === 'function') showToast('환영팝업 이미지를 삭제했습니다');
 }
+/* 배경 제거(가장자리에서 시작해 배경색과 비슷한 영역을 투명 처리 + 경계 부드럽게) */
+function rrWpOpt() {
+  try { var o = JSON.parse(localStorage.getItem('rrWelcomePopupOpt') || 'null'); if (o) return { bg: o.bg !== false, tol: Number(o.tol) || 40 }; } catch (e) {}
+  return { bg: true, tol: 40 };
+}
+function rrWpSetOpt(o) { try { localStorage.setItem('rrWelcomePopupOpt', JSON.stringify(o)); } catch (e) {} }
+function rrWpRemoveBg(canvas, tol) {
+  var w = canvas.width, h = canvas.height, ctx = canvas.getContext('2d');
+  var im = ctx.getImageData(0, 0, w, h), d = im.data, n = w * h;
+  // 이미 투명 배경이면(모서리 알파가 낮으면) 그대로 사용
+  var corners = [0, w - 1, (h - 1) * w, n - 1];
+  var transCnt = 0; corners.forEach(function (i) { if (d[i * 4 + 3] < 200) transCnt++; });
+  if (transCnt >= 3) return;
+  // 배경색: 테두리 픽셀 평균(모서리 주변 가중)
+  var sr = 0, sg = 0, sb = 0, c = 0;
+  function acc(x, y) { var i = (y * w + x) * 4; sr += d[i]; sg += d[i + 1]; sb += d[i + 2]; c++; }
+  for (var x = 0; x < w; x += 2) { acc(x, 0); acc(x, h - 1); }
+  for (var y = 0; y < h; y += 2) { acc(0, y); acc(w - 1, y); }
+  var br = sr / c, bgc = sg / c, bb = sb / c;
+  function dist(i) { var dr = d[i * 4] - br, dg = d[i * 4 + 1] - bgc, db = d[i * 4 + 2] - bb; return Math.sqrt(dr * dr + dg * dg + db * db); }
+  var removed = new Uint8Array(n), stack = [];
+  function push(i) { if (!removed[i] && dist(i) <= tol) { removed[i] = 1; stack.push(i); } }
+  for (var x2 = 0; x2 < w; x2++) { push(x2); push((h - 1) * w + x2); }
+  for (var y2 = 0; y2 < h; y2++) { push(y2 * w); push(y2 * w + w - 1); }
+  while (stack.length) {
+    var i = stack.pop(), px = i % w, py = (i / w) | 0;
+    if (px > 0) push(i - 1);
+    if (px < w - 1) push(i + 1);
+    if (py > 0) push(i - w);
+    if (py < h - 1) push(i + w);
+  }
+  var feather = Math.max(8, tol * 0.6);
+  for (var k = 0; k < n; k++) {
+    if (removed[k]) { d[k * 4 + 3] = 0; continue; }
+    var px2 = k % w, py2 = (k / w) | 0;
+    var near = (px2 > 0 && removed[k - 1]) || (px2 < w - 1 && removed[k + 1]) || (py2 > 0 && removed[k - w]) || (py2 < h - 1 && removed[k + w]);
+    if (near) {
+      var a2 = Math.min(1, Math.max(0, (dist(k) - tol) / feather));
+      d[k * 4 + 3] = Math.round(d[k * 4 + 3] * Math.max(a2, 0.15));
+    }
+  }
+  ctx.putImageData(im, 0, 0);
+}
+function rrWpProcess(srcData, done) {
+  var img = new Image();
+  img.onload = function () {
+    var max = 1000, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
+    var c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    var o = rrWpOpt();
+    if (o.bg) { try { rrWpRemoveBg(c, o.tol); } catch (e) { console.warn('[환영팝업] 배경 제거 실패', e); } }
+    var out = c.toDataURL('image/webp', 0.92);
+    if (out.indexOf('data:image/webp') !== 0) out = c.toDataURL('image/png');
+    done(out);
+  };
+  img.src = srcData;
+}
+function rrWpStore(processed) {
+  try { localStorage.setItem(RR_WP_KEY, processed); return true; } catch (e) { return false; }
+}
 function rrWpFromFile(file) {
   if (!file || !/^image\//.test(file.type)) return;
   var fr = new FileReader();
   fr.onload = function () {
-    var img = new Image();
-    img.onload = function () {
-      var max = 1600, w = img.naturalWidth, h = img.naturalHeight, k = Math.min(1, max / Math.max(w, h));
-      var c = document.createElement('canvas');
-      c.width = Math.round(w * k); c.height = Math.round(h * k);
-      var ctx = c.getContext('2d');
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, c.width, c.height);
-      ctx.drawImage(img, 0, 0, c.width, c.height);
-      var q = 0.88, data = c.toDataURL('image/jpeg', q);
-      while (data.length > 2400000 && q > 0.4) { q -= 0.12; data = c.toDataURL('image/jpeg', q); }
-      try {
-        localStorage.setItem(RR_WP_KEY, data);
-        if (typeof showToast === 'function') showToast('환영팝업 이미지를 등록했습니다 — "게시"를 누르면 화면에 표시됩니다');
-      } catch (e) {
-        if (typeof showToast === 'function') showToast('이미지가 너무 커서 저장하지 못했습니다. 더 작은 이미지를 사용해 주세요', 'error');
-      }
-      rrWpRefreshMenu();
+    // 원본은 재조정(허용치 변경)용으로 줄여서 보관
+    var im0 = new Image();
+    im0.onload = function () {
+      var k0 = Math.min(1, 1000 / Math.max(im0.naturalWidth, im0.naturalHeight));
+      var c0 = document.createElement('canvas');
+      c0.width = Math.max(1, Math.round(im0.naturalWidth * k0)); c0.height = Math.max(1, Math.round(im0.naturalHeight * k0));
+      c0.getContext('2d').drawImage(im0, 0, 0, c0.width, c0.height);
+      var src = /png|webp|gif/.test(file.type) ? c0.toDataURL('image/png') : c0.toDataURL('image/jpeg', 0.9);
+      rrWpProcess(src, function (out) {
+        try { localStorage.setItem('rrWelcomePopupSrc', src); } catch (e) { try { localStorage.removeItem('rrWelcomePopupSrc'); } catch (e2) {} }
+        if (rrWpStore(out)) {
+          if (typeof showToast === 'function') showToast('환영팝업 이미지를 등록했습니다 — "게시"를 누르면 화면에 표시됩니다');
+        } else if (typeof showToast === 'function') showToast('이미지가 너무 커서 저장하지 못했습니다. 더 작은 이미지를 사용해 주세요', 'error');
+        rrWpRefreshMenu();
+      });
     };
-    img.src = fr.result;
+    im0.src = fr.result;
   };
   fr.readAsDataURL(file);
+}
+/** 배경 제거 옵션(체크·허용치) 변경 시 원본으로 다시 처리 */
+function rrWpReprocess() {
+  var src = null; try { src = localStorage.getItem('rrWelcomePopupSrc'); } catch (e) {}
+  if (!src) return;
+  rrWpProcess(src, function (out) { rrWpStore(out); rrWpRefreshMenu(); });
 }
 (function rrWpInit() {
   function init() {
@@ -7272,6 +7338,15 @@ function rrWpFromFile(file) {
     if (f && !f.dataset.bound) {
       f.dataset.bound = '1';
       f.addEventListener('change', function () { rrWpFromFile(f.files && f.files[0]); f.value = ''; });
+    }
+    var cb = document.getElementById('rrWpAutoBg'), rg = document.getElementById('rrWpTol');
+    if (cb && !cb.dataset.bound) {
+      cb.dataset.bound = '1';
+      var o = rrWpOpt(); cb.checked = o.bg; if (rg) rg.value = o.tol;
+      var t = null;
+      var apply = function () { rrWpSetOpt({ bg: cb.checked, tol: rg ? Number(rg.value) : 40 }); if (rg) rg.disabled = !cb.checked; clearTimeout(t); t = setTimeout(rrWpReprocess, 200); };
+      cb.addEventListener('change', apply);
+      if (rg) { rg.disabled = !cb.checked; rg.addEventListener('input', apply); }
     }
     rrWpRefreshMenu();
   }
