@@ -849,10 +849,69 @@ function updateRankings() {
 
 
 // ===== 레이스 전광판(타이밍 타워) 행 렌더링 =====
+/* ===== 2026-11-08: 트랙·LIVE 순위 아바타 — 입력한 이름과 같은 STELVIO 회원의 프로필 사진(없으면 이름 첫 글자 원형) =====
+   회원 목록은 이미 로드된 window.users(관리자) 또는 apiGetUsers(30초 캐시)만 사용 — 추가 조회 없음. */
+var rrAvatarMap = null; // name(소문자) -> url
+var rrAvatarLoading = false;
+function rrAvatarBuildMap(list) {
+  var m = {};
+  (list || []).forEach(function (u) {
+    if (!u) return;
+    var n = String(u.name || '').trim().toLowerCase();
+    var url = u.profileImageUrl || u.profile_image_url;
+    if (n && url && !m[n]) m[n] = String(url);
+  });
+  return m;
+}
+function rrAvatarEnsureMap() {
+  if (rrAvatarMap) return;
+  try {
+    if (Array.isArray(window.users) && window.users.length) { rrAvatarMap = rrAvatarBuildMap(window.users); return; }
+  } catch (e) {}
+  if (rrAvatarLoading || typeof window.apiGetUsers !== 'function') return;
+  rrAvatarLoading = true;
+  window.apiGetUsers().then(function (r) {
+    var items = r && r.items;
+    if (Array.isArray(items) && items.length) {
+      rrAvatarMap = rrAvatarBuildMap(items);
+      rrAvatarRefreshAll();
+    }
+  }).catch(function () {}).then(function () { rrAvatarLoading = false; });
+}
+function rrAvatarUrl(name) {
+  rrAvatarEnsureMap();
+  return (rrAvatarMap && rrAvatarMap[String(name || '').trim().toLowerCase()]) || '';
+}
+/** el(.rr-av) 에 이름 기준 아바타 표시 */
+function rrSetAvatar(el, name) {
+  if (!el) return;
+  var nm = String(name || '').trim();
+  el.dataset.name = nm;
+  if (!nm) { el.style.display = 'none'; el.innerHTML = ''; el.dataset.k = ''; return; }
+  var url = rrAvatarUrl(nm);
+  var want = url ? 'i:' + url : 't:' + nm.charAt(0);
+  el.style.display = '';
+  if (el.dataset.k === want) return;
+  el.dataset.k = want;
+  el.textContent = '';
+  if (url) {
+    var img = document.createElement('img');
+    img.alt = ''; img.decoding = 'async'; img.src = url;
+    img.onerror = function () { el.dataset.k = ''; el.textContent = nm.charAt(0).toUpperCase(); };
+    el.appendChild(img);
+  } else {
+    el.textContent = nm.charAt(0).toUpperCase();
+  }
+}
+function rrAvatarRefreshAll() {
+  document.querySelectorAll('#rollerRaceDashboardScreen .rr-av[data-name]').forEach(function (el) { rrSetAvatar(el, el.dataset.name); });
+}
+
 const RR_RANK_ITEM_HTML = `
   <div class="rank-item-content">
     <span class="rr-pos">-</span>
     <span class="rr-bar"></span>
+    <span class="rr-av" style="display:none"></span>
     <span class="rank-name">-</span>
     <span class="rr-chg"></span>
     <span class="rank-distance"><b class="rr-val">0.00</b><small class="rr-unit">km</small></span>
@@ -875,6 +934,7 @@ function rrFillRankItem(item, sp, rank, leaderDist) {
   if (!sp) {
     if (posEl) posEl.textContent = '-';
     if (nameEl) nameEl.textContent = '-';
+    rrSetAvatar(item.querySelector('.rr-av'), '');
     if (valEl) valEl.textContent = '0.00';
     if (unitEl) unitEl.textContent = 'km';
     if (chgEl) chgEl.textContent = '';
@@ -888,6 +948,7 @@ function rrFillRankItem(item, sp, rank, leaderDist) {
   if (barEl) barEl.style.background = getMascotColor(sp.id);
   item.style.setProperty('--rr-c', getMascotColor(sp.id));
   if (nameEl) nameEl.textContent = sp.pairingName || sp.name || '-';
+  rrSetAvatar(item.querySelector('.rr-av'), sp.pairingName || '');
   if (rank === 1) {
     if (valEl) valEl.textContent = sp.totalDistance.toFixed(2);
     if (unitEl) unitEl.textContent = 'km';
@@ -2333,6 +2394,8 @@ function updateSpeedometerListUI() {
       </div>
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
+        <!-- 아바타 (트랙 왼쪽 끝) -->
+        <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" data-name="${String(pairingName).replace(/"/g, '&quot;')}"></span>
         <!-- 이름 표시 (주황색 블럭 안 왼쪽) -->
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
@@ -2436,6 +2499,7 @@ function updateSpeedometerListUI() {
       </div>
     `;
     listEl.appendChild(item);
+    rrSetAvatar(item.querySelector('.rr-av--track'), pairingName);
     
     // 초기 속도 및 거리 표시 설정
     updateStraightTrackStats(speedometer.id, speedometer.currentSpeed || 0, speedometer.totalDistance || 0);
