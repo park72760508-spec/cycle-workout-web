@@ -735,6 +735,8 @@ function updateSpeedometerData(speedometerId, speed, distance) {
     rrSetDigital(distanceValueEl, distance.toFixed(2));
   }
   
+  // 속도가 0보다 크면 트랙 아바타 테두리 네온 점멸
+  try { const __av = document.getElementById(`track-avatar-${speedometerId}`); if (__av) __av.classList.toggle('rr-av--live', speed > 0); } catch (e) {}
   // 직선 트랙 내 속도 및 거리 표시 업데이트
   updateStraightTrackStats(speedometerId, speed, distance);
   
@@ -1032,6 +1034,7 @@ function rrFillRankItem(item, sp, rank, leaderDist) {
   item.style.setProperty('--rr-c', getMascotColor(sp.id));
   if (nameEl) nameEl.textContent = sp.pairingName || sp.name || '-';
   rrSetAvatar(item.querySelector('.rr-av'), sp.pairingName || '', sp.id);
+  try { const __a = item.querySelector('.rr-av'); if (__a) __a.classList.toggle('rr-av--live', (sp.currentSpeed || 0) > 0); } catch (e) {}
   if (rank === 1) {
     if (valEl) valEl.textContent = sp.totalDistance.toFixed(2);
     if (unitEl) unitEl.textContent = 'km';
@@ -2563,7 +2566,7 @@ function updateSpeedometerListUI() {
           <rect x="35" y="3" width="865" height="1.2" fill="#ffffff" opacity="0.35"/>
           <rect x="35" y="35.8" width="865" height="1.2" fill="#ffffff" opacity="0.35"/>
           <!-- 중앙 점선 -->
-          <line x1="45" y1="20" x2="890" y2="20" stroke="#fde68a" stroke-width="1" stroke-dasharray="10,8" opacity="0.55"/>
+          <line x1="45" y1="20" x2="890" y2="20" stroke="#fde68a" stroke-width="1" stroke-dasharray="10,8" opacity="0.275"/>
           <!-- 거리 눈금 (10% 단위) -->
           ${[1,2,3,4,5,6,7,8,9].map(k => { const x = 35 + 865 * k / 10; return `<line x1="${x}" y1="4" x2="${x}" y2="8" stroke="#fff" stroke-width="0.8" opacity="0.45"/><line x1="${x}" y1="32" x2="${x}" y2="36" stroke="#fff" stroke-width="0.8" opacity="0.45"/>`; }).join('')}
           <!-- 광택 -->

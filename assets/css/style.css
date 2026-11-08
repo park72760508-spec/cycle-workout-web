@@ -38598,3 +38598,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   background-size: 100% 100%, 12px 12px, 12px 12px, 12px 12px, 12px 12px !important;
   background-position: 0 0, 0 0, 6px 0, 6px -6px, 0 6px !important;
 }
+
+/* ===== 2026-11-08 STELVIO Race: 속도>0 선수 아바타 네온 점멸 ===== */
+@keyframes rrAvNeon {
+  0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--rr-c, #22d3ee) 40%, transparent), 0 1px 3px rgba(0,0,0,.6); border-color: color-mix(in srgb, var(--rr-c, #22d3ee) 45%, #1b2338); }
+  50% { box-shadow: 0 0 6px var(--rr-c, #22d3ee), 0 0 14px var(--rr-c, #22d3ee), 0 0 24px color-mix(in srgb, var(--rr-c, #22d3ee) 70%, transparent); border-color: #fff; }
+}
+#rollerRaceDashboardScreen .rr-av.rr-av--live { animation: rrAvNeon 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rr-av.rr-av--live { animation-duration: 2.4s; } }
