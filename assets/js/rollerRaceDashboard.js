@@ -1977,10 +1977,25 @@ function saveSpeedometerPairing() {
                 speedometer.deviceId = newDeviceId;
                 speedometer.connected = false; 
                 updateSpeedometerConnectionStatus(targetId, false);
+                // 센서 교체: 누적 거리(totalDistance)는 그대로 두고, 이전 센서의 회전수·시간 기준점만 폐기
+                // → 새 센서의 첫 패킷을 기준점으로 삼아 그 이후 증가분만 이어서 누적(회전수 불일치로 인한 거리 튐 방지)
+                speedometer.needsSync = true;
+                speedometer.lastRevolutions = 0;
+                speedometer.lastEventTime = 0;
+                speedometer.lastEventUpdate = 0;
+                speedometer.lastPacketTime = 0;
+                speedometer.filteredSpeed = 0;
+                speedometer.previousSpeed = 0;
+                speedometer.currentSpeed = 0;
+                speedometer.speedHistorySmoothed = [];
+                speedometer.pktTimes = [];
+                speedometer.sensorSwaps = (speedometer.sensorSwaps || 0) + 1;
                 console.log(`[경기 중 센서 교체] 트랙${targetId}: 기존 데이터 유지, 새 센서 ID: ${newDeviceId}`);
             } else {
                 // 경기 중이 아닌 경우: deviceId만 변경
                 speedometer.deviceId = newDeviceId;
+                speedometer.needsSync = true;
+                speedometer.lastEventTime = 0;
             }
         } else if (!speedometer.deviceId && newDeviceId) {
             // deviceId가 없었는데 새로 설정하는 경우
@@ -2014,6 +2029,13 @@ function saveSpeedometerPairing() {
         
         // 페어링 이름 업데이트 (그리드 생성 후)
         updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
+
+        // 경기 중 센서 교체: 그리드 재생성으로 비워진 표시를 누적 거리 기준으로 복원
+        if (window.rollerRaceState.raceState === 'running' || window.rollerRaceState.raceState === 'paused') {
+            try { updateSpeedometerData(targetId, 0, speedometer.totalDistance || 0); } catch (e) {}
+            try { updateAllStraightTrackMascots(); } catch (e) {}
+            if (typeof showToast === 'function') showToast(`트랙${targetId} 센서 교체 완료 — 누적 거리 ${(speedometer.totalDistance || 0).toFixed(2)}km 유지, 새 센서 신호 수신 대기 중`);
+        }
         
         // 연결 상태 업데이트 (그리드 생성 후)
         if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
