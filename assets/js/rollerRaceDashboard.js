@@ -2479,7 +2479,7 @@ function updateSpeedometerListUI() {
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
         <!-- 아바타 (트랙 왼쪽 끝) -->
-        <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" role="button" tabindex="0" title="클릭하여 아바타 사진 변경" data-name="${String(pairingName).replace(/"/g, '&quot;')}" onclick="rrAvatarPickForTrack(${speedometer.id}, event)" onkeydown="if(event.key==='Enter'||event.key===' ')rrAvatarPickForTrack(${speedometer.id}, event)"></span>
+        <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" role="button" tabindex="0" title="선수 프로필 보기" data-name="${String(pairingName).replace(/"/g, '&quot;')}" onclick="rrOpenProfile(${speedometer.id}, event)" onkeydown="if(event.key==='Enter'||event.key===' ')rrOpenProfile(${speedometer.id}, event)"></span>
         <!-- 이름 표시 (주황색 블럭 안 왼쪽) -->
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
@@ -7010,3 +7010,97 @@ function rrWelcomeApply() {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
+
+
+/* ===== 2026-11-08: 선수 프로필 오버레이 — 트랙 아바타 클릭 시 가운데에 크게(사진·순위·속도·거리 실시간) ===== */
+var rrProfileTimer = null;
+function rrProfileSorted() {
+  return [...window.rollerRaceState.speedometers].filter(function (x) { return x.connected && x.totalDistance > 0; })
+    .sort(function (a, b) { return b.totalDistance - a.totalDistance; });
+}
+function rrProfileFmt(n, d) { n = Number(n); return isFinite(n) ? n.toFixed(d) : (0).toFixed(d); }
+function rrProfileRender() {
+  var root = document.getElementById('rrProfile');
+  if (!root || root.hidden) return;
+  var tid = Number(root.dataset.tid);
+  var sp = window.rollerRaceState.speedometers.find(function (x) { return x.id === tid; });
+  if (!sp) return;
+  var sorted = rrProfileSorted();
+  var idx = sorted.findIndex(function (x) { return x.id === tid; });
+  var rank = idx >= 0 ? idx + 1 : 0;
+  var name = (sp.pairingName || '').trim();
+  var color = getMascotColor(tid);
+  root.style.setProperty('--rr-c', color);
+  root.dataset.pos = rank || '';
+  var q = function (sel) { return root.querySelector(sel); };
+  q('.rrp__name').textContent = name || ('트랙' + tid);
+  q('.rrp__track').textContent = 'TRACK ' + tid;
+  var suf = rank === 1 ? 'ST' : rank === 2 ? 'ND' : rank === 3 ? 'RD' : 'TH';
+  q('.rrp__rank-num').textContent = rank || '-';
+  q('.rrp__rank-suf').textContent = rank ? suf : '';
+  q('.rrp__rank-of').textContent = rank ? ('/ ' + sorted.length) : (sp.connected ? '출발 대기' : '미연결');
+  q('[data-f="speed"]').textContent = sp.connected ? rrProfileFmt(sp.currentSpeed, 1) : '-';
+  q('[data-f="avg"]').textContent = rrProfileFmt(sp.averageSpeed, 1);
+  q('[data-f="max"]').textContent = rrProfileFmt(sp.maxSpeed, 1);
+  q('[data-f="dist"]').textContent = rrProfileFmt(sp.totalDistance, 2);
+  var gap = '-';
+  if (rank > 1) { var g = rrFormatGap(Math.max(0, sorted[0].totalDistance - sp.totalDistance)); gap = g; }
+  else if (rank === 1) gap = 'LEADER';
+  q('[data-f="gap"]').textContent = gap;
+  // 사진(크게)
+  var av = q('.rrp__photo');
+  var url = rrAvatarUrl(name, tid);
+  var want = url ? 'i:' + url.length + url.slice(-24) : 't:' + name.charAt(0);
+  if (av.dataset.k !== want) {
+    av.dataset.k = want; av.textContent = '';
+    if (url) { var img = document.createElement('img'); img.alt = ''; img.src = url; av.appendChild(img); }
+    else { var sp2 = document.createElement('span'); sp2.textContent = (name || String(tid)).charAt(0).toUpperCase(); av.appendChild(sp2); }
+  }
+}
+function rrCloseProfile() {
+  var root = document.getElementById('rrProfile');
+  if (root) { root.classList.remove('rrp--open'); setTimeout(function () { if (!root.classList.contains('rrp--open')) root.hidden = true; }, 260); }
+  if (rrProfileTimer) { clearInterval(rrProfileTimer); rrProfileTimer = null; }
+  document.removeEventListener('keydown', rrProfileKey, true);
+}
+function rrProfileKey(e) { if (e.key === 'Escape') { e.stopPropagation(); rrCloseProfile(); } }
+window.rrCloseProfile = rrCloseProfile;
+window.rrOpenProfile = function (tid, ev) {
+  if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+  var host = document.getElementById('rollerRaceDashboardScreen') || document.body;
+  var root = document.getElementById('rrProfile');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'rrProfile'; root.className = 'rrp'; root.hidden = true;
+    root.innerHTML =
+      '<div class="rrp__card" role="dialog" aria-modal="true" aria-label="선수 프로필">' +
+        '<button type="button" class="rrp__close" aria-label="닫기">✕</button>' +
+        '<div class="rrp__top"><span class="rrp__track"></span><span class="rrp__live">LIVE</span></div>' +
+        '<div class="rrp__hero">' +
+          '<div class="rrp__photo-wrap"><div class="rrp__photo"></div>' +
+            '<button type="button" class="rrp__change">사진 변경</button></div>' +
+          '<div class="rrp__id"><div class="rrp__name"></div>' +
+            '<div class="rrp__rank"><span class="rrp__rank-num">-</span><span class="rrp__rank-suf"></span><span class="rrp__rank-of"></span></div></div>' +
+        '</div>' +
+        '<div class="rrp__stats">' +
+          '<div class="rrp__stat rrp__stat--speed"><label>SPEED</label><b data-f="speed">-</b><small>km/h</small></div>' +
+          '<div class="rrp__stat rrp__stat--dist"><label>DISTANCE</label><b data-f="dist">0.00</b><small>km</small></div>' +
+          '<div class="rrp__stat"><label>AVG</label><b data-f="avg">0.0</b><small>km/h</small></div>' +
+          '<div class="rrp__stat"><label>MAX</label><b data-f="max">0.0</b><small>km/h</small></div>' +
+          '<div class="rrp__stat rrp__stat--gap"><label>GAP</label><b data-f="gap">-</b><small>to leader</small></div>' +
+        '</div>' +
+      '</div>';
+    host.appendChild(root);
+    root.addEventListener('click', function (e) { if (e.target === root) rrCloseProfile(); });
+    root.querySelector('.rrp__close').addEventListener('click', rrCloseProfile);
+    root.querySelector('.rrp__change').addEventListener('click', function () { window.rrAvatarPickForTrack(Number(root.dataset.tid)); });
+  }
+  root.dataset.tid = String(tid);
+  root.querySelector('.rrp__photo').dataset.k = '';
+  root.hidden = false;
+  rrProfileRender();
+  requestAnimationFrame(function () { root.classList.add('rrp--open'); });
+  if (rrProfileTimer) clearInterval(rrProfileTimer);
+  rrProfileTimer = setInterval(rrProfileRender, 500);
+  document.addEventListener('keydown', rrProfileKey, true);
+};

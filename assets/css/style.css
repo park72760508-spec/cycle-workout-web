@@ -38488,3 +38488,85 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   50% { transform: translateY(-3px) rotate(-1.4deg); filter: drop-shadow(0 4px 12px rgba(255,140,0,.65)); }
 }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rr-welcome__text { animation: none; } }
+
+/* ===== 2026-11-08 STELVIO Race: 선수 프로필 오버레이(트랙 아바타 클릭) ===== */
+#rollerRaceDashboardScreen .rrp {
+  position: fixed; inset: 0; z-index: 100600; display: flex; align-items: center; justify-content: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(8,12,26,.78), rgba(2,4,10,.92)); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  opacity: 0; transition: opacity .25s ease;
+}
+#rollerRaceDashboardScreen .rrp[hidden] { display: none; }
+#rollerRaceDashboardScreen .rrp.rrp--open { opacity: 1; }
+#rollerRaceDashboardScreen .rrp__card {
+  --rr-c: #22d3ee; position: relative; width: min(860px, 94vw); padding: 22px 30px 28px; color: #fff;
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.03) 0 2px, transparent 2px 6px),
+    linear-gradient(135deg, color-mix(in srgb, var(--rr-c) 22%, #0b1020) 0%, #0a0f1f 45%, #060912 100%);
+  clip-path: polygon(28px 0, 100% 0, calc(100% - 28px) 100%, 0 100%);
+  border-top: 6px solid var(--rr-c); box-shadow: 0 0 60px color-mix(in srgb, var(--rr-c) 45%, transparent);
+  transform: scale(.88) translateY(18px); transition: transform .35s cubic-bezier(.16,1,.3,1);
+}
+#rollerRaceDashboardScreen .rrp.rrp--open .rrp__card { transform: none; }
+#rollerRaceDashboardScreen .rrp__card::after { /* 지나가는 광택 */
+  content: ""; position: absolute; top: 0; bottom: 0; width: 30%; left: -40%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.12), transparent); animation: rrSheen 4.5s ease-in-out infinite;
+}
+#rollerRaceDashboardScreen .rrp__close {
+  position: absolute; top: 12px; right: 36px; z-index: 3; width: 36px; height: 36px; border: 0; cursor: pointer; color: #fff; font-size: 18px;
+  background: rgba(255,255,255,.1); clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+#rollerRaceDashboardScreen .rrp__close:hover { background: #ff3b3b; }
+#rollerRaceDashboardScreen .rrp__top { display: flex; align-items: center; gap: 12px; margin: 0 0 14px 20px; }
+#rollerRaceDashboardScreen .rrp__track {
+  font: italic 900 16px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .3em; color: var(--rr-c); text-shadow: 0 0 10px var(--rr-c);
+}
+#rollerRaceDashboardScreen .rrp__live {
+  font: italic 900 12px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .2em; padding: 4px 10px; background: #ff3b3b; color: #fff;
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); animation: rrChgBlink 1.2s steps(2) infinite;
+}
+#rollerRaceDashboardScreen .rrp__hero { display: flex; align-items: center; gap: 34px; padding: 0 20px; flex-wrap: wrap; justify-content: center; }
+#rollerRaceDashboardScreen .rrp__photo-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+#rollerRaceDashboardScreen .rrp__photo {
+  width: 240px; height: 240px; max-width: 52vw; max-height: 52vw; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #3a4560, #1b2338); border: 6px solid var(--rr-c);
+  box-shadow: 0 0 0 4px rgba(255,255,255,.9), 0 0 40px var(--rr-c), 0 12px 30px rgba(0,0,0,.6);
+  font: italic 900 110px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; color: #fff;
+}
+#rollerRaceDashboardScreen .rrp__photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#rollerRaceDashboardScreen .rrp__change {
+  border: 0; cursor: pointer; padding: 7px 18px; color: #cfe3ff; background: rgba(255,255,255,.1);
+  font: italic 800 13px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .12em;
+  clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%);
+}
+#rollerRaceDashboardScreen .rrp__change:hover { background: var(--rr-c); color: #06101a; }
+#rollerRaceDashboardScreen .rrp__id { flex: 1 1 280px; min-width: 0; }
+#rollerRaceDashboardScreen .rrp__name {
+  font: italic 900 56px/1.05 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .02em; text-transform: uppercase; overflow-wrap: anywhere;
+  text-shadow: 0 2px 0 rgba(0,0,0,.5), 0 0 24px color-mix(in srgb, var(--rr-c) 55%, transparent);
+}
+#rollerRaceDashboardScreen .rrp__rank { display: flex; align-items: baseline; gap: 4px; margin-top: 8px; font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 900; }
+#rollerRaceDashboardScreen .rrp__rank-num { font-size: 120px; line-height: .9; color: #fff; font-variant-numeric: tabular-nums; }
+#rollerRaceDashboardScreen .rrp__rank-suf { font-size: 40px; color: #cfe3ff; }
+#rollerRaceDashboardScreen .rrp__rank-of { font-size: 22px; color: #7f90b0; margin-left: 10px; letter-spacing: .08em; }
+#rollerRaceDashboardScreen .rrp[data-pos="1"] .rrp__rank-num { color: #f5b50f; text-shadow: 0 0 30px rgba(245,181,15,.6); }
+#rollerRaceDashboardScreen .rrp[data-pos="2"] .rrp__rank-num { color: #dbe3ee; text-shadow: 0 0 24px rgba(219,227,238,.45); }
+#rollerRaceDashboardScreen .rrp[data-pos="3"] .rrp__rank-num { color: #e0904f; text-shadow: 0 0 24px rgba(224,144,79,.5); }
+#rollerRaceDashboardScreen .rrp__stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 26px 20px 0; }
+#rollerRaceDashboardScreen .rrp__stat {
+  --st: #38bdf8; text-align: center; padding: 10px 4px 8px; border-top: 3px solid var(--st);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--st) 14%, #0e1424), #080c18);
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%); box-shadow: inset 0 8px 14px -10px var(--st);
+}
+#rollerRaceDashboardScreen .rrp__stat--speed { --st: #a3e635; }
+#rollerRaceDashboardScreen .rrp__stat--dist { --st: #ff8c00; }
+#rollerRaceDashboardScreen .rrp__stat--gap { --st: #ff3b3b; }
+#rollerRaceDashboardScreen .rrp__stat label { display: block; margin: 0 0 4px; font: italic 800 11px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .24em; color: #9fb0cc; }
+#rollerRaceDashboardScreen .rrp__stat b { display: block; font: italic 900 38px/1 'Barlow Semi Condensed', sans-serif; font-variant-numeric: tabular-nums; color: #f4f8ff; text-shadow: 0 0 12px color-mix(in srgb, var(--st) 55%, transparent); }
+#rollerRaceDashboardScreen .rrp__stat small { display: block; margin-top: 3px; font: italic 800 11px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .14em; color: var(--st); text-transform: uppercase; }
+@media (max-width: 720px) {
+  #rollerRaceDashboardScreen .rrp__stats { grid-template-columns: repeat(2, 1fr); }
+  #rollerRaceDashboardScreen .rrp__name { font-size: 36px; }
+  #rollerRaceDashboardScreen .rrp__rank-num { font-size: 80px; }
+  #rollerRaceDashboardScreen .rrp__card { clip-path: none; }
+}
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rrp, #rollerRaceDashboardScreen .rrp__card { transition: none; } #rollerRaceDashboardScreen .rrp__card::after { animation: none; } }
