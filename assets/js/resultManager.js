@@ -70,6 +70,7 @@ if (typeof postJSONWithProxy !== 'function') {
   // 세션 제어
   // ---------------------------
   function startSession(userId, notes = '') {
+    try { archiveStaleCheckpoint(); } catch (e) {}
     state.currentTrainingSession = {
       userId: userId ?? null,
       startTime: new Date().toISOString(),
@@ -466,7 +467,7 @@ async function saveTrainingResult(extra = {}) {
           }
           
           // 워크아웃 정보
-          const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || null;
+          const workoutTitle = window.currentWorkout?.title || window.currentWorkout?.name || extra.workoutName || null;
           const workoutId = window.currentWorkout?.id || trainingResult.workoutId || extra.workoutId || null;
           
           // 거리(km): 스마트로라·속도계 센서 연결 시 속도 적산 거리 (모바일/통합 블루투스/노트북)
@@ -622,6 +623,7 @@ async function saveTrainingResult(extra = {}) {
 
      // 4. 결과 처리 및 반환
      if (firebaseSuccess) {
+       try { clearActiveCheckpoint(); } catch (e) {}
        try { window.stelvioShowSaveStatus && window.stelvioShowSaveStatus('saved'); } catch (e) {}
        console.log('[saveTrainingResult] 🎉 Firebase 저장 성공 + 로컬 백업 완료');
        return { 
@@ -633,6 +635,7 @@ async function saveTrainingResult(extra = {}) {
          mileageUpdate: window.lastMileageUpdate || null
        };
      } else if (localSaveSuccess) {
+       try { clearActiveCheckpoint(); } catch (e) {}
        // 서버 저장 실패: 미전송 큐에 보관 → 로그인/앱 시작/네트워크 복구 시 자동 재전송
        try { if (window.__pendingTrainingPayload) { window.stelvioQueuePendingTraining(window.__pendingTrainingPayload); } } catch (e) {}
        try { window.stelvioShowSaveStatus && window.stelvioShowSaveStatus('pending'); } catch (e) {}
@@ -966,6 +969,162 @@ async function saveTrainingResult(extra = {}) {
 // ---------------------------
   // 외부 접근용 API 추가
   // ---------------------------
+  // ---------------------------
+  // 훈련 도중 임시 저장(체크포인트) — 앱 종료·오류로 훈련이 끊겨도 마지막 시점까지의 기록을 보존
+  //  - 진행 중 세션을 30초마다 localStorage 에 저장(압축), 정상 저장 성공 시 삭제
+  //  - 다음 앱 실행(로그인 후)에 남은 체크포인트를 자동으로 훈련 기록으로 저장(save_key 동일 → 중복 없음)
+  // ---------------------------
+  var CP_KEY = 'stelvio_training_checkpoint';
+  var CP_OLD_KEY = 'stelvio_training_checkpoint_old';
+  var CP_INTERVAL_MS = 30000;
+  var CP_STALE_MS = 90000;      // 이 시간 이상 갱신이 없어야 "끊긴 세션"으로 간주(다른 탭 진행 중 오복구 방지)
+  var CP_MIN_SEC = 120;         // 2분 미만 세션은 복구하지 않음
+
+  function cpPack(arr) {
+    var out = [];
+    for (var i = 0; i < (arr || []).length; i++) {
+      var d = arr[i];
+      out.push([new Date(d.t).getTime(), d.v]);
+    }
+    return out;
+  }
+  function cpUnpack(arr) {
+    return (arr || []).map(function (x) { return { t: new Date(x[0]).toISOString(), v: x[1] }; });
+  }
+  function cpRead(key) {
+    try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; }
+  }
+  function cpWrite(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+  }
+
+  function writeCheckpoint() {
+    var ss = state.currentTrainingSession;
+    if (!ss || !ss.startTime || ss.endTime) return;
+    if (!ss.powerData || !ss.powerData.length) return;
+    var last = ss.powerData[ss.powerData.length - 1];
+    var dist = (window.mobileTrainingState && window.mobileTrainingState.distanceKm) ||
+      window._indivDistanceKm || (window.trainingMetrics && window.trainingMetrics.distanceKm) || null;
+    var cp = {
+      v: 1,
+      savedAt: Date.now(),
+      userId: ss.userId,
+      startTime: ss.startTime,
+      lastSampleAt: new Date(last.t).getTime(),
+      workoutId: (window.currentWorkout && window.currentWorkout.id) || '',
+      workoutName: (window.currentWorkout && (window.currentWorkout.title || window.currentWorkout.name)) || '',
+      distanceKm: dist,
+      power: cpPack(ss.powerData),
+      hr: cpPack(ss.hrData),
+      cad: cpPack(ss.cadenceData)
+    };
+    if (!cpWrite(CP_KEY, cp)) {
+      // 용량 초과 시 케이던스부터 덜어내고 재시도
+      cp.cad = [];
+      cpWrite(CP_KEY, cp);
+    }
+  }
+
+  function clearActiveCheckpoint() {
+    var ss = state.currentTrainingSession;
+    var cp = cpRead(CP_KEY);
+    if (cp && ss && cp.startTime === ss.startTime) localStorage.removeItem(CP_KEY);
+  }
+
+  // 새 세션 시작 시, 이전에 끊긴 체크포인트가 있으면 보관함으로 이동(덮어써서 잃지 않도록)
+  function archiveStaleCheckpoint() {
+    var cp = cpRead(CP_KEY);
+    if (!cp) return;
+    var old = cpRead(CP_OLD_KEY) || [];
+    old = old.filter(function (o) { return o.startTime !== cp.startTime; });
+    old.push(cp);
+    while (old.length > 3) old.shift();
+    cpWrite(CP_OLD_KEY, old);
+    localStorage.removeItem(CP_KEY);
+  }
+
+  async function recoverInterruptedSessions() {
+    var ss = state.currentTrainingSession;
+    if (ss && ss.startTime && !ss.endTime) return 0; // 진행 중에는 복구하지 않음
+    var uid = window.currentUser && (window.currentUser.id || window.currentUser.uid);
+    if (!uid) return -1;
+    if (typeof window.saveTrainingSession !== 'function') return -1;
+
+    var list = (cpRead(CP_OLD_KEY) || []).slice();
+    var cur = cpRead(CP_KEY);
+    if (cur && Date.now() - cur.savedAt > CP_STALE_MS) list.push(cur);
+    if (!list.length) return (cur ? -1 : 0); // 방금 갱신된 체크포인트만 있으면 잠시 후 다시 확인
+
+    var recovered = 0;
+    var keepOld = (cpRead(CP_OLD_KEY) || []);
+    for (var i = 0; i < list.length; i++) {
+      var cp = list[i];
+      var done = false;
+      if (cp.userId !== uid) continue; // 다른 사용자 기록은 건드리지 않음
+      var sec = Math.floor(((cp.lastSampleAt || cp.savedAt) - new Date(cp.startTime).getTime()) / 1000);
+      if (sec < CP_MIN_SEC || !cp.power || cp.power.length < 30) {
+        done = true; // 너무 짧은 세션은 폐기
+      } else {
+        var prev = state.currentTrainingSession;
+        try {
+          state.currentTrainingSession = {
+            userId: cp.userId,
+            startTime: cp.startTime,
+            endTime: new Date(cp.lastSampleAt || cp.savedAt).toISOString(),
+            segmentResults: [],
+            powerData: cpUnpack(cp.power),
+            hrData: cpUnpack(cp.hr),
+            cadenceData: cpUnpack(cp.cad),
+            notes: 'recovered_from_checkpoint'
+          };
+          var prevElapsed = window.lastElapsedTime;
+          window.lastElapsedTime = undefined;
+          var res = await saveTrainingResult({
+            userId: cp.userId,
+            workoutId: cp.workoutId || '',
+            workoutName: cp.workoutName || '',
+            elapsedTime: sec,
+            distance_km: cp.distanceKm,
+            completionType: 'recovered',
+            source: 'checkpoint_recovery'
+          });
+          window.lastElapsedTime = prevElapsed;
+          // 서버 저장 성공 또는 미전송 큐 보관까지 끝났으면 체크포인트 제거
+          done = !!(res && res.success);
+          if (done && res.source === 'firebase') recovered++;
+        } catch (e) {
+          console.warn('[checkpoint] 복구 저장 실패(다음 실행에 재시도):', e && e.message ? e.message : e);
+        } finally {
+          state.currentTrainingSession = prev;
+        }
+      }
+      if (done) {
+        keepOld = keepOld.filter(function (o) { return o.startTime !== cp.startTime; });
+        var curNow = cpRead(CP_KEY);
+        if (curNow && curNow.startTime === cp.startTime) localStorage.removeItem(CP_KEY);
+      }
+    }
+    cpWrite(CP_OLD_KEY, keepOld);
+    if (recovered && typeof window.showToast === 'function') {
+      window.showToast('중단된 훈련 기록 ' + recovered + '건을 복구해 저장했습니다');
+    }
+    return recovered;
+  }
+
+  setInterval(function () { try { writeCheckpoint(); } catch (e) {} }, CP_INTERVAL_MS);
+  window.addEventListener('pagehide', function () { try { writeCheckpoint(); } catch (e) {} });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) { try { writeCheckpoint(); } catch (e) {} } });
+  (function () {
+    var tries = 0;
+    var t = setInterval(async function () {
+      tries++;
+      var r = -1;
+      try { r = await recoverInterruptedSessions(); } catch (e) {}
+      // 처리할 것이 없거나(0) 처리 완료(>0)면 종료, 로그인 대기(-1)면 최대 2분 재시도
+      if (r >= 0 || tries > 24) clearInterval(t);
+    }, 5000);
+  })();
+
   function getCurrentSessionData() {
     return state.currentTrainingSession;
   }
@@ -1143,6 +1302,8 @@ async function saveTrainingResult(extra = {}) {
     // 새로 추가된 API
     getCurrentSessionData,
     calculateSessionStats,
+    recoverInterruptedSessions,
+    writeCheckpoint,
 
     // 별칭(호환)
     save: saveTrainingResult,
