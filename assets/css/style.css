@@ -38645,3 +38645,21 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrwp__x:hover { background: #ff3b3b; }
 @keyframes rrwpIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes rrwpPop { from { transform: scale(.88); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* ===== 2026-11-08 STELVIO Race: 환영 전광판 설정 창 ===== */
+#rollerRaceDashboardScreen .rrws { position: fixed; inset: 0; z-index: 2147482000; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.72); }
+#rollerRaceDashboardScreen .rrws.hidden { display: none; }
+#rollerRaceDashboardScreen .rrws__card {
+  width: min(520px, 100%); max-height: 92vh; overflow: auto; background: #0e1424; color: #fff; border: 2px solid #ff8c00;
+  box-shadow: 0 0 30px rgba(255,140,0,.35), 0 20px 50px rgba(0,0,0,.7); padding: 14px 16px 18px; display: grid; gap: 14px;
+}
+#rollerRaceDashboardScreen .rrws__head { display: flex; align-items: center; justify-content: space-between; font: italic 800 20px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .06em; }
+#rollerRaceDashboardScreen .rrws__x { width: 34px; height: 34px; border: 0; border-radius: 50%; background: #1b2338; color: #fff; cursor: pointer; font-size: 16px; }
+#rollerRaceDashboardScreen .rrws__x:hover { background: #ff3b3b; }
+#rollerRaceDashboardScreen .rrws__sec { display: grid; gap: 8px; padding: 12px; background: rgba(255,255,255,.04); border-left: 3px solid #22d3ee; }
+#rollerRaceDashboardScreen .rrws__sec h4 { margin: 0; font: italic 800 15px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .08em; color: #22d3ee; }
+#rollerRaceDashboardScreen .rrws__sec p { margin: 0; font-size: 12px; color: #9fb0cc; }
+#rollerRaceDashboardScreen .rrws__sec input[type=text] { width: 100%; box-sizing: border-box; height: 38px; padding: 0 10px; background: #070b18; color: #fff; border: 1px solid #2f4170; font-size: 15px; }
+#rollerRaceDashboardScreen .rrws__thumb { height: 150px; display: flex; align-items: center; justify-content: center; background: #070b18; border: 1px dashed #2f4170; color: #8fa0c0; font-size: 13px; overflow: hidden; }
+#rollerRaceDashboardScreen .rrws__thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+#rollerRaceDashboardScreen .rrws .rr-wp-menu { flex-wrap: wrap; }

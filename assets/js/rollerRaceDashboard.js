@@ -7199,6 +7199,12 @@ function rrWpRefreshMenu() {
   var shown = !!document.getElementById('rrWelcomePopup');
   if (pub) { pub.textContent = shown ? '내리기' : '게시'; pub.disabled = !has; pub.classList.toggle('is-on', shown); }
   if (del) del.hidden = !has;
+  var th = document.getElementById('rrWpThumb');
+  if (th) {
+    th.innerHTML = '';
+    if (has) { var im = document.createElement('img'); im.alt = '환영팝업 미리보기'; im.src = rrWpGet(); th.appendChild(im); }
+    else { var sp = document.createElement('span'); sp.textContent = '등록된 이미지 없음'; th.appendChild(sp); }
+  }
 }
 function rrWelcomePopupHide() {
   var el = document.getElementById('rrWelcomePopup');
@@ -7220,6 +7226,7 @@ function rrWelcomePopupShow() {
   el.querySelector('img').src = src;
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
   el.querySelector('.rrwp__x').addEventListener('click', rrWelcomePopupHide);
+  try { rrWsClose(); } catch (e) {}
   document.body.appendChild(el);
   document.addEventListener('keydown', rrWpKey, true);
   rrWpRefreshMenu();
@@ -7273,3 +7280,22 @@ function rrWpFromFile(file) {
 window.rrWelcomePopupToggle = rrWelcomePopupToggle;
 window.rrWelcomePopupDelete = rrWelcomePopupDelete;
 window.rrWelcomePopupHide = rrWelcomePopupHide;
+
+/* 환영 전광판 설정 창 */
+function rrWsOpen() {
+  var m = document.getElementById('rrWelcomeSettings');
+  if (!m) return;
+  var inp = document.getElementById('rrWelcomeInput');
+  if (inp) inp.value = rrWelcomeGet();
+  rrWpRefreshMenu();
+  m.classList.remove('hidden');
+}
+function rrWsClose() {
+  var m = document.getElementById('rrWelcomeSettings');
+  if (m) m.classList.add('hidden');
+}
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && !document.getElementById('rrWelcomePopup')) rrWsClose();
+});
+window.rrWsOpen = rrWsOpen;
+window.rrWsClose = rrWsClose;
