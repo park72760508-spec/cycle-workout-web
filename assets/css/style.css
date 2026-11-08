@@ -38584,3 +38584,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rrp, #rollerRaceDashboardScreen .rrp__card { transition: none; } #rollerRaceDashboardScreen .rrp__card::after { animation: none; } }
 @keyframes rrWelcomeShine { from { background-position: 100% 0; } to { background-position: -150% 0; } }
+
+/* 2026-11-08: 개인훈련 > 모바일 훈련 화면 — 속도계 블록·하단 통계 줄 바탕에 블랙 카본 패턴(그룹훈련 참석자 화면과 같은 톤, 격자는 2배 크기 12px) */
+#mobileDashboardScreen .mobile-main-content,
+#mobileDashboardScreen .mobile-stats-footer {
+  background-color: #0b0b0d !important;
+  background-image:
+    radial-gradient(120% 70% at 50% 0%, rgba(255,255,255,.07), transparent 60%),
+    linear-gradient(135deg, rgba(255,255,255,.06) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255,255,255,.06) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(0,0,0,.5) 25%, transparent 25%),
+    linear-gradient(45deg, rgba(0,0,0,.5) 25%, transparent 25%) !important;
+  background-size: 100% 100%, 12px 12px, 12px 12px, 12px 12px, 12px 12px !important;
+  background-position: 0 0, 0 0, 6px 0, 6px -6px, 0 6px !important;
+}
