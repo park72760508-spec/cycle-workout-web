@@ -37630,6 +37630,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothIndividualScreen #indiv-gauge-speed-labels text {
   font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
 }
+#bluetoothIndividualScreen .indiv-gauge-container svg #indiv-gauge-labels text,
+#bluetoothIndividualScreen .indiv-gauge-container svg #indiv-gauge-speed-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+}
 #bluetoothIndividualScreen #indiv-ui-current-power { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
 #bluetoothIndividualScreen #indiv-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
 
