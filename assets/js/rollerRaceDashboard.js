@@ -7034,6 +7034,11 @@ function rrWelcomeReplay() {
     if (box && typeof IntersectionObserver !== 'undefined') {
       new IntersectionObserver(function (en) { if (en[0] && en[0].isIntersecting) rrWelcomeReplay(); }).observe(box);
     } else rrWelcomeReplay();
+    // 30초마다 글자 입장 애니메이션 재생(화면에 보일 때만)
+    setInterval(function () {
+      var b = document.getElementById('rrWelcome');
+      if (b && b.offsetParent !== null && !document.hidden) rrWelcomeReplay();
+    }, 30000);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
