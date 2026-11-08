@@ -4028,11 +4028,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <!-- 투명 이미지 오버레이: Druk Wide(로컬 woff2) + Bebas Neue(영문·숫자 fallback) + Pretendard(한글) -->
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue:wght@700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=East+Sea+Dokdo&display=swap" rel="stylesheet" />
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:ital,wght@1,700;1,800;1,900&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261108avatar" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261108avatar2" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -35272,6 +35273,7 @@
   <!-- ========== 실내 평로라 대회 대시보드 화면 ========== -->
   <div id="rollerRaceDashboardScreen" class="screen">
     <div class="dashboard-header">
+      <div class="rr-welcome" id="rrWelcome" aria-live="polite"><span class="rr-welcome__text" id="rrWelcomeText"></span></div>
       <h1 class="race-title-animated" style="flex: 1; text-align: center;">
         <span class="race-title-icon race-logo-spin" role="img" aria-label="Stelvio"></span>
         <span class="race-title-text">STELVIO Race</span>
@@ -35370,6 +35372,10 @@
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
             <span>진단하기</span>
           </button>
+          <label class="rr-welcome-edit" title="화면 상단 왼쪽에 표시되는 환영 문구 (비우면 숨김)">
+            <span>환영 문구</span>
+            <input type="text" id="rrWelcomeInput" maxlength="40" placeholder="환영 문구 입력" autocomplete="off">
+          </label>
         </div>
       </div>
       
@@ -35436,6 +35442,14 @@
           <div class="form-group">
             <label>속도계 이름</label>
             <input type="text" id="speedometerName" placeholder="예: 속도계 1">
+          </div>
+          <div class="form-group rr-avatar-group">
+            <label>아바타 사진 <small style="color:#888;font-weight:400;">(동명이인일 때 직접 지정 · 이 기기에 저장)</small></label>
+            <div class="rr-avatar-row">
+              <span class="rr-av" id="rrAvatarPreview" style="display:none;width:56px;height:56px;font-size:24px;"></span>
+              <label class="btn btn-secondary btn-sm" style="margin:0;cursor:pointer;">사진 선택<input type="file" accept="image/*" style="display:none" onchange="rrAvatarPick(this)"></label>
+              <button type="button" class="btn btn-sm btn-danger" id="rrAvatarDelBtn" style="display:none" onclick="rrAvatarRemove()">삭제</button>
+            </div>
           </div>
           <div class="form-group">
             <label>ANT+ 디바이스 선택</label>
@@ -36523,7 +36537,7 @@
   <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
 
   <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js?v=20261108avatar"></script>
+  <script src="assets/js/rollerRaceDashboard.js?v=20261108avatar2"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js?v=20261104dur1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->

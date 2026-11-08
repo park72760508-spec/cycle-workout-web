@@ -878,18 +878,31 @@ function rrAvatarEnsureMap() {
     }
   }).catch(function () {}).then(function () { rrAvatarLoading = false; });
 }
-function rrAvatarUrl(name) {
+/** 수동 업로드(동명이인 대비): 트랙 번호별로 저장 — 이 기기에 보관, 회원 자동 매칭보다 우선 */
+function rrAvatarOverrides() {
+  try { return JSON.parse(localStorage.getItem('rrTrackAvatars') || '{}') || {}; } catch (e) { return {}; }
+}
+function rrAvatarSetOverride(tid, dataUrl) {
+  var o = rrAvatarOverrides();
+  if (dataUrl) o[String(tid)] = dataUrl; else delete o[String(tid)];
+  try { localStorage.setItem('rrTrackAvatars', JSON.stringify(o)); return true; } catch (e) { return false; }
+}
+function rrAvatarUrl(name, tid) {
+  if (tid != null) { var ov = rrAvatarOverrides()[String(tid)]; if (ov) return ov; }
   rrAvatarEnsureMap();
   return (rrAvatarMap && rrAvatarMap[String(name || '').trim().toLowerCase()]) || '';
 }
 /** el(.rr-av) 에 이름 기준 아바타 표시 */
-function rrSetAvatar(el, name) {
+function rrSetAvatar(el, name, tid) {
   if (!el) return;
   var nm = String(name || '').trim();
   el.dataset.name = nm;
-  if (!nm) { el.style.display = 'none'; el.innerHTML = ''; el.dataset.k = ''; return; }
-  var url = rrAvatarUrl(nm);
-  var want = url ? 'i:' + url : 't:' + nm.charAt(0);
+  if (tid != null) el.dataset.tid = String(tid);
+  else tid = el.dataset.tid != null && el.dataset.tid !== '' ? el.dataset.tid : null;
+  var hasOv = tid != null && !!rrAvatarOverrides()[String(tid)];
+  if (!nm && !hasOv) { el.style.display = 'none'; el.innerHTML = ''; el.dataset.k = ''; return; }
+  var url = rrAvatarUrl(nm, tid);
+  var want = url ? 'i:' + url.length + url.slice(-24) : 't:' + nm.charAt(0);
   el.style.display = '';
   if (el.dataset.k === want) return;
   el.dataset.k = want;
@@ -897,15 +910,66 @@ function rrSetAvatar(el, name) {
   if (url) {
     var img = document.createElement('img');
     img.alt = ''; img.decoding = 'async'; img.src = url;
-    img.onerror = function () { el.dataset.k = ''; el.textContent = nm.charAt(0).toUpperCase(); };
+    img.onerror = function () { el.dataset.k = ''; el.textContent = (nm || '?').charAt(0).toUpperCase(); };
     el.appendChild(img);
   } else {
-    el.textContent = nm.charAt(0).toUpperCase();
+    el.textContent = (nm || '?').charAt(0).toUpperCase();
   }
 }
 function rrAvatarRefreshAll() {
   document.querySelectorAll('#rollerRaceDashboardScreen .rr-av[data-name]').forEach(function (el) { rrSetAvatar(el, el.dataset.name); });
 }
+/** 이미지 파일 → 중앙 정사각 크롭 160px JPEG dataURL */
+function rrAvatarFromFile(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('이미지 파일만 선택할 수 있습니다.'));
+    var fr = new FileReader();
+    fr.onerror = function () { reject(new Error('파일을 읽지 못했습니다.')); };
+    fr.onload = function () {
+      var img = new Image();
+      img.onerror = function () { reject(new Error('이미지를 열지 못했습니다.')); };
+      img.onload = function () {
+        var N = 160, c = document.createElement('canvas'); c.width = N; c.height = N;
+        var side = Math.min(img.width, img.height), sx = (img.width - side) / 2, sy = (img.height - side) / 2;
+        var g = c.getContext('2d'); g.drawImage(img, sx, sy, side, side, 0, 0, N, N);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function rrAvatarModalRefresh() {
+  var tid = window.currentTargetSpeedometerId;
+  var box = document.getElementById('rrAvatarPreview');
+  var del = document.getElementById('rrAvatarDelBtn');
+  if (!box) return;
+  var ov = tid != null ? rrAvatarOverrides()[String(tid)] : '';
+  var nm = (document.getElementById('speedometerName') || {}).value || '';
+  box.dataset.tid = tid != null ? String(tid) : '';
+  rrSetAvatar(box, nm || '?', tid);
+  box.style.display = 'inline-flex';
+  if (del) del.style.display = ov ? '' : 'none';
+}
+window.rrAvatarPick = function (input) {
+  var f = input && input.files && input.files[0];
+  var tid = window.currentTargetSpeedometerId;
+  if (!f || tid == null) return;
+  rrAvatarFromFile(f).then(function (url) {
+    if (!rrAvatarSetOverride(tid, url)) { if (typeof showToast === 'function') showToast('사진을 저장하지 못했습니다(저장 공간 부족).', 'error'); return; }
+    rrAvatarModalRefresh();
+    updateSpeedometerListUI();
+    if (typeof showToast === 'function') showToast('아바타 사진이 적용되었습니다.');
+  }).catch(function (e) { if (typeof showToast === 'function') showToast(e.message || '사진 처리 실패', 'error'); });
+  input.value = '';
+};
+window.rrAvatarRemove = function () {
+  var tid = window.currentTargetSpeedometerId;
+  if (tid == null) return;
+  rrAvatarSetOverride(tid, null);
+  rrAvatarModalRefresh();
+  updateSpeedometerListUI();
+};
 
 const RR_RANK_ITEM_HTML = `
   <div class="rank-item-content">
@@ -934,7 +998,7 @@ function rrFillRankItem(item, sp, rank, leaderDist) {
   if (!sp) {
     if (posEl) posEl.textContent = '-';
     if (nameEl) nameEl.textContent = '-';
-    rrSetAvatar(item.querySelector('.rr-av'), '');
+    rrSetAvatar(item.querySelector('.rr-av'), '', -1);
     if (valEl) valEl.textContent = '0.00';
     if (unitEl) unitEl.textContent = 'km';
     if (chgEl) chgEl.textContent = '';
@@ -948,7 +1012,7 @@ function rrFillRankItem(item, sp, rank, leaderDist) {
   if (barEl) barEl.style.background = getMascotColor(sp.id);
   item.style.setProperty('--rr-c', getMascotColor(sp.id));
   if (nameEl) nameEl.textContent = sp.pairingName || sp.name || '-';
-  rrSetAvatar(item.querySelector('.rr-av'), sp.pairingName || '');
+  rrSetAvatar(item.querySelector('.rr-av'), sp.pairingName || '', sp.id);
   if (rank === 1) {
     if (valEl) valEl.textContent = sp.totalDistance.toFixed(2);
     if (unitEl) unitEl.textContent = 'km';
@@ -1827,6 +1891,7 @@ async function pairSpeedometer(speedometerId) {
       }
       // 페어링 이름이 있으면 표시, 없으면 빈 값
       nameInput.value = speedometer.pairingName || '';
+      try { rrAvatarModalRefresh(); } catch (e) {}
     }
     if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
     // 기존 showAddSpeedometerModal 함수 호출 (자동 활성화 비활성화)
@@ -2499,7 +2564,7 @@ function updateSpeedometerListUI() {
       </div>
     `;
     listEl.appendChild(item);
-    rrSetAvatar(item.querySelector('.rr-av--track'), pairingName);
+    rrSetAvatar(item.querySelector('.rr-av--track'), pairingName, speedometer.id);
     
     // 초기 속도 및 거리 표시 설정
     updateStraightTrackStats(speedometer.id, speedometer.currentSpeed || 0, speedometer.totalDistance || 0);
@@ -6896,3 +6961,33 @@ function rrPlaceRankBadges() {
 }
 window.addEventListener('resize', () => { clearTimeout(window.__rrBadgeT); window.__rrBadgeT = setTimeout(rrPlaceRankBadges, 150); });
 setInterval(rrPlaceRankBadges, 1500);
+
+
+/* ===== 2026-11-08: 화면 상단 왼쪽 환영 문구 (메뉴의 '환영 문구' 입력란에서 수정, 이 기기에 저장) ===== */
+var RR_WELCOME_DEFAULT = '이종혁과 함께하는 유난스런 자덕생활';
+function rrWelcomeGet() {
+  try { var v = localStorage.getItem('rrWelcomeText'); return v === null ? RR_WELCOME_DEFAULT : v; } catch (e) { return RR_WELCOME_DEFAULT; }
+}
+function rrWelcomeApply() {
+  var t = rrWelcomeGet().trim();
+  var box = document.getElementById('rrWelcome'), el = document.getElementById('rrWelcomeText');
+  if (!box || !el) return;
+  el.textContent = t;
+  box.style.display = t ? '' : 'none';
+}
+(function rrWelcomeInit() {
+  function init() {
+    var inp = document.getElementById('rrWelcomeInput');
+    rrWelcomeApply();
+    if (!inp || inp.dataset.bound) return;
+    inp.dataset.bound = '1';
+    inp.value = rrWelcomeGet();
+    var save = function () {
+      try { localStorage.setItem('rrWelcomeText', inp.value.trim()); } catch (e) {}
+      rrWelcomeApply();
+    };
+    inp.addEventListener('input', save);
+    inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
