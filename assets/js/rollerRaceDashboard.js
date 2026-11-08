@@ -2021,19 +2021,33 @@ function saveSpeedometerPairing() {
             speedometer: speedometer
         });
         
-        // 속도계 목록 UI 업데이트
-        updateSpeedometerListUI();
-        
-        // 속도계 그리드 재생성 (이름이 포함되도록)
-        createSpeedometerGrid();
+        const __inRace = (window.rollerRaceState.raceState === 'running' || window.rollerRaceState.raceState === 'paused');
+        if (__inRace) {
+            // 경기 중: 전체 화면을 다시 그리지 않고 해당 트랙의 이름·ID·아바타만 갱신 (다른 트랙·경기 진행은 그대로)
+            try {
+                const av = document.getElementById(`track-avatar-${targetId}`);
+                const item = av ? av.closest('.speedometer-list-item') : null;
+                if (item) {
+                    const idEl = item.querySelector('.list-item-id');
+                    if (idEl) idEl.textContent = `ID: ${speedometer.deviceId || '미설정'}`;
+                    const nm = item.querySelector('.track-name-text');
+                    if (nm) nm.textContent = speedometer.pairingName || '';
+                    av.setAttribute('data-name', speedometer.pairingName || '');
+                    rrSetAvatar(av, speedometer.pairingName || '', targetId);
+                }
+            } catch (e) { console.warn('[센서 교체 부분 갱신]', e); }
+        } else {
+            // 속도계 목록 UI 업데이트
+            updateSpeedometerListUI();
+            // 속도계 그리드 재생성 (이름이 포함되도록)
+            createSpeedometerGrid();
+        }
         
         // 페어링 이름 업데이트 (그리드 생성 후)
         updateSpeedometerPairingName(targetId, speedometer.pairingName || '');
 
-        // 경기 중 센서 교체: 그리드 재생성으로 비워진 표시를 누적 거리 기준으로 복원
-        if (window.rollerRaceState.raceState === 'running' || window.rollerRaceState.raceState === 'paused') {
-            try { updateSpeedometerData(targetId, 0, speedometer.totalDistance || 0); } catch (e) {}
-            try { updateAllStraightTrackMascots(); } catch (e) {}
+        // 경기 중 센서 교체 안내 (경기는 그대로 진행, 누적 거리 유지)
+        if (__inRace) {
             if (typeof showToast === 'function') showToast(`트랙${targetId} 센서 교체 완료 — 누적 거리 ${(speedometer.totalDistance || 0).toFixed(2)}km 유지, 새 센서 신호 수신 대기 중`);
         }
         
@@ -2052,8 +2066,8 @@ function saveSpeedometerPairing() {
             if (speedometer.deviceId && (window.rollerRaceState.raceState === 'idle' || !window.rollerRaceState.raceState)) {
                 updateSpeedometerConnectionStatus(targetId, true, 'ready');
             }
-            // 속도계 목록도 다시 업데이트
-            updateSpeedometerListUI();
+            // 속도계 목록도 다시 업데이트 (경기 중에는 트랙 화면을 다시 그리지 않음)
+            if (!__inRace) updateSpeedometerListUI();
         }, 100);
         
         closeAddSpeedometerModal();
@@ -2069,7 +2083,7 @@ function saveSpeedometerPairing() {
         }
         
         // USB가 연결되어 있다면 바로 스캔 시작하여 연결 확인
-        if (window.antState.usbDevice) {
+        if (window.antState.usbDevice && !__inRace) {
             startContinuousScan(); 
         }
     }
@@ -2107,6 +2121,16 @@ function saveSpeedometerPairing() {
  */
 async function startContinuousScan() {
   if (!window.antState.usbDevice) return;
+
+  // 경기 진행/일시정지 중 이미 스캔이 켜져 있으면 Reset(0x4A)으로 스틱을 재시작하지 않음
+  // (재시작하면 모든 트랙의 센서 수신이 끊겨 경기가 중단됨 — 센서 교체는 경기 흐름을 방해하지 않아야 함)
+  {
+    const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+    if ((rs === 'running' || rs === 'paused') && window.antState.isScanningActive) {
+      console.log('[ANT+] 경기 중 — 이미 스캔 중이므로 수신기 재초기화 생략');
+      return;
+    }
+  }
   
   // [수정] 중복 실행 방지 (이미 초기화 중이면 차단)
   if (window.antState.isInitializing) {
