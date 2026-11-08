@@ -1386,7 +1386,7 @@
   function loadSubwayData() {
     if (sub.data || sub.loading) return;
     sub.loading = true;
-    fetch('assets/data/kr-subway.json?v=20261102st').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+    fetch('assets/data/kr-subway.json?v=20261108auto').then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       sub.loading = false;
       if (!d || !Array.isArray(d.stations)) return;
       sub.data = d;
@@ -1532,7 +1532,7 @@
   function loadSubwayLines() {
     if (subLines.data) return Promise.resolve(subLines.data);
     if (!subLines.loading) {
-      subLines.loading = fetch('assets/data/kr-subway-lines.json?v=20261103ln').then(function (r) { return r.ok ? r.json() : null; })
+      subLines.loading = fetch('assets/data/kr-subway-lines.json?v=20261108auto').then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) { subLines.data = d; subLines.loading = null; return d; }).catch(function () { subLines.loading = null; return null; });
     }
     return subLines.loading;
@@ -2616,7 +2616,7 @@
   var BUS_MIN_ZOOM = 15.5;   // 표시 숫자 16 이상
   var BUS_LABEL_ZOOM = 17.5; // 표시 숫자 18 이상: 정류장 이름
   var BUS_PREF = 'stelvioOutdBus';
-  var BUS_DATA_V = '20261107gz';
+  var BUS_DATA_V = '20261108auto';
   var BUS_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M6 2h12a3 3 0 0 1 3 3v11a2 2 0 0 1-1 1.73V20a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1.5h-9V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2.27A2 2 0 0 1 3 16V5a3 3 0 0 1 3-3zm0 3.5V11h12V5.5H6zM7 15.75a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5zm10 0a1.25 1.25 0 1 0 0-2.5 1.25 1.25 0 0 0 0 2.5z"/></svg>';
   var bus = { on: (function () { try { return localStorage.getItem(BUS_PREF) !== '0'; } catch (e) { return true; } })(),
     index: null, idxLoading: false, tiles: {}, layer: null, shown: '', stops: [] };
