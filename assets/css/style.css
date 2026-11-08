@@ -38669,9 +38669,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .rrws__opt input[type=color] { width: 40px; height: 28px; padding: 0; border: 1px solid #2f4170; background: none; cursor: pointer; }
 #rollerRaceDashboardScreen .rrws__opt input:disabled { opacity: .4; }
 
-/* 환영팝업 하단 중앙 STELVIO 로고 */
+/* 환영팝업: 이미지 블럭 안쪽 하단 중앙에 STELVIO 로고(아래 여백 포함) */
+.rrwp__box {
+  position: relative; display: inline-flex; max-width: 92vw; max-height: 92vh;
+  animation: rrwpPop .55s cubic-bezier(.2,.9,.3,1.2), rrwpFloat 4.5s ease-in-out .6s infinite;
+}
+.rrwp__box .rrwp__img { animation: none; max-width: 92vw; max-height: 92vh; }
 .rrwp__logo {
-  position: absolute; left: 50%; bottom: max(18px, 3vh); transform: translateX(-50%); width: clamp(72px, 11vh, 130px); height: auto;
+  position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); width: clamp(56px, 16%, 120px); height: auto;
   pointer-events: none; user-select: none;
-  filter: drop-shadow(0 0 6px rgba(255,255,255,.55)) drop-shadow(0 2px 8px rgba(0,0,0,.6)); animation: rrwpIn .6s ease-out .25s both;
+  filter: drop-shadow(0 0 5px rgba(255,255,255,.6)) drop-shadow(0 2px 6px rgba(0,0,0,.55));
 }
