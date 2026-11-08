@@ -735,8 +735,6 @@ function updateSpeedometerData(speedometerId, speed, distance) {
     rrSetDigital(distanceValueEl, distance.toFixed(2));
   }
   
-  // 속도가 0보다 크면 트랙 아바타 테두리 네온 점멸
-  try { const __av = document.getElementById(`track-avatar-${speedometerId}`); if (__av) __av.classList.toggle('rr-av--live', speed > 0); } catch (e) {}
   // 직선 트랙 내 속도 및 거리 표시 업데이트
   updateStraightTrackStats(speedometerId, speed, distance);
   
@@ -2591,7 +2589,7 @@ function updateSpeedometerListUI() {
           </g>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
-          <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)">
+          <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)" style="--rr-c:${getMascotColor(speedometer.id)}">
             <!-- 펄스 효과용 빨간색 원 (깜빡임 끝에 퍼지는 효과) -->
             <g class="mascot-pulse-ring" id="mascot-pulse-ring-${speedometer.id}">
               <ellipse class="rear-pulse rp1" cx="-16.5" cy="0" rx="4.2" ry="2.2" fill="${getMascotColor(speedometer.id)}" fill-opacity="0.7" stroke="${getMascotColor(speedometer.id)}" stroke-width="1" vector-effect="non-scaling-stroke" opacity="0"/>
@@ -3036,9 +3034,12 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   // 속도값이 인지되면 마스코트 색깔띠 원에 깜빡임 효과 및 펄스 효과 적용
   const mascotRingEl = document.getElementById(`mascot-color-ring-${speedometerId}`);
   const mascotPulseEl = document.getElementById(`mascot-pulse-ring-${speedometerId}`);
+  const mascotEl = document.getElementById(`straight-mascot-${speedometerId}`);
   if (mascotRingEl) {
     mascotRingEl.classList.toggle('blinking', speed > 0);
   }
+  // 속도>0: 트랙을 달리는 선수 아바타(마스코트)에 네온 점멸
+  if (mascotEl) mascotEl.classList.toggle('rr-neon', speed > 0);
 }
 
 /**

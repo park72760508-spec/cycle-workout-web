@@ -38604,5 +38604,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   0%, 100% { box-shadow: 0 0 2px color-mix(in srgb, var(--rr-c, #22d3ee) 40%, transparent), 0 1px 3px rgba(0,0,0,.6); border-color: color-mix(in srgb, var(--rr-c, #22d3ee) 45%, #1b2338); }
   50% { box-shadow: 0 0 6px var(--rr-c, #22d3ee), 0 0 14px var(--rr-c, #22d3ee), 0 0 24px color-mix(in srgb, var(--rr-c, #22d3ee) 70%, transparent); border-color: #fff; }
 }
-#rollerRaceDashboardScreen .rr-av.rr-av--live { animation: rrAvNeon 1s ease-in-out infinite; }
-@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rr-av.rr-av--live { animation-duration: 2.4s; } }
+#rollerRaceDashboardScreen .rank-item .rr-av.rr-av--live { animation: rrAvNeon 1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rank-item .rr-av.rr-av--live { animation-duration: 2.4s; } }
+
+/* 2026-11-08 STELVIO Race: 속도>0 트랙을 달리는 선수 아바타(마스코트) 네온 점멸 */
+@keyframes rrMascotNeon {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 3px var(--rr-c, #22d3ee)) drop-shadow(0 0 7px var(--rr-c, #22d3ee)) drop-shadow(0 0 12px var(--rr-c, #22d3ee)); }
+}
+#rollerRaceDashboardScreen .straight-race-mascot.rr-neon { animation: rrMascotNeon 1s ease-in-out infinite; }
