@@ -1896,7 +1896,51 @@
       }
       var nmS = function (x) { return subLiveName(x).replace(/지선$/, ''); };
       var isBranchTrain = function (t) { return /지선/.test(t.st + t.to) || !!brOnly[nmS(t.to)] || !!brOnly[nmS(t.st)]; };
+      /* 2026-11-09 갈라지는 호선(1호선 연천↔인천 / 광운대↔신창 등): 광운대~구로처럼 겹치는 역의 열차는 어느 노선 소속인지 모호해 양쪽에 모두 나왔음.
+       * 소속 판정: ①그 역이 한 노선에만 있으면 확정 ②종착역이 한 노선에만 있으면 확정 ③종착역이 어느 노선에도 없으면(서동탄·광명 등) 좌표가 가장 가까운 노선
+       * ④열차번호 이력(확정된 열차번호는 기억) ⑤열차번호 앞 2자리(같은 계열 열차는 같은 노선) 다수결 — 그래도 모르면 겹친 노선 모두에 표시 */
+      var asgOf = null;
+      if (!hasLoop && seqs.length > 1 && ldS && ldS.ok) {
+        var A = el.__asg;
+        if (!A || A.li !== el.__li) A = el.__asg = { li: el.__li, byNo: {}, votes: {} };
+        var allNm = seqs.map(function (q) { return q.map(function (si) { return st[si] ? subLiveName(st[si].n) : ''; }); });
+        var inSeq = function (i, nm) { return allNm[i].indexOf(nm) >= 0; };
+        var stByName = el.__stByName;
+        if (!stByName) { stByName = el.__stByName = {}; st.forEach(function (x, i) { if (x) stByName[subLiveName(x.n)] = i; }); }
+        var nearSeq = function (c, nm) {
+          var di = stByName[nm]; if (di == null) return c;
+          var best = 1e9, bi = c;
+          c.forEach(function (i) {
+            var m = 1e9; seqs[i].forEach(function (si) { if (st[si]) m = Math.min(m, subStDistKm(di, si)); });
+            if (m < best - 1e-6) { best = m; bi = [i]; } else if (Math.abs(m - best) <= 1e-6 && bi.indexOf(i) < 0) bi = bi.concat([i]);
+          });
+          return bi;
+        };
+        asgOf = {};
+        var pend = [];
+        ldS.items.forEach(function (t) {
+          var sn = nmS(t.st), dn = nmS(t.to), no = String(t.no || ''), c = [];
+          allNm.forEach(function (nm, i) { if (nm.indexOf(sn) >= 0) c.push(i); });
+          if (c.length < 2) { if (c.length === 1 && no) { A.byNo[no] = c[0]; var pf = no.slice(0, 2); (A.votes[pf] = A.votes[pf] || {})[c[0]] = ((A.votes[pf] || {})[c[0]] || 0) + 1; } asgOf[no || (t.st + '>' + t.to)] = c; return; }
+          var c2 = c.filter(function (i) { return inSeq(i, dn); });
+          if (c2.length === 1) { A.byNo[no] = c2[0]; asgOf[no] = c2; return; }
+          pend.push({ t: t, no: no, c: c2.length ? c2 : c, dn: dn, hasDest: c2.length > 0 });
+        });
+        pend.forEach(function (x) {
+          var c = x.c;
+          if (!x.hasDest) c = nearSeq(c, x.dn);
+          if (c.length > 1 && x.no && A.byNo[x.no] != null && c.indexOf(A.byNo[x.no]) >= 0) c = [A.byNo[x.no]];
+          if (c.length > 1) {
+            var v = A.votes[x.no.slice(0, 2)] || {}, bi = -1, bn = 0, tie = false;
+            c.forEach(function (i) { var n2 = v[i] || 0; if (n2 > bn) { bn = n2; bi = i; tie = false; } else if (n2 === bn && n2 > 0) tie = true; });
+            if (bi >= 0 && !tie) c = [bi];
+          }
+          asgOf[x.no || (x.t.st + '>' + x.t.to)] = c;
+        });
+      }
+      var meIdx = seqs.indexOf(seq);
       if (ldS && ldS.ok) ldS.items.forEach(function (t) {
+        if (asgOf) { var ac = asgOf[String(t.no || '') || (t.st + '>' + t.to)]; if (ac && ac.length && ac.indexOf(meIdx) < 0) return; }
         if (hasLoop && isBranchTrain(t) === isLoop) return;
         var k = names.indexOf(nmS(t.st));
         if (k < 0) return;
