@@ -38698,3 +38698,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-09 좌석 정보가 없는 버스 노선 안내(빨강) */
 #outdoorRideScreen .outd-busrt__live { flex-wrap: wrap; }
 #outdoorRideScreen .outd-busrt__live .outd-busrt__nosr { flex: 0 0 auto; color: #dc2626; font-size: 12px; font-weight: 800; }
+
+/* 2026-11-09 전체 경로 보기 버튼: 오른쪽 열에서 지하철(164) · 버스 정류장(212) 버튼과 겹치지 않게 그 위로 */
+#outdoorRideScreen .outd-overview-btn { bottom: 260px; }
+#outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 212px; }
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-overview-btn { bottom: 260px; }
+  #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 212px; }
+}
