@@ -38740,20 +38740,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-primer__b { height: 40px; padding: 0 24px; border: 0; cursor: pointer; font: italic 800 15px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; background: #1b2338; color: #fff; clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%); }
 .outd-primer__b--ok { background: #ff8c00; color: #14100a; }
 
-/* 2026-11-10 루트맵 속도계 숫자·단위: STELVIO Race 속도계와 같은 레이스 테마(Barlow Semi Condensed 이탤릭 800·고정폭 숫자·이탤릭 단위) */
+/* 2026-11-10 루트맵 속도계 숫자·단위: 그룹훈련 참석자 훈련 화면(#mobileDashboardScreen) 속도계와 같은 테마
+   숫자 = Barlow Semi Condensed 이탤릭 800 + 고정폭, 현재 속도 = 청록 글로우, 단위 = 이탤릭 800 · 자간 .24em · #9fb0cc */
 #outdoorRideScreen #outd-ui-speed,
 #outdoorRideScreen #outd-ui-speed-dec,
 #outdoorRideScreen #outd-ui-distance,
 #outdoorRideScreen #outd-ui-distance-dec {
-  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: 0;
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: 0;
 }
-#outdoorRideScreen #outd-ui-speed, #outdoorRideScreen #outd-ui-speed-dec { fill: #ffffff; }
-#outdoorRideScreen #outd-ui-speed-dec, #outdoorRideScreen #outd-ui-distance-dec { font-weight: 600; opacity: .85; }
+#outdoorRideScreen #outd-ui-speed, #outdoorRideScreen #outd-ui-speed-dec { fill: #ffffff; filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
+#outdoorRideScreen #outd-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
+#outdoorRideScreen #outd-ui-distance, #outdoorRideScreen #outd-ui-distance-dec { fill: #ff8c00; }
 #outdoorRideScreen #outdGaugeBody text:not([id]) {
-  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-weight: 700; letter-spacing: .08em; fill: #8fa0c0; text-transform: uppercase;
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; letter-spacing: .24em; fill: #9fb0cc !important; text-transform: none;
 }
-#outdoorRideScreen .outd-exp-stats__item b, #outdoorRideScreen .outd-exp-stats__item small {
-  font-family: 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; font-style: italic; font-variant-numeric: tabular-nums;
-}
-#outdoorRideScreen .outd-exp-stats__item b { font-weight: 800; }
-#outdoorRideScreen .outd-exp-stats__item small { font-weight: 700; letter-spacing: .06em; color: #8fa0c0; text-transform: uppercase; }
+#outdoorRideScreen .outd-exp-stats__item b { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
+#outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: .12em; color: #9fb0cc; }
