@@ -13,10 +13,14 @@ permissions:
   pages: write
   id-token: write
 
-# 연달아 푸시하면 이전 배포는 취소하고 최신 커밋만 배포
+# 2026-11-10 배포 실패 원인 분석 반영(실패 8건 중 사이트 크기가 원인인 것은 없었음 — 업로드 5~9초, 크기 188MB 로 성공·실패 동일):
+#  ① 동기화(syncing_files) 중인 배포를 새 푸시가 취소(cancel-in-progress: true) → 같은 배포가 여러 번 취소돼 끝내 못 올라감
+#     → false: 진행 중인 배포는 끝까지 두고, 대기 중인 것은 가장 최신 커밋 하나만 남김(GitHub 기본 동작)
+#  ② gh run rerun 으로 재시도하면 같은 이름(github-pages) 업로드 파일이 시도마다 쌓여 'Multiple artifacts' 로 배포 거부
+#     → 업로드 파일 이름에 시도 번호를 붙여 재시도해도 충돌하지 않게 함
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -42,10 +46,12 @@ jobs:
 
       - uses: actions/upload-pages-artifact@v3
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
-          # 파일 동기화(syncing_files)가 느린 날이 있어 기본 10분 → 30분까지 기다림
+          artifact_name: github-pages-${{ github.run_attempt }}
+          # 파일 동기화(syncing_files)가 느린 날이 있어 기본 10분 → 30분까지 기다림(액션이 허용하는 최대는 10분)
           timeout: 1800000
