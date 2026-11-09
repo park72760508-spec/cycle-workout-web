@@ -38776,3 +38776,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item small { color: #ffffff !important; text-transform: none; }
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child b { color: #ffffff; text-shadow: 0 0 6px rgba(34, 211, 238, .45); }
+
+/* 2026-11-10 지하철·버스 노선 버튼: 오른쪽 → 왼쪽 즐겨찾기 버튼 위로. 왼쪽 줄(아래→위): 길찾기 8 · 즐겨찾기 56 · 지하철 110 · 버스 158 · 재탐색 · 초기화 */
+#outdoorRideScreen .outd-subway-btn { left: 8px; right: auto; bottom: 110px; }
+#outdoorRideScreen .outd-bus-btn { left: 8px; right: auto; bottom: 158px; }
+#outdoorRideScreen .outd-reroute-btn { bottom: 206px; }
+#outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
+#outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-reroute-btn { bottom: 158px; }
+#outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-route-reset-btn { bottom: 206px; }
+/* 오른쪽 줄은 비었으므로 전체 경로 보기 버튼은 원래 높이로 */
+#outdoorRideScreen .outd-overview-btn,
+#outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 158px; }
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen .outd-subway-btn { bottom: 110px; }
+  #outdoorRideScreen .outd-bus-btn { bottom: 158px; }
+  #outdoorRideScreen .outd-reroute-btn { bottom: 206px; }
+  #outdoorRideScreen .outd-route-reset-btn { bottom: 254px; }
+  #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-reroute-btn { bottom: 158px; }
+  #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-route-reset-btn { bottom: 206px; }
+  #outdoorRideScreen .outd-overview-btn,
+  #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 110px; }
+}
