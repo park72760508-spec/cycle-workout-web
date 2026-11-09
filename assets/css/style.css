@@ -38707,3 +38707,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #outdoorRideScreen .outd-overview-btn { bottom: 260px; }
   #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 212px; }
 }
+
+/* 2026-11-10 환영 문구 글꼴 선택 */
+#rollerRaceDashboardScreen .rrws__opt select { flex: 1; height: 34px; background: #070b18; color: #fff; border: 1px solid #2f4170; padding: 0 8px; font-size: 14px; }
+#rollerRaceDashboardScreen .rrws__fontprev { padding: 8px 10px; font-size: 28px; line-height: 1.2; color: #ffd27a; background: #070b18; border: 1px dashed #2f4170; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -7038,10 +7038,65 @@ var RR_WELCOME_DEFAULT = '이종혁과 함께하는 유난스런 자덕생활';
 function rrWelcomeGet() {
   try { var v = localStorage.getItem('rrWelcomeText'); return v === null ? RR_WELCOME_DEFAULT : v; } catch (e) { return RR_WELCOME_DEFAULT; }
 }
+/** 환영 문구 글꼴 목록(STELVIO Race 테마: 레이싱·스포츠·붓글씨) */
+var RR_WELCOME_FONTS = [
+  { id: 'brush', name: '동해 붓글씨 (기본)', css: "'East Sea Dokdo', 'Nanum Brush Script', cursive", scale: 1 },
+  { id: 'dokdo', name: '독도 손글씨', css: "'Dokdo', 'East Sea Dokdo', cursive", scale: 0.9 },
+  { id: 'blackhan', name: '블랙한산스 (굵은 스포츠)', css: "'Black Han Sans', 'Noto Sans KR', sans-serif", scale: 0.8 },
+  { id: 'gasoek', name: '가속 원 (강한 헤드라인)', css: "'Gasoek One', 'Black Han Sans', sans-serif", scale: 0.8 },
+  { id: 'dohyeon', name: '도현 (각진 레이싱)', css: "'Do Hyeon', 'Noto Sans KR', sans-serif", scale: 0.85 },
+  { id: 'gugi', name: '구기 (게임 스타일)', css: "'Gugi', 'Do Hyeon', sans-serif", scale: 0.8 },
+  { id: 'jua', name: '주아 (둥근 캐주얼)', css: "'Jua', 'Noto Sans KR', sans-serif", scale: 0.85 },
+  { id: 'barlow', name: 'Barlow 이탤릭 (레이스 타이틀)', css: "'Barlow Semi Condensed', 'Do Hyeon', sans-serif; font-style: italic; font-weight: 800", scale: 0.85 },
+  { id: 'bebas', name: 'Bebas Neue (영문 헤비)', css: "'Bebas Neue', 'Do Hyeon', sans-serif", scale: 0.95 },
+  { id: 'orbitron', name: 'Orbitron (미래형 전광판)', css: "'Orbitron', 'Do Hyeon', sans-serif", scale: 0.7 },
+  { id: 'russo', name: 'Russo One (모터스포츠)', css: "'Russo One', 'Do Hyeon', sans-serif", scale: 0.8 },
+  { id: 'blackops', name: 'Black Ops One (스텐실)', css: "'Black Ops One', 'Do Hyeon', sans-serif", scale: 0.75 }
+];
+function rrWelcomeFontGet() {
+  var id = 'brush';
+  try { id = localStorage.getItem('rrWelcomeFont') || 'brush'; } catch (e) {}
+  return RR_WELCOME_FONTS.find(function (f) { return f.id === id; }) || RR_WELCOME_FONTS[0];
+}
+function rrWelcomeFontApply() {
+  var f = rrWelcomeFontGet();
+  var el = document.getElementById('rrWelcomeText');
+  if (el) {
+    var parts = f.css.split(';');
+    el.style.fontFamily = parts[0];
+    el.style.fontStyle = /italic/.test(f.css) ? 'italic' : '';
+    el.style.fontWeight = /font-weight:\s*(\d+)/.test(f.css) ? RegExp.$1 : '';
+    el.style.fontSize = f.scale === 1 ? '' : 'calc(' + (window.innerWidth <= 900 ? 28 : 38) + 'px * ' + f.scale + ')';
+  }
+  var pv = document.getElementById('rrWelcomeFontPrev');
+  if (pv) {
+    pv.style.fontFamily = f.css.split(';')[0];
+    pv.style.fontStyle = /italic/.test(f.css) ? 'italic' : '';
+    pv.style.fontWeight = /font-weight:\s*(\d+)/.test(f.css) ? RegExp.$1 : '';
+  }
+}
+function rrWelcomeFontInit() {
+  var sel = document.getElementById('rrWelcomeFont');
+  if (!sel || sel.dataset.bound) { rrWelcomeFontApply(); return; }
+  sel.dataset.bound = '1';
+  RR_WELCOME_FONTS.forEach(function (f) {
+    var o = document.createElement('option');
+    o.value = f.id; o.textContent = f.name;
+    sel.appendChild(o);
+  });
+  sel.value = rrWelcomeFontGet().id;
+  sel.addEventListener('change', function () {
+    try { localStorage.setItem('rrWelcomeFont', sel.value); } catch (e) {}
+    rrWelcomeFontApply();
+    rrWelcomeReplay();
+  });
+  rrWelcomeFontApply();
+}
 function rrWelcomeApply() {
   var t = rrWelcomeGet().trim();
   var box = document.getElementById('rrWelcome'), el = document.getElementById('rrWelcomeText');
   if (!box || !el) return;
+  rrWelcomeFontInit();
   rrWelcomeBuild(el, t);
   box.style.display = t ? '' : 'none';
 }
