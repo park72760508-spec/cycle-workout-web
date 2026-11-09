@@ -14,6 +14,7 @@ import {
   orderBy,
   limit,
   runTransaction,
+  writeBatch,
   onSnapshot,
   Timestamp,
   serverTimestamp,
@@ -757,23 +758,53 @@ export async function createRide(db, hostUserId, input) {
   const ridesCol = collection(db, 'rides');
   const rideRef = doc(ridesCol);
   const hostRef = doc(db, 'users', hostKey || String(hostUserId || '').trim());
-  await runTransaction(db, async (transaction) => {
+  /* Firestore SDK 10.14.1 은 구독(onSnapshot) 중인 문서가 많은 상태에서 runTransaction 을 쓰면
+     "INTERNAL ASSERTION FAILED: Unexpected state" 를 던지는 경우가 있다(SDK 내부 버그, 2026-11).
+     이 경우 트랜잭션 대신 "읽기 → 검증 → 배치 쓰기"로 같은 작업을 수행한다. */
+  const isFsInternalAssert = (e) => /INTERNAL ASSERTION FAILED|Unexpected state/i.test(String((e && e.message) || e || ''));
+  const chargeCheck = (hostData) => {
+    const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
+    // 2026-10-02 관리자(grade=1)·부관리자(grade=3)는 포인트 보유와 관계없이 생성 가능(차감은 그대로 — 잔액 마이너스 허용)
+    if (!isPointExemptGrade(hostData) && hostAcc < HOST_CREATE_CHARGE_SP) throw new Error('INSUFFICIENT_ACC_POINTS_HOST');
+    return hostAcc;
+  };
+  const createViaTransaction = () => runTransaction(db, async (transaction) => {
     if (input.isGroupSession) {
       transaction.set(rideRef, payload);
       return;
     }
     const hostSnap = await transaction.get(hostRef);
     if (!hostSnap.exists()) throw new Error('HOST_USER_NOT_FOUND');
-    const hostData = hostSnap.data() || {};
-    const hostAcc = Number(hostData.acc_points != null ? hostData.acc_points : 0) || 0;
-    // 2026-10-02 관리자(grade=1)·부관리자(grade=3)는 포인트 보유와 관계없이 생성 가능(차감은 그대로 — 잔액 마이너스 허용)
-    if (!isPointExemptGrade(hostData) && hostAcc < HOST_CREATE_CHARGE_SP) throw new Error('INSUFFICIENT_ACC_POINTS_HOST');
+    const hostAcc = chargeCheck(hostSnap.data() || {});
     transaction.set(rideRef, payload);
     transaction.update(hostRef, {
       acc_points: hostAcc - HOST_CREATE_CHARGE_SP,
       openRidingPointUpdatedAt: serverTimestamp()
     });
   });
+  const createViaBatch = async () => {
+    if (input.isGroupSession) {
+      await setDoc(rideRef, payload);
+      return;
+    }
+    const hostSnap = await getDoc(hostRef);
+    if (!hostSnap.exists()) throw new Error('HOST_USER_NOT_FOUND');
+    const hostAcc = chargeCheck(hostSnap.data() || {});
+    const batch = writeBatch(db);
+    batch.set(rideRef, payload);
+    batch.update(hostRef, {
+      acc_points: hostAcc - HOST_CREATE_CHARGE_SP,
+      openRidingPointUpdatedAt: serverTimestamp()
+    });
+    await batch.commit();
+  };
+  try {
+    await createViaTransaction();
+  } catch (txErr) {
+    if (!isFsInternalAssert(txErr)) throw txErr;
+    console.warn('[OpenRiding] runTransaction 내부 오류 → 배치 쓰기로 재시도:', txErr);
+    await createViaBatch();
+  }
   const createdRideId = rideRef.id;
   /* await: 생성 직후 바로 화면을 되돌아가 캘린더가 재조회할 때(Supabase 읽기 라우팅 시)
      Secondary에 아직 반영 안 된 새 모임이 안 보이던 버그(2026-08) 방지 — 실패해도 이 함수는
