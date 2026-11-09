@@ -85,18 +85,20 @@ async function gbisRouteIds(rn: string): Promise<string[]> {
   return ids;
 }
 /** 차량번호판 → 잔여좌석(-1 = 정보 없음). 노선번호가 같은 GBIS 노선 중 번호판이 겹치는 노선의 값을 사용 */
-async function gbisSeats(rn: string, plates: string[]): Promise<Record<string, number>> {
+async function gbisSeats(rn: string, plates: string[], dbgSink?: unknown[]): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   if (!rn || !plates.length) return out;
   for (const rid of await gbisRouteIds(rn)) {
     const b = await gbisGet("/buslocationservice/v2/getBusLocationListv2", { routeId: rid });
     let hit = 0;
+    if (dbgSink) dbgSink.push(...asList(b.busLocationList).slice(0, 3));
     for (const x of asList(b.busLocationList)) {
       const k = plateKey(x.plateNo);
       if (!k || plates.indexOf(k) < 0) continue;
       hit++;
       const n = Number(x.remainSeatCnt);
-      out[k] = Number.isFinite(n) && n >= 0 && String(x.remainSeatCnt) !== "" ? n : -1;
+      // 태그리스(taglessCd=1) 단말 차량만 실제 값 — 일반형 시내버스(routeTypeCd 13)는 remainSeatCnt 가 항상 0 으로 와서 '정보 없음'(2026-11-09 10번 노선 확인)
+      out[k] = Number(x.taglessCd) === 1 && Number.isFinite(n) && n >= 0 && String(x.remainSeatCnt) !== "" ? n : -1;
     }
     if (hit) break;
   }
@@ -183,7 +185,9 @@ Deno.serve(async (req) => {
     if (type === "bus" && rn && items.length) {
       try {
         const plates = (items as { v: string }[]).map((b) => plateKey(b.v)).filter(Boolean);
-        const m = await gbisSeats(rn, plates);
+        const gsink: unknown[] = [];
+        const m = await gbisSeats(rn, plates, dbg ? gsink : undefined);
+        if (dbg) extra = { gbis: gsink };
         for (const b of items as { v: string; seat?: number }[]) { const k = plateKey(b.v); if (k && m[k] != null && m[k] >= 0) b.seat = m[k]; }
         seat = { ok: true };
       } catch (e) { seat = { ok: false, err: String((e as Error)?.message || e).slice(0, 100) }; }

@@ -3019,15 +3019,31 @@
     el.__liveTimer = null;
     el.__liveKey = null;
   }
-  /* 버스 잔여좌석 글자(2026-11-09):
-   * ① 경기 GBIS(seat) = 정확한 잔여좌석 ② 서울 광역(9xxx·M) 위치정보 congetion 이 7 이상이면 잔여좌석 수(혼잡 단계는 3~6)
-   * ③ 서울 시내: 재차 인원(ld, 도착정보 API)이 오면 차종별 좌석수 표본 − 재차 인원 = 약 N석(서 있는 승객은 좌석을 차지하지 않아 어림값) */
+  /* 버스 잔여좌석·혼잡도 표시(2026-11-09) — 버스 한 대 → {k, v}
+   * 경기(GBIS, 태그리스 차량) seat = 정확한 잔여좌석(s)
+   * 서울 도착정보 재차 구분(ldd, 샘플 369대로 확인): 1 = 빈자리 수(광역·정확) · 2 = 재차 인원(일반 시내 → 좌석 표본 − 재차 인원 = 약 N석) · 4 = 혼잡도 단계(3 여유·4 보통·5 혼잡·6 매우혼잡) · 0 = 정보 없음
+   * 서울 광역 위치정보 congetion ≥ 7 = 빈자리 수(도착정보가 없을 때 대체) */
   var BUS_SEATS = { '0': 29, '1': 25, '2': 33 }; // 서울 시내버스 좌석 표본: 일반 29 · 저상 25 · 굴절 33
-  function busSeatText(b) {
-    if (b.seat != null) return String(b.seat);
-    if (b.ld != null && b.ld >= 0) return '약 ' + Math.max(0, (BUS_SEATS[b.bt] || 29) - b.ld);
-    if (b.cg != null && b.cg > 6 && b.cg <= 60) return String(b.cg);
-    return '';
+  var BUS_CROWD = { 3: '여유', 4: '보통', 5: '혼잡', 6: '매우혼잡' };
+  function busSeatInfo(b) {
+    if (b.seat != null) return { k: 's', v: String(b.seat) };
+    if (b.ld != null && b.ld >= 0 && b.ldd) {
+      if (b.ldd === '1') return { k: 's', v: String(b.ld) };
+      if (b.ldd === '2') return { k: 's', v: '약 ' + Math.max(0, (BUS_SEATS[b.bt] || 29) - b.ld) };
+      if (b.ldd === '4' && BUS_CROWD[b.ld]) return { k: 'c', v: BUS_CROWD[b.ld] };
+    }
+    if (b.cg != null && b.cg > 6 && b.cg <= 60) return { k: 's', v: String(b.cg) };
+    if (b.cg != null && BUS_CROWD[b.cg] && b.ld == null) return { k: 'c', v: BUS_CROWD[b.cg] };
+    return null;
+  }
+  /** 정류장 한 곳의 버스들 → '(잔여좌석 : 5, 12 · 혼잡도 : 여유)' */
+  function busSeatLabel(list) {
+    var s = list.filter(function (x) { return x.k === 's'; }).map(function (x) { return x.v; });
+    var c = list.filter(function (x) { return x.k === 'c'; }).map(function (x) { return x.v; });
+    var parts = [];
+    if (s.length) parts.push('잔여좌석 : ' + s.join(', '));
+    if (c.length) parts.push('혼잡도 : ' + c.join(', '));
+    return parts.length ? '(' + parts.join(' · ') + ')' : '';
   }
   function liveStatusHtml(el, unit, n) {
     var d = el.__live && el.__live.data;
@@ -3099,7 +3115,7 @@
         var ld = el.__live && el.__live.data;
         if (ld && ld.ok) ld.items.forEach(function (b) {
           var k = d.lv.i.indexOf(b.id);
-          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); var sv = busSeatText(b); if (sv) (liveSeat[k] = liveSeat[k] || []).push(sv); liveN++; }
+          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); var sv = busSeatInfo(b); if (sv) (liveSeat[k] = liveSeat[k] || []).push(sv); liveN++; }
         });
       } else liveStop(el);
       card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
@@ -3114,7 +3130,7 @@
           var nextArrow = i === curIdx && i < d.s.length - 1 ? '<b class="outd-busrt__arrow" aria-label="다음 정류장 ' + escHtml(d.s[i + 1][0]) + ' 방향"></b>' : '';
           // 실시간 버스: 노선 선 위 정류장 원 자리에 둥근 배지(여러 대면 숫자)
           var lv = liveAt[i] ? '<b class="outd-busrt__veh is-bus" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '<small>' + liveAt[i].length + '</small>' : '') + '</b>' : '';
-          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (liveSeat[i] ? '<b class="outd-busrt__seat">(잔여좌석 : ' + liveSeat[i].join(', ') + ')</b>' : '') + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (liveSeat[i] ? '<b class="outd-busrt__seat">' + escHtml(busSeatLabel(liveSeat[i])) + '</b>' : '') + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
       if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN) + '<ol class="outd-busrt__list">');
     }
