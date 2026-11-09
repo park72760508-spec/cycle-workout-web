@@ -38682,8 +38682,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrwp__logo {
   position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); width: clamp(56px, 16%, 120px); height: auto;
   pointer-events: none; user-select: none;
-  filter: saturate(1) brightness(1) drop-shadow(0 0 5px rgba(255,255,255,.45)) drop-shadow(0 2px 6px rgba(0,0,0,.55));
-  animation: rrwpLogoColor 8s ease-in-out infinite;
+  /* 2026-11-10 로고 색상 변화 애니메이션 제거 — 검정색 고정 */
+  filter: brightness(0);
+  animation: none;
 }
 /* 로고 색: 빨강 → (서서히) 흰색 → (서서히) 빨강 반복 */
 @keyframes rrwpLogoColor {
