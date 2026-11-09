@@ -1529,11 +1529,46 @@
   /** 2026-11-03 호선 칩 탭 → 지하철 노선도 팝업(버스 노선 정류장 목록과 같은 형식, 지선 탭·환승 호선·현재 역 강조)
    *  데이터: assets/data/kr-subway-lines.json (scripts/build-kr-subway-lines.mjs) */
   var subLines = { data: null, loading: null };
+  /* 지도 데이터(OSM)에 빠진 역 보강(2026-11-09 전수 점검: 실시간 열차가 이 역에 있을 때 표시되지 않던 곳) — [호선, 앞역, 뒤역, 새 역(없으면 만듦)]
+   * 자동 갱신 데이터가 덮어써도 매번 로드 때 다시 적용되도록 데이터가 아니라 코드에 둠. */
+  var SUB_PATCH = [
+    ['2호선', '상왕십리', '동대문역사문화공원', { n: '신당', p: [37.56538, 127.01625] }],
+    ['4호선', '산본', '대야미', { n: '수리산', p: [37.3453, 126.9267] }],
+    ['4호선', '대야미', '상록수', { n: '반월', p: [37.3128, 126.8978] }],
+    ['7호선', '신중동', '상동', { n: '부천시청', p: [37.5046, 126.7650] }],
+    ['경강선', '판교', '이매', { n: '성남', p: [37.3996, 127.1203] }],
+    ['경강선', '부발', '여주', { n: '세종대왕릉', p: [37.2790, 127.5740] }]
+  ];
+  function patchSubwayStations(ld) {
+    var sd = sub.data;
+    if (!ld || !sd || !sd.stations || ld.__patched) return;
+    ld.__patched = true;
+    var lnIdx = function (nm) { for (var i = 0; i < sd.lines.length; i++) if (sd.lines[i].n === nm) return i; return -1; };
+    var nmOf = function (si) { return sd.stations[si] ? subLiveName(sd.stations[si].n) : ''; };
+    SUB_PATCH.forEach(function (pt) {
+      var li = lnIdx(pt[0]), seqs = ld.o && ld.o[li];
+      if (li < 0 || !seqs) return;
+      seqs.forEach(function (q) {
+        for (var i = 0; i + 1 < q.length; i++) {
+          var a = nmOf(q[i]), b = nmOf(q[i + 1]);
+          if (!((a === pt[1] && b === pt[2]) || (a === pt[2] && b === pt[1]))) continue;
+          var ni = -1;
+          for (var j = 0; j < sd.stations.length; j++) {
+            if (subLiveName(sd.stations[j].n) === pt[3].n && subStDistKm(j, q[i]) < 6) { ni = j; break; }
+          }
+          if (ni < 0) { sd.stations.push({ n: pt[3].n, p: pt[3].p, l: [li] }); ni = sd.stations.length - 1; }
+          else if ((sd.stations[ni].l || []).indexOf(li) < 0) sd.stations[ni].l = (sd.stations[ni].l || []).concat([li]);
+          q.splice(i + 1, 0, ni);
+          return;
+        }
+      });
+    });
+  }
   function loadSubwayLines() {
     if (subLines.data) return Promise.resolve(subLines.data);
     if (!subLines.loading) {
       subLines.loading = fetch('assets/data/kr-subway-lines.json?v=20261108auto').then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { subLines.data = d; subLines.loading = null; return d; }).catch(function () { subLines.loading = null; return null; });
+        .then(function (d) { subLines.data = d; subLines.loading = null; try { patchSubwayStations(d); } catch (e) {} return d; }).catch(function () { subLines.loading = null; return null; });
     }
     return subLines.loading;
   }
@@ -1580,6 +1615,8 @@
   var SUB_EXPRESS_STOPS = {
     '9호선': ['김포공항', '마곡나루', '가양', '염창', '당산', '여의도', '노량진', '동작', '고속터미널', '신논현', '선정릉', '봉은사', '종합운동장', '석촌', '올림픽공원', '중앙보훈병원']
   };
+  /* 실시간 API 와 지도 데이터의 역 이름이 다른 경우(2026-11-09 전수 점검) */
+  var SUB_ALIAS = { '뚝섬유원지': '자양', '세종왕릉': '세종대왕릉', '지제': '평택지제' };
   function subLiveName(n) { return String(n || '').replace(/\(.*?\)/g, '').replace(/(역|종착)$/, '').replace(/\s+/g, ''); }
   /* 실시간 열차 위치 — 3포인트 단계 이동(2026-11-04 3차 개정, 발열 개선):
    * 연속 보간·1초 갱신·매초 DOM 재작성을 없애고, 역과 역 사이에 3개 고정 포인트만 둔다.
@@ -1894,7 +1931,11 @@
         seqs.forEach(function (q) { if (loopSeq(q)) q.forEach(function (si) { if (st[si]) mainNm[subLiveName(st[si].n)] = 1; }); });
         seqs.forEach(function (q) { if (!loopSeq(q)) q.forEach(function (si) { var z = st[si] && subLiveName(st[si].n); if (z && !mainNm[z]) brOnly[z] = 1; }); });
       }
-      var nmS = function (x) { return subLiveName(x).replace(/지선$/, ''); };
+      var nmS = function (x) {
+        var z = subLiveName(x).replace(/지선$/, ''); z = SUB_ALIAS[z] || z;
+        if (names.indexOf(z) < 0) { var pm = /\(([^)]*)\)/.exec(String(x)); if (pm) { var z2 = subLiveName(pm[1]); if (names.indexOf(z2) >= 0) return z2; } } // 예: 7호선 '총신대입구(이수)' → 이수
+        return z;
+      };
       var isBranchTrain = function (t) { return /지선/.test(t.st + t.to) || !!brOnly[nmS(t.to)] || !!brOnly[nmS(t.st)]; };
       /* 2026-11-09 갈라지는 호선(1호선 연천↔인천 / 광운대↔신창 등): 광운대~구로처럼 겹치는 역의 열차는 어느 노선 소속인지 모호해 양쪽에 모두 나왔음.
        * 소속 판정: ①그 역이 한 노선에만 있으면 확정 ②종착역이 한 노선에만 있으면 확정 ③종착역이 어느 노선에도 없으면(서동탄·광명 등) 좌표가 가장 가까운 노선
@@ -1923,7 +1964,7 @@
           allNm.forEach(function (nm, i) { if (nm.indexOf(sn) >= 0) c.push(i); });
           if (c.length < 2) { if (c.length === 1 && no) { A.byNo[no] = c[0]; var pf = no.slice(0, 2); (A.votes[pf] = A.votes[pf] || {})[c[0]] = ((A.votes[pf] || {})[c[0]] || 0) + 1; } asgOf[no || (t.st + '>' + t.to)] = c; return; }
           var c2 = c.filter(function (i) { return inSeq(i, dn); });
-          if (c2.length === 1) { A.byNo[no] = c2[0]; asgOf[no] = c2; return; }
+          if (c2.length === 1) { A.byNo[no] = c2[0]; var pf2 = no.slice(0, 2); (A.votes[pf2] = A.votes[pf2] || {})[c2[0]] = ((A.votes[pf2] || {})[c2[0]] || 0) + 1; asgOf[no] = c2; return; }
           pend.push({ t: t, no: no, c: c2.length ? c2 : c, dn: dn, hasDest: c2.length > 0 });
         });
         pend.forEach(function (x) {
@@ -1939,6 +1980,14 @@
         });
       }
       var meIdx = seqs.indexOf(seq);
+      // 종착역이 이 노선 목록에 없는 열차(응암순환·지평·광명 등)의 방향: 같은 응답에서 종착역으로 방향이 확정된 열차들의 상·하행 코드 다수결로 판정(목록 방향이 호선마다 달라서)
+      var udVote = { '0': 0, '1': 0 };
+      if (ldS && ldS.ok && !isLoop) ldS.items.forEach(function (t) {
+        var k0 = names.indexOf(nmS(t.st)), t0 = names.indexOf(nmS(t.to));
+        if (k0 < 0 || t0 < 0 || t0 === k0 || (t.ud !== '0' && t.ud !== '1')) return;
+        udVote[t.ud] += t0 > k0 ? 1 : -1;
+      });
+      var udDown = function (u) { var v = udVote[u], o = udVote[u === '0' ? '1' : '0']; return v - o > 0 ? true : v - o < 0 ? false : u === '1'; };
       if (ldS && ldS.ok) ldS.items.forEach(function (t) {
         if (asgOf) { var ac = asgOf[String(t.no || '') || (t.st + '>' + t.to)]; if (ac && ac.length && ac.indexOf(meIdx) < 0) return; }
         if (hasLoop && isBranchTrain(t) === isLoop) return;
@@ -1946,7 +1995,7 @@
         if (k < 0) return;
         var tk = names.indexOf(nmS(t.to));
         // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
-        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : hasLoop ? t.ud === '0' : t.ud === '1';
+        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : hasLoop ? t.ud === '0' : udDown(t.ud);
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: !isLoop && tk === k && String(t.s) === '1' });
         trainN++;
