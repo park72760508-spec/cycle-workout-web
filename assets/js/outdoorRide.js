@@ -3021,19 +3021,20 @@
   }
   /* 버스 잔여좌석·혼잡도 표시(2026-11-09) — 버스 한 대 → {k, v}
    * 경기(GBIS, 태그리스 차량) seat = 정확한 잔여좌석(s)
-   * 서울 도착정보 재차 구분(ldd, 샘플 369대로 확인): 1 = 빈자리 수(광역·정확) · 2 = 재차 인원(일반 시내 → 좌석 표본 − 재차 인원 = 약 N석) · 4 = 혼잡도 단계(3 여유·4 보통·5 혼잡·6 매우혼잡) · 0 = 정보 없음
+   * 서울 도착정보 재차 구분(ldd, 샘플 369대로 확인): 1 = 빈자리 수(광역·정확) · 2 = 재차 인원(일반 시내 → 좌석 표본 − 재차 인원 = 약 N석) · 4 = 혼잡도 단계(3 여유·4 보통·5 혼잡·6 매우혼잡 → 어림 잔여좌석, BUS_CROWD) · 0 = 정보 없음
    * 서울 광역 위치정보 congetion ≥ 7 = 빈자리 수(도착정보가 없을 때 대체) */
   var BUS_SEATS = { '0': 29, '1': 25, '2': 33 }; // 서울 시내버스 좌석 표본: 일반 29 · 저상 25 · 굴절 33
-  var BUS_CROWD = { 3: '여유', 4: '보통', 5: '혼잡', 6: '매우혼잡' };
+  /* 혼잡도 단계 → 대략적인 잔여좌석(서울시 단계 정의: 여유 = 앉아서 갈 수 있음, 보통 = 좌석이 거의 참, 혼잡 = 입석 승객 있음, 매우혼잡 = 입석도 가득). 공식 좌석 수치는 없어 어림값 */
+  var BUS_CROWD = { 3: '약 5석 이상', 4: '약 1~4석', 5: '0석 · 혼잡', 6: '0석 · 매우혼잡' };
   function busSeatInfo(b) {
     if (b.seat != null) return { k: 's', v: String(b.seat) };
     if (b.ld != null && b.ld >= 0 && b.ldd) {
       if (b.ldd === '1') return { k: 's', v: String(b.ld) };
       if (b.ldd === '2') return { k: 's', v: '약 ' + Math.max(0, (BUS_SEATS[b.bt] || 29) - b.ld) };
-      if (b.ldd === '4' && BUS_CROWD[b.ld]) return { k: 'c', v: BUS_CROWD[b.ld] };
+      if (b.ldd === '4' && BUS_CROWD[b.ld]) return { k: 's', v: BUS_CROWD[b.ld] };
     }
     if (b.cg != null && b.cg > 6 && b.cg <= 60) return { k: 's', v: String(b.cg) };
-    if (b.cg != null && BUS_CROWD[b.cg] && b.ld == null) return { k: 'c', v: BUS_CROWD[b.cg] };
+    if (b.cg != null && BUS_CROWD[b.cg] && b.ld == null) return { k: 's', v: BUS_CROWD[b.cg] };
     return null;
   }
   /** 정류장 한 곳의 버스들 → '(잔여좌석 : 5, 12 · 혼잡도 : 여유)' */
