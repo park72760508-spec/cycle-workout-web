@@ -38751,8 +38751,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen #outd-ui-speed, #outdoorRideScreen #outd-ui-speed-dec { fill: #ffffff; filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
 #outdoorRideScreen #outd-gauge-needle line { filter: drop-shadow(0 0 3px rgba(255, 59, 59, .85)); }
 #outdoorRideScreen #outd-ui-distance, #outdoorRideScreen #outd-ui-distance-dec { fill: #ff8c00; }
-#outdoorRideScreen #outdGaugeBody text:not([id]) {
-  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; letter-spacing: .24em; fill: #9fb0cc !important; text-transform: none;
+/* 단위(km, km/h): 자간 기본, 흰색 */
+#outdoorRideScreen #outdGaugeBody > text:not([id]) {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; letter-spacing: 0; fill: #ffffff !important; text-transform: none;
+}
+/* 원호 바깥 속도 눈금 숫자(0~60, 오토바이 0~180): 모두 흰색 */
+#outdoorRideScreen #outd-gauge-labels text {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: 0; fill: #ffffff !important;
 }
 #outdoorRideScreen .outd-exp-stats__item b { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
-#outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: .12em; color: #9fb0cc; }
+#outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; color: #ffffff; }
