@@ -38760,7 +38760,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: 0; fill: #ffffff !important;
 }
 #outdoorRideScreen .outd-exp-stats__item b { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
-#outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; color: #ffffff; }
+#outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; }
 
 /* 2026-11-10 루트맵 경과시간·평균속도·남은거리·누적고도·이동거리 숫자: 속도계와 같은 서체(Barlow Semi Condensed 이탤릭 800, 고정폭 숫자) — 색·크기는 그대로 */
 #outdoorRideScreen #outd-main-timer,
@@ -38774,8 +38774,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen.outd-expanded .outd-exp-stats__item small {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: 0 !important;
 }
-#outdoorRideScreen.outd-expanded .outd-exp-stats__item small { color: #ffffff !important; text-transform: none; }
-#outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child b { color: #ffffff; text-shadow: 0 0 6px rgba(34, 211, 238, .45); }
+/* 색은 이전 그대로: 검정 글자 + 흰색 둥근 테두리(위쪽 .outd-expanded 규칙의 color·text-shadow 가 적용됨) */
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item small { text-transform: none; }
 
 /* 2026-11-10 지하철·버스 노선 버튼: 오른쪽 → 왼쪽 즐겨찾기 버튼 위로. 왼쪽 줄(아래→위): 길찾기 8 · 즐겨찾기 56 · 지하철 110 · 버스 158 · 재탐색 · 초기화 */
 #outdoorRideScreen .outd-subway-btn { left: 8px; right: auto; bottom: 110px; }
