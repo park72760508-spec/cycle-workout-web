@@ -38694,3 +38694,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-09 버스 노선 목록: 버스가 있는 정류장 이름 옆 잔여좌석(경기·광역 노선) */
 #outdoorRideScreen .outd-busrt__list li .outd-busrt__seat { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #dc2626; white-space: nowrap; }
+
+/* 2026-11-09 좌석 정보가 없는 버스 노선 안내(빨강) */
+#outdoorRideScreen .outd-busrt__live { flex-wrap: wrap; }
+#outdoorRideScreen .outd-busrt__live .outd-busrt__nosr { flex: 0 0 auto; color: #dc2626; font-size: 12px; font-weight: 800; }

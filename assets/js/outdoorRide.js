@@ -2977,7 +2977,8 @@
           if (lb) {
             var tt = new Date(j.at || Date.now());
             var ts = ('0' + tt.getHours()).slice(-2) + ':' + ('0' + tt.getMinutes()).slice(-2) + ':' + ('0' + tt.getSeconds()).slice(-2);
-            lb.lastChild && lb.lastChild.nodeType === 3 && (lb.lastChild.nodeValue = lb.lastChild.nodeValue.replace(/\d\d:\d\d:\d\d/, ts));
+            var lt = lb.querySelector('.outd-busrt__lt');
+            if (lt) lt.textContent = ts;
           }
           return;
         }
@@ -3051,7 +3052,7 @@
     if (!d) return '<p class="outd-busrt__live is-wait">실시간 위치 불러오는 중…</p>';
     if (!d.ok) return '<p class="outd-busrt__live is-off">실시간 위치를 불러올 수 없습니다' + (/503|HTTP 5/.test(d.error || '') ? '(제공 기관 서버 점검 중)' : '') + '</p>';
     var t = new Date(d.at || Date.now());
-    return '<p class="outd-busrt__live"><i></i>실시간 ' + n + unit + ' 운행 중 · ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + ' 기준' + (note ? ' · ' + note : '') + '</p>';
+    return '<p class="outd-busrt__live"><i></i><span>실시간 ' + n + unit + ' 운행 중 · <span class="outd-busrt__lt">' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + '</span> 기준</span>' + (note ? '<b class="outd-busrt__nosr">' + note + '</b>' : '') + '</p>';
   }
   function keepListScroll(el, fn) {
     var lst = el.querySelector('.outd-busrt__list');
