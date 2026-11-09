@@ -38812,3 +38812,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media screen and (orientation: landscape) {
   #outdoorRideScreen.outd-expanded .mobile-main-content { display: none !important; }
 }
+
+/* 2026-11-10 속도계 전원 효과: 크게 보기로 들어갈 때 서서히 꺼지고, 돌아올 때 올라오는 동안 자동차 계기판처럼 어둡게 시작해 서서히 밝아지며 켜짐 */
+@media screen and (orientation: portrait) {
+  #outdoorRideScreen.outd-expanded .mobile-main-content .mobile-gauge-container { opacity: 0; transition: opacity .75s ease-in; }
+  #outdoorRideScreen.outd-poweron .mobile-main-content .mobile-gauge-container { animation: outdGaugePowerOn 1.6s cubic-bezier(.3, .1, .3, 1) .2s both; }
+}
+@keyframes outdGaugePowerOn {
+  0%   { opacity: 0;   filter: brightness(.15) saturate(.2); }
+  25%  { opacity: .3;  filter: brightness(.5)  saturate(.5); }
+  55%  { opacity: .75; filter: brightness(1.35) saturate(1.15); }
+  80%  { opacity: .95; filter: brightness(1.08) saturate(1.03); }
+  100% { opacity: 1;   filter: brightness(1)   saturate(1); }
+}
+@media (prefers-reduced-motion: reduce) { #outdoorRideScreen.outd-poweron .mobile-main-content .mobile-gauge-container { animation: none; } }

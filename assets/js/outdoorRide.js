@@ -926,6 +926,11 @@
       st.animT = setTimeout(function () { scr0.classList.remove('outd-anim'); fixMapSize(); }, 1100);
     }
     st.expanded = !st.expanded;
+    if (scr0) {
+      clearTimeout(st.powT);
+      scr0.classList.remove('outd-poweron');
+      if (!st.expanded) { void scr0.offsetWidth; scr0.classList.add('outd-poweron'); st.powT = setTimeout(function () { scr0.classList.remove('outd-poweron'); }, 2100); }
+    }
     applyStat3(st.expanded ? 'dist' : 'elev'); // 2026-10-31: 크게 보기 = 이동 거리, 원래 화면 = 누적 고도
     watchExpStats(st.expanded);
     var screen = $(SCREEN_ID);
