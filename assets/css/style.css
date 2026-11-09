@@ -38768,3 +38768,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .mobile-stats-footer .mobile-stat-value span {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
 }
+
+/* 2026-11-10 지도 크게 보기 상단 속도값·단위: 속도계와 같은 서체·스타일(이탤릭 800, 단위 흰색·기본 자간, 속도 청록 글로우) */
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item b,
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item small {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: 0 !important;
+}
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item small { color: #ffffff !important; text-transform: none; }
+#outdoorRideScreen.outd-expanded .outd-exp-stats__item:first-child b { color: #ffffff; text-shadow: 0 0 6px rgba(34, 211, 238, .45); }
