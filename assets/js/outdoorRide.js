@@ -1650,6 +1650,9 @@
     if (dir === 1) return f <= 0.5 ? last + f * 0.8 : -(1 - f) * 0.8;
     return f <= 0.5 ? -f * 0.8 : last + (1 - f) * 0.8;
   }
+  /** 종착역(to) 표시가 폴링마다 뒤집히는 노선은 상·하행 코드로 방향 고정(2026-11-09 실측: 우이신설선은 코드가 정확하고 to 가 신설동·북한산우이를 오감 →
+   *  종착역 방식은 열차 방향이 6번 뒤집혔고 코드 방식은 1번). 값 = 목록 아래쪽으로 가는 상·하행 코드(노선 끝 역에서는 회차 직후 코드가 늦게 바뀌므로 종착역 표시를 따름). 다른 노선은 종착역 방식이 코드 방식과 정확도가 같아 그대로 */
+  var SUB_UD_FIXED = { '우이신설선': '0' };
   var SUB_PASS_SEC = 25; // 급행 비정차역 진입 → 통과까지(초) — 실측: 진입→출발 기록 약 30초(도착 기록이 오는 경우 진입 후 약 19초)
   /** 급행 열차가 정차하지 않는 역인지(정차역 목록이 있는 호선만 — 현재 9호선) */
   function subExpressNonstop(el, t, i) {
@@ -2025,7 +2028,7 @@
         if (k < 0) return;
         var tk = names.indexOf(nmS(t.to));
         // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
-        var down = isLoop ? t.ud === '1' : tk >= 0 && tk !== k ? tk > k : hasLoop ? t.ud === '0' : udDown(t.ud); // tk === k(종착역 도착)는 상·하행 코드로(예전엔 항상 위쪽으로 판정)
+        var down = isLoop ? t.ud === '1' : SUB_UD_FIXED[ln.n] && !((k === 0 || k === seq.length - 1) && tk >= 0 && tk !== k) ? t.ud === SUB_UD_FIXED[ln.n] : tk >= 0 && tk !== k ? tk > k : tk === k && k === 0 ? false : tk === k && k === seq.length - 1 ? true : hasLoop ? t.ud === '0' : udDown(t.ud); // 종착역 도착(tk === k): 노선 끝 역이면 그 끝 쪽으로 들어온 것(실측: 회차 직후 상·하행 코드가 늦게 바뀌어 종착·출발 열차가 같은 방향으로 겹침)
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: !isLoop && tk === k && String(t.s) === '1' });
         trainN++;
