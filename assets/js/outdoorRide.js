@@ -1295,11 +1295,49 @@
       setText('outdGpsText', '이 기기는 GPS를 지원하지 않습니다');
       return;
     }
+    gpsPrimer(beginWatch);
+  }
+  function beginWatch() {
+    if (st.watchId != null || !navigator.geolocation) return;
     st.watchId = navigator.geolocation.watchPosition(onBrowserPosition, onPositionError, {
       enableHighAccuracy: true,
       maximumAge: 0,
       timeout: 20000
     });
+  }
+  /** 브라우저 위치 권한 창(영어·변경 불가)이 뜨기 전에 STELVIO 스타일 한글 안내를 먼저 보여준다(권한이 아직 묻기 전 상태일 때만) */
+  function gpsPrimer(go) {
+    function show() {
+      if (document.getElementById('outdGpsPrimer')) return;
+      var root = document.createElement('div');
+      root.id = 'outdGpsPrimer'; root.className = 'outd-primer';
+      root.innerHTML =
+        '<div class="outd-primer__card" role="dialog" aria-modal="true" aria-label="위치 권한 안내">' +
+          '<div class="outd-primer__ico">📍</div>' +
+          '<div class="outd-primer__title">위치 권한이 필요해요</div>' +
+          '<div class="outd-primer__msg">내 위치를 지도에 표시하고, 주변 날씨·대중교통·라이딩 기록을 위해<br>현재 위치를 사용합니다.<br><small>다음에 나오는 브라우저 창에서 <b>허용</b>을 눌러 주세요.</small></div>' +
+          '<div class="outd-primer__btns"><button type="button" class="outd-primer__b outd-primer__b--ok">확인</button><button type="button" class="outd-primer__b outd-primer__b--no">나중에</button></div>' +
+        '</div>';
+      document.body.appendChild(root);
+      var done = function (ok) {
+        root.remove();
+        try { localStorage.setItem('outdGpsPrimerSeen', '1'); } catch (e) {}
+        if (ok) go(); else setText('outdGpsText', '위치 권한이 꺼져 있습니다');
+      };
+      root.querySelector('.outd-primer__b--ok').addEventListener('click', function () { done(true); });
+      root.querySelector('.outd-primer__b--no').addEventListener('click', function () { done(false); });
+    }
+    try {
+      if (navigator.permissions && navigator.permissions.query) {
+        navigator.permissions.query({ name: 'geolocation' }).then(function (r) {
+          if (r.state === 'prompt') show(); else go();
+        }, go);
+        return;
+      }
+    } catch (e) { /* 아래로 */ }
+    var seen = false;
+    try { seen = localStorage.getItem('outdGpsPrimerSeen') === '1'; } catch (e) {}
+    if (seen) go(); else show();
   }
   function stopGps() {
     if (st.watchId != null && navigator.geolocation) navigator.geolocation.clearWatch(st.watchId);

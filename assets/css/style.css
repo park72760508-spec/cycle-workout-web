@@ -38727,3 +38727,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrcrop__b--ok { background: #ff8c00; color: #14100a; }
 #rollerRaceDashboardScreen .rrp__adjust { margin-top: 6px; }
 #rollerRaceDashboardScreen .rrp__adjust[hidden] { display: none; }
+
+/* 2026-11-10 루트맵 위치 권한 사전 안내(STELVIO 스타일) */
+.outd-primer { position: fixed; inset: 0; z-index: 2147483100; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.72); }
+.outd-primer__card { width: min(340px, 100%); background: #0e1424; color: #fff; border: 2px solid #ff8c00; box-shadow: 0 0 30px rgba(255,140,0,.35), 0 20px 50px rgba(0,0,0,.7); padding: 22px 18px 18px; text-align: center; display: grid; gap: 10px; }
+.outd-primer__ico { font-size: 34px; line-height: 1; }
+.outd-primer__title { font: italic 800 20px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .04em; color: #ffd27a; }
+.outd-primer__msg { font-size: 14px; line-height: 1.55; color: #cfd9ec; }
+.outd-primer__msg small { display: block; margin-top: 8px; color: #9fb0cc; font-size: 12px; }
+.outd-primer__msg b { color: #22d3ee; }
+.outd-primer__btns { display: flex; gap: 8px; justify-content: center; margin-top: 4px; }
+.outd-primer__b { height: 40px; padding: 0 24px; border: 0; cursor: pointer; font: italic 800 15px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; background: #1b2338; color: #fff; clip-path: polygon(7px 0, 100% 0, calc(100% - 7px) 100%, 0 100%); }
+.outd-primer__b--ok { background: #ff8c00; color: #14100a; }
