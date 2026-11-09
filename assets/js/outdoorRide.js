@@ -916,6 +916,15 @@
   window.toggleOutdoorExpand = function (e) {
     if (e && e.stopPropagation) e.stopPropagation();
     if (!st.expanded) measureGaugeScale();
+    // 속도계 슬라이드 애니메이션(세로 화면): 속도계 영역 높이를 기억해 고정 → 영역이 접히며 내려가고 되돌릴 때 올라옴
+    var scr0 = $(SCREEN_ID), mc0 = scr0 && scr0.querySelector('.mobile-main-content');
+    if (mc0 && !st.expanded && mc0.offsetHeight > 40) st.gaugeH = mc0.offsetHeight;
+    if (scr0 && mc0) {
+      scr0.style.setProperty('--outd-gh', (st.gaugeH || Math.round(window.innerHeight * 0.4)) + 'px');
+      scr0.classList.add('outd-anim');
+      clearTimeout(st.animT);
+      st.animT = setTimeout(function () { scr0.classList.remove('outd-anim'); fixMapSize(); }, 1100);
+    }
     st.expanded = !st.expanded;
     applyStat3(st.expanded ? 'dist' : 'elev'); // 2026-10-31: 크게 보기 = 이동 거리, 원래 화면 = 누적 고도
     watchExpStats(st.expanded);
@@ -930,7 +939,7 @@
     setExpSpeed(st.numSpeed != null ? st.numSpeed : st.speedKmh);
     setText('outdExpDist', (st.distanceM / 1000).toFixed(2));
     // 지도 크기가 바뀌었으니 다시 계산하고 내 위치 기준으로 다시 맞춤
-    [40, 320].forEach(function (ms) {
+    [40, 320, 700, 1150].forEach(function (ms) {
       setTimeout(function () {
         fixMapSize();
         if (st.follow && st.map && (st.mePos || st.lastFix)) {

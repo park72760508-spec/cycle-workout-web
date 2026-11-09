@@ -38797,3 +38797,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #outdoorRideScreen .outd-overview-btn,
   #outdoorRideScreen:has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 110px; }
 }
+
+/* 2026-11-10 지도 크게 보기: 속도계가 아래로 스르륵 내려가며 사라지고(지도가 그만큼 부드럽게 커짐), 되돌릴 때는 아래에서 올라옴.
+   세로 화면 전용(가로는 기존처럼 즉시). 속도계 그림은 크기를 고정(--outd-gh)해 줄어들지 않고 영역이 아래에서부터 접히며 내려가는 모양. 한 번의 ease-in-out 이라 중간에 멈추는 느낌 없음 */
+@media screen and (orientation: portrait) {
+  #outdoorRideScreen .mobile-main-content { overflow: hidden; transition: flex-grow 1s cubic-bezier(.45, 0, .2, 1), visibility 0s linear 0s; }
+  #outdoorRideScreen.outd-expanded .mobile-main-content {
+    display: flex !important; flex-grow: 0 !important; visibility: hidden; pointer-events: none;
+    transition: flex-grow 1s cubic-bezier(.45, 0, .2, 1), visibility 0s linear 1s;
+  }
+  #outdoorRideScreen.outd-anim .mobile-main-content .mobile-gauge-segment-wrap { flex: none !important; height: var(--outd-gh) !important; align-items: flex-start; }
+  #outdoorRideScreen.outd-anim .mobile-main-content { visibility: visible !important; }
+}
+@media screen and (orientation: landscape) {
+  #outdoorRideScreen.outd-expanded .mobile-main-content { display: none !important; }
+}
