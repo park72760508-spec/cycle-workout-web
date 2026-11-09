@@ -98,7 +98,7 @@ async function gbisSeats(rn: string, plates: string[], dbgSink?: unknown[]): Pro
       hit++;
       const n = Number(x.remainSeatCnt);
       // 태그리스(taglessCd=1) 단말 차량만 실제 값 — 일반형 시내버스(routeTypeCd 13)는 remainSeatCnt 가 항상 0 으로 와서 '정보 없음'(2026-11-09 10번 노선 확인)
-      out[k] = Number(x.taglessCd) === 1 && Number.isFinite(n) && n >= 0 && String(x.remainSeatCnt) !== "" ? n : -1;
+      out[k] = Number(x.taglessCd) === 1 && Number.isFinite(n) && n >= 0 && String(x.remainSeatCnt) !== "" && (n > 0 || Number(x.routeTypeCd) !== 13) ? n : -1; // 일반형(13)이 태그리스인데 0 이면 신뢰하지 않음(경기 도착정보 API 로 같은 값 확인)
     }
     if (hit) break;
   }
