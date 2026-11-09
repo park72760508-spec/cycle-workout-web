@@ -1604,8 +1604,16 @@
   }
   var SUB_PASS_HOLD_MS = 1300; // 역으로 이동(0.8초 전환) + 0.5초 정차
   var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 45;
-  function subTrainGoals(el, n, now) {
+  /* 순환선(2호선) 이음 구간(끝 역 ↔ 첫 역): 목록은 직선이라 끝 역 아래쪽(+0.2~0.4)·첫 역 위쪽(-0.16)의 여백에 표시(2026-11-09) */
+  function subWrapP(dir, f, n) {
     var last = n - 1;
+    if (dir === 1) return f <= 0.5 ? last + f * 0.8 : -(1 - f) * 0.8;
+    return f <= 0.5 ? -f * 0.8 : last + (1 - f) * 0.8;
+  }
+  function subTrainGoals(el, n, now) {
+    var last = n - 1, loop = !!el.__loop;
+    var isWrap = function (from, dir) { return from + dir < 0 || from + dir > last; };
+    var segOf = function (from, dir) { return isWrap(from, dir) ? last : Math.min(from, from + dir); };
     var list = (el.__trains || []).map(function (t) {
       var dir = t.down ? 1 : -1;
       var g = { t: t, dir: dir, st: null, from: null, dep: 0, pre: false };
@@ -1614,7 +1622,8 @@
       else if (t.s === '2') { g.from = t.k; g.dep = t.at; }
       else if (t.s === '3') { g.from = t.k - dir; g.dep = t.at; }
       else g.st = t.k;
-      if (g.from != null && (g.from < 0 || g.from > last || g.from + dir < 0 || g.from + dir > last)) { g.st = Math.max(0, Math.min(last, t.k)); g.from = null; g.pre = false; }
+      if (loop && g.from != null) { if (g.from < 0) g.from = last; else if (g.from > last) g.from = 0; }
+      else if (g.from != null && (g.from < 0 || g.from > last || g.from + dir < 0 || g.from + dir > last)) { g.st = Math.max(0, Math.min(last, t.k)); g.from = null; g.pre = false; }
       return g;
     });
     // 같은 방향 열차가 같은 역에 겹치면 앞차(기록이 오래된 쪽)는 뒤차 도착 시각에 출발한 것으로 보고 P1부터
@@ -1625,7 +1634,7 @@
       q.sort(function (a, b) { return (dir * a.st - dir * b.st) || ((b.t.at || 0) - (a.t.at || 0)); });
       for (var i = 1; i < q.length; i++) {
         var rear = q[i - 1], lead = q[i];
-        if (lead.st !== rear.st || lead.t.term || lead.st + dir < 0 || lead.st + dir > last) continue;
+        if (lead.st !== rear.st || lead.t.term || (!loop && (lead.st + dir < 0 || lead.st + dir > last))) continue;
         lead.from = lead.st; lead.st = null; lead.dep = Math.max(lead.t.at || 0, rear.t.at || 0) || now;
       }
     });
@@ -1641,15 +1650,16 @@
         g.goal = g.st;
         var age = g.t.at ? (now - g.t.at) / 1000 : 0;
         // 정차 후 SUB_DWELL_SEC 지나도 출발 기록이 없으면(기록 누락 대비) 그 시각을 출발로 보고 같은 단계 시계 적용
-        if (!g.t.term && age > SUB_DWELL_SEC && age < 600 && g.st + g.dir >= 0 && g.st + g.dir <= last) {
-          g.goal = g.st + g.dir * stage(age - SUB_DWELL_SEC, Math.min(g.st, g.st + g.dir));
+        if (!g.t.term && age > SUB_DWELL_SEC && age < 600 && (loop || (g.st + g.dir >= 0 && g.st + g.dir <= last))) {
+          var fi = stage(age - SUB_DWELL_SEC, segOf(g.st, g.dir));
+          g.goal = isWrap(g.st, g.dir) ? subWrapP(g.dir, fi, n) : g.st + g.dir * fi;
           g.inferred = true;
         }
       } else {
         var e = g.dep ? Math.max(0, (now - g.dep) / 1000) : 0;
         if (e > 900) e = 0;
-        var f = g.pre ? SUB_P3 : stage(e, Math.min(g.from, g.from + g.dir));
-        g.goal = g.from + g.dir * f;
+        var f = g.pre ? SUB_P3 : stage(e, segOf(g.from, g.dir));
+        g.goal = isWrap(g.from, g.dir) ? subWrapP(g.dir, f, n) : g.from + g.dir * f;
       }
       // 기록이 오래 갱신되지 않은 열차 표시(구간 안 4분·역 정차 5분 이상)
       var ageAll = g.t.at ? (now - g.t.at) / 1000 : 0;
@@ -1722,7 +1732,7 @@
           }
         }
       }
-      next[id] = { dir: dir, p: Math.max(0, Math.min(n - 1, p)), g: g };
+      next[id] = { dir: dir, p: el.__loop ? Math.max(-0.5, Math.min(n - 0.5, p)) : Math.max(0, Math.min(n - 1, p)), g: g };
     });
     // 급행·일반은 서로 추월할 수 있으므로 같은 종류끼리만 선행·후행 순서를 보전
     [[1, 0], [1, 1], [-1, 0], [-1, 1]].forEach(function (dc) {
@@ -1731,7 +1741,8 @@
       var ids = Object.keys(next).filter(function (id) { return next[id].dir === dir && cls(id); });
       var U = function (id) { return dir * next[id].p; };
       // 이전 순서(앞 → 뒤)를 유지하고, 새 열차는 위치에 맞게 끼워 넣음
-      var ord = (D.ord[ok] || []).filter(function (id) { return next[id] && next[id].dir === dir && cls(id); });
+      var ord = el.__loop ? [] : (D.ord[ok] || []).filter(function (id) { return next[id] && next[id].dir === dir && cls(id); });
+      if (el.__loop) ids.sort(function (a, b) { return U(b) - U(a); }); // 순환선: 이음 구간을 넘나들므로 순서를 기억하지 않고 매번 위치순
       ids.forEach(function (id) {
         if (ord.indexOf(id) >= 0) return;
         var at = 0;
@@ -1797,7 +1808,12 @@
     if (!rows.length) return;
     var cy = [];
     for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
-    var yAt = function (p) { var a = Math.floor(p), b = Math.min(cy.length - 1, a + 1); return cy[a] + (cy[b] - cy[a]) * (p - a); };
+    var yAt = function (p) {
+      var L = cy.length - 1;
+      if (p < 0) return cy[0] + (cy[Math.min(1, L)] - cy[0]) * p;
+      if (p > L) return cy[L] + (cy[L] - cy[Math.max(0, L - 1)]) * (p - L);
+      var a = Math.floor(p), b = Math.min(L, a + 1); return cy[a] + (cy[b] - cy[a]) * (p - a);
+    };
     var prevY = el.__trPrevY || {}, nextY = {};
     var have = {};
     Array.prototype.forEach.call(layer.children, function (c) { have[c.getAttribute('data-k')] = c; });
@@ -1876,10 +1892,10 @@
         // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
         var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : t.ud === '1';
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
-        trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: tk === k && String(t.s) === '1' });
+        trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: !isLoop && tk === k && String(t.s) === '1' });
         trainN++;
       });
-      el.__names = names; el.__lnName = ln.n;
+      el.__names = names; el.__lnName = ln.n; el.__loop = isLoop;
       subReconcile(el, trains);
       var dirf = el.__dirf || 0;
       if (dirf) { trains = trains.filter(function (t) { return (t.down ? 1 : -1) === dirf; }); trainN = trains.length; }
@@ -1889,6 +1905,7 @@
         el.__segL[i] = !!lv;
         return lv ? lv[0] : 30 + subStDistKm(seq[i], si) * 90;
       });
+      if (isLoop) { el.__segL[seq.length - 1] = false; el.__segT.push(30 + subStDistKm(seq[seq.length - 1], seq[0]) * 90); } // 이음 구간(끝 역 → 첫 역)
       el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       var dirf2 = el.__dirf || 0;
