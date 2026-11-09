@@ -8295,6 +8295,18 @@
       if (t && t.nodeType === 1 && t.matches && t.matches(NO_SCROLL_SEL)) resetLayoutScroll(t);
     }, true);
   }
+  /* 글꼴(Barlow)이 늦게 로드되면 글자 폭 캐시가 대체 글꼴 기준이라 소수 자리 위치가 어긋남 → 로드 후 캐시를 비우고 다시 배치 */
+  try {
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('italic 800 48px "Barlow Semi Condensed"').then(function () {
+        ['outd-ui-speed', 'outd-ui-distance'].forEach(function (id) {
+          var e = $(id); if (e) e.__wCache = null;
+          var d = $(id + '-dec'); if (d) { d.__wCache = null; d.__placed = false; }
+        });
+        if (isActive()) fixMapSize();
+      }, function () {});
+    }
+  } catch (e) {}
   function fixMapSize() {
     if (!isActive()) return;
     resetAllLayoutScroll();
