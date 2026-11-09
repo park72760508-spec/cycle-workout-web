@@ -3046,12 +3046,12 @@
     if (c.length) parts.push('혼잡도 : ' + c.join(', '));
     return parts.length ? '(' + parts.join(' · ') + ')' : '';
   }
-  function liveStatusHtml(el, unit, n) {
+  function liveStatusHtml(el, unit, n, note) {
     var d = el.__live && el.__live.data;
     if (!d) return '<p class="outd-busrt__live is-wait">실시간 위치 불러오는 중…</p>';
     if (!d.ok) return '<p class="outd-busrt__live is-off">실시간 위치를 불러올 수 없습니다' + (/503|HTTP 5/.test(d.error || '') ? '(제공 기관 서버 점검 중)' : '') + '</p>';
     var t = new Date(d.at || Date.now());
-    return '<p class="outd-busrt__live"><i></i>실시간 ' + n + unit + ' 운행 중 · ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + ' 기준</p>';
+    return '<p class="outd-busrt__live"><i></i>실시간 ' + n + unit + ' 운행 중 · ' + ('0' + t.getHours()).slice(-2) + ':' + ('0' + t.getMinutes()).slice(-2) + ':' + ('0' + t.getSeconds()).slice(-2) + ' 기준' + (note ? ' · ' + note : '') + '</p>';
   }
   function keepListScroll(el, fn) {
     var lst = el.querySelector('.outd-busrt__list');
@@ -3110,13 +3110,13 @@
       var curIdx = -1, best = 60;
       d.s.forEach(function (x, i) { var dm = busStopDistM(x, stop); if (dm < best) { best = dm; curIdx = i; } });
       // 실시간 버스 위치: 정류장 원본 id → 노선 목록 위치
-      var liveAt = {}, liveSeat = {}, liveN = 0;
+      var liveAt = {}, liveSeat = {}, liveN = 0, liveSeatN = 0;
       if (d.lv && d.lv.i) {
         liveEnsure(el, d.lv.src === 'T' ? (/^31/.test(String(d.lv.c)) ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c, rn: d.n } : { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c }) : { type: 'bus', src: 'S', rid: d.lv.rid }, renderBusRoutePopup); // rn = 노선번호(경기 노선 잔여좌석 조회용 — 서울 노선은 서버가 위치정보에 실어 보냄)
         var ld = el.__live && el.__live.data;
         if (ld && ld.ok) ld.items.forEach(function (b) {
           var k = d.lv.i.indexOf(b.id);
-          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); var sv = busSeatInfo(b); if (sv) (liveSeat[k] = liveSeat[k] || []).push(sv); liveN++; }
+          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); var sv = busSeatInfo(b); if (sv) { (liveSeat[k] = liveSeat[k] || []).push(sv); liveSeatN++; } liveN++; }
         });
       } else liveStop(el);
       card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
@@ -3133,7 +3133,7 @@
           var lv = liveAt[i] ? '<b class="outd-busrt__veh is-bus" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '<small>' + liveAt[i].length + '</small>' : '') + '</b>' : '';
           return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (liveSeat[i] ? '<b class="outd-busrt__seat">' + escHtml(busSeatLabel(liveSeat[i])) + '</b>' : '') + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
-      if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN) + '<ol class="outd-busrt__list">');
+      if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN, liveN > 0 && !liveSeatN ? '좌석 정보 미제공 노선' : '') + '<ol class="outd-busrt__list">');
     }
     card += '<p class="outd-busrt__src">노선 정보: 서울특별시 · 국토교통부(TAGO) · OpenStreetMap</p>';
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
