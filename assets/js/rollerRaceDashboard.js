@@ -955,18 +955,123 @@ function rrAvatarModalRefresh() {
   rrSetAvatar(box, nm || '?', tid);
   box.style.display = 'inline-flex';
   if (del) del.style.display = ov ? '' : 'none';
+  var adj = document.getElementById('rrAvatarAdjBtn');
+  if (adj) adj.style.display = ov && tid != null && rrAvatarSources()[String(tid)] ? '' : 'none';
+}
+/** 이미지 파일 → 원본(긴 변 640px 이하) dataURL — 위치 조정 편집기의 원본으로 사용 */
+function rrAvatarSourceFromFile(file) {
+  return new Promise(function (resolve, reject) {
+    if (!file || !/^image\//.test(file.type)) return reject(new Error('이미지 파일만 선택할 수 있습니다.'));
+    var fr = new FileReader();
+    fr.onerror = function () { reject(new Error('파일을 읽지 못했습니다.')); };
+    fr.onload = function () {
+      var img = new Image();
+      img.onerror = function () { reject(new Error('이미지를 열지 못했습니다.')); };
+      img.onload = function () {
+        var k = Math.min(1, 640 / Math.max(img.width, img.height));
+        var c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function rrAvatarSources() {
+  try { return JSON.parse(localStorage.getItem('rrTrackAvatarSrc') || '{}') || {}; } catch (e) { return {}; }
+}
+function rrAvatarSetSource(tid, dataUrl) {
+  var o = rrAvatarSources();
+  if (dataUrl) o[String(tid)] = dataUrl; else delete o[String(tid)];
+  try { localStorage.setItem('rrTrackAvatarSrc', JSON.stringify(o)); } catch (e) { /* 원본 저장 실패 시 재조정만 불가 */ }
+}
+/** 위치 조정 편집기: 드래그로 이동, 슬라이더/휠로 확대 → 원형 프레임 그대로 아바타에 적용 */
+function rrAvatarEditOpen(srcUrl, tid) {
+  var old = document.getElementById('rrCrop'); if (old) old.remove();
+  var F = 240;
+  var root = document.createElement('div');
+  root.id = 'rrCrop'; root.className = 'rrcrop';
+  root.innerHTML =
+    '<div class="rrcrop__card" role="dialog" aria-modal="true" aria-label="사진 위치 조정">' +
+      '<div class="rrcrop__title">사진 위치 조정</div>' +
+      '<div class="rrcrop__frame"><img alt="" draggable="false"></div>' +
+      '<div class="rrcrop__hint">사진을 드래그해 위치를 맞추고, 슬라이더로 크기를 조정하세요</div>' +
+      '<label class="rrcrop__zoom">작게 <input type="range" min="100" max="400" value="100"> 크게</label>' +
+      '<div class="rrcrop__btns"><button type="button" class="rrcrop__b rrcrop__b--ok">적용</button><button type="button" class="rrcrop__b rrcrop__b--cancel">취소</button></div>' +
+    '</div>';
+  document.body.appendChild(root);
+  var frame = root.querySelector('.rrcrop__frame'), im = root.querySelector('img'), zr = root.querySelector('input');
+  var st = { w: 0, h: 0, base: 1, z: 1, ox: 0, oy: 0 };
+  function clamp() {
+    var dw = st.w * st.base * st.z, dh = st.h * st.base * st.z;
+    st.ox = Math.min(0, Math.max(F - dw, st.ox));
+    st.oy = Math.min(0, Math.max(F - dh, st.oy));
+  }
+  function paint() {
+    clamp();
+    var s = st.base * st.z;
+    im.style.width = st.w * s + 'px'; im.style.height = st.h * s + 'px';
+    im.style.transform = 'translate(' + st.ox + 'px,' + st.oy + 'px)';
+  }
+  function setZoom(z) {
+    var cx = F / 2, cy = F / 2, s0 = st.base * st.z;
+    var ix = (cx - st.ox) / s0, iy = (cy - st.oy) / s0;
+    st.z = Math.min(4, Math.max(1, z));
+    var s1 = st.base * st.z;
+    st.ox = cx - ix * s1; st.oy = cy - iy * s1;
+    zr.value = String(Math.round(st.z * 100));
+    paint();
+  }
+  im.onload = function () {
+    st.w = im.naturalWidth; st.h = im.naturalHeight;
+    st.base = F / Math.min(st.w, st.h);
+    st.ox = (F - st.w * st.base) / 2; st.oy = (F - st.h * st.base) / 2;
+    paint();
+  };
+  im.src = srcUrl;
+  var drag = null;
+  frame.addEventListener('pointerdown', function (e) { drag = { x: e.clientX, y: e.clientY, ox: st.ox, oy: st.oy }; frame.setPointerCapture(e.pointerId); e.preventDefault(); });
+  frame.addEventListener('pointermove', function (e) { if (!drag) return; st.ox = drag.ox + (e.clientX - drag.x); st.oy = drag.oy + (e.clientY - drag.y); paint(); });
+  var end = function () { drag = null; };
+  frame.addEventListener('pointerup', end); frame.addEventListener('pointercancel', end);
+  frame.addEventListener('wheel', function (e) { e.preventDefault(); setZoom(st.z * (e.deltaY < 0 ? 1.08 : 1 / 1.08)); }, { passive: false });
+  zr.addEventListener('input', function () { setZoom(Number(zr.value) / 100); });
+  function close() { root.remove(); document.removeEventListener('keydown', onKey, true); }
+  function onKey(e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } }
+  document.addEventListener('keydown', onKey, true);
+  root.querySelector('.rrcrop__b--cancel').addEventListener('click', close);
+  root.addEventListener('pointerdown', function (e) { if (e.target === root) close(); });
+  root.querySelector('.rrcrop__b--ok').addEventListener('click', function () {
+    var N = 200, c = document.createElement('canvas'); c.width = N; c.height = N;
+    var s = st.base * st.z, k = N / F;
+    var g = c.getContext('2d'); g.fillStyle = '#1b2338'; g.fillRect(0, 0, N, N);
+    g.drawImage(im, 0, 0, st.w, st.h, st.ox * k, st.oy * k, st.w * s * k, st.h * s * k);
+    var url = c.toDataURL('image/jpeg', 0.88);
+    if (!rrAvatarSetOverride(tid, url)) { if (typeof showToast === 'function') showToast('사진을 저장하지 못했습니다(저장 공간 부족).', 'error'); return; }
+    rrAvatarSetSource(tid, srcUrl);
+    close();
+    rrAvatarModalRefresh();
+    updateSpeedometerListUI();
+    var rp = document.getElementById('rrProfile'); if (rp && !rp.hidden) { rp.querySelector('.rrp__photo').dataset.k = ''; rrProfileRender(); }
+    if (typeof showToast === 'function') showToast('아바타 사진이 적용되었습니다.');
+  });
 }
 window.rrAvatarPick = function (input, tidArg) {
   var f = input && input.files && input.files[0];
   var tid = tidArg != null ? tidArg : window.currentTargetSpeedometerId;
   if (!f || tid == null) return;
-  rrAvatarFromFile(f).then(function (url) {
-    if (!rrAvatarSetOverride(tid, url)) { if (typeof showToast === 'function') showToast('사진을 저장하지 못했습니다(저장 공간 부족).', 'error'); return; }
-    rrAvatarModalRefresh();
-    updateSpeedometerListUI();
-    if (typeof showToast === 'function') showToast('아바타 사진이 적용되었습니다.');
-  }).catch(function (e) { if (typeof showToast === 'function') showToast(e.message || '사진 처리 실패', 'error'); });
+  rrAvatarSourceFromFile(f).then(function (src) { rrAvatarEditOpen(src, tid); })
+    .catch(function (e) { if (typeof showToast === 'function') showToast(e.message || '사진 처리 실패', 'error'); });
   input.value = '';
+};
+/** 저장된 원본으로 위치만 다시 조정 */
+window.rrAvatarReadjust = function (tidArg) {
+  var tid = tidArg != null ? tidArg : window.currentTargetSpeedometerId;
+  if (tid == null) return;
+  var src = rrAvatarSources()[String(tid)];
+  if (!src) { if (typeof showToast === 'function') showToast('원본이 없습니다. 사진을 다시 선택해 주세요.', 'error'); return; }
+  rrAvatarEditOpen(src, tid);
 };
 /** 트랙의 아바타를 클릭 → 파일 선택 → 해당 트랙 사진 교체 */
 window.rrAvatarPickForTrack = function (tid, ev) {
@@ -986,6 +1091,7 @@ window.rrAvatarRemove = function () {
   var tid = window.currentTargetSpeedometerId;
   if (tid == null) return;
   rrAvatarSetOverride(tid, null);
+  rrAvatarSetSource(tid, null);
   rrAvatarModalRefresh();
   updateSpeedometerListUI();
 };
@@ -7188,6 +7294,7 @@ function rrProfileRender() {
   // 사진(크게)
   var av = q('.rrp__photo');
   var url = rrAvatarUrl(name, tid);
+  var adjB = q('.rrp__adjust'); if (adjB) adjB.hidden = !(rrAvatarOverrides()[String(tid)] && rrAvatarSources()[String(tid)]);
   var want = url ? 'i:' + url.length + url.slice(-24) : 't:' + name.charAt(0);
   if (av.dataset.k !== want) {
     av.dataset.k = want; av.textContent = '';
@@ -7216,7 +7323,8 @@ window.rrOpenProfile = function (tid, ev) {
         '<div class="rrp__top"><span class="rrp__track"></span><span class="rrp__live">LIVE</span></div>' +
         '<div class="rrp__hero">' +
           '<div class="rrp__photo-wrap"><div class="rrp__photo"></div>' +
-            '<button type="button" class="rrp__change">사진 변경</button></div>' +
+            '<button type="button" class="rrp__change">사진 변경</button>' +
+            '<button type="button" class="rrp__change rrp__adjust" hidden>위치 조정</button></div>' +
           '<div class="rrp__id"><div class="rrp__name"></div>' +
             '<div class="rrp__rank"><span class="rrp__rank-num">-</span><span class="rrp__rank-suf"></span><span class="rrp__rank-of"></span></div></div>' +
         '</div>' +
@@ -7231,7 +7339,8 @@ window.rrOpenProfile = function (tid, ev) {
     host.appendChild(root);
     root.addEventListener('click', function (e) { if (e.target === root) rrCloseProfile(); });
     root.querySelector('.rrp__close').addEventListener('click', rrCloseProfile);
-    root.querySelector('.rrp__change').addEventListener('click', function () { window.rrAvatarPickForTrack(Number(root.dataset.tid)); });
+    root.querySelector('.rrp__change:not(.rrp__adjust)').addEventListener('click', function () { window.rrAvatarPickForTrack(Number(root.dataset.tid)); });
+    root.querySelector('.rrp__adjust').addEventListener('click', function () { window.rrAvatarReadjust(Number(root.dataset.tid)); });
   }
   root.dataset.tid = String(tid);
   root.querySelector('.rrp__photo').dataset.k = '';

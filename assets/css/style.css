@@ -38711,3 +38711,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-10 환영 문구 글꼴 선택 */
 #rollerRaceDashboardScreen .rrws__opt select { flex: 1; height: 34px; background: #070b18; color: #fff; border: 1px solid #2f4170; padding: 0 8px; font-size: 14px; }
 #rollerRaceDashboardScreen .rrws__fontprev { padding: 8px 10px; font-size: 28px; line-height: 1.2; color: #ffd27a; background: #070b18; border: 1px dashed #2f4170; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 2026-11-10 아바타 사진 위치 조정 편집기 */
+.rrcrop { position: fixed; inset: 0; z-index: 2147483200; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,.78); }
+.rrcrop__card { width: min(320px, 100%); background: #0e1424; color: #fff; border: 2px solid #ff8c00; padding: 16px; display: grid; gap: 12px; justify-items: center; box-shadow: 0 0 30px rgba(255,140,0,.35); }
+.rrcrop__title { font: italic 800 18px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .06em; }
+.rrcrop__frame { position: relative; width: 240px; height: 240px; overflow: hidden; border-radius: 50%; border: 3px solid #22d3ee; background: #070b18; cursor: grab; touch-action: none; user-select: none; }
+.rrcrop__frame:active { cursor: grabbing; }
+.rrcrop__frame img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; }
+.rrcrop__hint { font-size: 12px; color: #9fb0cc; text-align: center; }
+.rrcrop__zoom { display: flex; align-items: center; gap: 8px; width: 100%; font-size: 12px; color: #cfd9ec; }
+.rrcrop__zoom input { flex: 1; accent-color: #ff8c00; }
+.rrcrop__btns { display: flex; gap: 8px; }
+.rrcrop__b { height: 36px; padding: 0 20px; border: 0; cursor: pointer; font: italic 800 14px 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; background: #1b2338; color: #fff; }
+.rrcrop__b--ok { background: #ff8c00; color: #14100a; }
+#rollerRaceDashboardScreen .rrp__adjust { margin-top: 6px; }
+#rollerRaceDashboardScreen .rrp__adjust[hidden] { display: none; }
