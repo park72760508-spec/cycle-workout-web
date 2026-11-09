@@ -3083,13 +3083,13 @@
       var curIdx = -1, best = 60;
       d.s.forEach(function (x, i) { var dm = busStopDistM(x, stop); if (dm < best) { best = dm; curIdx = i; } });
       // 실시간 버스 위치: 정류장 원본 id → 노선 목록 위치
-      var liveAt = {}, liveN = 0;
+      var liveAt = {}, liveSeat = {}, liveN = 0;
       if (d.lv && d.lv.i) {
-        liveEnsure(el, d.lv.src === 'T' ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c } : { type: 'bus', src: 'S', rid: d.lv.rid }, renderBusRoutePopup);
+        liveEnsure(el, d.lv.src === 'T' ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c, rn: d.n } : { type: 'bus', src: 'S', rid: d.lv.rid, rn: d.n }, renderBusRoutePopup); // rn = 노선번호(경기·광역 잔여좌석 조회용)
         var ld = el.__live && el.__live.data;
         if (ld && ld.ok) ld.items.forEach(function (b) {
           var k = d.lv.i.indexOf(b.id);
-          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); liveN++; }
+          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); if (b.seat != null) (liveSeat[k] = liveSeat[k] || []).push(b.seat); liveN++; }
         });
       } else liveStop(el);
       card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
@@ -3104,7 +3104,7 @@
           var nextArrow = i === curIdx && i < d.s.length - 1 ? '<b class="outd-busrt__arrow" aria-label="다음 정류장 ' + escHtml(d.s[i + 1][0]) + ' 방향"></b>' : '';
           // 실시간 버스: 노선 선 위 정류장 원 자리에 둥근 배지(여러 대면 숫자)
           var lv = liveAt[i] ? '<b class="outd-busrt__veh is-bus" title="' + escHtml(liveAt[i].join(', ')) + '">🚌' + (liveAt[i].length > 1 ? '<small>' + liveAt[i].length + '</small>' : '') + '</b>' : '';
-          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
+          return '<li class="' + (i === curIdx ? 'is-cur' : '') + (liveAt[i] ? ' has-veh' : '') + '"><i></i>' + lv + nextArrow + '<span>' + escHtml(x[0]) + '</span>' + (liveSeat[i] ? '<b class="outd-busrt__seat">(잔여좌석 : ' + liveSeat[i].join(', ') + ')</b>' : '') + (i === curIdx ? '<em>현재 정류장</em>' : '') + '</li>';
         }).join('') + '</ol>';
       if (d.lv) card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '대', liveN) + '<ol class="outd-busrt__list">');
     }

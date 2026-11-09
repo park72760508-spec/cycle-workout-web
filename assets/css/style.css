@@ -38691,3 +38691,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   50% { filter: saturate(0) brightness(4) drop-shadow(0 0 8px rgba(255,255,255,.7)) drop-shadow(0 2px 6px rgba(0,0,0,.55)); }
 }
 @media (prefers-reduced-motion: reduce) { .rrwp__logo { animation-duration: 16s; } }
+
+/* 2026-11-09 버스 노선 목록: 버스가 있는 정류장 이름 옆 잔여좌석(경기·광역 노선) */
+#outdoorRideScreen .outd-busrt__list li .outd-busrt__seat { flex: 0 0 auto; font-size: 12px; font-weight: 800; color: #dc2626; white-space: nowrap; }
