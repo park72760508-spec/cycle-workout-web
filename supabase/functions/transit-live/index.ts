@@ -103,15 +103,36 @@ async function gbisSeats(rn: string, plates: string[]): Promise<Record<string, n
   return out;
 }
 
-async function seoulBus(rid: string) {
+// 서울 시내버스 혼잡도·재차 인원(2026-11-09): 위치정보(congetion) + 노선별 도착정보(reride_Num = 재차 인원, rerdie_Div = 재차 구분)를 차량으로 합침
+async function seoulBus(rid: string, dbg = false) {
   const key = await apiKey("data_go_kr");
   const q = new URLSearchParams({ serviceKey: key, busRouteId: rid, resultType: "json" });
-  const j = await getJson("http://ws.bus.go.kr/api/rest/buspos/getBusPosByRtid?" + q);
-  const list = j?.msgBody?.itemList || [];
-  return (Array.isArray(list) ? list : [list]).map((b: Record<string, unknown>) => ({
-    v: String(b.plainNo || b.vehId || ""), id: String(b.lastStnId || ""), lat: Number(b.gpsY), lon: Number(b.gpsX),
-    stop: String(b.stopFlag || "") === "1",
-  }));
+  const [pos, arr] = await Promise.all([
+    getJson("http://ws.bus.go.kr/api/rest/buspos/getBusPosByRtid?" + q),
+    getJson("http://ws.bus.go.kr/api/rest/arrive/getArrInfoByRouteAll?" + q).catch((e) => ({ err: String((e as Error)?.message || e) })),
+  ]);
+  const list = asList(pos?.msgBody?.itemList);
+  const ld = new Map<string, { n: number; d: string }>(); // 차량(번호판·vehId) → 재차 인원·구분
+  const arrList = asList(arr?.msgBody?.itemList);
+  for (const a of arrList) {
+    for (const i of ["1", "2"]) {
+      const n = Number(a["reride_Num" + i]);
+      const rec = { n: Number.isFinite(n) ? n : -1, d: String(a["rerdie_Div" + i] ?? "") };
+      for (const k of [String(a["vehId" + i] || ""), String(a["plainNo" + i] || "")]) if (k && k !== "0") ld.set(k, rec);
+    }
+  }
+  const items = list.map((b: Record<string, unknown>) => {
+    const r = ld.get(String(b.vehId || "")) || ld.get(String(b.plainNo || ""));
+    return {
+      v: String(b.plainNo || b.vehId || ""), id: String(b.lastStnId || ""), lat: Number(b.gpsY), lon: Number(b.gpsX),
+      stop: String(b.stopFlag || "") === "1",
+      cg: Number(b.congetion ?? 0) || 0, // 위치정보 혼잡도(0 = 정보 없음)
+      bt: String(b.busType ?? ""), // 0 일반 1 저상 2 굴절
+      ld: r ? r.n : -1, ldd: r ? r.d : "", // 재차 인원(-1 = 정보 없음)
+    };
+  });
+  if (dbg) return { items, raw: { pos: list.slice(0, 2), arr: arrList.slice(0, 2), arrKeys: arrList[0] ? Object.keys(arrList[0]) : [], arrHdr: (arr as Record<string, unknown> | null)?.msgHeader ?? (arr as Record<string, unknown> | null)?.err ?? null } };
+  return { items };
 }
 
 // 앱 호선 이름 → 실시간 API 호선 이름
@@ -153,8 +174,9 @@ Deno.serve(async (req) => {
   let body: unknown;
   try {
     let items: unknown[] = [];
+    let extra: unknown;
     if (type === "bus" && src === "T" && rid && city) items = await tagoBus(city, rid);
-    else if (type === "bus" && src === "S" && rid) items = await seoulBus(rid);
+    else if (type === "bus" && src === "S" && rid) { const r = await seoulBus(rid, u.searchParams.get("dbg") === "1"); items = r.items; extra = (r as { raw?: unknown }).raw; }
     else if (type === "subway" && line) items = await seoulSubway(line);
     else return json({ ok: false, error: "지원하지 않는 노선" }, 400);
     let seat: { ok: boolean; err?: string } | undefined;
@@ -166,7 +188,7 @@ Deno.serve(async (req) => {
         seat = { ok: true };
       } catch (e) { seat = { ok: false, err: String((e as Error)?.message || e).slice(0, 100) }; }
     }
-    body = { ok: true, at: Date.now(), items, seat };
+    body = { ok: true, at: Date.now(), items, seat, raw: extra };
   } catch (e) {
     body = { ok: false, at: Date.now(), error: String((e as Error)?.message || e).slice(0, 120) };
   }

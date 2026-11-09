@@ -3019,6 +3019,16 @@
     el.__liveTimer = null;
     el.__liveKey = null;
   }
+  /* 버스 잔여좌석 글자(2026-11-09):
+   * ① 경기 GBIS(seat) = 정확한 잔여좌석 ② 서울 광역(9xxx·M) 위치정보 congetion 이 7 이상이면 잔여좌석 수(혼잡 단계는 3~6)
+   * ③ 서울 시내: 재차 인원(ld, 도착정보 API)이 오면 차종별 좌석수 표본 − 재차 인원 = 약 N석(서 있는 승객은 좌석을 차지하지 않아 어림값) */
+  var BUS_SEATS = { '0': 29, '1': 25, '2': 33 }; // 서울 시내버스 좌석 표본: 일반 29 · 저상 25 · 굴절 33
+  function busSeatText(b) {
+    if (b.seat != null) return String(b.seat);
+    if (b.ld != null && b.ld >= 0) return '약 ' + Math.max(0, (BUS_SEATS[b.bt] || 29) - b.ld);
+    if (b.cg != null && b.cg > 6 && b.cg <= 60) return String(b.cg);
+    return '';
+  }
   function liveStatusHtml(el, unit, n) {
     var d = el.__live && el.__live.data;
     if (!d) return '<p class="outd-busrt__live is-wait">실시간 위치 불러오는 중…</p>';
@@ -3085,11 +3095,11 @@
       // 실시간 버스 위치: 정류장 원본 id → 노선 목록 위치
       var liveAt = {}, liveSeat = {}, liveN = 0;
       if (d.lv && d.lv.i) {
-        liveEnsure(el, d.lv.src === 'T' ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c, rn: d.n } : { type: 'bus', src: 'S', rid: d.lv.rid, rn: d.n }, renderBusRoutePopup); // rn = 노선번호(경기·광역 잔여좌석 조회용)
+        liveEnsure(el, d.lv.src === 'T' ? (/^31/.test(String(d.lv.c)) ? { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c, rn: d.n } : { type: 'bus', src: 'T', rid: d.lv.rid, c: d.lv.c }) : { type: 'bus', src: 'S', rid: d.lv.rid }, renderBusRoutePopup); // rn = 노선번호(경기 노선 잔여좌석 조회용 — 서울 노선은 서버가 위치정보에 실어 보냄)
         var ld = el.__live && el.__live.data;
         if (ld && ld.ok) ld.items.forEach(function (b) {
           var k = d.lv.i.indexOf(b.id);
-          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); if (b.seat != null) (liveSeat[k] = liveSeat[k] || []).push(b.seat); liveN++; }
+          if (k >= 0) { (liveAt[k] = liveAt[k] || []).push(b.v); var sv = busSeatText(b); if (sv) (liveSeat[k] = liveSeat[k] || []).push(sv); liveN++; }
         });
       } else liveStop(el);
       card = '<div class="outd-busrt__head"><span class="outd-busrt__no">' + escHtml(el.__ref) + '</span>' +
