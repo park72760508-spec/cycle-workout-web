@@ -38761,3 +38761,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #outdoorRideScreen .outd-exp-stats__item b { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
 #outdoorRideScreen .outd-exp-stats__item small { font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; letter-spacing: 0; color: #ffffff; }
+
+/* 2026-11-10 루트맵 경과시간·평균속도·남은거리·누적고도·이동거리 숫자: 속도계와 같은 서체(Barlow Semi Condensed 이탤릭 800, 고정폭 숫자) — 색·크기는 그대로 */
+#outdoorRideScreen #outd-main-timer,
+#outdoorRideScreen .mobile-stats-footer .mobile-stat-value,
+#outdoorRideScreen .mobile-stats-footer .mobile-stat-value span {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
+}
