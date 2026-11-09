@@ -1640,21 +1640,32 @@
     if (!subLearnTimer) subLearnTimer = setTimeout(function () { subLearnTimer = null; try { localStorage.setItem('stelvio_subseg_v1', JSON.stringify(SUB_LEARN)); } catch (e) {} }, 5000);
   }
   var SUB_PASS_HOLD_MS = 1300; // 역으로 이동(0.8초 전환) + 0.5초 정차
-  var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 45;
+  var SUB_P1 = 0.25, SUB_P2 = 0.5, SUB_P3 = 0.8, SUB_T2 = 60, SUB_T3 = 120, SUB_DWELL_SEC = 65; // 정차: 실측 도착→출발 기록 중앙 68초(2026-11-09)
+  /** 처음 보는 구간의 출발→도착 기록 간격 어림(초). 2026-11-09 실측 102구간 회귀: 약 1 + 41×km(1km 미만 중앙 38초, 1~1.5km 47초, 1.5~2.5km 66초)
+   *  — 예전 30 + 90×km 는 실제보다 약 3배 느려 도착 직전 표시가 평균 0.2~0.4역 뒤처졌음 */
+  function subSegDefault(km) { return Math.max(28, Math.min(300, 6 + 40 * (km || 0))); }
   /* 순환선(2호선) 이음 구간(끝 역 ↔ 첫 역): 목록은 직선이라 끝 역 아래쪽(+0.2~0.4)·첫 역 위쪽(-0.16)의 여백에 표시(2026-11-09) */
   function subWrapP(dir, f, n) {
     var last = n - 1;
     if (dir === 1) return f <= 0.5 ? last + f * 0.8 : -(1 - f) * 0.8;
     return f <= 0.5 ? -f * 0.8 : last + (1 - f) * 0.8;
   }
+  var SUB_PASS_SEC = 25; // 급행 비정차역 진입 → 통과까지(초) — 실측: 진입→출발 기록 약 30초(도착 기록이 오는 경우 진입 후 약 19초)
+  /** 급행 열차가 정차하지 않는 역인지(정차역 목록이 있는 호선만 — 현재 9호선) */
+  function subExpressNonstop(el, t, i) {
+    var xs = t && t.ex && SUB_EXPRESS_STOPS[el.__lnName];
+    return !!(xs && el.__names && el.__names[i] && xs.indexOf(el.__names[i]) < 0);
+  }
   function subTrainGoals(el, n, now) {
     var last = n - 1, loop = !!el.__loop;
     var isWrap = function (from, dir) { return from + dir < 0 || from + dir > last; };
     var segOf = function (from, dir) { return isWrap(from, dir) ? last : Math.min(from, from + dir); };
+    var nonstop = function (t, i) { return subExpressNonstop(el, t, i); };
     var list = (el.__trains || []).map(function (t) {
       var dir = t.down ? 1 : -1;
       var g = { t: t, dir: dir, st: null, from: null, dep: 0, pre: false };
       if (t.s === '1') g.st = t.k;
+      else if (t.s === '0' && nonstop(t, t.k) && t.at && now - t.at > SUB_PASS_SEC * 1000) { g.from = t.k; g.dep = t.at + SUB_PASS_SEC * 1000; } // 급행 비정차역: 진입 기록만 오고 도착 기록 없이 통과(실측) → 통과한 것으로 보고 계속
       else if (t.s === '0') { g.from = t.k - dir; g.pre = true; } // 진입 = 도착 직전
       else if (t.s === '2') { g.from = t.k; g.dep = t.at; }
       else if (t.s === '3') { g.from = t.k - dir; g.dep = t.at; }
@@ -1687,8 +1698,11 @@
         g.goal = g.st;
         var age = g.t.at ? (now - g.t.at) / 1000 : 0;
         // 정차 후 SUB_DWELL_SEC 지나도 출발 기록이 없으면(기록 누락 대비) 그 시각을 출발로 보고 같은 단계 시계 적용
-        if (!g.t.term && age > SUB_DWELL_SEC && age < 600 && (loop || (g.st + g.dir >= 0 && g.st + g.dir <= last))) {
-          var fi = stage(age - SUB_DWELL_SEC, segOf(g.st, g.dir));
+        // 노선 끝 역(시·종착)에서는 회차 대기가 길어(실측 수 분) 출발 기록이 올 때까지 추정 출발하지 않음
+        // 급행이 정차하지 않는 역(9호선 정차역 목록 밖)도 제공 기관은 도착·출발 기록을 남기며 통과 → 정차 5초로(실측: 예전엔 최대 1.2역 뒤처짐)
+        var dwell = nonstop(g.t, g.st) ? 5 : SUB_DWELL_SEC;
+        if (!g.t.term && age > dwell && age < 600 && (loop || (g.st > 0 && g.st < last))) {
+          var fi = stage(age - dwell, segOf(g.st, g.dir));
           g.goal = isWrap(g.st, g.dir) ? subWrapP(g.dir, fi, n) : g.st + g.dir * fi;
           g.inferred = true;
         }
@@ -1715,7 +1729,7 @@
     var T = el.__trk || (el.__trk = {});
     var seen = {};
     trains.forEach(function (t) {
-      var key = el.__li + '|' + t.id;
+      var key = el.__li + '|' + (el.__dir || 0) + '|' + t.id; // 2026-11-09: 노선 목록(본선·지선)별 — 역 순번 k 가 목록마다 다름
       seen[key] = 1;
       var pv = T[key];
       var P = subProg(t);
@@ -1731,10 +1745,23 @@
           t.k = pv.k; t.s = pv.s; t.at = pv.at; t.stn = pv.stn; P = pv.P; t.kept = true;
         }
       }
-      T[key] = { k: t.k, s: t.s, at: t.at, down: t.down, P: P, stn: t.stn, seenAt: Date.now() };
+      T[key] = { k: t.k, s: t.s, at: t.at, down: t.down, P: P, stn: t.stn, seenAt: Date.now(), t: t };
     });
     Object.keys(T).forEach(function (k) { if (!seen[k] && Date.now() - T[k].seenAt > 600000) delete T[k]; });
+    /* 2026-11-09 잠시 빠진 열차 유지: 제공 기관 응답이 옛 기록·새 기록을 번갈아 보내 열차가 20~160초 빠졌다 돌아옴(실측)
+     * → 깜빡이고, 돌아올 때 옛 상태로 뒤로 튐. SUB_HOLD_MS 동안은 마지막 기록으로 계속 표시(위치는 기록 시각부터 계속 추정) */
+    var pre = el.__li + '|' + (el.__dir || 0) + '|', held = [], now = Date.now();
+    Object.keys(T).forEach(function (k) {
+      var r = T[k];
+      if (seen[k] || k.indexOf(pre) !== 0 || !r.t || r.t.term || now - r.seenAt > SUB_HOLD_MS) return;
+      var c = {}; for (var f in r.t) c[f] = r.t[f];
+      c.k = r.k; c.s = r.s; c.at = r.at; c.stn = r.stn; c.held = true;
+      held.push(c);
+    });
+    return held;
   }
+  var SUB_HOLD_MS = 90000;
+  var SUB_TERM_HIDE_MS = 150000; // 종착 도착 기록 후 이만큼 지나면 운행 종료로 보고 숨김(실측: 종착 열차가 최대 5분 남아 있음)
   /** 진행 방향 기준 좌표 u 에서 다음 격자점(역 · +¼ · +½ · +0.8) */
   function subNextGrid(u) {
     var j = Math.floor(u + 1e-9), F = [0, SUB_P1, SUB_P2, SUB_P3];
@@ -1749,18 +1776,19 @@
     var now = Date.now();
     var key = el.__li + '|' + el.__dir;
     var D = el.__trDisp;
-    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {}, hold: {}, ord: {} };
+    if (!D || D.key !== key) D = el.__trDisp = { key: key, map: {}, hold: {}, ord: {}, last: {} };
     var next = {};
     subTrainGoals(el, n, now).forEach(function (g) {
       g.t.forced = false;
       var id = g.t.id, dir = g.dir, pv = D.map[id];
+      if (!pv) { var ls = D.last[id]; if (ls && now - ls.at < 300000) pv = ls; } // 목록에서 빠졌다 돌아온 열차: 5분간 마지막 표시 위치 기억
       var p = g.goal;
       if (pv && pv.dir === dir) {
         var d = dir * (p - pv.p);
         if (d < 0 && d > -1) p = pv.p; // 같은 구간 안에서는 후퇴 없음
         // 진입(P3) 대기 중 도착 기록 없이 출발 기록이 와서 역을 건너뛰게 되면: 먼저 그 역으로 이동해 0.5초 머문 뒤 출발 지점으로
         var pu = dir * pv.p, gu = dir * p, cu = Math.ceil(pu - 1e-6);
-        if (pu < cu - 1e-6 && gu > cu + 1e-6 && gu - cu <= 1 && cu >= 0 && cu <= n - 1) {
+        if (pu < cu - 1e-6 && gu > cu + 1e-6 && gu - cu <= 1 && cu >= 0 && cu <= n - 1 && !subExpressNonstop(el, g.t, dir * cu)) { // 급행 비정차역은 멈추지 않고 통과
           var hd = D.hold[id];
           if (!hd || hd.st !== cu) hd = D.hold[id] = { st: cu, at: now };
           if (now - hd.at < SUB_PASS_HOLD_MS) {
@@ -1799,6 +1827,8 @@
       D.ord[ok] = ord;
     });
     D.map = next;
+    Object.keys(next).forEach(function (id) { D.last[id] = { dir: next[id].dir, p: next[id].p, at: now }; });
+    Object.keys(D.last).forEach(function (id) { if (now - D.last[id].at > 300000) delete D.last[id]; });
     return next;
   }
   function subAgeText(t, now) {
@@ -1995,22 +2025,25 @@
         if (k < 0) return;
         var tk = names.indexOf(nmS(t.to));
         // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
-        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : hasLoop ? t.ud === '0' : udDown(t.ud);
+        var down = isLoop ? t.ud === '1' : tk >= 0 && tk !== k ? tk > k : hasLoop ? t.ud === '0' : udDown(t.ud); // tk === k(종착역 도착)는 상·하행 코드로(예전엔 항상 위쪽으로 판정)
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: !isLoop && tk === k && String(t.s) === '1' });
         trainN++;
       });
       el.__names = names; el.__lnName = ln.n; el.__loop = isLoop;
-      subReconcile(el, trains);
+      trains = trains.concat(subReconcile(el, trains));
+      var nowR = Date.now();
+      trains = trains.filter(function (t) { return !(t.term && t.at && nowR - t.at > SUB_TERM_HIDE_MS); });
+      trainN = trains.length;
       var dirf = el.__dirf || 0;
       if (dirf) { trains = trains.filter(function (t) { return (t.down ? 1 : -1) === dirf; }); trainN = trains.length; }
       el.__segL = [];
       el.__segT = seq.slice(1).map(function (si, i) { // 구간 소요(초): 학습값 우선, 없으면 거리 어림
         var lv = SUB_LEARN[subSegKey(ln.n, names[i], names[i + 1])];
         el.__segL[i] = !!lv;
-        return lv ? lv[0] : 30 + subStDistKm(seq[i], si) * 90;
+        return lv ? lv[0] : subSegDefault(subStDistKm(seq[i], si));
       });
-      if (isLoop) { el.__segL[seq.length - 1] = false; el.__segT.push(30 + subStDistKm(seq[seq.length - 1], seq[0]) * 90); } // 이음 구간(끝 역 → 첫 역)
+      if (isLoop) { el.__segL[seq.length - 1] = false; el.__segT.push(subSegDefault(subStDistKm(seq[seq.length - 1], seq[0]))); } // 이음 구간(끝 역 → 첫 역)
       el.__trains = trains; el.__trainN = seq.length;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       var dirf2 = el.__dirf || 0;
