@@ -1867,12 +1867,14 @@
       liveEnsure(el, { type: 'subway', line: ln.n }, renderSubwayLinePopup);
       var names = seq.map(function (si) { return st[si] ? subLiveName(st[si].n) : ''; });
       // 2026-11-04 열차 상태(진입·도착·출발·전역출발)별 위치 + 기록 시각부터 지난 시간만큼 다음 역 쪽으로 추정 이동(placeSubTrains)
+      var isLoop = seq.length > 10 && subStDistKm(seq[0], seq[seq.length - 1]) < 2.5;
       var trains = [], trainN = 0, ldS = el.__live && el.__live.data;
       if (ldS && ldS.ok) ldS.items.forEach(function (t) {
         var k = names.indexOf(subLiveName(t.st));
         if (k < 0) return;
         var tk = names.indexOf(subLiveName(t.to));
-        var down = tk >= 0 ? tk > k : t.ud === '1';
+        // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
+        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : t.ud === '1';
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: tk === k && String(t.s) === '1' });
         trainN++;
