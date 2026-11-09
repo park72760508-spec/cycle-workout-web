@@ -38467,7 +38467,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: 'East Sea Dokdo', 'Nanum Brush Script', cursive; font-size: 38px; line-height: 1.1; letter-spacing: .02em;
   background: linear-gradient(90deg, #ffffff 0%, #ffd27a 55%, #ff8c00 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 6px rgba(255, 140, 0, .35)); transform: rotate(-2deg); transform-origin: left center; padding: 2px 4px;
+  filter: drop-shadow(0 2px 6px rgba(255, 140, 0, .35)); transform: none; transform-origin: left center; padding: 2px 4px;
 }
 #rollerRaceDashboardScreen .rr-welcome-edit {
   display: inline-flex; align-items: center; gap: 8px; margin: 0; padding: 4px 10px; background: rgba(255,255,255,.06); border-left: 3px solid #ff8c00;
@@ -38501,8 +38501,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   100% { opacity: 1; transform: translateX(0) rotate(0) scale(1); filter: blur(0); }
 }
 @keyframes rrWelcomeFloat {
-  0%, 100% { transform: translateY(0) rotate(-2deg); filter: drop-shadow(0 2px 6px rgba(255,140,0,.30)); }
-  50% { transform: translateY(-3px) rotate(-1.4deg); filter: drop-shadow(0 4px 12px rgba(255,140,0,.65)); }
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 2px 6px rgba(255,140,0,.30)); }
+  50% { transform: translateY(-3px); filter: drop-shadow(0 4px 12px rgba(255,140,0,.65)); }
 }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .rr-welcome__text, #rollerRaceDashboardScreen .rr-welcome--play .rr-ch { animation: none; } #rollerRaceDashboardScreen .rr-ch { opacity: 1; } }
 
