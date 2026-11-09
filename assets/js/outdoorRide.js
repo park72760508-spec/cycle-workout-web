@@ -1885,12 +1885,24 @@
       // 2026-11-04 열차 상태(진입·도착·출발·전역출발)별 위치 + 기록 시각부터 지난 시간만큼 다음 역 쪽으로 추정 이동(placeSubTrains)
       var isLoop = seq.length > 10 && subStDistKm(seq[0], seq[seq.length - 1]) < 2.5;
       var trains = [], trainN = 0, ldS = el.__live && el.__live.data;
+      // 2026-11-09 순환선(2호선) 지선: API 는 지선 열차를 '성수지선'·'신도림지선'(역·종착)으로 내려줌 → 접미사 '지선' 제거 후 매칭.
+      // 본선/지선이 같은 역 이름(성수·신도림)을 공유하므로 열차를 본선·지선으로 나눠 해당 노선에만 표시. 지선의 상·하행 코드는 본선과 반대 아님: 0 = 목록 아래쪽(성수·까치산) 방향.
+      var loopSeq = function (q) { return q.length > 10 && subStDistKm(q[0], q[q.length - 1]) < 2.5; };
+      var hasLoop = seqs.some(loopSeq), brOnly = {};
+      if (hasLoop) {
+        var mainNm = {};
+        seqs.forEach(function (q) { if (loopSeq(q)) q.forEach(function (si) { if (st[si]) mainNm[subLiveName(st[si].n)] = 1; }); });
+        seqs.forEach(function (q) { if (!loopSeq(q)) q.forEach(function (si) { var z = st[si] && subLiveName(st[si].n); if (z && !mainNm[z]) brOnly[z] = 1; }); });
+      }
+      var nmS = function (x) { return subLiveName(x).replace(/지선$/, ''); };
+      var isBranchTrain = function (t) { return /지선/.test(t.st + t.to) || !!brOnly[nmS(t.to)] || !!brOnly[nmS(t.st)]; };
       if (ldS && ldS.ok) ldS.items.forEach(function (t) {
-        var k = names.indexOf(subLiveName(t.st));
+        if (hasLoop && isBranchTrain(t) === isLoop) return;
+        var k = names.indexOf(nmS(t.st));
         if (k < 0) return;
-        var tk = names.indexOf(subLiveName(t.to));
+        var tk = names.indexOf(nmS(t.to));
         // 순환선(2호선 본선)은 종착역(예: 성수종착)이 방향을 알려주지 못함 → 상·하행 코드(0=내선=목록 위쪽, 1=외선=목록 아래쪽)로 판정(2026-11-09)
-        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : t.ud === '1';
+        var down = isLoop ? t.ud === '1' : tk >= 0 ? tk > k : hasLoop ? t.ud === '0' : t.ud === '1';
         var at = t.dt ? Date.parse(String(t.dt).replace(' ', 'T') + '+09:00') : NaN;
         trains.push({ id: String(t.no || '') || (t.st + '>' + t.to + '#' + trainN), k: k, stn: st[seq[k]] ? st[seq[k]].n : '', down: down, to: String(t.to || '').replace(/종착$/, ''), s: String(t.s || ''), ex: t.ex, at: isFinite(at) ? at : 0, term: !isLoop && tk === k && String(t.s) === '1' });
         trainN++;
