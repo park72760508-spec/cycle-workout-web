@@ -263,7 +263,7 @@
     var target = Math.round(userTargetPower(pm));
     var lap = Math.round(Number(pm && pm.segmentPower) || 0);
     setText('coachm-ui-target-power', target);
-    setText('coachm-ui-current-power', Math.round(Number(pm && pm.currentPower) || 0));
+    if (!window.StelvioGaugeSpring) setText('coachm-ui-current-power', Math.round(Number(pm && pm.currentPower) || 0)); // 스프링 사용 시 루프가 숫자를 그림
     setText('coachm-ui-cadence', Math.round(Number(pm && pm.cadence) || 0));
     setText('coachm-ui-lap-power', lap);
     setText('coachm-ui-hr', Math.round(Number(pm && pm.heartRate) || 0));
@@ -330,7 +330,15 @@
     var pm = selectedPm();
     var target = pm && pm.userName ? Math.max(0, Number(pm.currentPower) || 0) : 0;
     var diff = target - st.displayPower;
-    st.displayPower = Math.abs(diff) > 0.1 ? st.displayPower + diff * 0.15 : target;
+    if (window.StelvioGaugeSpring) {
+      // 2026-11-10 스프링 바늘 + 정수 순차 카운트 숫자 (표시 전용, 계산은 pm.currentPower 그대로)
+      var gs = st.gs || (st.gs = window.StelvioGaugeSpring.create(st.displayPower));
+      window.StelvioGaugeSpring.step(gs, target, performance.now());
+      st.displayPower = gs.x;
+      setText('coachm-ui-current-power', Math.round(gs.n));
+    } else {
+      st.displayPower = Math.abs(diff) > 0.1 ? st.displayPower + diff * 0.15 : target;
+    }
     var ftp = Number(pm && pm.userName && pm.userFTP) || 200;
     var ratio = Math.min(Math.max(st.displayPower / (ftp * 2), 0), 1);
     var needle = $('coachm-gauge-needle');
@@ -509,7 +517,7 @@
     applyMonitorMode();
     st.userPicked = false;
     st.trackId = null;
-    st.displayPower = 0;
+    st.displayPower = 0; st.gs = null;
     st.gaugeFtp = 0;
     closeMenu();
     subscribeStatus();
@@ -650,7 +658,7 @@
         e.stopPropagation();
         st.trackId = row.getAttribute('data-track');
         st.userPicked = true;
-        st.displayPower = 0;
+        st.displayPower = 0; st.gs = null;
         st.lastTextAt = 0;
         closeMenu();
       });
@@ -702,7 +710,7 @@
       if (card.classList.contains('coachm-mcard--idle')) return;
       st.trackId = card.getAttribute('data-track');
       st.userPicked = true;
-      st.displayPower = 0;
+      st.displayPower = 0; st.gs = null;
       st.lastTextAt = 0;
       setMonitorMode(false); // 고른 슬롯을 계기판으로 크게 보기
     });
@@ -1072,7 +1080,7 @@
       window.clearAllBluetoothTracksData({ skipConfirm: true, roomId: sid });
       st.trackId = null;
       st.userPicked = false;
-      st.displayPower = 0;
+      st.displayPower = 0; st.gs = null;
     };
     var msg = '모든 슬롯을 비우시겠습니까?';
     if (typeof window.showStelvioExitConfirmPopup === 'function') {

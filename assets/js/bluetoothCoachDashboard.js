@@ -1084,9 +1084,10 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   
   // 파워값 표시 업데이트
   const textEl = document.getElementById(`current-power-value-${powerMeterId}`);
-  if (textEl) {
+  if (textEl && (!window.StelvioGaugeSpring || !powerMeter.connected || window.bluetoothCoachState.gaugeAnimationFrameId === null)) { // 루프가 돌면 루프가 숫자를 부드럽게 그림
     textEl.textContent = Math.round(powerMeter.currentPower);
   }
+  if (!powerMeter.__txtAt || performance.now() - powerMeter.__txtAt >= 3000) powerMeter.__txtPower = powerMeter.currentPower;
   
   // FTP 대비 % 위첨자 표시
   const ftpPercentEl = document.getElementById(`ftp-percent-${powerMeterId}`);
@@ -1117,6 +1118,7 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   if (powerMeter.networkDisconnected) {
     // 네트워크 단절 시 즉시 0으로 설정
     powerMeter.displayPower = 0;
+    powerMeter.__gs = null; powerMeter.__gn = null; powerMeter.__txtPower = 0;
   }
   // 정상 작동 시에는 애니메이션 루프가 displayPower를 부드럽게 업데이트함
   
@@ -1183,6 +1185,20 @@ function startGaugeAnimationLoop() {
       const diff = target - current;
       const absDiff = Math.abs(diff);
 
+      if (window.StelvioGaugeSpring) {
+        // 2026-11-10 스프링 바늘 + 정수 순차 카운트 숫자 (표시 전용, 계산은 pm.currentPower 그대로)
+        const gs = pm.__gs || (pm.__gs = window.StelvioGaugeSpring.create(current));
+        window.StelvioGaugeSpring.step(gs, target, now);
+        pm.displayPower = gs.x;
+        // 숫자는 3초 평균(updatePowerMeterUI) 값을 따라가고, 최근 3초 내 갱신이 없으면 현재 파워를 따라감
+        const txtTarget = (pm.__txtAt && now - pm.__txtAt < 3000 && pm.__txtPower != null) ? pm.__txtPower : target;
+        const gn = pm.__gn || (pm.__gn = window.StelvioGaugeSpring.create(txtTarget));
+        window.StelvioGaugeSpring.step(gn, txtTarget, now);
+        const txtEl = document.getElementById(`current-power-value-${pm.id}`);
+        const txt = String(Math.round(gn.n));
+        if (txtEl && txtEl.textContent !== txt) txtEl.textContent = txt;
+      } else
+      {
       // Garmin 스타일 부드러운 애니메이션: 적응형 지수적 감쇠 (Exponential Decay)
       if (absDiff > 0.05) {
         // 거리에 따른 적응형 보간 속도 (Garmin의 실제 알고리즘 기반)
@@ -1215,6 +1231,8 @@ function startGaugeAnimationLoop() {
       } else {
         // 차이가 매우 작으면 목표값으로 고정 (떨림 방지)
         pm.displayPower = target;
+      }
+
       }
 
       // FTP 기반 최대 파워 계산 (FTP × 2)
@@ -1783,7 +1801,8 @@ function updatePowerMeterUI(trackId) {
   const currentPowerEl = document.getElementById(`current-power-value-${trackId}`);
   if (currentPowerEl) {
     const avgPower = powerMeter.get3SecondAveragePower ? powerMeter.get3SecondAveragePower() : powerMeter.currentPower;
-    currentPowerEl.textContent = Math.round(avgPower);
+    powerMeter.__txtPower = Math.round(avgPower); powerMeter.__txtAt = performance.now();
+    if (!window.StelvioGaugeSpring || !powerMeter.connected || window.bluetoothCoachState.gaugeAnimationFrameId === null) currentPowerEl.textContent = Math.round(avgPower); // 루프가 돌면 루프가 숫자를 부드럽게 그림
   }
   
   // FTP 대비 % 위첨자 표시 (updatePowerMeterNeedle에서도 처리되지만 여기서도 업데이트)
