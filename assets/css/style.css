@@ -38841,3 +38841,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-10 협찬 주소: 링크 아님(표시 문자만), 글자 폭 = '협찬 : 로고' 줄 폭(JS 가 글자 크기 계산) */
 .rrwp__spons-url { display: inline-block; white-space: nowrap; font: 600 8px/1.1 'Noto Sans KR', sans-serif; color: #111; text-shadow: 0 0 4px rgba(255,255,255,.85); user-select: none; pointer-events: none; }
+
+/* 2026-11-10 지도 크게 보기 상태의 버튼 아이콘: 축소 모양 대신 속도계 센서 아이콘(흰색) — 누르면 속도계가 다시 나옴 */
+#outdoorRideScreen .outd-expand img.outd-expand__out { width: 24px; height: 24px; object-fit: contain; filter: brightness(0) invert(1); pointer-events: none; user-select: none; }
