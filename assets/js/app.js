@@ -18292,6 +18292,7 @@ function startMobileGaugeAnimationLoop() {
   
   // 루프 시작
   mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
+  if (window.StelvioGaugeSpring) window.StelvioGaugeSpring.fallback('mobile', loopBody, () => window.__mobileGaugeBeat); // 안드로이드 프레임 신호 부족 대비
 }
 
 /** 모바일 바늘 루프 감시: 화면이 보이는데 프레임이 2.5초 넘게 안 돌면 재시작, 화면 복귀 시 즉시 점검 */
@@ -18568,11 +18569,11 @@ function initializeLaptopGauge() {
 
 function startLaptopGaugeAnimationLoop() {
   if (laptopGaugeAnimationFrameId !== null) return;
-  const loop = () => {
+  const loopBody = () => {
     const trainingScreen = document.getElementById('trainingScreen');
     if (!trainingScreen || (!trainingScreen.classList.contains('active') && window.getComputedStyle(trainingScreen).display === 'none')) {
       laptopGaugeAnimationFrameId = null;
-      return;
+      return false;
     }
     const target = laptopCurrentPowerValue || 0;
     const current = laptopDisplayPower || 0;
@@ -18602,9 +18603,16 @@ function startLaptopGaugeAnimationLoop() {
     const centerText = safeGetElement('laptop-ui-current-power');
     if (centerText) { const lt = String(Math.round(laptopNum != null ? laptopNum : laptopDisplayPower)); if (centerText.textContent !== lt) centerText.textContent = lt; }
     if (typeof updateLaptopTargetPowerArc === 'function') updateLaptopTargetPowerArc();
-    laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
+    return true;
+  };
+  const loop = () => {
+    window.__laptopGaugeBeat = Date.now();
+    let go = true;
+    try { go = loopBody() !== false; } catch (err) { /* 한 프레임 오류에도 루프 유지 */ }
+    if (go) laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
   };
   laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
+  if (window.StelvioGaugeSpring) window.StelvioGaugeSpring.fallback('laptop', loopBody, () => window.__laptopGaugeBeat); // 안드로이드 프레임 신호 부족 대비
 }
 
 function updateLaptopGaugeNeedle(power) {

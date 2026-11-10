@@ -37,5 +37,21 @@
     }
     return s;
   }
-  w.StelvioGaugeSpring = { create: create, step: step };
+  /*
+   * 안드로이드 WebView 보조 구동(2026-11-10): 프레임 신호(requestAnimationFrame)가 70ms 넘게 비면 33ms 타이머가 body 를 대신 실행.
+   * id: 화면별 구분, body: 한 프레임 처리 함수(false 반환 시 중단), beat: 마지막 프레임 실행 시각(Date.now 기준) 반환 함수.
+   */
+  var timers = {};
+  function fallback(id, body, beat) {
+    if (timers[id]) return;
+    timers[id] = setInterval(function () {
+      var go = true;
+      try {
+        if (Date.now() - (Number(beat()) || 0) < 70 && !document.hidden) return; // 프레임 신호 정상
+        go = body() !== false;
+      } catch (e) {}
+      if (!go) { clearInterval(timers[id]); timers[id] = null; }
+    }, 33);
+  }
+  w.StelvioGaugeSpring = { create: create, step: step, fallback: fallback };
 })(window);

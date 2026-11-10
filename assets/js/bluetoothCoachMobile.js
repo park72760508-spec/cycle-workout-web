@@ -314,11 +314,8 @@
     window.drawSegmentGraph(w.segments, idx, 'coachmSegmentGraph', Number(cs.totalElapsedTime) || 0);
   }
 
-  function loop() {
-    if (!isActive()) {
-      st.rafId = null;
-      return;
-    }
+  function loopBody() {
+    if (!isActive()) return false;
     checkLoadingDone();
     if (st.monitorMode) {
       var nowM = Date.now();
@@ -362,11 +359,18 @@
       st.lastGraphAt = now;
       renderGraph();
     }
-    st.rafId = requestAnimationFrame(loop);
+    return true;
+  }
+  function loop() {
+    st.beat = Date.now();
+    var go = true;
+    try { go = loopBody() !== false; } catch (e) { /* 한 프레임 오류에도 루프 유지 */ }
+    st.rafId = go ? requestAnimationFrame(loop) : null;
   }
 
   function startLoop() {
     if (st.rafId == null) st.rafId = requestAnimationFrame(loop);
+    if (window.StelvioGaugeSpring) window.StelvioGaugeSpring.fallback('coachm', loopBody, function () { return st.beat; }); // 안드로이드 프레임 신호 부족 대비
   }
 
   /* ---------- 시작 카운트다운 (엔진이 기록하는 status.countdownRemainingSec) ---------- */

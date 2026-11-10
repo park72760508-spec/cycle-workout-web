@@ -1156,10 +1156,9 @@ function startGaugeAnimationLoop() {
     window.bluetoothCoachState.lastFrameTime = performance.now();
   }
   
-  const loop = () => {
+  const loopBody = () => {
     if (!window.bluetoothCoachState || !window.bluetoothCoachState.powerMeters) {
-      window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
-      return;
+      return true;
     }
 
     // 프레임 레이트 독립적인 애니메이션을 위한 델타 타임 계산
@@ -1260,9 +1259,15 @@ function startGaugeAnimationLoop() {
       updateBluetoothCoachPowerMeterTrail(pm.id, pm.displayPower, angle, pm);
     });
 
+    return true;
+  };
+  const loop = () => {
+    window.__coachGaugeBeat = Date.now();
+    try { loopBody(); } catch (err) { /* 한 프레임 오류에도 루프 유지 */ }
     window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
   };
   window.bluetoothCoachState.gaugeAnimationFrameId = requestAnimationFrame(loop);
+  if (window.StelvioGaugeSpring) window.StelvioGaugeSpring.fallback('coach', loopBody, () => window.__coachGaugeBeat); // 안드로이드 프레임 신호 부족 대비
 }
 
 /**

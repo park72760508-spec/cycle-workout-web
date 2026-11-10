@@ -4118,6 +4118,7 @@ function indivStartGaugeAnimationLoop() {
     
     // 루프 시작
     gaugeAnimationFrameId = requestAnimationFrame(loop);
+    if (window.StelvioGaugeSpring) window.StelvioGaugeSpring.fallback('indiv', loopBody, () => window.__indivGaugeBeat); // 안드로이드 프레임 신호 부족 대비
 }
 /**
  * 바늘 루프 감시(워치독): 화면이 보이는데 프레임이 2.5초 넘게 안 돌면(예외·WebView 일시정지·백그라운드 복귀 등) 루프를 다시 시작하고,
