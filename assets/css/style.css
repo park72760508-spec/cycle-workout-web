@@ -38900,3 +38900,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-10 급행 정차역 이름: 역 원 테두리(급행 부드러운 빨강)와 같은 색조 — 호선 공통(급행 정차역 목록이 있는 호선) */
 #outdoorRideScreen .outd-subln .outd-busrt__list li.is-xs > span:not(.outd-subln__xfer) { color: #e46a6a; }
+
+/* 2026-11-10 1등 세리머니: 팝업 시점까지 1등의 TSS·IF */
+#coachRaceCeremony .crc__metrics { display: flex; gap: 14px; margin-top: 1.6vh; animation: crcRise 0.8s ease-out 1.05s both; }
+#coachRaceCeremony .crc__metric {
+  display: inline-flex; align-items: baseline; gap: 10px; padding: 8px 20px; border: 1px solid rgba(250, 204, 21, .45); border-radius: 999px;
+  background: rgba(15, 23, 42, .55); box-shadow: 0 0 18px rgba(250, 204, 21, .18) inset;
+}
+#coachRaceCeremony .crc__metric i { font-style: normal; font-size: min(2.2vh, 18px); font-weight: 800; letter-spacing: .14em; color: #fde68a; }
+#coachRaceCeremony .crc__metric b { font-family: 'Orbitron', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: min(3.6vh, 32px); font-weight: 800; color: #ffffff; text-shadow: 0 0 12px rgba(250, 204, 21, .55); }

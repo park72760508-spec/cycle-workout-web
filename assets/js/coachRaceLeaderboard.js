@@ -221,14 +221,14 @@
   }
   function storeKey(k) { return 'stelvioCoachRace:' + k; }
   function freshState(key) {
-    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, tiz: {}, rpm: {}, users: {}, prevRank: {}, moves: {}, done: false };
+    return { key: key, seg: null, lastElapsed: 0, final: {}, lap: {}, tiz: {}, rpm: {}, np: {}, users: {}, prevRank: {}, moves: {}, done: false };
   }
   function loadState(key) {
     try {
       var raw = sessionStorage.getItem(storeKey(key));
       if (raw) {
         var o = JSON.parse(raw);
-        if (o && o.key === key) { o.moves = {}; o.tiz = o.tiz || {}; o.rpm = o.rpm || {}; return o; }
+        if (o && o.key === key) { o.moves = {}; o.tiz = o.tiz || {}; o.rpm = o.rpm || {}; o.np = o.np || {}; return o; }
       }
     } catch (e) {}
     return freshState(key);
@@ -371,6 +371,18 @@
             rs.sum += cad;
             rs.z += devR <= ZONE_FULL + 1e-9 ? 1 : devR <= ZONE_HALF + 1e-9 ? 0.5 : 0;
           }
+        }
+      }
+      // 2026-11-10 TSS·IF 집계(세리머니 표시용): 진행 중(일시정지 제외) 전 구간 1초 표본 → 30초 이동평균의 4제곱 평균으로 NP
+      if (st === 'running') {
+        var np = S.np[uid] || (S.np[uid] = { at: 0, ring: [], rs: 0, n: 0, sp: 0, n4: 0, s4: 0 });
+        if (now - np.at >= 950) {
+          np.at = now;
+          var pw = fresh ? Math.max(0, num(pm.currentPower)) : 0;
+          np.n += 1; np.sp += pw;
+          np.ring.push(pw); np.rs += pw;
+          if (np.ring.length > 30) np.rs -= np.ring.shift();
+          if (np.ring.length === 30) { var avg30 = np.rs / 30; np.n4 += 1; np.s4 += avg30 * avg30 * avg30 * avg30; }
         }
       }
       if (pm.userId) fetchAvatar(String(pm.userId));
@@ -565,6 +577,23 @@
   // ---------- 1등 축하 세리머니(2026-11-03) ----------
   // 모든 세그먼트 종료 시 화면 전체 오버레이: 트로피 + 1등 이름·점수 + 2·3위, 폭죽·불꽃·꽃가루 애니메이션.
   // 화면을 클릭(터치)하기 전까지 계속 유지.
+  /** 지금까지의 TSS·IF(FTP = 오늘 적용 FTP: 프로필 FTP × 목표값 조절). 표본이 없으면 null */
+  function userTssIf(uid) {
+    var np = S && S.np && S.np[uid], u = S && S.users && S.users[uid];
+    var ftp = u && num(u.ftp);
+    if (!np || !(np.n > 0) || !(ftp > 0)) return null;
+    var ap = np.sp / np.n;
+    var npW = np.n4 > 0 ? Math.pow(np.s4 / np.n4, 0.25) : ap;
+    if (!(npW > 0)) return { tss: 0, ifv: 0 };
+    var ifv = npW / ftp;
+    var tss = null;
+    try {
+      if (typeof window.calculateStelvioRevisedTSS === 'function') tss = num(window.calculateStelvioRevisedTSS(np.n, ap, npW, ftp, num(u.weight) > 0 ? num(u.weight) : (window.STELVIO_RTSS_DEFAULT_WEIGHT_KG || 70)));
+    } catch (e) { tss = null; }
+    if (!(tss >= 0)) tss = (np.n / 3600) * ifv * ifv * 100;
+    return { tss: tss, ifv: ifv };
+  }
+  window.coachRaceUserTssIf = userTssIf;
   function showCeremony(rows) {
     var old = $('coachRaceCeremony');
     if (old && old.__stop) old.__stop();
@@ -586,6 +615,12 @@
         '<div class="crc__label">WINNER</div>' +
         '<div class="crc__name">' + (av ? '<img class="crc__avatar" src="' + esc(av) + '" alt="" onerror="this.remove()">' : '') + '<span>' + esc(w1.name) + '</span></div>' +
         '<div class="crc__score"><b>' + scoreHtml(w1.total) + '</b> 점</div>' +
+        (function () {
+          var m = userTssIf(w1.uid);
+          if (!m) return '';
+          return '<div class="crc__metrics"><span class="crc__metric"><i>TSS</i><b>' + Math.round(m.tss) + '</b></span>' +
+            '<span class="crc__metric"><i>IF</i><b>' + m.ifv.toFixed(2) + '</b></span></div>';
+        })() +
         (pod ? '<div class="crc__pods">' + pod + '</div>' : '') +
         '<div class="crc__hint">화면을 클릭하면 닫힙니다</div>' +
       '</div>';
