@@ -4850,7 +4850,35 @@ function getUserChallengeSync() {
     return 'Fitness'; // 기본값
 }
 
+/** 슬라이더 양옆 라벨에 실제 조절 가능 범위 표시 */
+function indivSetIntensityRangeLabels(slider, range) {
+    const wrap = slider && slider.parentElement;
+    const minLabel = wrap && wrap.querySelector('[class$="intensity-adjustment-min"]');
+    const maxLabel = wrap && wrap.querySelector('[class$="intensity-adjustment-max"]');
+    if (minLabel) minLabel.textContent = `${range.min}%`;
+    if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+}
+/** 사용자 정보(등급)가 늦게 불러와져도 범위·라벨을 다시 맞춤(범위를 벗어난 현재 값은 범위 안으로) */
+function indivReapplyIntensityRange() {
+    const slider = __indivEl('individualIntensityAdjustmentSlider');
+    if (!slider) return;
+    const challenge = getUserChallengeSync();
+    const range = INDIV_SLIDER_RANGE_BY_CHALLENGE[challenge] || INDIV_SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+    slider.min = range.min;
+    slider.max = range.max;
+    indivSetIntensityRangeLabels(slider, range);
+    const v = parseInt(slider.value, 10);
+    if (!isNaN(v) && (v < range.min || v > range.max)) {
+        const c = Math.max(range.min, Math.min(range.max, v));
+        slider.value = c;
+        updateIndividualIntensityAdjustment(c);
+    }
+}
+window.indivReapplyIntensityRange = indivReapplyIntensityRange;
+
 function initializeIndividualIntensitySlider() {
+    setTimeout(indivReapplyIntensityRange, 1200);
+    setTimeout(indivReapplyIntensityRange, 3500);
     const slider = __indivEl('individualIntensityAdjustmentSlider');
     const valueDisplay = __indivEl('individualIntensityAdjustmentValue');
     
@@ -4865,11 +4893,9 @@ function initializeIndividualIntensitySlider() {
     slider.min = range.min;
     slider.max = range.max;
     
-    // 슬라이더 범위 표시 라벨 업데이트
-    const minLabel = document.querySelector('.individual-intensity-adjustment-min');
-    const maxLabel = document.querySelector('.individual-intensity-adjustment-max');
-    if (minLabel) minLabel.textContent = `${range.min}%`;
-    if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+    // 슬라이더 범위 표시 라벨 업데이트 — 2026-11-10: 통합 화면의 라벨 클래스는 'indiv-individual-…' 이라 예전 선택자로는 찾지 못해
+    // 등급과 관계없이 HTML 기본값(-5%/+5%)이 그대로 보였다 → 슬라이더 옆 라벨을 직접 찾음
+    indivSetIntensityRangeLabels(slider, range);
     
     console.log('[Bluetooth 개인 훈련] Challenge 타입:', challenge, '슬라이더 범위:', range);
     

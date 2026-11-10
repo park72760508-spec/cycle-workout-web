@@ -12597,6 +12597,22 @@ function initializeIntensitySlider() {
   const maxLabel = document.querySelector('.intensity-adjustment-max');
   if (minLabel) minLabel.textContent = `${range.min}%`;
   if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+  // 2026-11-10: 사용자 등급이 늦게 불러와져도 실제 범위로 다시 맞춤
+  [1200, 3500].forEach(function (ms) {
+    setTimeout(function () {
+      const sl = document.getElementById('intensityAdjustmentSlider');
+      if (!sl) return;
+      const rg = SLIDER_RANGE_BY_CHALLENGE[getUserChallengeSync()] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+      sl.min = rg.min; sl.max = rg.max;
+      const wrap = sl.parentElement;
+      const mn = wrap && wrap.querySelector('.intensity-adjustment-min');
+      const mx = wrap && wrap.querySelector('.intensity-adjustment-max');
+      if (mn) mn.textContent = `${rg.min}%`;
+      if (mx) mx.textContent = `+${rg.max}%`;
+      const v = parseInt(sl.value, 10);
+      if (!isNaN(v) && (v < rg.min || v > rg.max)) { sl.value = Math.max(rg.min, Math.min(rg.max, v)); sl.dispatchEvent(new Event('input')); sl.dispatchEvent(new Event('change')); }
+    }, ms);
+  });
   
   console.log('[강도 조절] Challenge 타입:', challenge, '슬라이더 범위:', range);
   
@@ -17326,6 +17342,21 @@ async function startMobileDashboard() {
         const maxLabel = safeGetElement('mobileIndividualIntensityAdjustmentSlider')?.parentElement?.querySelector('.mobile-individual-intensity-adjustment-max');
         if (minLabel) minLabel.textContent = `${range.min}%`;
         if (maxLabel) maxLabel.textContent = `+${range.max}%`;
+        // 2026-11-10: 사용자 등급(challenge)이 화면 진입 뒤에 불러와지면 처음 범위(기본값)로 남던 문제 — 잠시 뒤 다시 맞춤
+        [1200, 3500].forEach(function (ms) {
+          setTimeout(function () {
+            const sl = safeGetElement('mobileIndividualIntensityAdjustmentSlider', { silent: true });
+            if (!sl) return;
+            const rg = SLIDER_RANGE_BY_CHALLENGE[getUserChallengeSync()] || SLIDER_RANGE_BY_CHALLENGE['Fitness'];
+            sl.min = rg.min; sl.max = rg.max;
+            const mn = sl.parentElement && sl.parentElement.querySelector('.mobile-individual-intensity-adjustment-min');
+            const mx = sl.parentElement && sl.parentElement.querySelector('.mobile-individual-intensity-adjustment-max');
+            if (mn) mn.textContent = `${rg.min}%`;
+            if (mx) mx.textContent = `+${rg.max}%`;
+            const v = parseInt(sl.value, 10);
+            if (!isNaN(v) && (v < rg.min || v > rg.max)) { sl.value = Math.max(rg.min, Math.min(rg.max, v)); sl.dispatchEvent(new Event('input')); sl.dispatchEvent(new Event('change')); }
+          }, ms);
+        });
         
         console.log('[Mobile Dashboard] Challenge 타입:', challenge, '슬라이더 범위:', range);
         
