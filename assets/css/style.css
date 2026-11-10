@@ -38909,3 +38909,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #coachRaceCeremony .crc__metric i { font-style: normal; font-size: min(2.2vh, 18px); font-weight: 800; letter-spacing: .14em; color: #fde68a; }
 #coachRaceCeremony .crc__metric b { font-family: 'Orbitron', ui-monospace, SFMono-Regular, Menlo, monospace; font-size: min(3.6vh, 32px); font-weight: 800; color: #ffffff; text-shadow: 0 0 12px rgba(250, 204, 21, .55); }
+
+/* 2026-11-11 지도에서 정류장을 눌러 연 버스 노선도: 이 정류장을 지나는 방향 = 파랑, 반대 방향 = 회색
+   선택됨: 진한 채움 + 굵은 테두리 / 선택 안 됨: 연한 색 (파랑·회색 각각) */
+#outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-fwd { background: #dbeafe; border: 1.5px solid #bfdbfe; color: #3b82f6; font-weight: 700; box-shadow: none; }
+#outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-fwd.is-on { background: #2563eb; border-color: #1d4ed8; color: #ffffff; font-weight: 800; box-shadow: 0 0 0 2px rgba(37, 99, 235, .28), inset 0 -3px 0 #1e40af; }
+#outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-rev { background: #f3f4f6; border: 1.5px solid #e5e7eb; color: #9ca3af; font-weight: 700; box-shadow: none; }
+#outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-rev.is-on { background: #6b7280; border-color: #4b5563; color: #ffffff; font-weight: 800; box-shadow: 0 0 0 2px rgba(107, 114, 128, .28), inset 0 -3px 0 #374151; }

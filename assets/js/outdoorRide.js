@@ -2979,7 +2979,7 @@
         var rtBtn = t.closest('[data-bus-rt]');
         if (rtBtn) {
           var k = Number(rtBtn.getAttribute('data-bus-rt'));
-          openBusRoutePopup(el.__stop.r[k], el.__stop.rid[k], el.__stop);
+          openBusRoutePopup(el.__stop.r[k], el.__stop.rid[k], el.__stop, { fromStop: true });
           return;
         }
         var modeBtn = t.closest('[data-pop-mode]');
@@ -3183,7 +3183,20 @@
     var l2 = el.querySelector('.outd-busrt__list');
     if (l2 && top != null) l2.scrollTop = top;
   }
-  function openBusRoutePopup(ref, ids, stop) {
+  /** 같은 노선번호의 노선 id 전부(지금 불러온 지도 타일 기준) — 정류장은 한쪽 방향 노선만 갖고 있어 반대 방향 노선을 찾는 데 사용 */
+  function busAllIdsForRef(ref) {
+    var seen = {}, out = [];
+    Object.keys(bus.tiles || {}).forEach(function (k) {
+      var t = bus.tiles[k];
+      if (!t || t === 'loading' || !Array.isArray(t.r)) return;
+      t.r.forEach(function (x) {
+        if (!x || typeof x === 'string' || x[0] !== ref) return;
+        (x[1] || []).forEach(function (id) { if (!seen[id]) { seen[id] = 1; out.push(id); } });
+      });
+    });
+    return out;
+  }
+  function openBusRoutePopup(ref, ids, stop, opts) {
     var el = $('outdBusRtPop');
     if (!el) {
       el = document.createElement('div');
@@ -3198,22 +3211,54 @@
       });
     }
     el.__ref = ref; el.__stop = stop; el.__routes = null; el.__dir = 0;
+    var fromStop = !!(opts && opts.fromStop);
+    el.__fromStop = fromStop;
+    el.__fwd = null;
+    // 정류장에서 연 경우: 이 정류장을 지나는 방향(파랑) + 반대 방향(회색)을 함께 볼 수 있게 같은 노선번호의 노선 id 를 합침(최대 40개)
+    var ownN = (ids || []).length;
+    var ownSet = {};
+    (ids || []).forEach(function (x) { ownSet[x] = 1; });
+    if (fromStop) {
+      var union = (ids || []).slice(), have = {};
+      union.forEach(function (x) { have[x] = 1; });
+      busAllIdsForRef(ref).forEach(function (x) { if (!have[x] && union.length < 40) { have[x] = 1; union.push(x); } });
+      ids = union;
+    }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선 정보를 불러오는 중…</div></div>';
     el.style.display = 'flex';
     Promise.all((ids || []).map(loadBusRoute)).then(function (list) {
       if (el.__ref !== ref || el.__stop !== stop) return;
-      el.__routes = list.filter(function (d) { return d && d.s && d.s.length; });
+      // 합쳐서 가져온 다른 노선(반대 방향)은 이 정류장에서 1km 안을 지나는 것만 — 같은 번호의 다른 지역 노선이 섞이지 않게
+      el.__routes = list.filter(function (d, i) {
+        if (!(d && d.s && d.s.length)) return false;
+        if (!fromStop || i < ownN) return true;
+        return d.s.some(function (x) { return busStopDistM(x, stop) < 1000; });
+      });
       // 지금 정류장이 들어 있는 방향을 먼저
       var near = function (d) { return d.s.some(function (x) { return busStopDistM(x, stop) < 60; }); };
+      if (fromStop) {
+        // 정류장에서 연 경우 '이 정류장을 지나는 방향' = 이 정류장의 노선 id 목록에 있는 노선(반대편 정류장은 같은 길 맞은편이라 거리로는 구분 불가)
+        var idMap = new Map();
+        list.forEach(function (d, i) { if (d) idMap.set(d, ids[i]); });
+        near = function (d) { return !!ownSet[idMap.get(d)]; };
+      }
       // 2026-11-10: 제주 795 처럼 한 노선번호에 운행 유형(단축·회차·가지)별 노선 id 가 10개 넘게 와도 방향 버튼은 2개(상·하행)만
-      el.__routes = busMergeDirections(el.__routes, near);
-      el.__routes.sort(function (a, b) { return (near(b) ? 1 : 0) - (near(a) ? 1 : 0); });
+      el.__routes = busMergeDirections(el.__routes, near, fromStop);
+      if (fromStop) {
+        // 이 정류장을 지나는 방향이 앞(파랑), 반대 방향은 뒤(회색). 정류장을 지나는 방향을 못 찾으면 첫 방향을 파랑으로
+        var fw = el.__routes.map(near);
+        if (!fw.some(Boolean) && fw.length) fw[0] = true;
+        var ord = el.__routes.map(function (r, i) { return i; }).sort(function (a, b) { return (fw[b] ? 1 : 0) - (fw[a] ? 1 : 0) || a - b; });
+        el.__routes = ord.map(function (i) { return el.__routes[i]; });
+        el.__fwd = ord.map(function (i) { return !!fw[i]; });
+      }
+      if (!fromStop) el.__routes.sort(function (a, b) { return (near(b) ? 1 : 0) - (near(a) ? 1 : 0); });
       renderBusRoutePopup(el);
     });
   }
   /** 노선(방향) 3개 이상 → 처음→끝 정류장 진행 방위로 두 방향으로 묶고, 방향마다 대표 1개(지금 정류장이 있는 것 우선, 그다음 정류장 많은 것). 순환형(처음≈끝)은 방위가 무의미해 건드리지 않음 */
-  function busMergeDirections(routes, near) {
-    if (routes.length <= 2) return routes;
+  function busMergeDirections(routes, near, force) {
+    if (routes.length <= (force ? 1 : 2)) return routes;
     var brg = function (d) {
       var a = d.s[0], z = d.s[d.s.length - 1];
       var dy = z[1] - a[1], dx = (z[2] - a[2]) * Math.cos(a[1] * Math.PI / 180);
@@ -3281,8 +3326,9 @@
         '<div class="outd-busrt__ttl"><b>' + escHtml(d.s[0][0]) + ' ↔ ' + escHtml(d.s[d.s.length - 1][0]) + '</b>' +
         '<span>정류장 ' + d.s.length + '개' + (d.e ? ' · 경로로 추정한 목록' : '') + '</span></div>' +
         '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>' +
-        (routes.length > 1 ? '<div class="outd-busrt__dirs" role="tablist">' + routes.map(function (r, i) {
-          return '<button type="button" class="outd-busrt__dir' + (r === d ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab">' + escHtml(busRouteDirLabel(r, i)) + '</button>';
+        (routes.length > 1 ? '<div class="outd-busrt__dirs' + (el.__fromStop ? ' is-stopmode' : '') + '" role="tablist">' + routes.map(function (r, i) {
+          var side = el.__fromStop ? (el.__fwd && el.__fwd[i] ? ' is-fwd' : ' is-rev') : '';
+          return '<button type="button" class="outd-busrt__dir' + side + (r === d ? ' is-on' : '') + '" data-rt-dir="' + i + '" role="tab" aria-selected="' + (r === d ? 'true' : 'false') + '">' + escHtml(busRouteDirLabel(r, i)) + '</button>';
         }).join('') + '</div>' : '') +
         '<ol class="outd-busrt__list">' + d.s.map(function (x, i) {
           // 현재 정류장: 다음 정류장 쪽(아래)으로 이동 방향 화살표
