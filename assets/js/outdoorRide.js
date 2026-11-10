@@ -538,7 +538,7 @@
     return !!(f && f.mode !== 'walk' && f.moving && Math.abs(f.a || 0) >= 0.35 && Date.now() - (f.fixAt || 0) < 1000);
   }
 
-  var FRAME_MS = 33;
+  var FRAME_MS = 16; // 60fps 로 부드럽게(2026-11-10)
   /*
    * 2026-11-01 안드로이드 가로 화면(차량 거치·분할 화면 등)에서 속도계 바늘·현재 속도가 멈추던 문제:
    *  속도계는 브라우저 프레임 신호(requestAnimationFrame)로만 다시 그렸는데, 일부 안드로이드 WebView 는 화면이 보이는데도
@@ -575,25 +575,34 @@
     if (!isFinite(tgt) || tgt < 0) tgt = 0;
     if (!isFinite(st.displaySpeed)) st.displaySpeed = tgt;
     if (st.numSpeed != null && !isFinite(st.numSpeed)) st.numSpeed = tgt;
-    if (direct) { st.displaySpeed = tgt; st.numSpeed = tgt; } // 직접 그릴 때(프레임 신호 없음)는 바로 현재 값으로
-    var diff = tgt - st.displaySpeed;
-    var needleSettled = Math.abs(diff) <= 0.05;
-    // 2026-10-27: 이동 중에는 약 0.5초에 걸쳐 미끄러지듯(1초 간격 GPS 사이를 이어 줌), 0 으로 멈출 때는 빠르게
-    var dtF = st.prevFrameTs ? Math.min(200, Math.max(16, ts - st.prevFrameTs)) : FRAME_MS;
-    st.prevFrameTs = ts;
-    var needleK = tgt === 0 ? 0.25 : 1 - Math.exp(-dtF / 450);
-    st.displaySpeed = needleSettled ? tgt : st.displaySpeed + diff * needleK;
     /*
-     * 속도 숫자(2026-10-23): 45 → 41 처럼 바뀔 때 45, 44, 43, 42, 41 이 빠짐없이 보이게 숫자만 따로 센다.
-     * 한 프레임(약 1/30초)에 최대 1km/h 만 움직여 정수가 건너뛰지 않고, 변화가 작으면(7.5km/h 이하) 0.5씩 더 천천히.
+     * 2026-11-10 자동차 속도계처럼 끊김 없는 바늘·숫자:
+     *  - 바늘: 시간 기반 임계감쇠 스프링(관성). 목표 속도가 5→9 처럼 갑자기 바뀌어도 속도(바늘 각속도)가 연속이라 뚝뚝 끊기지 않고,
+     *    출렁임(오버슈트)도 없음. 프레임이 늦거나 직접 그릴 때도 값을 즉시 대입하지 않고 경과 시간만큼만 이동.
+     *  - 숫자: 목표까지 사이 정수를 빠짐없이 지나가며(5,6,7,8) 시간당 속도 제한(차이가 클수록 빠르게)으로 1 프레임에 건너뛰지 않음.
      */
+    var dtMs = st.prevFrameTs ? Math.min(100, Math.max(1, ts - st.prevFrameTs)) : FRAME_MS;
+    st.prevFrameTs = ts;
+    if (!isFinite(st.needleVel)) st.needleVel = 0;
+    var om = tgt === 0 ? 9 : 6; // 클수록 빨리 따라감(임계감쇠)
+    var rem = dtMs / 1000;
+    while (rem > 0) {
+      var h = Math.min(rem, 0.012);
+      st.needleVel += (om * om * (tgt - st.displaySpeed) - 2 * om * st.needleVel) * h;
+      st.displaySpeed += st.needleVel * h;
+      rem -= h;
+    }
+    if (st.displaySpeed < 0) { st.displaySpeed = 0; if (st.needleVel < 0) st.needleVel = 0; }
+    var needleSettled = Math.abs(tgt - st.displaySpeed) <= 0.05 && Math.abs(st.needleVel) <= 0.2;
+    if (needleSettled) { st.displaySpeed = tgt; st.needleVel = 0; }
     if (st.numSpeed == null) st.numSpeed = tgt;
     var nd = tgt - st.numSpeed;
     var numSettled = Math.abs(nd) <= 0.05;
     if (numSettled) st.numSpeed = tgt;
     else {
-      var step = Math.min(1, Math.max(0.5, Math.abs(nd) / 15));
-      st.numSpeed += Math.abs(nd) <= step ? nd : (nd > 0 ? step : -step);
+      var nrate = Math.min(45, Math.max(7, Math.abs(nd) * 3.5)); // km/h per 초: 차이 3 → 약 10/초(5,6,7,8 이 0.3초에)
+      var nstep = nrate * dtMs / 1000;
+      st.numSpeed += Math.abs(nd) <= nstep ? nd : (nd > 0 ? nstep : -nstep);
     }
     var settled = needleSettled && numSettled && !shownRamping();
     syncGaugeMode();
