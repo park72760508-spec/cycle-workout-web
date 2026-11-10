@@ -18178,10 +18178,15 @@ function initializeMobileGauge() {
  * 모바일 속도계 바늘 애니메이션 루프 (individual.js의 startGaugeAnimationLoop 참고)
  */
 function startMobileGaugeAnimationLoop() {
-  // 이미 실행 중이면 중복 실행 방지
-  if (mobileGaugeAnimationFrameId !== null) return;
+  // 이미 실행 중이면 중복 실행 방지 — 단, 프레임 루프가 멈췄는데 id 만 남은 경우(예외로 죽음·백그라운드 정지)는 다시 시작
+  if (mobileGaugeAnimationFrameId !== null) {
+    if (Date.now() - (window.__mobileGaugeBeat || 0) < 2500) return;
+    try { cancelAnimationFrame(mobileGaugeAnimationFrameId); } catch (e) {}
+    mobileGaugeAnimationFrameId = null;
+  }
+  mobileGaugeWatchdogInstall();
   
-  const loop = () => {
+  const loopBody = () => {
     // 모바일 대시보드 화면이 활성화되어 있는지 확인
     const mobileScreen = document.getElementById('mobileDashboardScreen');
     if (!mobileScreen || 
@@ -18189,7 +18194,7 @@ function startMobileGaugeAnimationLoop() {
          window.getComputedStyle(mobileScreen).display === 'none')) {
       // 화면이 비활성화되면 루프 중지
       mobileGaugeAnimationFrameId = null;
-      return;
+      return false;
     }
     
     // 1. 목표값(mobileCurrentPowerValue)과 현재표시값(mobileDisplayPower)의 차이 계산
@@ -18232,12 +18237,45 @@ function startMobileGaugeAnimationLoop() {
       updateMobileSpeedArc();
     }
     
-    // 다음 프레임 요청
-    mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
+    return true;
+  };
+  // 한 프레임에서 예외가 나도 다음 프레임을 이어간다(예외 한 번에 루프가 영구 정지하고 재시작도 막혀 바늘이 멈추던 문제 방지)
+  const loop = () => {
+    window.__mobileGaugeBeat = Date.now();
+    let go = true;
+    try { go = loopBody() !== false; }
+    catch (err) {
+      const t = Date.now();
+      if (!window.__mobileGaugeErrAt || t - window.__mobileGaugeErrAt > 10000) { window.__mobileGaugeErrAt = t; console.warn('[Mobile Gauge] 프레임 오류(루프 계속):', err && err.message); }
+    }
+    if (go) mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
   };
   
   // 루프 시작
   mobileGaugeAnimationFrameId = requestAnimationFrame(loop);
+}
+
+/** 모바일 바늘 루프 감시: 화면이 보이는데 프레임이 2.5초 넘게 안 돌면 재시작, 화면 복귀 시 즉시 점검 */
+function mobileGaugeWatchdogCheck() {
+  try {
+    if (document.hidden) return;
+    const s = document.getElementById('mobileDashboardScreen');
+    if (!s || (!s.classList.contains('active') && window.getComputedStyle(s).display === 'none')) return;
+    if (Date.now() - (window.__mobileGaugeBeat || 0) > 2500) {
+      console.warn('[Mobile Gauge] 바늘 루프 정지 감지 → 재시작');
+      try { if (mobileGaugeAnimationFrameId !== null) cancelAnimationFrame(mobileGaugeAnimationFrameId); } catch (e) {}
+      mobileGaugeAnimationFrameId = null;
+      startMobileGaugeAnimationLoop();
+    }
+  } catch (e) {}
+}
+function mobileGaugeWatchdogInstall() {
+  if (window.__mobileGaugeWdInstalled) return;
+  window.__mobileGaugeWdInstalled = true;
+  setInterval(mobileGaugeWatchdogCheck, 2000);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(mobileGaugeWatchdogCheck, 50); });
+  window.addEventListener('pageshow', function () { setTimeout(mobileGaugeWatchdogCheck, 50); });
+  window.addEventListener('focus', function () { setTimeout(mobileGaugeWatchdogCheck, 50); });
 }
 
 /**

@@ -4020,12 +4020,17 @@ window.updateIndivSpeedArc = updateIndivSpeedArc;
  * 루프가 실행되고 이 화면(indiv-) 바늘 루프는 돌지 않아 현재 파워 바늘이 0W에 고정됐다 → indiv 고유 이름 사용.
  */
 function indivStartGaugeAnimationLoop() {
-    // 이미 실행 중이면 중복 실행 방지
-    if (gaugeAnimationFrameId !== null) return;
+    // 이미 실행 중이면 중복 실행 방지 — 단, 프레임 루프가 멈췄는데 id 만 남은 경우(예외로 죽음·백그라운드 정지)는 다시 시작
+    if (gaugeAnimationFrameId !== null) {
+        if (Date.now() - (window.__indivGaugeBeat || 0) < 2500) return;
+        try { cancelAnimationFrame(gaugeAnimationFrameId); } catch (e) {}
+        gaugeAnimationFrameId = null;
+    }
+    indivGaugeWatchdogInstall();
     
     updateIndivSpeedArc();
     
-    const loop = () => {
+    const loopBody = () => {
         // SPA 모드: 모바일 개인훈련과 동일, bluetoothIndividualScreen 비활성(display:none) 시 루프 중지
         if (__indivIdPrefix) {
             var indivScreen = document.getElementById('bluetoothIndividualScreen');
@@ -4033,7 +4038,7 @@ function indivStartGaugeAnimationLoop() {
                 var style = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(indivScreen) : null;
                 if (style && style.display === 'none') {
                     gaugeAnimationFrameId = null;
-                    return;
+                    return false;
                 }
             }
         }
@@ -4052,7 +4057,7 @@ function indivStartGaugeAnimationLoop() {
         
         // 3. 바늘 각도 계산 및 업데이트 (매 프레임 실행)
         // FTP 기반으로 최대 파워 계산 (FTP × 2)
-        const maxPower = userFTP * 2;
+        const maxPower = (Number(userFTP) > 0 ? Number(userFTP) : 200) * 2; // FTP 가 0/NaN 이면 바늘 각도가 NaN 이 되어 멈추므로 기본값 사용
         let ratio = Math.min(Math.max(displayPower / maxPower, 0), 1);
         
         // -90도(왼쪽 상단) ~ 90도(오른쪽 상단) - 위쪽 반원
@@ -4086,12 +4091,51 @@ function indivStartGaugeAnimationLoop() {
             window._indivLastSpeedUpdateTime = null;
         }
         
-        // 다음 프레임 요청
-        gaugeAnimationFrameId = requestAnimationFrame(loop);
+        return true;
+    };
+    // 한 프레임에서 예외가 나도(목표 원호·속도 원호·거리 계산 등) 다음 프레임은 반드시 이어간다 — 예전에는 예외 한 번에 루프가 영구 정지하고
+    // 재시작도 '이미 실행 중' 검사에 막혀 바늘이 멈춘 채(Time·순위는 정상) 복구되지 않았다.
+    const loop = () => {
+        window.__indivGaugeBeat = Date.now();
+        let go = true;
+        try { go = loopBody() !== false; }
+        catch (err) {
+            const t = Date.now();
+            if (!window.__indivGaugeErrAt || t - window.__indivGaugeErrAt > 10000) { window.__indivGaugeErrAt = t; console.warn('[Indiv Gauge] 프레임 오류(루프 계속):', err && err.message); }
+        }
+        if (go) gaugeAnimationFrameId = requestAnimationFrame(loop);
     };
     
     // 루프 시작
     gaugeAnimationFrameId = requestAnimationFrame(loop);
+}
+/**
+ * 바늘 루프 감시(워치독): 화면이 보이는데 프레임이 2.5초 넘게 안 돌면(예외·WebView 일시정지·백그라운드 복귀 등) 루프를 다시 시작하고,
+ * 화면이 다시 보이면(visibilitychange/pageshow/focus) 즉시 점검. 그룹훈련 중 '바늘만 멈추는' 현상 방지.
+ */
+function indivGaugeWatchdogCheck() {
+    try {
+        if (document.hidden) return;
+        var scr = document.getElementById('bluetoothIndividualScreen');
+        if (scr) {
+            var cs = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(scr) : null;
+            if (cs && cs.display === 'none') return;
+        }
+        if (Date.now() - (window.__indivGaugeBeat || 0) > 2500) {
+            console.warn('[Indiv Gauge] 바늘 루프 정지 감지 → 재시작');
+            try { if (gaugeAnimationFrameId !== null) cancelAnimationFrame(gaugeAnimationFrameId); } catch (e) {}
+            gaugeAnimationFrameId = null;
+            indivStartGaugeAnimationLoop();
+        }
+    } catch (e) {}
+}
+function indivGaugeWatchdogInstall() {
+    if (window.__indivGaugeWdInstalled) return;
+    window.__indivGaugeWdInstalled = true;
+    setInterval(indivGaugeWatchdogCheck, 2000);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) setTimeout(indivGaugeWatchdogCheck, 50); });
+    window.addEventListener('pageshow', function () { setTimeout(indivGaugeWatchdogCheck, 50); });
+    window.addEventListener('focus', function () { setTimeout(indivGaugeWatchdogCheck, 50); });
 }
 window.indivStartGaugeAnimationLoop = indivStartGaugeAnimationLoop;
 
