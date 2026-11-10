@@ -546,9 +546,26 @@
    *  → 프레임 신호가 0.4초 넘게 오지 않거나 숨김으로 알려 오면 GPS 가 들어올 때마다 직접 한 번 그린다.
    */
   function nowTs() { return window.performance && performance.now ? performance.now() : Date.now(); }
+  /*
+   * 2026-11-10 안드로이드 태블릿에서 숫자가 24 → 32 처럼 건너뛰던 문제:
+   *  일부 안드로이드 WebView 는 프레임 신호(requestAnimationFrame)를 아주 드물게 주거나 멈춰, 그 사이엔 GPS(1초 간격)가 올 때만 다시 그려졌다.
+   *  → 프레임 신호가 70ms 넘게 비면 33ms 타이머가 대신 스프링·숫자 카운트를 돌린다(프레임 신호가 정상이면 타이머는 아무것도 안 함).
+   */
+  function startTimerLoop() {
+    if (st.tmr) return;
+    st.tmr = setInterval(function () {
+      if (!isActive() || st.saver) { clearInterval(st.tmr); st.tmr = null; return; }
+      if (st.settled) { clearInterval(st.tmr); st.tmr = null; return; }
+      if (Date.now() - (st.rafFrameAt || 0) < 70 && !document.hidden) return; // 프레임 신호 정상
+      st.timerDraws = (st.timerDraws || 0) + 1;
+      loop(nowTs(), true);
+    }, 33);
+  }
   function kickLoop() {
     if (st.saver) return; // 배터리 절약 화면 중에는 속도계 애니메이션 멈춤
     if (!isActive()) return;
+    st.settled = false;
+    startTimerLoop();
     if (document.hidden) { st.hiddenDraws = (st.hiddenDraws || 0) + 1; loop(nowTs(), true); return; } // 숨김으로 알려 와도 값은 갱신(실제로 숨겨졌으면 그리는 비용 거의 없음)
     if (st.rafId != null) {
       if (Date.now() - (st.rafReqAt || 0) < 400) return;
@@ -570,6 +587,7 @@
       return;
     }
     st.lastFrameTs = ts;
+    if (!direct) st.rafFrameAt = Date.now();
     var tgt = shownSpeed(); // 3초(자전거 2초) 평균 표시 속도
     // 잘못된 값(NaN 등)이 한 번 들어오면 바늘 회전값이 깨져 바늘이 사라지고 다시 돌아오지 않음 → 막음
     if (!isFinite(tgt) || tgt < 0) tgt = 0;
@@ -605,6 +623,7 @@
       st.numSpeed += Math.abs(nd) <= nstep ? nd : (nd > 0 ? nstep : -nstep);
     }
     var settled = needleSettled && numSettled && !shownRamping();
+    st.settled = settled;
     syncGaugeMode();
     var ratio = Math.min(Math.max(st.displaySpeed / GAUGE_MAX_KMH, 0), 1);
     var needle = $('outd-gauge-needle');
