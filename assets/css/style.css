@@ -38875,3 +38875,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen.outd-expanded .outd-expand span.outd-expand__in { display: none; }
 #outdoorRideScreen .outd-expand span.outd-expand__in img { position: absolute; left: 1px; top: 1px; width: 24px; height: 24px; object-fit: contain; filter: none; opacity: .5; pointer-events: none; user-select: none; }
 #outdoorRideScreen .outd-expand span.outd-expand__in svg { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+/* 2026-11-10 루트맵 속도계 영역 바탕: 그룹훈련 참석자(모바일 훈련) 화면 속도계와 같은 블랙 카본 격자(6px, 같은 농도) + 위쪽 은은한 광택 */
+#outdoorRideScreen .mobile-main-content {
+  background-color: #0b0b0d !important;
+  background-image:
+    radial-gradient(120% 70% at 50% 0%, rgba(255,255,255,.07), transparent 60%),
+    linear-gradient(135deg, rgba(255,255,255,.055) 25%, transparent 25%),
+    linear-gradient(225deg, rgba(255,255,255,.055) 25%, transparent 25%),
+    linear-gradient(315deg, rgba(0,0,0,.45) 25%, transparent 25%),
+    linear-gradient(45deg, rgba(0,0,0,.45) 25%, transparent 25%) !important;
+  background-size: 100% 100%, 6px 6px, 6px 6px, 6px 6px, 6px 6px !important;
+  background-position: 0 0, 0 0, 3px 0, 3px -3px, 0 3px !important;
+}
