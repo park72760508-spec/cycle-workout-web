@@ -38893,3 +38893,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrwp__spons--l { left: auto; right: calc(100% + 10cqw); align-items: flex-end; }
 .rrwp__spons--l .rrwp__spons-row img { height: 14.8cqw; width: auto; border-radius: 2cqw; filter: none; }
 .rrwp__spons--l .rrwp__spons-url { text-align: right; }
+
+/* 2026-11-10 왼쪽 백만킬로 로고: 아래 문구의 가로 중앙에 */
+.rrwp__spons--l { align-items: center; }
+.rrwp__spons--l .rrwp__spons-url { text-align: center; }
