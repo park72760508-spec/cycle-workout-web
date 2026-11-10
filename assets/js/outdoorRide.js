@@ -3180,9 +3180,44 @@
       el.__routes = list.filter(function (d) { return d && d.s && d.s.length; });
       // 지금 정류장이 들어 있는 방향을 먼저
       var near = function (d) { return d.s.some(function (x) { return busStopDistM(x, stop) < 60; }); };
+      // 2026-11-10: 제주 795 처럼 한 노선번호에 운행 유형(단축·회차·가지)별 노선 id 가 10개 넘게 와도 방향 버튼은 2개(상·하행)만
+      el.__routes = busMergeDirections(el.__routes, near);
       el.__routes.sort(function (a, b) { return (near(b) ? 1 : 0) - (near(a) ? 1 : 0); });
       renderBusRoutePopup(el);
     });
+  }
+  /** 노선(방향) 3개 이상 → 처음→끝 정류장 진행 방위로 두 방향으로 묶고, 방향마다 대표 1개(지금 정류장이 있는 것 우선, 그다음 정류장 많은 것). 순환형(처음≈끝)은 방위가 무의미해 건드리지 않음 */
+  function busMergeDirections(routes, near) {
+    if (routes.length <= 2) return routes;
+    var brg = function (d) {
+      var a = d.s[0], z = d.s[d.s.length - 1];
+      var dy = z[1] - a[1], dx = (z[2] - a[2]) * Math.cos(a[1] * Math.PI / 180);
+      if (Math.hypot(dy, dx) * 111000 < 400) return null; // 처음과 끝이 가까운 순환형
+      return Math.atan2(dx, dy);
+    };
+    var ang = function (x, y) { var t = Math.abs(x - y) % (2 * Math.PI); return t > Math.PI ? 2 * Math.PI - t : t; };
+    var groups = [], loops = [];
+    routes.forEach(function (d) {
+      var g = brg(d);
+      if (g == null) { loops.push(d); return; }
+      var hit = null;
+      groups.forEach(function (G) { if (!hit && ang(G.ref, g) < Math.PI / 2) hit = G; });
+      if (hit) hit.list.push(d); else groups.push({ ref: g, list: [d] });
+    });
+    if (groups.length > 2) {
+      // 방위가 셋 이상으로 갈리면 가장 큰 두 묶음만 방향으로 보고 나머지는 가까운 방위 묶음에 합침
+      groups.sort(function (A, B) { return B.list.length - A.list.length; });
+      groups.slice(2).forEach(function (G) {
+        var t = ang(groups[0].ref, G.ref) <= ang(groups[1].ref, G.ref) ? groups[0] : groups[1];
+        t.list = t.list.concat(G.list);
+      });
+      groups = groups.slice(0, 2);
+    }
+    var reps = groups.map(function (G) {
+      return G.list.slice().sort(function (A, B) { return ((near(B) ? 1 : 0) - (near(A) ? 1 : 0)) || (B.s.length - A.s.length); })[0];
+    });
+    if (!reps.length) return routes;
+    return reps.concat(loops.length && reps.length < 2 ? loops.slice(0, 2 - reps.length) : []);
   }
   function busStopDistM(x, stop) {
     return Math.hypot((x[1] - stop.p[0]) * 111000, (x[2] - stop.p[1]) * 88000);
