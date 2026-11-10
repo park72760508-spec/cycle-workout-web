@@ -1202,7 +1202,7 @@
   }
   function syncNativePoll() {
     var want = !!nativeBridge() && (st.nativeBgOn || st.nativePreview);
-    if (want && !st.nativePollT) st.nativePollT = setInterval(pollNativeLocations, 250);
+    if (want && !st.nativePollT) st.nativePollT = setInterval(pollNativeLocations, 500);
     else if (!want && st.nativePollT) { clearInterval(st.nativePollT); st.nativePollT = null; }
   }
   function pollNativeLocations() {
@@ -1210,8 +1210,8 @@
     if (!ab || !(st.nativeBgOn || st.nativePreview) || document.hidden) return;
     try {
       var since = st.lastFix ? st.lastFix.t : Date.now() - 5000;
-      var arr = JSON.parse(ab.getBackgroundLocations(String(since)) || '[]');
-      if (arr.length) window.stelvioNativeLocation(arr);
+      var raw = ab.getBackgroundLocations(String(since)) || '[]';
+      if (raw.length > 2) { var arr = JSON.parse(raw); if (arr.length) window.stelvioNativeLocation(arr); } // 빈 목록 '[]' 은 파싱 생략
       if (typeof ab.getMotionState === 'function' && (!st.motionPolledAt || Date.now() - st.motionPolledAt >= 500)) {
         st.motionPolledAt = Date.now();
         window.stelvioNativeMotion(JSON.parse(ab.getMotionState() || '{}'));
@@ -1488,16 +1488,22 @@
     var z = map.getZoom();
     if (!(sub.on && z >= SUBWAY_MIN_ZOOM)) {
       if (sub.stLayer && map.hasLayer(sub.stLayer)) map.removeLayer(sub.stLayer);
-      sub.stShown = '';
+      sub.stShown = ''; sub.drawnB = null;
       return;
     }
     if (!sub.data) { loadSubwayData(); return; }
     // 지금 화면(+여유) 안의 역만 그림
-    var b = map.getBounds().pad(0.6);
+    /*
+     * 2026-11-11 발열: 예전엔 화면 영역을 약 1km 단위로 반올림한 키가 바뀔 때마다(팬·따라가기 중 거의 매번) 역 마커를 전부 지우고 다시 만들었다.
+     * → 마지막으로 그린 영역이 지금 화면(+20% 여유)을 아직 덮고 있고 줌·이름 표시 방식이 같으면 그대로 둔다(역은 화면 여유 20% 이상 앞서 그려져 있어 보이는 모습은 같음).
+     */
+    var vb = map.getBounds();
     var allNames = z >= SUBWAY_LABEL_ZOOM;
-    var key = Math.round(z) + '|' + b.toBBoxString().split(',').map(function (v) { return Number(v).toFixed(2); }).join(',');
-    if (key === sub.stShown && sub.stLayer && map.hasLayer(sub.stLayer)) return;
-    sub.stShown = key;
+    var zk = Math.round(z) + '|' + (allNames ? 1 : 0);
+    if (sub.drawnB && sub.drawnZ === zk && sub.stLayer && map.hasLayer(sub.stLayer) && sub.drawnB.contains(vb.pad(0.2))) return;
+    var b = vb.pad(0.6);
+    sub.drawnB = b; sub.drawnZ = zk;
+    sub.stShown = zk;
     if (sub.stLayer) map.removeLayer(sub.stLayer);
     sub.stLayer = L.layerGroup();
     sub.data.stations.forEach(function (s2, si) {
@@ -1676,7 +1682,7 @@
       });
     }
     liveStop(el); // 다른 호선으로 바꿀 때 이전 호선 실시간 응답이 목록을 다시 그리지 않게
-    el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__dirf = 0; el.__seqs = null;
+    el.__li = li; el.__cur = curIdx; el.__dir = 0; el.__dirf = 0; el.__seqs = null; el.__structKey = null;
     el.style.setProperty('--ln', ln.c);
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true"><div class="outd-busrt__loading">노선도를 불러오는 중…</div></div>';
     el.style.display = 'flex';
@@ -1961,9 +1967,10 @@
     // 열차가 역 안에 들어와 있는(화면에 역 위치로 그려진) 행만 볼드
     var atRows = {};
     keys.forEach(function (k) { if (groups[k].atSt) atRows[Math.round(groups[k].p)] = true; });
-    for (var ri = 0; ri < rows.length; ri++) rows[ri].classList.toggle('has-veh', !!atRows[ri]);
+    // 2026-11-11 발열: 레이아웃 읽기(offsetTop)를 클래스 쓰기보다 먼저 — 쓰기 뒤에 읽으면 매번 강제 재계산. 바뀐 행만 클래스 갱신.
     var cy = [];
     for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
+    for (var ri = 0; ri < rows.length; ri++) { var wantV = !!atRows[ri]; if (rows[ri].classList.contains('has-veh') !== wantV) rows[ri].classList.toggle('has-veh', wantV); }
     var yAt = function (p) {
       var L = cy.length - 1;
       if (p < 0) return cy[0] + (cy[Math.min(1, L)] - cy[0]) * p;
@@ -2031,6 +2038,7 @@
     var badge = '<span class="outd-busrt__no" style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</span>';
     var card;
     if (!seqs.length) {
+      el.__structKey = null;
       card = '<div class="outd-busrt__head">' + badge + '<div class="outd-busrt__ttl"><b>노선도 정보 없음</b></div>' +
         '<button type="button" class="coachm-picker__close" data-rt-close aria-label="닫기">✕</button></div>';
     } else {
@@ -2134,6 +2142,23 @@
       });
       if (isLoop) { el.__segL[seq.length - 1] = false; el.__segT.push(subSegDefault(subStDistKm(seq[seq.length - 1], seq[0]))); } // 이음 구간(끝 역 → 첫 역)
       el.__trains = trains; el.__trainN = seq.length;
+      /*
+       * 2026-11-11 발열: 실시간 갱신(10초)마다 팝업 전체(역 40~100줄)를 innerHTML 로 다시 만들고 강제 레이아웃을 했다.
+       * 목록(역·환승·방면 버튼)은 호선·방면·현재 역에만 의존하고 실시간 값은 열차 위치와 상태 줄뿐 → 구조가 같으면 상태 줄만 바꾸고 열차만 다시 배치한다.
+       */
+      var sk = el.__li + '|' + el.__dir + '|' + (el.__dirf || 0) + '|' + el.__cur + '|' + seqs.length;
+      var lst0 = el.querySelector('.outd-busrt__list.is-rail');
+      var lb0 = el.querySelector('.outd-busrt__live');
+      if (fromLive && el.__structKey === sk && lst0 && lb0) {
+        var tmp0 = document.createElement('div');
+        tmp0.innerHTML = liveStatusHtml(el, '편성', trainN);
+        if (tmp0.firstChild) {
+          if (tmp0.firstChild.outerHTML !== lb0.outerHTML) lb0.replaceWith(tmp0.firstChild);
+          placeSubTrains(el, true);
+          return;
+        }
+      }
+      el.__structKey = sk;
       var ends = function (q) { return (st[q[0]] ? st[q[0]].n : '') + ' ↔ ' + (st[q[q.length - 1]] ? st[q[q.length - 1]].n : ''); };
       var dirf2 = el.__dirf || 0;
       var nm0 = st[seq[0]] ? st[seq[0]].n : '', nm1 = st[seq[seq.length - 1]] ? st[seq[seq.length - 1]].n : '';
@@ -2890,13 +2915,17 @@
       refreshBus();
     }).catch(function () { bus.idxLoading = false; });
   }
+  var busRefT = 0;
+  function scheduleBusRefresh() {
+    clearTimeout(busRefT);
+    busRefT = setTimeout(function () { busRefT = 0; bus.shown = ''; bus.built = null; refreshBus(); }, 120);
+  }
   function loadBusTile(k) {
     if (bus.tiles[k]) return;
     bus.tiles[k] = 'loading';
     fetch('assets/data/kr-bus/' + k + '.json?v=' + BUS_DATA_V).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
       bus.tiles[k] = d && Array.isArray(d.s) ? d : { r: [], s: [] };
-      bus.shown = '';
-      refreshBus();
+      scheduleBusRefresh(); // 타일 여러 개가 연달아 도착해도 120ms 안에 한 번만 다시 그림(2026-11-11 발열)
     }).catch(function () { delete bus.tiles[k]; });
   }
   function refreshBus() {
@@ -2905,11 +2934,18 @@
     var z = map.getZoom();
     if (!(bus.on && z >= BUS_MIN_ZOOM)) {
       if (bus.layer && map.hasLayer(bus.layer)) map.removeLayer(bus.layer);
-      bus.shown = '';
+      bus.shown = ''; bus.built = null;
       return;
     }
     if (!bus.index) { loadBusIndex(); return; }
-    var b = map.getBounds().pad(0.4);
+    /*
+     * 2026-11-11 발열: 예전엔 화면 영역을 약 100m 단위로 반올림한 키가 바뀔 때마다 정류장 마커를 전부 다시 만들었다(따라가기 중 거의 매번).
+     * → 마지막으로 그린 영역이 지금 화면(+15% 여유)을 아직 덮고 있고 줌·이름 표시가 같으며 타일 로딩 대기가 없으면 그대로 둔다.
+     */
+    var vbB = map.getBounds();
+    var zrB = Math.round(z), allNamesB = z >= BUS_LABEL_ZOOM;
+    if (bus.built && bus.built.z === zrB && bus.built.nm === allNamesB && bus.layer && map.hasLayer(bus.layer) && bus.built.b.contains(vbB.pad(0.15))) return;
+    var b = vbB.pad(0.4);
     var cell = bus.index.cell;
     var keys = [];
     for (var i = Math.floor(b.getSouth() / cell); i <= Math.floor(b.getNorth() / cell); i++) {
@@ -2921,9 +2957,7 @@
     var pending = false;
     keys.forEach(function (k) { if (!bus.tiles[k]) loadBusTile(k); if (bus.tiles[k] === 'loading') pending = true; });
     var allNames = z >= BUS_LABEL_ZOOM;
-    var key = Math.round(z) + '|' + b.toBBoxString().split(',').map(function (v) { return Number(v).toFixed(3); }).join(',') + (pending ? '|p' : '');
-    if (key === bus.shown && bus.layer && map.hasLayer(bus.layer)) return;
-    bus.shown = key;
+    bus.shown = zrB + '|' + (pending ? 'p' : '');
     if (bus.layer) map.removeLayer(bus.layer);
     bus.layer = L.layerGroup();
     bus.stops = [];
@@ -2948,6 +2982,7 @@
       });
     });
     bus.layer.addTo(map);
+    bus.built = pending ? null : { z: zrB, nm: allNamesB, b: b }; // 타일 로딩 중이면 미완성이라 완료 때 다시 그림
     applyFavPinUnrotate(true);
   }
   /** 탭한 지점 근처(반경 28px)의 버스 정류장 → { idx, d2 } */

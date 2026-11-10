@@ -36254,7 +36254,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .outd-subst__in b {
   position: absolute; left: 8px; top: -8px; white-space: nowrap;
   font: 700 11px/16px "Noto Sans KR", sans-serif; color: #1e293b;
-  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 0 4px #fff;
+  text-shadow: 0 0 3px #fff, 0 0 3px #fff; /* 2026-11-11 발열: 블러 4겹 → 2겹 */
 }
 .outd-subst--x .outd-subst__in b { font-weight: 800; color: #0f172a; }
 /* 2026-11-02 지하철 역만 표시: 점 = 호선 색(환승역은 호선 색 분할) + 흰 테두리 + 얇은 어두운 외곽 */
