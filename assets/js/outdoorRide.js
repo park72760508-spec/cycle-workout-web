@@ -1675,7 +1675,8 @@
   }
   /* 급행 정차역(공식 안내 기준, 2026-11) — 급행이 운행되는 호선만. 역 이름은 괄호·'역' 제거한 형태 */
   var SUB_EXPRESS_STOPS = {
-    '9호선': ['김포공항', '마곡나루', '가양', '염창', '당산', '여의도', '노량진', '동작', '고속터미널', '신논현', '선정릉', '봉은사', '종합운동장', '석촌', '올림픽공원', '중앙보훈병원']
+    '9호선': ['김포공항', '마곡나루', '가양', '염창', '당산', '여의도', '노량진', '동작', '고속터미널', '신논현', '선정릉', '봉은사', '종합운동장', '석촌', '올림픽공원', '중앙보훈병원'],
+    '공항철도': ['서울', '인천공항1터미널', '인천공항2터미널'] // 직통열차(서울역·인천공항1·2터미널만 정차)
   };
   /* 실시간 API 와 지도 데이터의 역 이름이 다른 경우(2026-11-09 전수 점검) */
   var SUB_ALIAS = { '뚝섬유원지': '자양', '세종왕릉': '세종대왕릉', '지제': '평택지제' };
@@ -1938,6 +1939,10 @@
     // 행 위치는 다시 그릴 때만 읽음(캐시)
     var rows = lst.querySelectorAll('li:not(.outd-subtr)');
     if (!rows.length) return;
+    // 열차가 역 안에 들어와 있는(화면에 역 위치로 그려진) 행만 볼드
+    var atRows = {};
+    keys.forEach(function (k) { if (groups[k].atSt) atRows[Math.round(groups[k].p)] = true; });
+    for (var ri = 0; ri < rows.length; ri++) rows[ri].classList.toggle('has-veh', !!atRows[ri]);
     var cy = [];
     for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
     var yAt = function (p) {
@@ -2129,7 +2134,7 @@
           }).join('');
           var cur = si === el.__cur;
           var k2 = seq.indexOf(si);
-          var tr = trains.some(function (t) { return t.k === k2 && t.s === '1'; });
+          var tr = false; // 볼드(has-veh)는 화면에 그려진 열차 위치 기준으로 placeSubTrains 가 지정
           var xs = SUB_EXPRESS_STOPS[ln.n];
           var isX = xs && xs.indexOf(subLiveName(s2.n)) >= 0;
           return '<li class="' + (cur ? 'is-cur' : '') + (tr ? ' has-veh' : '') + (isX ? ' is-xs' : '') + '"><i></i><span>' + escHtml(s2.n) + '</span>' +
