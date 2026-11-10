@@ -7386,7 +7386,7 @@ function rrWelcomePopupShow() {
   el.className = 'rrwp';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '환영 이미지');
-  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
+  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><div class="rrwp__brand"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><div class="rrwp__spons"><div class="rrwp__spons-row"><span>협찬 :</span><img src="assets/img/igpsport-logo-sm.png?v=1" alt="iGPSPORT" draggable="false"></div><a href="https://igpsport.co.kr/" target="_blank" rel="noopener noreferrer">https://igpsport.co.kr/</a></div></div></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
   el.querySelector('.rrwp__img').src = src;
   el.querySelector('.rrwp__img').addEventListener('click', rrWelcomePopupHide);
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });

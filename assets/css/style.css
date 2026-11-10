@@ -38826,3 +38826,15 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   100% { opacity: 1;   filter: brightness(1)   saturate(1); }
 }
 @media (prefers-reduced-motion: reduce) { #outdoorRideScreen.outd-poweron .mobile-main-content .mobile-gauge-container { animation: none; } }
+
+/* 2026-11-10 환영팝업: STELVIO 로고 오른쪽, 로고의 'STELVIO' 글자 줄 높이에 협찬(iGPSPORT) 로고 + 아래 링크 — 크기는 로고 폭 기준(cqw)이라 로고와 함께 커지고 줄어듦 */
+.rrwp__brand {
+  position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%); width: clamp(56px, 16%, 120px); aspect-ratio: 480 / 473;
+  container-type: inline-size; pointer-events: none;
+}
+.rrwp__brand .rrwp__logo { position: static; transform: none; left: auto; bottom: auto; width: 100%; display: block; }
+.rrwp__spons { position: absolute; left: calc(100% + 10cqw); top: 63.4%; display: flex; flex-direction: column; align-items: flex-start; gap: 3cqw; white-space: nowrap; }
+.rrwp__spons-row { display: flex; align-items: center; gap: 5cqw; }
+.rrwp__spons-row span { font: 800 max(8px, 11cqw)/1 'Noto Sans KR', sans-serif; color: #111; text-shadow: 0 0 4px rgba(255,255,255,.85); }
+.rrwp__spons-row img { height: 14.8cqw; width: auto; display: block; filter: drop-shadow(0 0 3px rgba(255,255,255,.7)); user-select: none; }
+.rrwp__spons a { pointer-events: auto; font: 600 max(7px, 8.5cqw)/1.2 'Noto Sans KR', sans-serif; color: #111; text-decoration: underline; text-shadow: 0 0 4px rgba(255,255,255,.85); }
