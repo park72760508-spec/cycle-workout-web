@@ -38838,3 +38838,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrwp__spons-row span { font: 800 max(8px, 11cqw)/1 'Noto Sans KR', sans-serif; color: #111; text-shadow: 0 0 4px rgba(255,255,255,.85); }
 .rrwp__spons-row img { height: 14.8cqw; width: auto; display: block; filter: drop-shadow(0 0 3px rgba(255,255,255,.7)); user-select: none; }
 .rrwp__spons a { pointer-events: auto; font: 600 max(7px, 8.5cqw)/1.2 'Noto Sans KR', sans-serif; color: #111; text-decoration: underline; text-shadow: 0 0 4px rgba(255,255,255,.85); }
+
+/* 2026-11-10 협찬 주소: 링크 아님(표시 문자만), 글자 폭 = '협찬 : 로고' 줄 폭(JS 가 글자 크기 계산) */
+.rrwp__spons-url { display: inline-block; white-space: nowrap; font: 600 8px/1.1 'Noto Sans KR', sans-serif; color: #111; text-shadow: 0 0 4px rgba(255,255,255,.85); user-select: none; pointer-events: none; }

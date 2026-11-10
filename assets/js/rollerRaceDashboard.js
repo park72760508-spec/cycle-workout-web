@@ -7386,8 +7386,23 @@ function rrWelcomePopupShow() {
   el.className = 'rrwp';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '환영 이미지');
-  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><div class="rrwp__brand"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><div class="rrwp__spons"><div class="rrwp__spons-row"><span>협찬 :</span><img src="assets/img/igpsport-logo-sm.png?v=1" alt="iGPSPORT" draggable="false"></div><a href="https://igpsport.co.kr/" target="_blank" rel="noopener noreferrer">https://igpsport.co.kr/</a></div></div></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
+  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><div class="rrwp__brand"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><div class="rrwp__spons"><div class="rrwp__spons-row"><span>협찬 :</span><img src="assets/img/igpsport-logo-sm.png?v=1" alt="iGPSPORT" draggable="false"></div><span class="rrwp__spons-url">https://igpsport.co.kr/</span></div></div></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
   el.querySelector('.rrwp__img').src = src;
+  // 주소 글자 폭을 '협찬 : 로고' 줄 폭과 같게 맞춤(글자 크기 자동 계산)
+  (function () {
+    var row = el.querySelector('.rrwp__spons-row'), url = el.querySelector('.rrwp__spons-url');
+    if (!row || !url) return;
+    var fit = function () {
+      var w = row.offsetWidth; if (!w) return;
+      url.style.fontSize = '100px';
+      var nat = url.offsetWidth; if (!nat) return;
+      url.style.fontSize = (100 * w / nat).toFixed(2) + 'px';
+    };
+    var im = row.querySelector('img');
+    if (im) im.addEventListener('load', fit);
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(fit).observe(row);
+    requestAnimationFrame(fit); setTimeout(fit, 300);
+  })();
   el.querySelector('.rrwp__img').addEventListener('click', rrWelcomePopupHide);
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
   el.querySelector('.rrwp__x').addEventListener('click', rrWelcomePopupHide);
