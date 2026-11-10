@@ -84,6 +84,14 @@ const ANT_CHANNEL_CONFIG = {
  * 센서 10대면 초당 40패킷 이상이 들어오므로 패킷마다 console.log 를 찍으면 브라우저가 느려진다.
  * 평소엔 로그를 끄고, 필요할 때만 localStorage.rrAntDiag='1' 또는 Shift+Alt+D 로 켠다(로그 + 트랙별 수신률 표시). */
 function rrAntDiagOn() { try { return window.RR_ANT_DEBUG === true || localStorage.getItem('rrAntDiag') === '1'; } catch (e) { return !!window.RR_ANT_DEBUG; } }
+/** 같은 종류의 경고는 10초에 한 번만(장시간 경기에서 콘솔이 쌓여 느려지는 것 방지) */
+function rrWarnThrottled(key, msg, err) {
+  const w = window.__rrWarnAt || (window.__rrWarnAt = {});
+  const t = Date.now();
+  if (w[key] && t - w[key] < 10000) return;
+  w[key] = t;
+  console.warn(msg, err && (err.message || err));
+}
 function rrAntLog() { if (rrAntDiagOn()) console.log.apply(console, arguments); }
 window.rrAntDiagToggle = function (on) {
   try { localStorage.setItem('rrAntDiag', on ? '1' : '0'); } catch (e) {}
@@ -561,14 +569,23 @@ function updateSpeedometerNeedle(speedometerId, speed) {
 }
 
 let rrNeedleRaf = null;
+let rrNeedleBeat = 0;
 function rrStartNeedleLoop() {
-  if (rrNeedleRaf !== null) return;
+  // 2026-11-10 장시간 경기 안정화: 루프가 예외로 죽었는데 id 만 남으면 '이미 실행 중'으로 막혀 모든 바늘이 멈췄다 → 1초 넘게 프레임이 없으면 다시 시작
+  if (rrNeedleRaf !== null) {
+    if (Date.now() - rrNeedleBeat < 1000) return;
+    try { cancelAnimationFrame(rrNeedleRaf); } catch (e) {}
+    rrNeedleRaf = null;
+  }
   const loop = () => {
+    rrNeedleBeat = Date.now();
+    try {
     const scr = document.getElementById('rollerRaceDashboardScreen');
     if (!scr || getComputedStyle(scr).display === 'none') { rrNeedleRaf = null; return; } // 화면이 숨겨지면 중지
     let moving = false;
     window.rollerRaceState.speedometers.forEach(sp => {
       if (!sp) return;
+      try {
       const target = sp.needleTargetSpeed || 0;
       const cur = sp.needleDisplaySpeed || 0;
       const diff = target - cur;
@@ -585,8 +602,13 @@ function rrStartNeedleLoop() {
       // 궤적선: 2.5km/h 단계가 바뀔 때만 갱신
       const step = Math.floor(next / 2.5);
       if (step !== sp.needleTrailStep) { sp.needleTrailStep = step; updateSpeedometerNeedlePath(sp.id, next); }
+      } catch (eSp) { rrWarnThrottled('needle', '[Race] 바늘 갱신 오류(트랙 ' + (sp && sp.id) + ', 계속):', eSp); }
     });
     rrNeedleRaf = moving ? requestAnimationFrame(loop) : null;
+    } catch (eLoop) {
+      rrWarnThrottled('needleLoop', '[Race] 바늘 루프 오류(계속):', eLoop);
+      rrNeedleRaf = requestAnimationFrame(loop);
+    }
   };
   rrNeedleRaf = requestAnimationFrame(loop);
 }
@@ -1753,6 +1775,16 @@ async function activateWakeLock() {
     window.rollerRaceState.wakeLock = null;
   }
 }
+
+// 2026-11-10: 경기 중(진행·일시정지) 화면이 다시 보이면 / 30초마다 화면 꺼짐 방지 다시 요청(시스템이 해제하면 예전에는 다시 걸지 않아 장시간 경기 중 화면·PC 절전 위험)
+function rrWakeLockKeep() {
+  try {
+    const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+    if ((rs === 'running' || rs === 'paused') && !document.hidden && !window.rollerRaceState.wakeLock) activateWakeLock();
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', rrWakeLockKeep);
+setInterval(rrWakeLockKeep, 30000);
 
 /**
  * 화면 잠금 해제
@@ -4276,19 +4308,24 @@ async function scanANTDevices() {
 /**
  * [수정됨] 메시지 수신부 (Raw 데이터 디버깅 추가)
  */
-async function startANTMessageListener() {
-  if (!window.antState.usbDevice || !window.antState.isScanning) return;
+async function startANTMessageListener(chainToken) {
+  // 2026-11-10: 수신 체인은 항상 1개(새로 시작하면 이전 체인은 진행 중인 읽기 한 번만 처리하고 종료)
+  if (chainToken === undefined) chainToken = window.__rrRxChain = (window.__rrRxChain || 0) + 1;
+  else if (chainToken !== window.__rrRxChain) return;
+  if (!window.antState.usbDevice || !window.antState.isScanning) { window.antMessageListenerActive = false; return; }
+  let rxErr = false;
 
   try {
     // 64바이트 읽기 시도
     const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 64);
+    window.antState.lastRxLoopAt = Date.now();
     
     if (result.data && result.data.byteLength > 0) {
       const data = new Uint8Array(result.data.buffer);
+      window.antState.lastRxDataAt = window.antState.lastRxLoopAt;
       
-      // [디버깅용] 들어오는 모든 데이터를 콘솔에 출력
-      // 예: 0xA4 0x03 0x40 0x00 ...
-      rrAntLog('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
+      // [디버깅용] 들어오는 모든 데이터를 콘솔에 출력(진단 켰을 때만 문자열 생성 — 패킷마다 만들면 장시간 경기에서 CPU·메모리 낭비)
+      if (rrAntDiagOn()) rrAntLog('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
       // 현재 화면 확인 (Race 모드와 Training 모드 분리)
       const currentScreen = document.querySelector('.screen.active');
@@ -4303,8 +4340,9 @@ async function startANTMessageListener() {
         } catch (e) {
           console.error('[Training] window.processBuffer 함수 호출 에러:', e);
         }
-        // Training 모드에서는 Race 처리를 하지 않고 바로 반환
-        setTimeout(startANTMessageListener, 10);
+        // Training 모드에서는 Race 처리를 하지 않고 바로 다음 읽기
+        if (window.antState.isScanning) Promise.resolve().then(() => startANTMessageListener(chainToken));
+        else window.antMessageListenerActive = false;
         return;
       }
       
@@ -4376,16 +4414,51 @@ async function startANTMessageListener() {
     } else {
         console.error('[ANT+] USB 끊김 감지');
         window.antState.isScanning = false;
+        // 다시 꽂았을 때 스캔 모드를 처음부터 다시 설정하도록 상태 정리(예전에는 '이미 스캔 중'으로 남아 재설정이 생략돼 센서가 안 들어옴)
+        window.antState.isScanningActive = false;
+        window.antMessageListenerActive = false;
         updateANTUSBStatusUI('error', 'USB 연결 끊김', null);
         return;
     }
+    rxErr = true;
   }
   
-  // 끊기지 않고 계속 대기
+  // 끊기지 않고 계속 대기 — 정상: 바로 다음 읽기(마이크로태스크, 탭이 가려져도 타이머 지연 없음) / 오류: 30ms 쉬고(연속 오류 시 CPU 과열 방지)
   if (window.antState.isScanning) {
-     setTimeout(startANTMessageListener, 0);
+     if (rxErr) setTimeout(() => startANTMessageListener(chainToken), 30);
+     else Promise.resolve().then(() => startANTMessageListener(chainToken));
+  } else {
+     window.antMessageListenerActive = false;
   }
 }
+
+/**
+ * 2026-11-10 수신기 워치독(3~4시간 연속 경기 대비): 수신기가 열려 있고 최근 2분 안에 센서 신호가 있었는데
+ * 15초 동안 ANT+ 데이터가 전혀 안 들어오면(USB 읽기 멈춤·스틱 스캔 모드 해제 등) 스캔 모드를 다시 설정하고 수신 루프를 새로 시작.
+ * 45초에 한 번까지만 시도.
+ */
+function rrReceiverWatchdog() {
+  try {
+    const a = window.antState;
+    if (!a || !a.usbDevice || !a.usbDevice.opened || a.isInitializing) return;
+    const now = Date.now();
+    const sps = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
+    const recentSensor = sps.some(s => s && s.deviceId && s.lastPacketTime && now - s.lastPacketTime < 120000);
+    if (!recentSensor) return;
+    const lastRx = Math.max(a.lastRxDataAt || 0, 0);
+    if (!lastRx || now - lastRx < 15000) return;
+    if (window.__rrRxRecoverAt && now - window.__rrRxRecoverAt < 45000) return;
+    window.__rrRxRecoverAt = now;
+    console.warn('[ANT+] 수신 멈춤 감지(' + Math.round((now - lastRx) / 1000) + '초) → 스캔 모드 재설정·수신 루프 재시작');
+    a.isScanningActive = false;
+    window.antMessageListenerActive = false;
+    a.isScanning = true;
+    startANTMessageListener();
+    window.antMessageListenerActive = true;
+    if (typeof startContinuousScan === 'function') startContinuousScan();
+  } catch (e) { rrWarnThrottled('rxwd', '[ANT+] 수신기 워치독 오류:', e); }
+}
+setInterval(rrReceiverWatchdog, 3000);
 
 /**
  * 수신 데이터 파싱 (버퍼링 처리)
@@ -5919,7 +5992,7 @@ window.processIncomingData = processMasterBuffer;
 function processMasterBuffer(newData) {
   if (!newData || newData.length === 0) return;
   
-  console.log(`[Race] processMasterBuffer 호출: newData.length=${newData.length}, masterRxBuffer.length=${masterRxBuffer.length}`);
+  rrAntLog(`[Race] processMasterBuffer 호출: newData.length=${newData.length}, masterRxBuffer.length=${masterRxBuffer.length}`);
   
   // 버퍼 병합
   const combined = new Uint8Array(masterRxBuffer.length + newData.length);
@@ -5938,7 +6011,7 @@ function processMasterBuffer(newData) {
       break;
     }
     if (syncIndex > 0) {
-      console.log(`[Race] Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
+      rrAntLog(`[Race] Sync 바이트 앞부분 ${syncIndex}바이트 제거`);
       masterRxBuffer = masterRxBuffer.slice(syncIndex); // Sync 앞부분 제거
       continue;
     }
@@ -6236,7 +6309,8 @@ function startConnectionStatusCheck() {
     }
     
     window.rollerRaceState.speedometers.forEach(speedometer => {
-      if (!speedometer.deviceId) return;
+      if (!speedometer || !speedometer.deviceId) return;
+      try {
 
       // 1. 패킷 단절 체크 (5초간 무응답 시)
       const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
@@ -6271,6 +6345,7 @@ function startConnectionStatusCheck() {
             speedometer.lastDecelerationCheck = now; // 시간 기준점 갱신
         }
       }
+      } catch (eChk) { rrWarnThrottled('chk' + speedometer.id, '[Race] 트랙 ' + speedometer.id + ' 상태 체크 오류(계속):', eChk); }
     });
   }, 200); // 0.2초마다 정밀 감시
 }
