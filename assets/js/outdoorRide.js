@@ -947,7 +947,8 @@
     var btn = $('outdExpand');
     if (btn) {
       btn.setAttribute('aria-pressed', st.expanded ? 'true' : 'false');
-      btn.setAttribute('aria-label', st.expanded ? '지도 원래 크기로' : '지도 크게 보기');
+      btn.setAttribute('aria-label', st.expanded ? '속도계 보이기' : '속도계 숨기기');
+      btn.title = st.expanded ? '속도계 보이기' : '속도계 숨기기';
     }
     renderToggle();
     setExpSpeed(st.numSpeed != null ? st.numSpeed : st.speedKmh);

@@ -38869,3 +38869,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-10 협찬 주소: 링크 아님(표시 글자만), 처음 크기(로고 폭의 8.5%)의 130% — 폭 맞춤 해제 */
 .rrwp__spons-url { font: 600 max(9.1px, 11.05cqw)/1.2 'Noto Sans KR', sans-serif !important; }
+
+/* 2026-11-10 지도 크게 보기 버튼 = 속도계 숨기기 버튼: 평소에는 속도계 아이콘(흰색)에 빨간 사선(숨김 표시), 속도계가 숨겨진 상태에서는 사선 없는 속도계 아이콘(누르면 다시 보임) */
+#outdoorRideScreen .outd-expand span.outd-expand__in { position: relative; display: inline-block; width: 26px; height: 26px; }
+#outdoorRideScreen.outd-expanded .outd-expand span.outd-expand__in { display: none; }
+#outdoorRideScreen .outd-expand span.outd-expand__in img { position: absolute; left: 1px; top: 1px; width: 24px; height: 24px; object-fit: contain; filter: brightness(0) invert(1); opacity: .85; pointer-events: none; user-select: none; }
+#outdoorRideScreen .outd-expand span.outd-expand__in svg { position: absolute; left: 0; top: 0; pointer-events: none; }
