@@ -4371,7 +4371,7 @@ window.updateTrainingDisplay = function () {
   if (typeof updateLaptopGaugeNeedle === "function") updateLaptopGaugeNeedle(currentPower);
   const laptopCurrentEl = safeGetElement("laptop-ui-current-power");
   const laptopTargetEl = safeGetElement("laptop-ui-target-power");
-  if (laptopCurrentEl) laptopCurrentEl.textContent = String(Math.round(currentPower));
+  if (laptopCurrentEl && (!window.StelvioGaugeSpring || laptopGaugeAnimationFrameId === null)) laptopCurrentEl.textContent = String(Math.round(currentPower)); // 루프가 돌면 루프가 숫자를 부드럽게 그림
   // laptopTargetEl은 아래 TARGET 타입별 업데이트 블록에서 설정
 
   // target_type에 따라 현재 파워/RPM 표시 변경
@@ -17675,7 +17675,7 @@ function startMobileDashboardDataUpdate() {
     // 현재 파워 표시 (3초 평균값 사용)
     const powerValue = window.get3SecondAveragePower ? window.get3SecondAveragePower() : Math.round(liveData.power || 0);
     const powerEl = safeGetElement('mobile-ui-current-power');
-    if (powerEl) {
+    if (powerEl && (!window.StelvioGaugeSpring || mobileGaugeAnimationFrameId === null)) { // 루프가 돌면 루프가 숫자를 부드럽게 그림
       powerEl.textContent = Math.round(powerValue);
     }
 
@@ -18234,7 +18234,15 @@ function startMobileGaugeAnimationLoop() {
     const diff = target - current;
     
     // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
-    if (Math.abs(diff) > 0.1) {
+    if (window.StelvioGaugeSpring) {
+      // 2026-11-10 스프링 바늘 + 정수 순차 카운트 숫자 (표시 전용, 계산은 mobileCurrentPowerValue 그대로)
+      const gs = window.__mobileGaugeSpring || (window.__mobileGaugeSpring = window.StelvioGaugeSpring.create(current));
+      window.StelvioGaugeSpring.step(gs, target, performance.now());
+      mobileDisplayPower = gs.x;
+      const pe = safeGetElement('mobile-ui-current-power');
+      const txt = String(Math.round(gs.n));
+      if (pe && pe.textContent !== txt) pe.textContent = txt;
+    } else if (Math.abs(diff) > 0.1) {
       mobileDisplayPower = current + diff * 0.15;
     } else {
       mobileDisplayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
@@ -18569,7 +18577,13 @@ function startLaptopGaugeAnimationLoop() {
     const target = laptopCurrentPowerValue || 0;
     const current = laptopDisplayPower || 0;
     const diff = target - current;
-    if (Math.abs(diff) > 0.1) {
+    let laptopNum = null;
+    if (window.StelvioGaugeSpring) {
+      const gs = window.__laptopGaugeSpring || (window.__laptopGaugeSpring = window.StelvioGaugeSpring.create(current));
+      window.StelvioGaugeSpring.step(gs, target, performance.now());
+      laptopDisplayPower = gs.x;
+      laptopNum = gs.n;
+    } else if (Math.abs(diff) > 0.1) {
       laptopDisplayPower = current + diff * 0.15;
     } else {
       laptopDisplayPower = target;
@@ -18586,7 +18600,7 @@ function startLaptopGaugeAnimationLoop() {
       }
     }
     const centerText = safeGetElement('laptop-ui-current-power');
-    if (centerText) centerText.textContent = String(Math.round(laptopDisplayPower));
+    if (centerText) { const lt = String(Math.round(laptopNum != null ? laptopNum : laptopDisplayPower)); if (centerText.textContent !== lt) centerText.textContent = lt; }
     if (typeof updateLaptopTargetPowerArc === 'function') updateLaptopTargetPowerArc();
     laptopGaugeAnimationFrameId = requestAnimationFrame(loop);
   };

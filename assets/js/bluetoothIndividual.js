@@ -2061,7 +2061,7 @@ function updateDashboard(data = null) {
     // 텍스트는 즉시 업데이트 (바늘은 애니메이션 루프에서 부드럽게 이동)
     const powerEl = __indivEl('ui-current-power');
     if (powerEl) {
-        powerEl.textContent = powerValue;
+        if (!window.StelvioGaugeSpring || gaugeAnimationFrameId === null) powerEl.textContent = powerValue; // 루프가 돌면 루프가 숫자를 부드럽게 그림
         powerEl.setAttribute('fill', '#fff');
     }
     
@@ -4051,7 +4051,15 @@ function indivStartGaugeAnimationLoop() {
         
         // 2. 보간(Interpolation) 적용: 거리가 멀면 빠르게, 가까우면 천천히 (감속 효과)
         // 0.15는 반응속도 계수 (높을수록 빠름, 낮을수록 부드러움. 0.1~0.2 추천)
-        if (Math.abs(diff) > 0.1) {
+        if (window.StelvioGaugeSpring) {
+            // 2026-11-10 스프링 바늘 + 정수 순차 카운트 숫자 (표시 전용, 계산은 currentPowerValue 그대로)
+            const gs = window.__indivGaugeSpring || (window.__indivGaugeSpring = window.StelvioGaugeSpring.create(current));
+            window.StelvioGaugeSpring.step(gs, target, performance.now());
+            displayPower = gs.x;
+            const pe = __indivEl('ui-current-power');
+            const txt = String(Math.round(gs.n));
+            if (pe && pe.textContent !== txt) pe.textContent = txt;
+        } else if (Math.abs(diff) > 0.1) {
             displayPower = current + diff * 0.15;
         } else {
             displayPower = target; // 차이가 미세하면 목표값으로 고정 (떨림 방지)
