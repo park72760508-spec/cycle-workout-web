@@ -334,6 +334,13 @@ async function waitForFirestore(maxWaitMs = null) {
     let firestoreDb = null;
     let useV9 = false;
     
+    // 0순위(2026-11-10): 로그인은 v9 앱('authV9')에서 이뤄지고 v8 호환 앱에는 사용자가 없다 → v8 Firestore 로 읽으면 request.auth 가 비어 permission-denied.
+    // 태블릿에서 'Training Room 목록 권한 오류'의 원인. v9 로그인 상태면 v9 Firestore 를 먼저 쓴다.
+    if (window.firestoreV9 && window.authV9 && window.authV9.currentUser) {
+      console.log('[Mobile Debug] ✅ Firestore v9 선택(authV9 로그인 상태, 시도:', attempt, ')');
+      return { db: window.firestoreV9, useV9: true };
+    }
+
     // 1순위: Firebase v8 호환 모드
     if (window.firebase && typeof window.firebase.firestore === 'function') {
       try {
@@ -876,6 +883,11 @@ async function loadTrainingRooms() {
     } catch (firstErr) {
       lastErr = firstErr;
       if (isPermissionError(firstErr)) {
+        // 2026-11-10: 로그인된 v9 인증과 다른 Firestore(v8 호환)로 읽어서 난 권한 오류면 v9 Firestore 로 바꿔 재시도
+        if (!useV9 && window.firestoreV9 && window.authV9 && window.authV9.currentUser) {
+          console.warn('[Training Room] v8 Firestore 는 로그인 정보가 없음 → v9 Firestore 로 전환하여 재시도');
+          db = window.firestoreV9; useV9 = true;
+        }
         console.warn('[Training Room] Permission denied. 1st retry: Force Token Refresh...');
         try {
           if (currentUser && typeof currentUser.getIdToken === 'function') {
