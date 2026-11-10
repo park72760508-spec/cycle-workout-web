@@ -38888,3 +38888,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   background-size: 100% 100%, 6px 6px, 6px 6px, 6px 6px, 6px 6px !important;
   background-position: 0 0, 0 0, 3px 0, 3px -3px, 0 3px !important;
 }
+
+/* 2026-11-10 환영팝업 왼쪽: 백만칼로 사이클 아카데미 로고 + 아래 문구 — 오른쪽 협찬 이미지와 같은 높이·같은 줄에 좌우 대칭으로(로고 쪽으로 붙여 정렬) */
+.rrwp__spons--l { left: auto; right: calc(100% + 10cqw); align-items: flex-end; }
+.rrwp__spons--l .rrwp__spons-row img { height: 14.8cqw; width: auto; border-radius: 2cqw; filter: none; }
+.rrwp__spons--l .rrwp__spons-url { text-align: right; }
