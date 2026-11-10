@@ -258,7 +258,7 @@
     // 2026-10-10: 목표 파워 = 현재 세그먼트 목표 % × 트랙 사용자 프로필 FTP (PC Coach 와 같은 계산)
     if (pmRaw && pm && pm.userName && pm.userId && typeof window.bluetoothCoachResolveFtp === 'function') {
       var resolved = window.bluetoothCoachResolveFtp(pmRaw, pm.userId, pmRaw.userFTP);
-      if (resolved > 0) pmRaw.userFTP = resolved;
+      if (resolved > 0) pmRaw.userFTP = Math.round(resolved * (Number(pmRaw.__intensityAdj) > 0 ? Number(pmRaw.__intensityAdj) : 1)); // 목표값 조절 반영
     }
     var target = Math.round(userTargetPower(pm));
     var lap = Math.round(Number(pm && pm.segmentPower) || 0);

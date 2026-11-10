@@ -1530,9 +1530,13 @@ async function loadInitialUserDataForTracks() {
               if (userData.weight) powerMeter.userWeight = userData.weight;
               
               // FTP 적용
-              const initFTP = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
+              const initBase = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
+              const initAdjRaw = Number(userData.intensityAdj);
+              powerMeter.__intensityAdj = initAdjRaw >= 0.5 && initAdjRaw <= 1.5 ? initAdjRaw : 1;
+              const initFTP = initBase ? Math.round(initBase * powerMeter.__intensityAdj) : initBase; // 목표값 조절 반영(오늘 적용 FTP)
               if (initFTP) {
                 const prevFTP = powerMeter.userFTP;
+                powerMeter.__baseFTP = initBase;
                 powerMeter.userFTP = initFTP;
                 if (Number(prevFTP) !== Number(initFTP)) {
                   console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${initFTP}`);
@@ -1663,8 +1667,10 @@ function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
       var w = Number(prof && prof.weight);
       __bcProfileFtpCache[uid] = { ftp: f > 0 ? f : null, weight: w > 0 ? w : null, at: Date.now(), pending: false };
       // 응답이 온 시점에 같은 사용자가 그 트랙에 있으면 계기판 갱신
-      if (f > 0 && powerMeter && String(powerMeter.userId || '') === uid && Number(powerMeter.userFTP) !== f) {
-        powerMeter.userFTP = f;
+      var fEff = f > 0 ? Math.round(f * (Number(powerMeter && powerMeter.__intensityAdj) > 0 ? Number(powerMeter.__intensityAdj) : 1)) : 0;
+      if (f > 0 && powerMeter && String(powerMeter.userId || '') === uid && Number(powerMeter.userFTP) !== fEff) {
+        powerMeter.__baseFTP = f;
+        powerMeter.userFTP = fEff;
         if (w > 0) powerMeter.userWeight = w;
         console.log('[Bluetooth Coach] 트랙 ' + powerMeter.id + ' 프로필 FTP 적용: ' + f);
         updateBluetoothCoachPowerMeterTicks(powerMeter.id);
@@ -1698,8 +1704,12 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   // FTP 업데이트 — 프로필 FTP 우선(트랙 값은 신청 시점 복사본이라 오래될 수 있음)
   const resolvedFTP = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
   const ftpUid = userData.userId ? String(userData.userId) : '';
+  // 2026-11-10 참석자 목표값 조절(-5%~+5%) → 오늘 적용 FTP = 프로필 FTP × 조절값(목표 파워·달성도·순위 배점·W/kg 가중 모두 이 값 사용)
+  const adjRaw = Number(userData.intensityAdj);
+  powerMeter.__intensityAdj = adjRaw >= 0.5 && adjRaw <= 1.5 ? adjRaw : 1;
   if (resolvedFTP) {
-    powerMeter.userFTP = resolvedFTP;
+    powerMeter.__baseFTP = resolvedFTP;
+    powerMeter.userFTP = Math.round(resolvedFTP * powerMeter.__intensityAdj);
   } else if (prevFTP && powerMeter.__ftpUid && powerMeter.__ftpUid !== ftpUid) {
     // 트랙 사용자가 바뀌었는데 새 사용자 FTP를 아직 모르면 이전 사용자 FTP를 남기지 않는다(비율 표시로 복귀)
     powerMeter.userFTP = null;

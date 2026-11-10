@@ -625,6 +625,8 @@ function sendDataToFirebase() {
         maxPower: maxPowerRecorded,
         segmentPower: segmentPower,
         targetPower: targetPower,
+        // 2026-11-10 목표값 조절(강도 조절): Coach 가 '오늘 적용 FTP = 프로필 FTP × 조절값'으로 목표·달성도·순위 배점을 계산하도록 함께 전송
+        intensityAdj: Math.round((Number(individualIntensityAdjustment) > 0 ? Number(individualIntensityAdjustment) : 1) * 1000) / 1000,
         lastUpdate: now
     };
 

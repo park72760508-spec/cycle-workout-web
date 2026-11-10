@@ -114,7 +114,11 @@ if (typeof postJSONWithProxy !== 'function') {
       segmentIndex,
       label: segmentData?.label ?? `SEG-${segmentIndex}`,
       duration: Number(segmentData?.duration_sec) || 0,
-      targetPower: Number(segmentData?.target_value) || 0,
+      // 2026-11-10: 목표값 조절을 반영한 실제 목표(W) = FTP × 조절값 × 세그먼트 %(getSegmentTargetW) — 없으면 기존 값
+      targetPower: (function () {
+        try { if (typeof window.getSegmentTargetW === 'function') { var tw = Number(window.getSegmentTargetW(segmentIndex)); if (tw > 0) return tw; } } catch (e) {}
+        return Number(segmentData?.target_value) || 0;
+      })(),
       actualAvgPower: calculateSegmentAverage('power', segmentIndex),
       actualAvgHR: calculateSegmentAverage('hr', segmentIndex),        // ← heartRate → hr 매핑 처리
       actualAvgCadence: calculateSegmentAverage('cadence', segmentIndex),
