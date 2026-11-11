@@ -46,7 +46,71 @@
   function $(id) { return document.getElementById(id); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function toast(msg, type) { if (typeof w.showToast === 'function') w.showToast(msg, type || 'info'); else alert(msg); }
-  function getKey() { try { return (localStorage.getItem(KEY_NAME) || '').trim(); } catch (e) { return ''; } }
+  /*
+   * 키 저장소(2026-11-11): localStorage 가 가득 차면(QuotaExceededError "The quota has been exceeded") 저장이 실패해 매번 설정 화면으로 돌아갔다.
+   * → localStorage + IndexedDB(별도 할당량) 이중 저장, 읽기는 메모리 → localStorage → IndexedDB 순. 한쪽만 성공해도 저장 성공으로 처리.
+   */
+  var memKey = '';
+  function lsGet() { try { return (localStorage.getItem(KEY_NAME) || '').trim(); } catch (e) { return ''; } }
+  function getKey() { return memKey || lsGet(); }
+  function idbOpen() {
+    return new Promise(function (resolve, reject) {
+      var done = false, t = setTimeout(function () { if (!done) { done = true; reject(new Error('idb timeout')); } }, 3000);
+      try {
+        var rq = indexedDB.open('stelvioClaude', 1);
+        rq.onupgradeneeded = function () { try { rq.result.createObjectStore('kv'); } catch (e) {} };
+        rq.onsuccess = function () { if (done) { try { rq.result.close(); } catch (e) {} return; } done = true; clearTimeout(t); resolve(rq.result); };
+        rq.onerror = function () { if (done) return; done = true; clearTimeout(t); reject(rq.error || new Error('idb open')); };
+      } catch (e) { if (!done) { done = true; clearTimeout(t); reject(e); } }
+    });
+  }
+  function idbOp(mode, fn) {
+    return idbOpen().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var finished = false, t = setTimeout(function () { if (!finished) { finished = true; try { db.close(); } catch (e) {} reject(new Error('idb tx timeout')); } }, 4000);
+        function end(ok, v) { if (finished) return; finished = true; clearTimeout(t); try { db.close(); } catch (e) {} ok ? resolve(v) : reject(v); }
+        try {
+          var tx = db.transaction('kv', mode), rq = fn(tx.objectStore('kv'));
+          tx.oncomplete = function () { end(true, rq && rq.result); };
+          tx.onerror = tx.onabort = function () { end(false, tx.error || new Error('idb tx')); };
+        } catch (e) { end(false, e); }
+      });
+    });
+  }
+  function idbGetKey() { return idbOp('readonly', function (st) { return st.get(KEY_NAME); }).then(function (v) { return String(v || '').trim(); }, function () { return ''; }); }
+  function idbSetKey(v) { return idbOp('readwrite', function (st) { return st.put(v, KEY_NAME); }).then(function () { return true; }, function () { return false; }); }
+  function idbDelKey() { return idbOp('readwrite', function (st) { return st.delete(KEY_NAME); }).then(function () { return true; }, function () { return false; }); }
+  function lsSet(v) {
+    try { localStorage.setItem(KEY_NAME, v); if (lsGet() === v) return true; } catch (e) {}
+    // 용량 초과: 이 기능의 오래된 캐시를 비우고 한 번 더
+    try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('claudeRecoDay:') === 0) localStorage.removeItem(k); }); localStorage.setItem(KEY_NAME, v); return lsGet() === v; } catch (e2) { return false; }
+  }
+  /** 저장: { ls, idb } — 둘 중 하나라도 true 면 다음 방문에도 유지 */
+  async function saveKey(v) {
+    memKey = v;
+    var ls = lsSet(v), idb = await idbSetKey(v);
+    return { ls: ls, idb: idb };
+  }
+  var memOnly = false; // 키 확인은 됐지만 어느 저장소에도 못 써서 이번 접속에서만 유지
+  async function removeKey() {
+    memKey = ''; memOnly = false;
+    try { localStorage.removeItem(KEY_NAME); } catch (e) {}
+    var ok = await idbDelKey();
+    if (!ok) await idbSetKey(''); // 삭제 실패 시 빈 값으로 덮어써 다음 로드에 되살아나지 않게
+  }
+  function bigLocalStorageKeys(n) {
+    var out = [];
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i), v = localStorage.getItem(k) || ''; out.push([k, (k.length + v.length) * 2]); } } catch (e) {}
+    out.sort(function (a, b) { return b[1] - a[1]; });
+    return out.slice(0, n || 4).map(function (x) { return x[0].slice(0, 40) + ' (' + Math.round(x[1] / 1024) + 'KB)'; });
+  }
+  try { window.addEventListener('storage', function (e) { if (e.key === KEY_NAME) { memKey = (e.newValue || '').trim(); try { updateStatusLine(); } catch (x) {} } }); } catch (e) {}
+  // 시작 시 localStorage 에 없으면 IndexedDB 에서 복구(예: localStorage 가 정리된 경우)
+  var keyReady = (function () {
+    var ls = lsGet();
+    if (ls) { memKey = ls; idbSetKey(ls); return Promise.resolve(); } // IndexedDB 에도 백업
+    return idbGetKey().then(function (v) { if (v) { memKey = v; try { localStorage.setItem(KEY_NAME, v); } catch (e) {} } });
+  })().then(function () { try { updateStatusLine(); } catch (e) {} }, function () {});
   function loadPrefs() { try { return JSON.parse(localStorage.getItem(PREF_NAME) || '{}') || {}; } catch (e) { return {}; } }
   function savePrefs(p) { try { localStorage.setItem(PREF_NAME, JSON.stringify(p)); } catch (e) {} }
   function ymd(d) { var z = new Date(d.getTime() - d.getTimezoneOffset() * 60000); return z.toISOString().slice(0, 10); }
@@ -103,6 +167,7 @@
     var user = w.currentUser;
     if (!user || !user.id) { toast('사용자 정보가 없습니다. 먼저 로그인해주세요.', 'error'); return; }
     // 오늘 이미 생성했다면 키·토큰 없이 그 결과를 보여줌(하루 1회)
+    await keyReady;
     var today = await loadToday(user);
     if (today) { showDay(today, true); return; }
     if (!getKey()) { openSettingsForClaudeKey(); return; }
@@ -452,7 +517,7 @@
     try {
       Object.keys(localStorage).forEach(function (k) { if (k.indexOf('claudeRecoDay:' + user.id + ':') === 0 && k !== dayKey(user)) localStorage.removeItem(k); });
       localStorage.setItem(dayKey(user), JSON.stringify(day));
-    } catch (e) {}
+    } catch (e) { console.warn('[ClaudeReco] 오늘 결과 캐시를 이 기기에 저장하지 못함(서버 기록으로 대체)', e && e.name); }
   }
   /** 오늘 이미 생성된 결과(없으면 null): 이 기기 캐시 → 서버 순 */
   async function loadToday(user) {
@@ -603,9 +668,9 @@
   function updateStatusLine() {
     var el = $('settingsClaudeApiStatusLine'), inp = $('settingsClaudeApiKey'), k = getKey();
     if (el) {
-      var def = k ? '✅ Claude API 키가 이 기기에 저장되어 있습니다.' : '키가 없으면 Claude 추천을 사용할 수 없습니다. (console.anthropic.com 에서 발급 후 입력 → 저장)';
+      var def = k ? (memOnly ? '⚠ 키는 확인됐지만 이 기기에 저장하지 못해 이번 접속 동안만 유지됩니다.' : '✅ Claude API 키가 이 기기에 저장되어 있습니다.') : '키가 없으면 Claude 추천을 사용할 수 없습니다. (console.anthropic.com 에서 발급 후 입력 → 저장)';
       el.textContent = statusMsg ? statusMsg.text : def;
-      el.style.color = statusMsg ? (statusMsg.kind === 'err' ? '#b91c1c' : (statusMsg.kind === 'ok' ? '#15803d' : '#64748b')) : (k ? '#15803d' : '#64748b');
+      el.style.color = statusMsg ? (statusMsg.kind === 'err' ? '#b91c1c' : (statusMsg.kind === 'ok' ? '#15803d' : '#64748b')) : (k ? (memOnly ? '#b45309' : '#15803d') : '#64748b');
       el.style.fontWeight = statusMsg ? '600' : '400';
     }
     if (inp) { if (k) { inp.value = '••••••••••••••••'; inp.disabled = true; } else if (inp.disabled) { inp.value = ''; inp.disabled = false; } }
@@ -645,15 +710,25 @@
     btnBusy('settingsSaveClaudeKeyBtn', true, '저장'); setStatus('키 확인 중...', 'info');
     try {
       await verifyKey(v);
-      localStorage.setItem(KEY_NAME, v);
-      if (getKey() !== v) throw new Error('이 기기의 저장 공간에 쓰지 못했습니다(브라우저 저장소 제한). 시크릿 모드가 아닌지, 저장 공간이 가득 차지 않았는지 확인해주세요.');
-      setStatus('✅ Claude API 키가 확인되어 저장되었습니다.', 'ok');
+      var saved = await saveKey(v);
+      var persisted = saved.ls || saved.idb, note = '';
+      memOnly = !persisted;
+      if (!saved.ls && saved.idb) note = ' (브라우저 저장 공간이 가득 차 보조 저장소에 저장했습니다)';
+      if (!persisted) {
+        var big = bigLocalStorageKeys(3).join(', ');
+        console.warn('[ClaudeReco] 키를 영구 저장하지 못함. localStorage 큰 항목:', bigLocalStorageKeys(8));
+        var warn = '⚠ 키는 확인됐지만 이 기기의 저장 공간이 가득 차 영구 저장하지 못했습니다. 이번 접속 동안만 사용할 수 있고, 새로고침하면 다시 입력해야 합니다.' + (big ? ' (큰 항목: ' + big + ')' : '');
+        setStatus(warn, 'err'); alert(warn);
+        if (w.__claudeRecoAfterKey && Date.now() - w.__claudeRecoAfterKey < 10 * 60000) { w.__claudeRecoAfterKey = 0; if (typeof w.closeSettingsModal === 'function') w.closeSettingsModal(); setTimeout(function () { w.startClaudeRecommendFlow && w.startClaudeRecommendFlow(); }, 300); }
+        return;
+      }
+      setStatus('✅ Claude API 키가 확인되어 저장되었습니다.' + note, 'ok');
       try { w.dispatchEvent(new CustomEvent('stelvio-claude-apikey-changed', { detail: { hasKey: true } })); } catch (e) {}
       if (w.__claudeRecoAfterKey && Date.now() - w.__claudeRecoAfterKey < 10 * 60000) {
         w.__claudeRecoAfterKey = 0;
         if (typeof w.closeSettingsModal === 'function') w.closeSettingsModal();
         setTimeout(function () { w.startClaudeRecommendFlow && w.startClaudeRecommendFlow(); }, 300);
-      } else { alert('Claude API 키가 저장되었습니다.'); }
+      } else { alert('Claude API 키가 저장되었습니다.' + note); }
     } catch (e) {
       console.warn('[ClaudeReco] 키 저장 실패', e);
       var m2 = describeKeyError(e); setStatus('❌ ' + m2, 'err'); alert(m2);
@@ -672,9 +747,9 @@
     } catch (e) { var m2 = describeKeyError(e); setStatus('❌ ' + m2, 'err'); alert(m2); }
     finally { btnBusy('settingsTestClaudeKeyBtn', false, 'API 키 검증'); }
   };
-  w.resetClaudeApiKeyFromSettings = function () {
+  w.resetClaudeApiKeyFromSettings = async function () {
     if (getKey() && !confirm('저장된 Claude API 키를 삭제할까요?')) return;
-    try { localStorage.removeItem(KEY_NAME); } catch (e) {}
+    await removeKey();
     var inp = $('settingsClaudeApiKey'); if (inp) { inp.disabled = false; inp.value = ''; }
     setStatus('키를 삭제했습니다. 새 키를 입력하고 저장하세요.', 'info');
     var i2 = $('settingsClaudeApiKey'); if (i2) i2.focus();

@@ -9,6 +9,7 @@
     currentUser: 1,
     authUser: 1,
     geminiApiKey: 1,
+    geminiApiKeyDisabled: 1,
     claudeApiKey: 1,
     claudeRecoPrefs: 1,
     geminiModelName: 1,
@@ -46,6 +47,8 @@
     ) {
       return true;
     }
+    /* 2026-11-11: 훈련 결과 로컬 백업(쓰기 전용, 초 단위 배열 포함 수백 KB/건)이 쌓여 용량을 채움 → 부팅·용량초과 시 정리 */
+    if (key.indexOf('training_result_') === 0) return true;
     if (key === 'stelvio_workouts_cache') return true;
     if (key === 'stelvio_workouts_cache_timestamp') return true;
     if (key === 'stelvio_workouts_cache_count') return true;
@@ -56,6 +59,8 @@
     if (opts.aggressive) {
       /* 2026-10-09: AI 분석 캐시(당일 결과)는 부팅마다 지우면 같은 날 재분석(AI 재호출)이 발생 —
          실제 용량 초과 시에만 삭제. 오래된 항목은 dashboardAICache/runDashboardAICache가 스스로 정리. */
+      if (key === 'latest_training_result') return true;
+      if (key.indexOf('claudeRecoDay:') === 0) return true; // 서버 기록으로 복구됨
       if (key.indexOf('stelvio_dashboard_ai_') === 0) return true;
       if (key.indexOf('stelvio_run_dashboard_ai_') === 0) return true;
       if (key.indexOf('stelvio_workout') === 0) return true;

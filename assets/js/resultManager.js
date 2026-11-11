@@ -209,9 +209,21 @@ async function saveTrainingResult(extra = {}) {
      // 1. 로컬 스토리지에 즉시 백업 (최우선)
      let localSaveSuccess = false;
      try {
+       /* 2026-11-11 용량: 예전엔 훈련마다 새 키(초 단위 파워·심박·케이던스 배열 포함, 300~500KB)를 계속 쌓아 localStorage(5MB)가 가득 찼다
+          (그 결과 다른 설정값(API 키 등) 저장이 'The quota has been exceeded' 로 실패). 읽는 곳이 없는 백업이므로 이전 백업을 지우고 최신 1건만 유지. */
+       try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('training_result_') === 0) localStorage.removeItem(k); }); } catch (_cl) {}
        const localKey = `training_result_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-       localStorage.setItem(localKey, JSON.stringify(trainingResult));
-       localStorage.setItem('latest_training_result', JSON.stringify(trainingResult));
+       let backupJson = JSON.stringify(trainingResult);
+       try {
+         localStorage.setItem(localKey, backupJson);
+         localStorage.setItem('latest_training_result', backupJson);
+       } catch (_qe) {
+         // 용량 부족: 초 단위 배열을 뺀 요약본으로 재시도
+         try { localStorage.removeItem(localKey); } catch (_r) {}
+         backupJson = JSON.stringify(Object.assign({}, trainingResult, { powerData: [], hrData: [], cadenceData: [] }));
+         localStorage.setItem(localKey, backupJson);
+         localStorage.setItem('latest_training_result', backupJson);
+       }
        console.log('[saveTrainingResult] ✅ 로컬 백업 저장 완료:', localKey);
        localSaveSuccess = true;
      } catch (e) {

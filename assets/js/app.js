@@ -11780,9 +11780,14 @@ async function saveGeminiApiKey() {
       throw new Error('사용 가능한 모델을 찾을 수 없습니다.');
     }
     
-    // API 키 저장
-    localStorage.setItem('geminiApiKey', apiKey);
-    localStorage.setItem('geminiApiKeyDisabled', 'true'); // 비활성화 상태 저장
+    // API 키 저장 (2026-11-11: 검증은 통과했는데 저장 공간 부족이면 '검증 실패'로 오해하지 않도록 구분)
+    try {
+      localStorage.setItem('geminiApiKey', apiKey);
+    } catch (storeErr) {
+      const se = new Error('저장 공간이 가득 차 키를 저장하지 못했습니다. 브라우저 사이트 데이터를 정리한 뒤 다시 시도해주세요.');
+      se.isStorage = true; throw se;
+    }
+    try { localStorage.setItem('geminiApiKeyDisabled', 'true'); } catch (_d) {} // 비활성화 상태 저장
     apiKeyInput.type = 'password'; // 보안을 위해 password 타입 유지
     apiKeyInput.disabled = true; // 저장 후 텍스트 상자 비활성화
     
@@ -11814,10 +11819,11 @@ async function saveGeminiApiKey() {
     
   } catch (error) {
     console.error('API 키 검증 오류:', error);
+    const failMsg = error && error.isStorage ? error.message : `API 키 검증 실패: ${error.message}`;
     if (typeof showToast === 'function') {
-      showToast(`API 키 검증 실패: ${error.message}`, 'error');
+      showToast(failMsg, 'error');
     } else {
-      alert(`API 키 검증 실패: ${error.message}`);
+      alert(failMsg);
     }
     return;
   } finally {
