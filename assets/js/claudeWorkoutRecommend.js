@@ -641,7 +641,7 @@
       var html = '', lastDate = '';
       items.forEach(function (wk, i) {
         if (wk.date !== lastDate) { lastDate = wk.date; html += '<div style="font-weight:700;color:#111827;margin:12px 0 6px;text-align:left;">' + esc(wk.date) + '</div>'; }
-        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;">' +
+        html += '<div data-card="' + i + '" style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;content-visibility:auto;contain-intrinsic-size:auto 130px;">' +
           '<div style="display:flex;justify-content:space-between;gap:8px;"><div style="min-width:0;"><div style="font-weight:700;color:#111827;">' + esc(wk.name) + '</div><div style="font-size:12px;color:#6b7280;">' + esc(wk.category) + ' · ' + Math.round(wk.seconds / 60) + '분 · TSS ' + wk.tss + '</div></div>' +
           '<div style="display:flex;gap:6px;flex:none;align-items:flex-start;"><button type="button" data-use="' + i + '" style="padding:6px 12px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer;">사용</button>' +
           '<button type="button" data-del="' + i + '" aria-label="삭제" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#b91c1c;font-size:13px;cursor:pointer;">삭제</button></div></div>' +
@@ -654,7 +654,18 @@
         b.onclick = async function () {
           var wk = w.__claudeSaved[Number(b.getAttribute('data-del'))];
           if (!wk || !confirm('"' + wk.name + '" 워크아웃을 목록에서 삭제할까요?')) return;
-          try { await rpc('fn_ai_workout_delete', { p_id: wk.id }); try { var u = w.currentUser; if (u) localStorage.removeItem(dayKey(u)); } catch (e) {} openSavedList(); } catch (e) { toast('삭제하지 못했습니다.', 'error'); }
+          try {
+            await rpc('fn_ai_workout_delete', { p_id: wk.id });
+            try { var u = w.currentUser; if (u) localStorage.removeItem(dayKey(u)); } catch (e) {}
+            // 전체 목록을 다시 불러와 다시 그리지 않고 해당 카드만 제거(날짜 제목만 남으면 함께 제거)
+            var card = b.closest('[data-card]');
+            if (card) {
+              var prev = card.previousElementSibling, next = card.nextElementSibling;
+              card.remove();
+              if (prev && !prev.hasAttribute('data-card') && (!next || !next.hasAttribute('data-card'))) prev.remove();
+              if (!body.querySelector('[data-card]')) body.textContent = '저장된 워크아웃이 없습니다. Claude 추천을 받으면 이곳에 저장됩니다.';
+            } else { openSavedList(); }
+          } catch (e) { toast('삭제하지 못했습니다.', 'error'); }
         };
       });
     } catch (e) { body.textContent = (e && e.message) || '목록을 불러오지 못했습니다.'; }
