@@ -17,12 +17,12 @@
   var API_URL = 'https://api.anthropic.com/v1/messages';
 
   var GRADES = [
-    { max: 2.5, name: '입문', hint: '주로 Z1~Z2(55~75%), 인터벌은 짧고 낮게(최대 SS 85~90%, 1회 8~10분 이하). 총 부하 낮게, 꾸준함 우선.' },
-    { max: 3.2, name: '초급', hint: 'Z2 중심 + 가벼운 템포/SS(최대 88~92%, 1회 10~15분). 고강도(VO2)는 짧게(2~3분)·소량.' },
-    { max: 3.7, name: '중급', hint: 'Z2·템포·SS·역치(95~100%, 1회 10~20분) 균형. VO2(106~118%) 3~4분 x 4~5회까지.' },
-    { max: 4.2, name: '상급', hint: 'SS·역치·오버언더·VO2 적극 활용(역치 2x20분, VO2 5x4~5분 가능). 회복 간격 충분히.' },
-    { max: 5.0, name: '엘리트', hint: '고강도 볼륨 높음(역치 3x15~20분, VO2 6x4분, 혐기 30~60초 반복). 회복일 엄수.' },
-    { max: 99, name: '프로선수', hint: '대회 특이 훈련·고강도 큰 볼륨(역치 3x20분+, VO2 6~8x4~5분, 스프린트·혐기). 정확한 회복·테이퍼링.' }
+    { max: 2.5, ifMax: 0.75, name: '입문', hint: '주로 Z1~Z2(55~75%), 인터벌은 짧고 낮게(최대 SS 85~90%, 1회 8~10분 이하). 총 부하 낮게, 꾸준함 우선.' },
+    { max: 3.2, ifMax: 0.82, name: '초급', hint: 'Z2 중심 + 가벼운 템포/SS(최대 88~92%, 1회 10~15분). 고강도(VO2)는 짧게(2~3분)·소량.' },
+    { max: 3.7, ifMax: 0.88, name: '중급', hint: 'Z2·템포·SS·역치(95~100%, 1회 10~20분) 균형. VO2(106~118%) 3~4분 x 4~5회까지.' },
+    { max: 4.2, ifMax: 0.93, name: '상급', hint: 'SS·역치·오버언더·VO2 적극 활용(역치 2x20분, VO2 5x4~5분 가능). 회복 간격 충분히.' },
+    { max: 5.0, ifMax: 0.98, name: '엘리트', hint: '고강도 볼륨 높음(역치 3x15~20분, VO2 6x4분, 혐기 30~60초 반복). 회복일 엄수.' },
+    { max: 99, ifMax: 1.05, name: '프로선수', hint: '대회 특이 훈련·고강도 큰 볼륨(역치 3x20분+, VO2 6~8x4~5분, 스프린트·혐기). 정확한 회복·테이퍼링.' }
   ];
   var GOALS = [
     { id: 'diet', label: '다이어트', ask: false, hint: '지방 연소·칼로리 소모: 긴 Z2(55~70%) 중심, 약간의 템포. 과도한 고강도 지양(회복 저하).' },
@@ -90,17 +90,22 @@
       '<b style="font-size:16px;color:#5b21b6;">Claude 유료 API 추천 <span style="font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 8px;vertical-align:middle;">NEW</span></b>' +
       '<div style="font-size:12px;color:#6b7280;margin-top:4px;">FTP·컨디션·최근 30일 로그·목표·가능 시간에 맞춰 맞춤 워크아웃을 새로 생성' +
       (hasKey ? '' : '<br><span style="color:#b45309;">※ 내 Claude API 키 등록 필요(설정에서 저장)</span>') + '</div></button>' +
+      '<button type="button" data-eng="saved" style="width:100%;margin-top:10px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:14px;cursor:pointer;">📋 나의 훈련 목록 (저장된 Claude 워크아웃)</button>' +
       '</div>';
     m.style.display = 'flex';
     m.querySelector('[data-close]').onclick = function () { m.style.display = 'none'; };
     m.querySelector('[data-eng="gemini"]').onclick = function () { m.style.display = 'none'; if (typeof w.handleGeminiRecommendationClick === 'function') w.handleGeminiRecommendationClick(); };
     m.querySelector('[data-eng="claude"]').onclick = function () { m.style.display = 'none'; startClaudeFlow(); };
+    m.querySelector('[data-eng="saved"]').onclick = function () { m.style.display = 'none'; openSavedList(); };
   }
 
   /* ---------------- 2) Claude 키 확인 → 설정 ---------------- */
-  function startClaudeFlow() {
+  async function startClaudeFlow() {
     var user = w.currentUser;
     if (!user || !user.id) { toast('사용자 정보가 없습니다. 먼저 로그인해주세요.', 'error'); return; }
+    // 오늘 이미 생성했다면 키·토큰 없이 그 결과를 보여줌(하루 1회)
+    var today = await loadToday(user);
+    if (today) { showDay(today, true); return; }
     if (!getKey()) { openSettingsForClaudeKey(); return; }
     openOptionsModal();
   }
@@ -192,18 +197,26 @@
   }
   function summarizeLogs(logs) {
     var todayStr = ymd(new Date()), t0 = new Date(todayStr + 'T00:00:00');
-    var weeks = [0, 0, 0, 0], total = 0, last7 = 0, days = {};
+    var weeks = [0, 0, 0, 0], total = 0, last7 = 0, last48 = 0, days = {}, daily = [];
+    for (var i = 0; i < 30; i++) daily.push(0); // daily[0]=29일 전 … daily[29]=오늘
     logs.forEach(function (l) {
       var dd = Math.floor((t0 - new Date(l.date + 'T00:00:00')) / 86400000);
       var wi = Math.min(3, Math.max(0, Math.floor(dd / 7)));
-      weeks[wi] += l.tss || 0; total += l.tss || 0; if (dd < 7) last7 += l.tss || 0; days[l.date] = (days[l.date] || 0) + (l.tss || 0);
+      weeks[wi] += l.tss || 0; total += l.tss || 0; if (dd < 7) last7 += l.tss || 0; if (dd <= 1) last48 += l.tss || 0;
+      days[l.date] = (days[l.date] || 0) + (l.tss || 0);
+      if (dd >= 0 && dd < 30) daily[29 - dd] += l.tss || 0;
     });
+    // CTL(42일)·ATL(7일) 지수가중 — 30일치만 있으므로 평균 일일 TSS 로 초기화한 추정치
+    var seed = total / 30, ctl = seed, atl = seed;
+    daily.forEach(function (t) { ctl += (t - ctl) / 42; atl += (t - atl) / 7; });
     var lastDate = logs.length ? logs[0].date : null;
     var daysSince = lastDate ? Math.floor((t0 - new Date(lastDate + 'T00:00:00')) / 86400000) : null;
-    var hard = logs.filter(function (l) { return (l.tss || 0) >= 90; }).length;
+    var hard = logs.filter(function (l) { return (l.tss || 0) >= 90; });
+    var lastHard = hard.length ? Math.floor((t0 - new Date(hard[0].date + 'T00:00:00')) / 86400000) : null;
     return {
-      sessions: logs.length, total_tss_30d: Math.round(total), weekly_tss_newest_first: weeks.map(Math.round), last7d_tss: Math.round(last7),
-      riding_days_30d: Object.keys(days).length, days_since_last_ride: daysSince, hard_sessions_tss90plus: hard,
+      sessions: logs.length, total_tss_30d: Math.round(total), weekly_tss_newest_first: weeks.map(Math.round), last7d_tss: Math.round(last7), last48h_tss: Math.round(last48),
+      ctl_est: Math.round(ctl), atl_est: Math.round(atl), tsb_est: Math.round(ctl - atl),
+      riding_days_30d: Object.keys(days).length, days_since_last_ride: daysSince, hard_sessions_tss90plus: hard.length, days_since_last_hard_session: lastHard,
       recent_sessions: logs.slice(0, 12).map(function (l) { return { date: l.date, name: String(l.name).slice(0, 40), min: l.min, avg_w: l.avgW, np_w: l.np, tss: l.tss, hr: l.hr || undefined }; })
     };
   }
@@ -256,24 +269,32 @@
   function buildPrompt(ctx) {
     var goal = ctx.goal, cond = ctx.cond, grade = ctx.grade, tm = ctx.time;
     var daysToEvent = ctx.date ? Math.ceil((new Date(ctx.date + 'T00:00:00') - new Date(ymd(new Date()) + 'T00:00:00')) / 86400000) : null;
-    var sys = '당신은 사이클 전문 코치입니다. 사용자의 FTP·W/kg 등급·오늘 컨디션·최근 30일 훈련 로그·훈련 목표·오늘 가능 시간을 모두 반영해 도로/실내 사이클 훈련에 최적화된 워크아웃 3개(1~3순위)를 설계하고 submit_workouts 도구로만 답하세요.\n' +
-      '규칙:\n' +
-      '- 모든 강도는 %FTP(정수)로 표현. 구간 합계 시간은 반드시 가능 시간 이내(웜업·쿨다운 포함).\n' +
-      '- 모든 워크아웃은 웜업(warmup)으로 시작해 쿨다운(cooldown)으로 끝낼 것(각 5~15분, 점진 상승/하강 ramp 사용 가능).\n' +
-      '- 최근 30일 부하(주간 TSS, 최근 7일 TSS, 마지막 라이딩 이후 일수, 고강도 횟수)로 피로를 판단해 과부하면 회복/지구력 위주로, 휴식이 충분하면 질적 훈련을 배치.\n' +
-      '- 1순위=가장 적합, 2·3순위=강도/형태가 다른 대안(예: 한 단계 쉬운 안/한 단계 강한 안). 세 워크아웃의 이름·구성이 서로 달라야 함.\n' +
-      '- interval 블록은 reps x (on_minutes@on_percent + off_minutes@off_percent). 한 블록에 웜업·쿨다운을 섞지 말 것.\n' +
-      '- 등급별 강도 상한을 넘기지 말 것. 안전을 위해 단일 인터벌 %FTP는 200 초과 금지.\n' +
-      '- 한국어로, goal_comment는 오늘 훈련의 목표를 1줄(60자 이내)로.\n- 반드시 submit_workouts 도구를 정확히 한 번 호출해서 답하세요(텍스트로 답하지 말 것).';
+    var sys = '당신은 세계 최고 수준의 사이클 파워 트레이닝 코치입니다(운동생리학·훈련 주기화·파워 기반 훈련 전문). ' +
+      '사용자의 FTP·W/kg 등급·오늘 컨디션·최근 30일 부하(CTL/ATL/TSB 추정 포함)·훈련 목표·오늘 가능 시간을 모두 반영해 사이클 훈련에 과학적으로 최적화된 워크아웃 3개(1~3순위)를 설계하고, 반드시 submit_workouts 도구를 정확히 한 번 호출해서만 답하세요(텍스트 답변 금지).\n\n' +
+      '[파워존(Coggan, %FTP)] Z1 활성회복 <55 / Z2 지구력 56~75 / Z3 템포 76~90 / 스위트스팟(SS) 88~94 / Z4 역치 91~105 / Z5 VO2max 106~120 / Z6 무산소 121~150 / Z7 신경근 최대(6~15초).\n\n' +
+      '[세션 설계 원칙]\n' +
+      '1) 한 세션 = 하나의 주 자극(SS·역치·VO2 중 하나). 서로 다른 에너지 시스템을 한 세션에 과적하지 말 것.\n' +
+      '2) 인터벌 설계(일:휴식): SS 2~4x10~20분 @88~94% (휴식 3~5분 @50~55%) / 역치 2~3x8~20분 @95~105% (휴식 4~6분, 약 4:1) / VO2max 4~8x3~5분 @106~120% (휴식 = 일 시간의 100%, @45~50%) / 무산소 6~10x30~60초 @121~150% (휴식 2~4분) / 오버언더: reps x (on 2~3분 @102~105% + off 2~3분 @88~92%) / 지구력 Z2 연속(필요 시 짧은 템포 삽입) / 회복 Z1~Z2 낮은 케이던스 부담 없이.\n' +
+      '3) 웜업 10~15분을 55%→75% 정도로 점진 상승(ramp)시키고, SS 이상의 질적 세션은 웜업 뒤에 오프너(예: 2x40초 @105~110%, 휴식 2분 @50%)를 넣을 것. 쿨다운 5~10분은 60%→40%로 점진 하강.\n' +
+      '4) 부하 관리: TSB(=CTL−ATL) < −25면 회복/Z2 위주, −25~−10은 생산적 피로(중강도 가능, 고강도는 신중), −10~+5는 질적 훈련 적기, +5 이상이면 고강도·장시간 가능. 최근 48시간 TSS가 크거나(예: 90+) 마지막 고강도 세션이 1일 전이면 오늘은 지구력/회복 위주. 고강도(Z4 이상) 세션은 주 2회(최대 3회)로 제한하고 사이 48시간을 확보, 나머지는 Z1~Z2(극분화 80/20 또는 피라미드).\n' +
+      '5) 점진적 과부하: 새 세션의 TSS는 최근 세션 평균/최근 7일 TSS 추세 대비 약 +5~10% 이내로 시작(기록이 없으면 보수적으로). 급격한 증가 금지.\n' +
+      '6) 강도계수(IF) 가이드: 회복 <0.55, 지구력 0.55~0.75, 템포/SS 0.75~0.88, 역치 0.88~0.95, VO2 위주 0.90~1.05(짧은 시간). 등급별 IF 한도를 넘기지 말 것.\n' +
+      '7) 컨디션: 최상=계획 강도 상단까지 가능, 좋음=계획대로, 보통=질적 훈련 유지하되 강도·볼륨을 3~5% 낮춤, 나쁨=인터벌 없이 Z1~Z2 회복 중심(IF ≤ 0.70).\n' +
+      '8) 목표별 처방: 다이어트=긴 Z2 + 약간의 템포로 총 에너지 소모(칼로리) 극대화·회복 가능한 범위, 체력향상=지구력 기반 + 템포/SS + 가끔 VO2, FTP 향상=SS/역치/오버언더 중심, 그란폰도=장시간 Z2 + 오르막 대비 템포/SS·역치(지구력 우선), 대회=레이스 특이 훈련(역치·VO2·서지/변속) .\n' +
+      '9) 대회/이벤트 D-day 주기화: D-84 이상=베이스(Z2·템포 볼륨), D-28~84=빌드(SS·역치·VO2 점진 과부하), D-14~28=피크(대회 특이·강도 유지, 볼륨 감소 시작), D-7~14=테이퍼 1(볼륨 −30~40%, 강도 유지), D-2~7=테이퍼 2(볼륨 −50~60%, 짧은 오프너 위주), D-1 이하=회복·오프너만(매우 짧게).\n' +
+      '10) 시간 제약을 절대 넘기지 말 것(웜업·쿨다운 포함). 시간이 짧으면(60분 이내) 질을 높이고 볼륨을 줄이며, 길면(2시간 이상) 지구력 기반 + 후반부 템포/SS 블록 등으로 구성.\n' +
+      '11) 세 안의 구성: 1순위=오늘의 상태에 가장 적합한 최적안, 2순위=다른 자극(에너지 시스템/형태)의 대안, 3순위=가장 보수적인 안(피로가 높거나 컨디션이 나빠도 수행 가능, 또는 더 짧은 안). 세 워크아웃의 이름·구성·카테고리가 서로 달라야 함.\n\n' +
+      '[출력 규칙] 모든 강도는 %FTP(정수). 각 워크아웃은 warmup 으로 시작해 cooldown 으로 끝남. interval 블록은 reps x (on_minutes@on_percent + off_minutes@off_percent)로 표현(오버언더도 interval 로). 한 블록에 웜업·쿨다운을 섞지 말 것. 단일 구간 %FTP는 200 초과 금지. ' +
+      'why 에는 이 워크아웃을 고른 근거를 TSB·최근 부하·목표·컨디션 수치를 들어 한 줄로(한국어). goal_comment 는 오늘 훈련의 목표를 1줄(60자 이내, 한국어).';
     var user = '[사용자]\n' +
       '- FTP: ' + ctx.ftp + 'W / 체중: ' + (ctx.weight || '미입력') + 'kg / W/kg: ' + (ctx.wkg ? ctx.wkg.toFixed(2) : '알 수 없음') + '\n' +
-      '- 등급: ' + (grade ? grade.name + ' — ' + grade.hint : '알 수 없음(체중 미입력): 보수적으로 중급 이하 강도 적용') + '\n' +
+      '- 등급: ' + (grade ? grade.name + ' — ' + grade.hint + ' (IF 한도 ' + grade.ifMax + ')' : '알 수 없음(체중 미입력): 보수적으로 중급 이하 강도 적용') + '\n' +
       '  (등급 기준 W/kg: 입문 2.5 미만, 초급 2.5~3.2, 중급 3.2~3.7, 상급 3.7~4.2, 엘리트 4.2~5.0, 프로선수 5.0 이상)\n' +
       '[오늘 컨디션] ' + cond.id + ' — ' + cond.hint + '\n' +
       '[훈련 목표] ' + goal.label + ' — ' + goal.hint + '\n' +
-      (daysToEvent != null ? '[대회/이벤트 일자] ' + ctx.date + ' (D-' + daysToEvent + '일) — 남은 기간에 맞는 훈련 단계(베이스/빌드/피크/테이퍼)를 적용\n' : '') +
+      (daysToEvent != null ? '[대회/이벤트 일자] ' + ctx.date + ' (D-' + daysToEvent + '일) — 위 D-day 주기화 규칙의 해당 단계를 적용\n' : '') +
       '[오늘 가능 시간] ' + tm.label + ' → 총 시간 ' + tm.minMin + '~' + tm.maxMin + '분 범위(절대 ' + tm.maxMin + '분 초과 금지)\n' +
-      '[최근 30일 훈련 요약]\n' + JSON.stringify(ctx.summary) + '\n' +
+      '[최근 30일 훈련 요약(ctl_est/atl_est/tsb_est 는 30일 기록 기반 추정치)]\n' + JSON.stringify(ctx.summary) + '\n' +
       (ctx.summary.sessions === 0 ? '(최근 30일 기록 없음: 보수적으로 시작)\n' : '');
     return { sys: sys, user: user };
   }
@@ -314,6 +335,15 @@
   }
   function fmtMin(m) { return (Math.round(m * 10) / 10) + 'm'; }
   function totalSec(segs) { return segs.reduce(function (s, x) { return s + (x.duration_sec || 0); }, 0); }
+  function calcIF(segs) {
+    var T = 0, s4 = 0;
+    segs.forEach(function (x) {
+      var t = x.duration_sec || 0; if (t <= 0) return;
+      var a = (Number(x.target_value) || 50) / 100, b = x.ramp_to_value != null ? Number(x.ramp_to_value) / 100 : a;
+      s4 += ((Math.pow(a, 4) + Math.pow(b, 4)) / 2) * t; T += t;
+    });
+    return T ? Math.pow(s4 / T, 0.25) : 0;
+  }
   function calcTSS(segs) {
     var T = 0, s4 = 0;
     segs.forEach(function (s) {
@@ -363,6 +393,9 @@
     if (modal) { modal.style.display = 'flex'; modal.classList.remove('hidden'); }
     function status(msg) { if (content) content.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="loading-text">' + esc(msg) + '</div></div>'; }
     try {
+      // 하루 1회: 다른 기기·직전 클릭으로 이미 생성됐다면 토큰을 쓰지 않고 그 결과를 보여줌
+      var already = await loadToday(user);
+      if (already) { showDay(already, true); return; }
       status('최근 30일 훈련 기록을 분석 중입니다...');
       var ftp = Math.round(Number(user.ftp) || 0) || 200;
       var weight = Number(user.weight) || 0;
@@ -379,16 +412,21 @@
       var messages = [{ role: 'user', content: pr.user }], result = null, lastErr = '';
       for (var attempt = 0; attempt < 2 && !result; attempt++) {
         status('Claude가 맞춤 워크아웃을 설계 중입니다...' + (attempt ? ' (보정 중)' : ''));
-        var res = await callClaude(key, { model: MODEL, max_tokens: 12000, output_config: { effort: 'medium' }, system: pr.sys, tools: [TOOL], tool_choice: { type: 'auto' }, messages: messages }, 120000);
+        var res = await callClaude(key, { model: MODEL, max_tokens: 12000, output_config: { effort: 'high' }, system: pr.sys, tools: [TOOL], tool_choice: { type: 'auto' }, messages: messages }, 150000);
         var tu = (res.content || []).filter(function (c) { return c.type === 'tool_use' && c.name === 'submit_workouts'; })[0];
         if (!tu || !tu.input) { lastErr = res.stop_reason === 'max_tokens' ? '응답이 길어 잘렸습니다.' : '응답 형식이 올바르지 않습니다.'; continue; }
-        var checked = validate(tu.input, ctx);
+        var checked = validate(tu.input, ctx, attempt > 0); // 2차 시도는 IF 한도를 경고로만 취급(시간 제한은 항상 적용)
         if (checked.ok) { result = checked.data; break; }
         lastErr = checked.error;
         messages = [{ role: 'user', content: pr.user + '\n\n[이전 응답 문제] ' + checked.error + '\n위 문제를 고쳐 다시 submit_workouts 로 제출하세요.' }];
       }
       if (!result) throw new Error('조건에 맞는 워크아웃을 만들지 못했습니다. ' + lastErr);
-      renderResult(result, ctx);
+      var day = {
+        date: ymd(new Date()), category: result.category, comment: result.comment, workouts: result.workouts,
+        label: ctx.goal.label + ' · 컨디션 ' + ctx.cond.id + ' · ' + ctx.time.label + (ctx.grade ? ' · ' + ctx.grade.name + ' (' + ctx.wkg.toFixed(2) + ' W/kg)' : '')
+      };
+      day = await saveDay(user, day); // 서버 저장(실패해도 이 기기에는 저장) — 다른 기기에서 먼저 만든 게 있으면 그걸 반환
+      showDay(day, false);
     } catch (e) {
       console.warn('[ClaudeReco]', e);
       if (content) content.innerHTML = '<div style="padding:24px;text-align:center;"><div style="font-size:15px;color:#b91c1c;margin-bottom:14px;">' + esc(e && e.message || '추천 중 오류가 발생했습니다.') + '</div>' +
@@ -396,16 +434,70 @@
     } finally { w.__claudeRecoBusy = false; }
   }
 
-  function validate(input, ctx) {
+  /* ---------------- 하루 1회 캐시 + 서버 저장(나의 훈련 목록) ---------------- */
+  function dayKey(user) { return 'claudeRecoDay:' + user.id + ':' + ymd(new Date()); }
+  function rpcFn() {
+    return typeof w.stelvioSupabaseRpc === 'function' ? Promise.resolve(w.stelvioSupabaseRpc)
+      : import('/assets/js/supabaseDualWrite.js').then(function (m) { return m.callSupabaseRpcAsUser; });
+  }
+  function rpc(name, args) { return rpcFn().then(function (f) { return f(name, args); }); }
+  function fromServer(res) {
+    var items = (res.items || []).map(function (it) {
+      return { id: it.id, rank: it.rank, name: it.title, category: it.category, why: it.why, flow: it.flow, seconds: it.total_seconds, tss: it.tss, segments: it.segments || [], date: it.workout_date };
+    });
+    var m = res.meta || {};
+    return { date: items.length ? String(items[0].date).slice(0, 10) : ymd(new Date()), category: m.category || (items[0] && items[0].category) || '', comment: m.comment || '', label: m.label || '', workouts: items };
+  }
+  function cacheLocal(user, day) {
+    try {
+      Object.keys(localStorage).forEach(function (k) { if (k.indexOf('claudeRecoDay:' + user.id + ':') === 0 && k !== dayKey(user)) localStorage.removeItem(k); });
+      localStorage.setItem(dayKey(user), JSON.stringify(day));
+    } catch (e) {}
+  }
+  /** 오늘 이미 생성된 결과(없으면 null): 이 기기 캐시 → 서버 순 */
+  async function loadToday(user) {
+    try { var c = JSON.parse(localStorage.getItem(dayKey(user)) || 'null'); if (c && c.workouts && c.workouts.length) return c; } catch (e) {}
+    try {
+      var res = await rpc('fn_ai_workout_day_get', { p_date: ymd(new Date()) });
+      if (res && res.success && res.exists) {
+        var day = fromServer(res);
+        if (day.workouts.length) { cacheLocal(user, day); return day; }
+        return { date: ymd(new Date()), category: '', comment: '', label: '', workouts: [], emptied: true }; // 오늘 생성했지만 목록에서 전부 삭제됨
+      }
+    } catch (e) { console.warn('[ClaudeReco] 오늘 기록 조회 실패', e); }
+    return null;
+  }
+  async function saveDay(user, day) {
+    cacheLocal(user, day); // 서버 저장이 실패해도 이 기기에서는 하루 1회 보장
+    try {
+      var res = await rpc('fn_ai_workout_day_save', {
+        p_date: ymd(new Date()),
+        p_meta: { category: day.category, comment: day.comment, label: day.label },
+        p_items: day.workouts.map(function (x) { return { title: x.name, category: x.category, why: x.why, flow: x.flow, total_seconds: x.seconds, tss: x.tss, segments: x.segments }; })
+      });
+      if (res && res.success && res.items && res.items.length) { var d2 = fromServer(res); if (d2.workouts.length) { cacheLocal(user, d2); return d2; } }
+    } catch (e) { console.warn('[ClaudeReco] 서버 저장 실패(이 기기에는 저장됨)', e); }
+    return day;
+  }
+  function showDay(day, cached) {
+    var modal = $('workoutRecommendationModal'); if (modal) { modal.style.display = 'flex'; modal.classList.remove('hidden'); }
+    renderResult(day, cached);
+  }
+
+  function validate(input, ctx, relaxed) {
     var list = Array.isArray(input.workouts) ? input.workouts : [];
     if (list.length < 1) return { ok: false, error: '워크아웃이 비어 있습니다.' };
     var out = [], maxSec = ctx.time.maxMin * 60, minSec = Math.max(20, ctx.time.minMin - 15) * 60;
+    var ifCap = ctx.grade ? ctx.grade.ifMax : 0.88;
+    if (ctx.cond && ctx.cond.id === '나쁨') ifCap = Math.min(ifCap, 0.72);
     for (var i = 0; i < list.length && out.length < 3; i++) {
       var wk = list[i], conv = blocksToSegments(wk.blocks), t = totalSec(conv.segments);
       if (!conv.segments.length) continue;
       if (t > maxSec + 60) return { ok: false, error: '"' + (wk.name || i + 1) + '" 총 ' + Math.round(t / 60) + '분 — 가능 시간 ' + ctx.time.maxMin + '분 이내로 줄여야 합니다.' };
       if (t < minSec) return { ok: false, error: '"' + (wk.name || i + 1) + '" 총 ' + Math.round(t / 60) + '분 — 너무 짧습니다. ' + ctx.time.minMin + '~' + ctx.time.maxMin + '분으로 맞춰주세요.' };
-      out.push({ rank: Number(wk.rank) || i + 1, name: String(wk.name || '맞춤 워크아웃').slice(0, 40), category: String(wk.category || input.category || '').slice(0, 30), why: String(wk.why || '').slice(0, 120), segments: conv.segments, flow: conv.flow, seconds: t, tss: calcTSS(conv.segments) });
+      var IFv = calcIF(conv.segments);
+      if (!relaxed && IFv > ifCap + 0.005) return { ok: false, error: '"' + (wk.name || i + 1) + '" 강도계수(IF) ' + IFv.toFixed(2) + ' — 이 사용자(' + (ctx.grade ? ctx.grade.name : '등급 미상') + ', 컨디션 ' + (ctx.cond ? ctx.cond.id : '') + ')의 IF 한도 ' + ifCap.toFixed(2) + ' 이하로 낮춰주세요.' };
+      out.push({ rank: Number(wk.rank) || i + 1, name: String(wk.name || '맞춤 워크아웃').slice(0, 40), category: String(wk.category || input.category || '').slice(0, 30), why: String(wk.why || '').slice(0, 160), segments: conv.segments, flow: conv.flow, seconds: t, tss: calcTSS(conv.segments) });
     }
     if (!out.length) return { ok: false, error: '유효한 워크아웃이 없습니다.' };
     out.sort(function (a, b) { return a.rank - b.rank; });
@@ -414,43 +506,93 @@
 
   /* ---------------- 8) 결과 화면 ---------------- */
   var COLORS = ['#3b82f6', '#10b981', '#f59e0b'];
-  function renderResult(res, ctx) {
+  function barsHtml(wk) {
+    return (wk.segments || []).map(function (s) {
+      var v = Number(s.ramp_to_value) || Number(s.target_value) || 50;
+      var h = Math.max(8, Math.min(100, Math.round((v / 140) * 100)));
+      var c = s.target_value >= 106 ? '#ef4444' : s.target_value >= 91 ? '#f97316' : s.target_value >= 76 ? '#eab308' : s.target_value >= 56 ? '#22c55e' : '#94a3b8';
+      return '<div style="flex:' + s.duration_sec + ';height:' + h + '%;background:' + c + ';min-width:1px;"></div>';
+    }).join('');
+  }
+  function renderResult(day, cached) {
     var content = $('workoutRecommendationContent'); if (!content) return;
-    w.__claudeRecs = res.workouts;
+    w.__claudeRecs = day.workouts;
+    if (!day.workouts.length) {
+      content.innerHTML = '<div style="padding:24px;text-align:center;color:#374151;">오늘 이미 Claude 추천을 받으셨습니다(하루 1회).<br>저장된 워크아웃은 목록에서 모두 삭제되었습니다. 내일 다시 추천받을 수 있어요.<br><br><button type="button" data-claude-list style="padding:10px 18px;border:0;border-radius:10px;background:#7c3aed;color:#fff;cursor:pointer;">나의 훈련 목록 보기</button></div>';
+      var lb = content.querySelector('[data-claude-list]'); if (lb) lb.onclick = openSavedList;
+      return;
+    }
     var html = '<div style="padding:4px 2px;">' +
       '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;"><span style="background:#7c3aed;color:#fff;border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;">Claude</span>' +
-      '<b style="font-size:17px;color:#111827;">추천 카테고리: ' + esc(res.category) + '</b></div>' +
-      '<div style="font-size:14px;color:#374151;line-height:1.5;margin-bottom:6px;">' + esc(res.comment) + '</div>' +
-      '<div style="font-size:11px;color:#9ca3af;margin-bottom:12px;">' + esc(ctx.goal.label) + ' · 컨디션 ' + esc(ctx.cond.id) + ' · ' + esc(ctx.time.label) + (ctx.grade ? ' · ' + esc(ctx.grade.name) + ' (' + ctx.wkg.toFixed(2) + ' W/kg)' : '') + '</div>';
-    res.workouts.forEach(function (wk, idx) {
+      '<b style="font-size:17px;color:#111827;">추천 카테고리: ' + esc(day.category) + '</b></div>' +
+      '<div style="font-size:14px;color:#374151;line-height:1.5;margin-bottom:6px;">' + esc(day.comment) + '</div>' +
+      '<div style="font-size:11px;color:#9ca3af;margin-bottom:8px;">' + esc(day.label) + '</div>' +
+      '<div style="font-size:12px;color:#5b21b6;background:#f5f3ff;border-radius:8px;padding:8px 10px;margin-bottom:12px;line-height:1.5;">' +
+      (cached ? '오늘(' + esc(day.date) + ') 이미 생성된 워크아웃입니다. Claude 추천은 하루 1회이며, 다시 열어도 토큰이 사용되지 않습니다.' : '오늘 추천 3개가 <b>나의 훈련 목록</b>에 저장되었습니다. 다음에도 사용할 수 있어요.') +
+      ' <a href="javascript:void(0)" data-claude-list style="color:#5b21b6;font-weight:700;text-decoration:underline;">나의 훈련 목록 ›</a></div>';
+    day.workouts.forEach(function (wk, idx) {
       var col = COLORS[idx] || '#6b7280', total = wk.seconds || 1;
-      var bars = wk.segments.map(function (s) {
-        var h = Math.max(8, Math.min(100, Math.round(((Number(s.ramp_to_value) || s.target_value) / 140) * 100)));
-        var c = s.target_value >= 106 ? '#ef4444' : s.target_value >= 91 ? '#f97316' : s.target_value >= 76 ? '#eab308' : s.target_value >= 56 ? '#22c55e' : '#94a3b8';
-        return '<div style="flex:' + s.duration_sec + ';height:' + h + '%;background:' + c + ';min-width:1px;"></div>';
-      }).join('');
       html += '<div data-claude-pick="' + idx + '" style="border:2px solid ' + col + ';border-radius:12px;padding:14px;margin-bottom:12px;cursor:pointer;background:#fff;">' +
         '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">' +
         '<div style="display:flex;align-items:center;gap:8px;min-width:0;"><div style="width:30px;height:30px;border-radius:50%;background:' + col + ';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex:none;">' + (idx + 1) + '</div>' +
         '<div style="min-width:0;"><div style="font-size:16px;font-weight:700;color:#111827;word-break:keep-all;">' + esc(wk.name) + '</div><div style="font-size:12px;color:#6b7280;">' + esc(wk.category) + '</div></div></div>' +
         '<div style="font-size:12px;color:#374151;text-align:right;flex:none;">' + Math.round(total / 60) + '분<br>예상 TSS ' + wk.tss + '</div></div>' +
         (wk.why ? '<div style="font-size:13px;color:#6b7280;margin-bottom:8px;">' + esc(wk.why) + '</div>' : '') +
-        '<div style="display:flex;align-items:flex-end;gap:1px;height:56px;background:#f9fafb;border-radius:8px;padding:6px;margin-bottom:8px;">' + bars + '</div>' +
+        '<div style="display:flex;align-items:flex-end;gap:1px;height:56px;background:#f9fafb;border-radius:8px;padding:6px;margin-bottom:8px;">' + barsHtml(wk) + '</div>' +
         '<div style="font-size:12px;font-family:ui-monospace,Menlo,monospace;color:#374151;background:#f3f4f6;border-radius:8px;padding:8px;line-height:1.5;word-break:break-word;">' + esc(wk.flow) + '</div>' +
         '<div style="margin-top:8px;text-align:right;font-size:12px;color:' + col + ';font-weight:700;">선택하면 훈련 준비 화면으로 이동 ›</div></div>';
     });
     html += '</div>';
     content.innerHTML = html;
     Array.prototype.forEach.call(content.querySelectorAll('[data-claude-pick]'), function (el) {
-      el.onclick = function () { pick(Number(el.getAttribute('data-claude-pick'))); };
+      el.onclick = function () { pick(w.__claudeRecs[Number(el.getAttribute('data-claude-pick'))]); };
     });
+    Array.prototype.forEach.call(content.querySelectorAll('[data-claude-list]'), function (el) { el.onclick = openSavedList; });
   }
-  function pick(idx) {
-    var wk = (w.__claudeRecs || [])[idx]; if (!wk) return;
+  function pick(wk) {
+    if (!wk) return;
     w.__aiRecommendationInProgress = false;
     if (typeof w.selectAIRecommendedWorkout !== 'function') { toast('워크아웃 준비 기능을 불러오지 못했습니다.', 'error'); return; }
-    w.selectAIRecommendedWorkout(idx, wk.name, JSON.parse(JSON.stringify(wk.segments)));
-    try { if (w.currentWorkout) { w.currentWorkout.description = 'Claude AI가 생성한 워크아웃 · ' + wk.flow; w.currentWorkout.author = 'Claude AI'; w.currentWorkout.id = 'claude-ai-' + Date.now() + '-' + idx; } } catch (e) {}
+    var sm = $('claudeRecoSavedModal'); if (sm) sm.style.display = 'none';
+    w.selectAIRecommendedWorkout(Number(wk.rank) || 1, wk.name, JSON.parse(JSON.stringify(wk.segments)));
+    try { if (w.currentWorkout) { w.currentWorkout.description = 'Claude AI가 생성한 워크아웃 · ' + wk.flow; w.currentWorkout.author = 'Claude AI'; w.currentWorkout.id = 'claude-ai-' + (wk.id || Date.now()); } } catch (e) {}
+  }
+
+  /* ---------------- 나의 훈련 목록(저장된 Claude 워크아웃) ---------------- */
+  async function openSavedList() {
+    var m = ensureModal('claudeRecoSavedModal');
+    m.style.zIndex = '100001';
+    m.innerHTML = '<div style="' + CARD + '"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b style="font-size:18px;">나의 훈련 목록 <span style="font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 8px;vertical-align:middle;">Claude</span></b>' +
+      '<button type="button" data-close style="border:0;background:none;font-size:22px;cursor:pointer;color:#6b7280;">✕</button></div><div data-body style="font-size:14px;color:#6b7280;padding:16px 0;text-align:center;">불러오는 중...</div></div>';
+    m.style.display = 'flex';
+    m.querySelector('[data-close]').onclick = function () { m.style.display = 'none'; };
+    var body = m.querySelector('[data-body]');
+    try {
+      var res = await rpc('fn_ai_workout_list', { p_limit: 90 });
+      if (!res || !res.success) throw new Error('목록을 불러오지 못했습니다.');
+      var items = (res.items || []).map(function (it) { return { id: it.id, rank: it.rank, name: it.title, category: it.category, why: it.why, flow: it.flow, seconds: it.total_seconds, tss: it.tss, segments: it.segments || [], date: String(it.workout_date).slice(0, 10) }; });
+      w.__claudeSaved = items;
+      if (!items.length) { body.textContent = '저장된 워크아웃이 없습니다. Claude 추천을 받으면 이곳에 저장됩니다.'; return; }
+      var html = '', lastDate = '';
+      items.forEach(function (wk, i) {
+        if (wk.date !== lastDate) { lastDate = wk.date; html += '<div style="font-weight:700;color:#111827;margin:12px 0 6px;text-align:left;">' + esc(wk.date) + '</div>'; }
+        html += '<div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;">' +
+          '<div style="display:flex;justify-content:space-between;gap:8px;"><div style="min-width:0;"><div style="font-weight:700;color:#111827;">' + esc(wk.name) + '</div><div style="font-size:12px;color:#6b7280;">' + esc(wk.category) + ' · ' + Math.round(wk.seconds / 60) + '분 · TSS ' + wk.tss + '</div></div>' +
+          '<div style="display:flex;gap:6px;flex:none;align-items:flex-start;"><button type="button" data-use="' + i + '" style="padding:6px 12px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer;">사용</button>' +
+          '<button type="button" data-del="' + i + '" aria-label="삭제" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#b91c1c;font-size:13px;cursor:pointer;">삭제</button></div></div>' +
+          '<div style="display:flex;align-items:flex-end;gap:1px;height:36px;background:#f9fafb;border-radius:6px;padding:4px;margin:8px 0 6px;">' + barsHtml(wk) + '</div>' +
+          '<div style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:#4b5563;word-break:break-word;">' + esc(wk.flow) + '</div></div>';
+      });
+      body.style.textAlign = 'left'; body.style.padding = '0'; body.innerHTML = html;
+      Array.prototype.forEach.call(body.querySelectorAll('[data-use]'), function (b) { b.onclick = function () { pick(w.__claudeSaved[Number(b.getAttribute('data-use'))]); }; });
+      Array.prototype.forEach.call(body.querySelectorAll('[data-del]'), function (b) {
+        b.onclick = async function () {
+          var wk = w.__claudeSaved[Number(b.getAttribute('data-del'))];
+          if (!wk || !confirm('"' + wk.name + '" 워크아웃을 목록에서 삭제할까요?')) return;
+          try { await rpc('fn_ai_workout_delete', { p_id: wk.id }); try { var u = w.currentUser; if (u) localStorage.removeItem(dayKey(u)); } catch (e) {} openSavedList(); } catch (e) { toast('삭제하지 못했습니다.', 'error'); }
+        };
+      });
+    } catch (e) { body.textContent = (e && e.message) || '목록을 불러오지 못했습니다.'; }
   }
 
   /* ---------------- 9) 설정: Claude 키 저장/삭제/검증 ---------------- */
@@ -507,5 +649,5 @@
     openChooser();
   };
   w.openClaudeRecommendOptions = openOptionsModal;
-  w.__claudeReco = { blocksToSegments: blocksToSegments, calcTSS: calcTSS, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES };
+  w.__claudeReco = { loadToday: loadToday, saveDay: saveDay, blocksToSegments: blocksToSegments, calcTSS: calcTSS, calcIF: calcIF, summarizeLogs: summarizeLogs, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES };
 })(window);
