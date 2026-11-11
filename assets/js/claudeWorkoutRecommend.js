@@ -13,7 +13,6 @@
   var KEY_NAME = 'claudeApiKey';
   var PREF_NAME = 'claudeRecoPrefs';
   var MODEL = 'claude-sonnet-5-5';
-  var TEST_MODEL = 'claude-haiku-5-5';
   var API_URL = 'https://api.anthropic.com/v1/messages';
 
   var GRADES = [
@@ -111,6 +110,7 @@
   }
   function openSettingsForClaudeKey() {
     if (typeof w.openSettingsModal === 'function') w.openSettingsModal();
+    setStatus('Claude API 키를 입력하고 [저장]을 누르면 자동으로 추천이 이어집니다.', 'info');
     toast('Claude API 키를 먼저 저장해주세요. 저장하면 자동으로 이어집니다.', 'warning');
     setTimeout(function () { var i = $('settingsClaudeApiKey'); if (i) { i.focus(); try { i.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (e) {} } }, 300);
     w.__claudeRecoAfterKey = Date.now();
@@ -595,49 +595,100 @@
     } catch (e) { body.textContent = (e && e.message) || '목록을 불러오지 못했습니다.'; }
   }
 
-  /* ---------------- 9) 설정: Claude 키 저장/삭제/검증 ---------------- */
+  /* ---------------- 9) 설정: Claude 키 저장/삭제/검증 ----------------
+   * 2026-11-11 수정: 알림(toast)이 설정 모달 뒤에 가려져 결과가 안 보이던 문제 → 상태줄(모달 안)에 결과를 고정 표시 + 오류는 alert.
+   * 키 검증은 토큰을 쓰지 않는 GET /v1/models 로(모델명·요청 형식과 무관, 401 = 잘못된 키). */
+  var statusMsg = null; // { text, kind('ok'|'err'|'info') } — 사용자가 마지막으로 본 결과를 유지
+  function setStatus(text, kind) { statusMsg = text ? { text: text, kind: kind || 'info' } : null; updateStatusLine(); }
   function updateStatusLine() {
     var el = $('settingsClaudeApiStatusLine'), inp = $('settingsClaudeApiKey'), k = getKey();
-    if (el) el.textContent = k ? '✅ Claude API 키가 이 기기에 저장되어 있습니다.' : '키가 없으면 Claude 추천을 사용할 수 없습니다. (console.anthropic.com 에서 발급)';
+    if (el) {
+      var def = k ? '✅ Claude API 키가 이 기기에 저장되어 있습니다.' : '키가 없으면 Claude 추천을 사용할 수 없습니다. (console.anthropic.com 에서 발급 후 입력 → 저장)';
+      el.textContent = statusMsg ? statusMsg.text : def;
+      el.style.color = statusMsg ? (statusMsg.kind === 'err' ? '#b91c1c' : (statusMsg.kind === 'ok' ? '#15803d' : '#64748b')) : (k ? '#15803d' : '#64748b');
+      el.style.fontWeight = statusMsg ? '600' : '400';
+    }
     if (inp) { if (k) { inp.value = '••••••••••••••••'; inp.disabled = true; } else if (inp.disabled) { inp.value = ''; inp.disabled = false; } }
   }
-  function testKey(key) {
-    return callClaude(key, { model: TEST_MODEL, max_tokens: 8, messages: [{ role: 'user', content: 'ping' }] }, 20000);
+  function describeKeyError(e) {
+    var st = e && e.status, m = (e && e.message) || '';
+    if (st === 401) return 'Claude API 키가 올바르지 않습니다. console.anthropic.com 에서 키를 다시 복사해 입력해주세요.';
+    if (st === 403) return 'Claude API 사용 권한이 없는 키입니다(권한·조직 설정 확인).';
+    if (st === 429) return '요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.';
+    if (st >= 500) return 'Claude 서버 응답 오류(' + st + '). 잠시 후 다시 시도해주세요.';
+    if (/Failed to fetch|NetworkError|Load failed|network/i.test(m)) return '네트워크 오류로 Claude 에 연결하지 못했습니다. 인터넷 연결(VPN·광고차단 확장 프로그램 포함)을 확인해주세요.';
+    return m || '키 검증에 실패했습니다.';
   }
+  /** 토큰을 쓰지 않는 키 확인: 모델 목록 1건 조회 */
+  function verifyKey(key) {
+    var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 20000) : null;
+    return fetch('https://api.anthropic.com/v1/models?limit=1', {
+      method: 'GET', signal: ctrl ? ctrl.signal : undefined,
+      headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' }
+    }).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (r.ok) return true;
+      return r.json().catch(function () { return {}; }).then(function (j) {
+        var e = new Error((j && j.error && j.error.message) || ('HTTP ' + r.status)); e.status = r.status; throw e;
+      });
+    }, function (e) { if (timer) clearTimeout(timer); if (e && e.name === 'AbortError') throw new Error('응답 시간이 초과되었습니다. 다시 시도해주세요.'); throw e; });
+  }
+  function btnBusy(id, busy, idle) { var b = $(id); if (b) { b.disabled = !!busy; b.textContent = busy ? '확인 중...' : idle; } }
+
   w.saveClaudeApiKeyFromSettings = async function () {
-    var inp = $('settingsClaudeApiKey'); if (!inp) return;
-    var v = inp.disabled ? '' : inp.value.trim();
-    if (!v) { toast('Claude API 키를 입력해주세요.', 'error'); return; }
-    if (!/^sk-ant-/.test(v)) { toast('Claude API 키는 sk-ant- 로 시작합니다.', 'error'); return; }
-    var btn = $('settingsSaveClaudeKeyBtn'); if (btn) { btn.disabled = true; btn.textContent = '확인 중...'; }
+    var inp = $('settingsClaudeApiKey'); if (!inp) { alert('설정 화면 요소를 찾지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+    var v = inp.disabled ? '' : (inp.value || '').trim();
+    if (!v) { var msg0 = getKey() ? '이미 키가 저장되어 있습니다. 바꾸려면 [삭제] 후 새 키를 입력하세요.' : 'Claude API 키를 입력해주세요.'; setStatus(msg0, getKey() ? 'ok' : 'err'); if (!getKey()) alert(msg0); return; }
+    v = v.replace(/\s+/g, '');
+    if (!/^sk-ant-/.test(v)) { var m1 = 'Claude API 키는 sk-ant- 로 시작합니다. (Gemini 키가 아닌 Anthropic 키를 입력해주세요)'; setStatus(m1, 'err'); alert(m1); return; }
+    btnBusy('settingsSaveClaudeKeyBtn', true, '저장'); setStatus('키 확인 중...', 'info');
     try {
-      await testKey(v);
+      await verifyKey(v);
       localStorage.setItem(KEY_NAME, v);
-      updateStatusLine();
-      toast('Claude API 키가 저장되었습니다.', 'success');
+      if (getKey() !== v) throw new Error('이 기기의 저장 공간에 쓰지 못했습니다(브라우저 저장소 제한). 시크릿 모드가 아닌지, 저장 공간이 가득 차지 않았는지 확인해주세요.');
+      setStatus('✅ Claude API 키가 확인되어 저장되었습니다.', 'ok');
       try { w.dispatchEvent(new CustomEvent('stelvio-claude-apikey-changed', { detail: { hasKey: true } })); } catch (e) {}
       if (w.__claudeRecoAfterKey && Date.now() - w.__claudeRecoAfterKey < 10 * 60000) {
         w.__claudeRecoAfterKey = 0;
         if (typeof w.closeSettingsModal === 'function') w.closeSettingsModal();
-        setTimeout(openOptionsModal, 300);
-      }
-    } catch (e) { toast((e && e.message) || '키 검증에 실패했습니다.', 'error'); }
-    finally { if (btn) { btn.disabled = false; btn.textContent = '저장'; } }
+        setTimeout(function () { w.startClaudeRecommendFlow && w.startClaudeRecommendFlow(); }, 300);
+      } else { alert('Claude API 키가 저장되었습니다.'); }
+    } catch (e) {
+      console.warn('[ClaudeReco] 키 저장 실패', e);
+      var m2 = describeKeyError(e); setStatus('❌ ' + m2, 'err'); alert(m2);
+    } finally { btnBusy('settingsSaveClaudeKeyBtn', false, '저장'); }
   };
   w.testClaudeApiKeyFromSettings = async function () {
-    var k = getKey() || ($('settingsClaudeApiKey') && !$('settingsClaudeApiKey').disabled ? $('settingsClaudeApiKey').value.trim() : '');
-    if (!k) { toast('먼저 Claude API 키를 입력/저장해주세요.', 'error'); return; }
-    try { await testKey(k); toast('Claude API 키가 정상입니다.', 'success'); } catch (e) { toast((e && e.message) || '키 검증 실패', 'error'); }
+    var inp = $('settingsClaudeApiKey');
+    var k = getKey() || (inp && !inp.disabled ? (inp.value || '').replace(/\s+/g, '') : '');
+    if (!k) { var m0 = '먼저 Claude API 키를 입력해주세요.'; setStatus(m0, 'err'); alert(m0); return; }
+    if (!/^sk-ant-/.test(k)) { var m1 = 'Claude API 키는 sk-ant- 로 시작합니다.'; setStatus(m1, 'err'); alert(m1); return; }
+    btnBusy('settingsTestClaudeKeyBtn', true, 'API 키 검증'); setStatus('키 확인 중...', 'info');
+    try {
+      await verifyKey(k);
+      var ok = '✅ Claude API 키가 정상입니다.' + (getKey() ? '' : ' (아직 저장 전입니다 — [저장]을 눌러주세요)');
+      setStatus(ok, 'ok'); alert(ok);
+    } catch (e) { var m2 = describeKeyError(e); setStatus('❌ ' + m2, 'err'); alert(m2); }
+    finally { btnBusy('settingsTestClaudeKeyBtn', false, 'API 키 검증'); }
   };
   w.resetClaudeApiKeyFromSettings = function () {
     if (getKey() && !confirm('저장된 Claude API 키를 삭제할까요?')) return;
     try { localStorage.removeItem(KEY_NAME); } catch (e) {}
     var inp = $('settingsClaudeApiKey'); if (inp) { inp.disabled = false; inp.value = ''; }
-    updateStatusLine();
-    var inp2 = $('settingsClaudeApiKey'); if (inp2) { inp2.disabled = false; inp2.value = ''; inp2.focus(); }
+    setStatus('키를 삭제했습니다. 새 키를 입력하고 저장하세요.', 'info');
+    var i2 = $('settingsClaudeApiKey'); if (i2) i2.focus();
   };
-  // 설정 모달이 열릴 때 상태 갱신
-  document.addEventListener('click', function (e) { if (e.target && e.target.closest && e.target.closest('#settingsModal')) setTimeout(updateStatusLine, 0); }, true);
+  // 설정 모달이 열릴 때 상태 갱신(클릭마다 덮어쓰지 않음)
+  (function hookSettingsOpen() {
+    function wrap() {
+      if (typeof w.openSettingsModal !== 'function' || w.openSettingsModal.__claudeWrapped) return !!(w.openSettingsModal && w.openSettingsModal.__claudeWrapped);
+      var orig = w.openSettingsModal;
+      var wrapped = function () { var r = orig.apply(this, arguments); setTimeout(updateStatusLine, 0); return r; };
+      wrapped.__claudeWrapped = true; w.openSettingsModal = wrapped; return true;
+    }
+    if (!wrap()) { var n = 0, t = setInterval(function () { if (wrap() || ++n > 40) clearInterval(t); }, 500); }
+  })();
   document.addEventListener('DOMContentLoaded', updateStatusLine);
   setTimeout(updateStatusLine, 1500);
 
@@ -649,5 +700,6 @@
     openChooser();
   };
   w.openClaudeRecommendOptions = openOptionsModal;
+  w.startClaudeRecommendFlow = startClaudeFlow;
   w.__claudeReco = { loadToday: loadToday, saveDay: saveDay, blocksToSegments: blocksToSegments, calcTSS: calcTSS, calcIF: calcIF, summarizeLogs: summarizeLogs, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES };
 })(window);
