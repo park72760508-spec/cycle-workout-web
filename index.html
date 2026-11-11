@@ -9370,6 +9370,24 @@
             <p id="settingsGeminiApiStatusLine" style="font-size: 12px; color: #64748b; margin: 10px 0 0 0; line-height: 1.45;"></p>
           </div>
         </div>
+        <!-- Claude API 키 입력 블럭 (2026-11-11, AI 워크아웃 추천 Claude 유료 API용 — 키는 이 기기에만 저장) -->
+        <div class="card settings-block" style="margin-top: 0;">
+          <div class="form-group" style="margin-bottom: 0;">
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 0.9em; margin: 0; display: flex; align-items: center; gap: 6px;">
+                <img src="assets/img/ai.gif" loading="lazy" alt="AI" style="height: 2em; width: auto; vertical-align: middle;" />
+                Claude API 키 (<a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" style="color: #2e74e8; text-decoration: underline; font-weight: normal;">발급받기</a>)
+              </label>
+            </div>
+            <input type="password" id="settingsClaudeApiKey" placeholder="sk-ant-... 키를 입력하세요" autocomplete="off" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 8px;" />
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-default-style" id="settingsResetClaudeKeyBtn" onclick="resetClaudeApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">삭제</button>
+              <button class="btn btn-default-style" id="settingsTestClaudeKeyBtn" onclick="testClaudeApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">API 키 검증</button>
+              <button class="btn btn-secondary btn-refresh" id="settingsSaveClaudeKeyBtn" onclick="saveClaudeApiKeyFromSettings()" style="flex: 1; white-space: nowrap;">저장</button>
+            </div>
+            <p id="settingsClaudeApiStatusLine" style="font-size: 12px; color: #64748b; margin: 10px 0 0 0; line-height: 1.45;"></p>
+          </div>
+        </div>
         <!-- CONNECT WITH STRAVA 블럭 (문구 + 버튼) -->
         <div class="card settings-block">
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
@@ -9981,7 +9999,7 @@
       }
       
       // AI 분석 카테고리 클릭 핸들러
-      async function handleAIRecommendationClick() {
+      async function handleGeminiRecommendationClick() {
         console.log('[AI Recommendation] AI 분석 워크아웃 추천 시작');
         
         // 🔒 이미 진행 중이면 중복 실행 방지
@@ -10060,7 +10078,7 @@
                       }
                       // AI 추천 다시 실행
                       setTimeout(function() {
-                        handleAIRecommendationClick();
+                        handleGeminiRecommendationClick();
                       }, 300);
                     }
                   }, 500);
@@ -10855,7 +10873,9 @@
       window.workoutViewShowList = workoutViewShowList;
       window.renderWorkoutCategories = renderWorkoutCategories;
       window.workoutViewInit = workoutViewInit;
-      window.handleAIRecommendationClick = handleAIRecommendationClick;
+      window.handleGeminiRecommendationClick = handleGeminiRecommendationClick;
+      /* 2026-11-11: 클릭 시 [Gemini 무료 | Claude 유료 API] 선택창은 assets/js/claudeWorkoutRecommend.js 가 window.handleAIRecommendationClick 으로 제공 (미로드 시 Gemini 로 폴백) */
+      if (typeof window.handleAIRecommendationClick !== 'function') window.handleAIRecommendationClick = handleGeminiRecommendationClick;
       window.generateAIWorkoutFromRecommendation = generateAIWorkoutFromRecommendation;
       window.selectAIRecommendedWorkout = selectAIRecommendedWorkout;
       window.createWorkoutSegmentsFromType = createWorkoutSegmentsFromType;
@@ -30114,6 +30134,7 @@
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
+  <script src="assets/js/claudeWorkoutRecommend.js?v=20261111b"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx

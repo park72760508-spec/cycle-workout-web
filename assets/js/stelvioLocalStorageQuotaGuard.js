@@ -9,6 +9,8 @@
     currentUser: 1,
     authUser: 1,
     geminiApiKey: 1,
+    claudeApiKey: 1,
+    claudeRecoPrefs: 1,
     geminiModelName: 1,
     geminiApiVersion: 1
   };
