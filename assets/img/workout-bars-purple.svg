@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="워크아웃">
+  <g fill="#5b21b6">
+    <rect x="0" y="375" width="105" height="120"/>
+    <rect x="136" y="255" width="105" height="240"/>
+    <rect x="271" y="135" width="105" height="360"/>
+    <rect x="406" y="15" width="106" height="480"/>
+  </g>
+</svg>
