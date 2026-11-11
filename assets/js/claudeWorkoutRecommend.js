@@ -153,7 +153,7 @@
       '<b style="font-size:16px;color:#5b21b6;">Claude 유료 API 추천 <span style="font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 8px;vertical-align:middle;">NEW</span></b>' +
       '<div style="font-size:12px;color:#6b7280;margin-top:4px;">FTP·컨디션·최근 30일 로그·목표·가능 시간에 맞춰 맞춤 워크아웃을 새로 생성' +
       (hasKey ? '' : '<br><span style="color:#b45309;">※ 내 Claude API 키 등록 필요(설정에서 저장)</span>') + '</div></button>' +
-      '<button type="button" data-eng="saved" style="width:100%;margin-top:10px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:14px;cursor:pointer;">📋 나의 훈련 목록 (저장된 Claude 워크아웃)</button>' +
+      '<button type="button" data-eng="saved" style="width:100%;margin-top:10px;padding:12px;border:1px solid #e5e7eb;border-radius:12px;background:#fff;color:#374151;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;">' + '<img src="assets/img/workout2.png" alt="" aria-hidden="true" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:8px;">' + '나의 훈련 목록 (저장된 Claude 워크아웃)</button>' +
       '</div>';
     m.style.display = 'flex';
     m.querySelector('[data-close]').onclick = function () { m.style.display = 'none'; };
@@ -627,7 +627,7 @@
   async function openSavedList() {
     var m = ensureModal('claudeRecoSavedModal');
     m.style.zIndex = '100001';
-    m.innerHTML = '<div style="' + CARD + '"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b style="font-size:18px;">나의 훈련 목록 <span style="font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 8px;vertical-align:middle;">Claude</span></b>' +
+    m.innerHTML = '<div style="' + CARD + '"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;"><b style="font-size:18px;display:inline-flex;align-items:center;">' + '<img src="assets/img/workout2.png" alt="" aria-hidden="true" style="width:22px;height:22px;object-fit:contain;vertical-align:middle;margin-right:8px;">' + '나의 훈련 목록 <span style="font-size:11px;background:#7c3aed;color:#fff;border-radius:999px;padding:2px 8px;vertical-align:middle;">Claude</span></b>' +
       '<button type="button" data-close style="border:0;background:none;font-size:22px;cursor:pointer;color:#6b7280;">✕</button></div><div data-body style="font-size:14px;color:#6b7280;padding:16px 0;text-align:center;">불러오는 중...</div></div>';
     m.style.display = 'flex';
     m.querySelector('[data-close]').onclick = function () { m.style.display = 'none'; };
