@@ -598,7 +598,7 @@
     var fill = $('rrmProgFill'), th = $('rrmProgThumb'), pp = $('rrmProgPct');
     if (fill) fill.style.width = (pct * 100).toFixed(2) + '%'; if (th) th.style.left = (pct * 100).toFixed(2) + '%';
     if (pp) { txt = Math.floor(pct * 100) + '%'; if (pp.textContent !== txt) pp.textContent = txt; }
-    var pmax = $('rrmProgMax'); if (pmax) { txt = S.mode === 'time' ? fmtMS(tv) : tv.toFixed(1) + 'km'; if (pmax.textContent !== txt) pmax.textContent = txt; }
+    var pmax = $('rrmProgMax'); if (pmax) { txt = S.mode === 'time' ? fmtMS(tv) : Math.round(tv) + 'km'; if (pmax.textContent !== txt) pmax.textContent = txt; }
     var pl = $('rrmProgLabel');
     if (pl) {
       var left = S.mode === 'time' ? fmtMS(Math.max(0, tv - S.elapsed)) + ' left' : Math.max(0, tv - S.dist).toFixed(2) + 'km left';
