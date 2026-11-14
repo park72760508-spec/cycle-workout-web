@@ -266,7 +266,7 @@
   function rrmCloseResult() { var m = $('rrmResultModal'); if (m) m.classList.add('hidden'); }
 
   /* ---------------- 설정 팝업 ---------------- */
-  var presetsTime = [5, 10, 20, 30, 60], presetsDist = [2, 5, 10, 20, 40];
+  var presetsTime = [30, 60, 90, 120, 240], presetsDist = [20, 40, 60, 80, 100];
   var draft = null;
   function rrmOpenSettings() {
     closeMenus();
