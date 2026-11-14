@@ -34,6 +34,7 @@
     boundChar: null,
     // 표시(평균·스프링)
     gs: null, gp: null, buf: [], stopApplied: false,
+    fSpeed: 0, fHist: [], fPrev: 0, fLastAt: 0, fPostStop: false, decayAt: 0, gapMax: 0, pNZ: 0, pNZAt: 0,
     pbuf: [], zbuf: [], zonePower: 0, hist: [], lastHistAt: 0, lastTick: 0, rafId: null, active: false, saved: null, lastResult: null
   };
 
@@ -56,6 +57,40 @@
   function circM() { return (WHEEL_SPECS[S.wheel] || 2105) / 1000; }
 
   /* ---------------- 센서: 원시 CSC 패킷 ---------------- */
+  /*
+   * PC Race(rollerRaceDashboard.js)와 같은 센서 단계 스무딩 — 휠 이벤트마다 흔들리는 순간 속도가 그대로 평균에 들어가 속도가 튀거나 떨어지는 것을 막는다.
+   *  1) 가속도 기반 적응형 EMA(가속 α 0.75~0.95, 감속 α 0.4~0.6, 유지 0.3)  2) 최근 5개 평균  3) 변화율 제한(30km/h/s 초과 시 이전 값과 중간값)
+   *  정지 후 첫 이벤트는 변화율 제한을 건너뜀(낡은 이전 값에 끌려 절반으로 시작하는 것 방지).
+   */
+  function filterSpeed(valid, tn) {
+    var since = S.fLastAt ? (tn - S.fLastAt) / 1000 : 0.25;
+    if (since <= 0 || since >= 2.0) since = 0.25;
+    var finalV = valid;
+    if (!S.fSpeed) { S.fSpeed = valid; finalV = valid; }
+    else {
+      var absA = Math.abs((valid - S.fSpeed) / since), alpha;
+      if (valid > S.fSpeed) alpha = absA > 20 ? 0.95 : (absA > 10 ? 0.85 : 0.75);
+      else if (valid < S.fSpeed) alpha = absA > 20 ? 0.6 : (absA > 10 ? 0.5 : 0.4);
+      else alpha = 0.3;
+      S.fSpeed = alpha * valid + (1 - alpha) * S.fSpeed; finalV = S.fSpeed;
+      S.fHist.push([tn, finalV]);
+      while (S.fHist.length > 5 || (S.fHist.length > 1 && tn - S.fHist[0][0] > 1250)) S.fHist.shift();   // 최근 5개 평균(PC)을 시간 창으로: 알림이 느린 BLE 센서에서 반응이 늦어지지 않게
+      if (S.fHist.length >= 3) { var sum = 0; for (var i = 0; i < S.fHist.length; i++) sum += S.fHist[i][1]; finalV = sum / S.fHist.length; }
+    }
+    if (!S.fPostStop && Math.abs(finalV - S.fPrev) / since > 30) finalV = (finalV + S.fPrev) / 2;
+    S.fPostStop = false;
+    S.fPrev = finalV; S.fLastAt = tn;
+    return finalV;
+  }
+  function resetFilter() { S.fSpeed = 0; S.fHist.length = 0; S.fPrev = 0; S.fPostStop = true; S.decayAt = 0; }
+
+  /** 파워 입력 보정: 순간 0(센서 끊김·패킷 누락, 1.5초 미만)은 직전 값으로 이어 주고, 1.5초 넘게 0 이면 실제 0(페달 멈춤)으로 봄 → 이후 3초 평균이 부드럽게 내려감 */
+  function powerInput(tn) {
+    var p = Number(w.liveData && w.liveData.power); if (!isFinite(p) || p < 0) p = 0;
+    if (p > 0) { S.pNZ = p; S.pNZAt = tn; return p; }
+    return (S.pNZAt && tn - S.pNZAt < 1500) ? S.pNZ : 0;
+  }
+
   /** DataView(CSC Measurement) 처리 — PC Race 와 같은 계산(롤오버 보정·16틱 미만 무시·150km/h 초과 리셋) */
   function onCscView(dv) {
     try {
@@ -74,8 +109,9 @@
         if (v > 150) { S.rev = rev; S.evT = t; return; }        // 이상치: 기준점만 리셋
         if (v < 0.1) v = 0;
         if (S.status === 'running') S.dist += meters / 1000;    // 거리는 기록 중에만, 회전수 × 둘레로 정확하게
-        if (S.lastEvAt) S.evInterval = tn - S.lastEvAt;
-        S.lastEvAt = tn; S.rawKmh = v; S.stopped = false;
+        S.evInterval = (dt / 1024 * 1000) / Math.max(1, dr);     // 센서 시각 기준 휠 1회전 간격(ms) — 정지·감쇠 판정용(수신 지터 영향 없음)
+        if (S.lastEvAt) { var gp = tn - S.lastEvAt; S.gapMax = Math.max(gp, S.gapMax * 0.9); }   // 새 이벤트 알림 사이 간격(BLE ~1초, ANT+ 이벤트마다)
+        S.lastEvAt = tn; S.rawKmh = filterSpeed(v, tn); S.decayAt = 0; S.stopped = false;
         if (S.active && S.rafId == null) kick();
       }
       S.rev = rev; S.evT = t;
@@ -99,7 +135,7 @@
     S.lastPacketAt = tn; S.speedOnly = true;
     v = Math.max(0, Number(v) || 0); if (v > 150) return;
     if (S.lastEvAt) S.evInterval = tn - S.lastEvAt;
-    S.lastEvAt = tn; S.rawKmh = v < 0.1 ? 0 : v; S.stopped = false;
+    S.lastEvAt = tn; S.rawKmh = filterSpeed(v < 0.1 ? 0 : v, tn); S.decayAt = 0; S.stopped = false;
     if (S.active && S.rafId == null) kick();
   }
   /** 웹 BLE: 연결된 속도계 특성에 우리 리스너를 추가(기존 handleSpeedSensorData 와 공존) */
@@ -388,8 +424,13 @@
     var SG = w.StelvioGaugeSpring;
     // 정지 판정: 새 휠 이벤트가 3초 이상(저속은 간격의 3배, 최대 5초) 없으면 정지
     if (S.lastEvAt && !S.stopped) {
-      var thr = Math.min(STOP_MAX_MS, Math.max(STOP_MIN_MS, 3 * (S.evInterval || 0)));
-      if (tn - S.lastEvAt >= thr) { S.stopped = true; S.rawKmh = 0; }
+      var since = tn - S.lastEvAt, thr = Math.min(STOP_MAX_MS, Math.max(STOP_MIN_MS, 3 * (S.evInterval || 0)));
+      if (since >= thr) { S.stopped = true; S.rawKmh = 0; resetFilter(); }
+      else if (S.rawKmh > 0 && since > Math.max(2 * (S.evInterval || 0), 1200, 2.2 * (S.gapMax || 0))) {
+        // PC 와 같은 정지 전 감쇠: 이벤트가 끊기면 400ms 마다 반감(새 이벤트는 위에서 바로 이어받음) — 정지 확정(3초) 전에 값이 급락하지 않고 자연스럽게 내려감
+        var dtd = Math.min(400, Math.max(0, tn - (S.decayAt || (S.lastEvAt + Math.max(2 * (S.evInterval || 0), 1200, 2.2 * (S.gapMax || 0))))));
+        S.rawKmh *= Math.pow(0.5, dtd / 400); if (S.rawKmh < 1.0) S.rawKmh = 0; S.decayAt = tn;
+      }
     }
     var raw = S.stopped ? 0 : S.rawKmh;
     if (S.status === 'running') {
@@ -430,14 +471,13 @@
       S.needle = S.gs.x; S.speedNum = S.gs.n;
       // Zone 띠 강조용 현재 파워(3초 평균, 두 모드 공통): 파워미터가 연결됐을 때만 계산(속도 모드에서도 파워 존 표시)
       if (w.connectedDevices && w.connectedDevices.powerMeter) {
-        var zp = Number(w.liveData && w.liveData.power); if (!isFinite(zp) || zp < 0) zp = 0;
-        S.zonePower = SG.avgHold(S.zbuf, zp, tn, 3000, true);
+        S.zonePower = SG.avgHold(S.zbuf, powerInput(tn), tn, 3000, false);
       } else { S.zonePower = 0; if (S.zbuf.length) S.zbuf.length = 0; }
       // 파워(선택했을 때만 계산): 전용 버퍼 3초 시간가중 평균(순간 0 제외) + 정수 카운트 — 공용 평균 함수를 매 프레임 부르지 않음(발열·다른 화면 버퍼 오염 방지)
       if (S.metric === 'power') {
-        var pw = Number(w.liveData && w.liveData.power); if (!isFinite(pw) || pw < 0) pw = 0;
+        var pw = powerInput(tn);
         if (!S.gp) S.gp = SG.create(0);
-        SG.step(S.gp, SG.avgHold(S.pbuf, pw, tn, 3000, true), tn, { omega: 8, omegaZero: 10, eps: 0.3, minRate: 25, k: 4, maxRate: 300 });
+        SG.step(S.gp, SG.avgHold(S.pbuf, pw, tn, 3000, false), tn, { omega: 8, omegaZero: 10, eps: 0.3, minRate: 25, k: 4, maxRate: 300 });
         S.powNum = S.gp.n; S.powNeedle = S.gp.x;
       }
     } else { S.needle = raw; S.speedNum = raw; S.powNum = Number(w.liveData && w.liveData.power) || 0; S.powNeedle = S.powNum; }
