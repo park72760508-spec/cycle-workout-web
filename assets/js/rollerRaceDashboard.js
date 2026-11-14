@@ -563,14 +563,85 @@ function generateSpeedometerLabels() {
 function updateSpeedometerNeedle(speedometerId, speed) {
   const sp = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!sp) return;
-  sp.needleTargetSpeed = Math.max(0, Number(speed) || 0);
+  /*
+   * 2026-11-14 STELVIO Race 속도 표시 고도화: 센서에서 온 속도(speed)는 '표시 원본'(dispRawSpeed)으로만 기록하고,
+   * 화면(속도 숫자·바늘·눈금 궤적·직선 트랙 속도)은 프레임 루프에서 [3초 시간가중 평균 → 스프링(바늘)/순차 카운트(숫자)]를 거쳐 그린다.
+   * 계산용 값(currentSpeed·최대/평균 속도·거리·순위)은 건드리지 않는다.
+   */
+  sp.dispRawSpeed = Math.max(0, Number(speed) || 0);
+  sp.needleTargetSpeed = sp.dispRawSpeed;
   if (sp.needleDisplaySpeed === undefined) sp.needleDisplaySpeed = 0;
   rrStartNeedleLoop();
 }
 
+/** 속도 표시 상태 초기화(경기 시작·트랙 초기화) — 0 으로 즉시 되돌림 */
+function rrResetSpeedDisplay(sp) {
+  if (!sp) return;
+  sp.dispRawSpeed = 0; sp.needleTargetSpeed = 0; sp.needleDisplaySpeed = 0; sp.needleTrailStep = undefined; sp.needleDrawn = false;
+  sp.__gs = null; sp.__sp3 = []; sp.__txt = ''; sp.__els = null; sp.__ang = null;
+  const v = document.getElementById(`speed-value-${sp.id}`); if (v) rrSetDigital(v, '0.0');
+  const t = document.getElementById(`straight-speed-text-${sp.id}`); if (t) t.textContent = '0.0';
+}
+
 let rrNeedleRaf = null;
 let rrNeedleBeat = 0;
+/** 한 프레임: 모든 트랙의 표시 속도 갱신. 아직 움직이는 중이면 true */
+function rrDisplayFrame() {
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  if (!scr || getComputedStyle(scr).display === 'none') return false; // 화면이 숨겨지면 중지
+  const SG = window.StelvioGaugeSpring;
+  const now = (window.performance && performance.now) ? performance.now() : Date.now();
+  let moving = false;
+  window.rollerRaceState.speedometers.forEach(sp => {
+    if (!sp) return;
+    try {
+      const raw = sp.dispRawSpeed || 0;
+      let x, num, tgt = raw;
+      if (SG && SG.avgHold && SG.step) {
+        const buf = sp.__sp3 || (sp.__sp3 = []);
+        tgt = SG.avgHold(buf, raw, now, 3000, false);              // 3초 시간가중 평균
+        const gs = sp.__gs || (sp.__gs = SG.create(sp.needleDisplaySpeed || 0));
+        SG.step(gs, tgt, now, { omega: 6, omegaZero: 9, eps: 0.05, minRate: 7, k: 3.5, maxRate: 45 });
+        x = gs.x; num = gs.n;
+        if (Math.abs(tgt - gs.x) > 0.05 || Math.abs(gs.n - tgt) > 0.05 || Math.abs(gs.v) > 0.2 || buf.length > 1) moving = true;
+      } else {                                                      // 스프링 모듈이 없으면 기존 방식
+        const cur = sp.needleDisplaySpeed || 0, diff = raw - cur;
+        if (Math.abs(diff) > 0.1) { x = cur + diff * 0.15; moving = true; } else { x = raw; }
+        num = raw;
+      }
+      sp.needleDisplaySpeed = x;
+      const E = (sp.__els && sp.__els.needle && sp.__els.needle.isConnected) ? sp.__els : (sp.__els = {
+        needle: document.getElementById(`needle-${sp.id}`),
+        val: document.getElementById(`speed-value-${sp.id}`),
+        straight: document.getElementById(`straight-speed-text-${sp.id}`)
+      });
+      // 바늘
+      const ang = calculateNeedleAngle(x);
+      if (E.needle && (sp.__ang == null || Math.abs(ang - sp.__ang) >= 0.02)) {
+        sp.__ang = ang;
+        E.needle.style.transition = 'none';
+        E.needle.setAttribute('transform', `rotate(${ang.toFixed(2)})`);
+        window.rollerRaceState.needleAngles[sp.id] = ang;
+      }
+      sp.needleDrawn = true;
+      // 궤적선: 2.5km/h 단계가 바뀔 때만 갱신
+      const step = Math.floor(x / 2.5);
+      if (step !== sp.needleTrailStep) { sp.needleTrailStep = step; updateSpeedometerNeedlePath(sp.id, x); }
+      // 속도 숫자(중간 값을 빠짐없이 지나가는 카운트): 바뀔 때만 DOM 갱신
+      const txt = (Math.max(0, num)).toFixed(1);
+      if (txt !== sp.__txt) {
+        sp.__txt = txt;
+        if (E.val) rrSetDigital(E.val, txt);
+        if (E.straight) E.straight.textContent = txt;
+      }
+    } catch (eSp) { rrWarnThrottled('needle', '[Race] 속도 표시 오류(트랙 ' + (sp && sp.id) + ', 계속):', eSp); }
+  });
+  return moving;
+}
 function rrStartNeedleLoop() {
+  // 안드로이드 WebView 가 프레임 신호를 늦게/안 줄 때 33ms 타이머가 대신 구동(움직임이 끝나면 스스로 멈춤, 새 데이터가 오면 다시 켬)
+  const ensureFallback = () => { if (window.StelvioGaugeSpring && window.StelvioGaugeSpring.fallback) window.StelvioGaugeSpring.fallback('race', rrDisplayFrame, () => rrNeedleBeat); };
+  ensureFallback();
   // 2026-11-10 장시간 경기 안정화: 루프가 예외로 죽었는데 id 만 남으면 '이미 실행 중'으로 막혀 모든 바늘이 멈췄다 → 1초 넘게 프레임이 없으면 다시 시작
   if (rrNeedleRaf !== null) {
     if (Date.now() - rrNeedleBeat < 1000) return;
@@ -579,36 +650,10 @@ function rrStartNeedleLoop() {
   }
   const loop = () => {
     rrNeedleBeat = Date.now();
-    try {
-    const scr = document.getElementById('rollerRaceDashboardScreen');
-    if (!scr || getComputedStyle(scr).display === 'none') { rrNeedleRaf = null; return; } // 화면이 숨겨지면 중지
     let moving = false;
-    window.rollerRaceState.speedometers.forEach(sp => {
-      if (!sp) return;
-      try {
-      const target = sp.needleTargetSpeed || 0;
-      const cur = sp.needleDisplaySpeed || 0;
-      const diff = target - cur;
-      let next;
-      if (Math.abs(diff) > 0.1) { next = cur + diff * 0.15; moving = true; } else { next = target; }
-      if (next === sp.needleDisplaySpeed && sp.needleDrawn) return;
-      sp.needleDisplaySpeed = next;
-      sp.needleDrawn = true;
-      const needle = document.getElementById(`needle-${sp.id}`);
-      if (!needle) return;
-      needle.style.transition = 'none';
-      needle.setAttribute('transform', `rotate(${calculateNeedleAngle(next)})`);
-      window.rollerRaceState.needleAngles[sp.id] = calculateNeedleAngle(next);
-      // 궤적선: 2.5km/h 단계가 바뀔 때만 갱신
-      const step = Math.floor(next / 2.5);
-      if (step !== sp.needleTrailStep) { sp.needleTrailStep = step; updateSpeedometerNeedlePath(sp.id, next); }
-      } catch (eSp) { rrWarnThrottled('needle', '[Race] 바늘 갱신 오류(트랙 ' + (sp && sp.id) + ', 계속):', eSp); }
-    });
+    try { moving = rrDisplayFrame(); }
+    catch (eLoop) { rrWarnThrottled('needleLoop', '[Race] 바늘 루프 오류(계속):', eLoop); moving = true; }
     rrNeedleRaf = moving ? requestAnimationFrame(loop) : null;
-    } catch (eLoop) {
-      rrWarnThrottled('needleLoop', '[Race] 바늘 루프 오류(계속):', eLoop);
-      rrNeedleRaf = requestAnimationFrame(loop);
-    }
   };
   rrNeedleRaf = requestAnimationFrame(loop);
 }
@@ -746,8 +791,8 @@ function updateSpeedometerData(speedometerId, speed, distance) {
   const avgSpeedValueEl = document.getElementById(`avg-speed-value-${speedometerId}`);
   const distanceValueEl = document.getElementById(`distance-value-${speedometerId}`); // 중앙에 표시
   
-  if (speedValueEl) {
-    // 우측에 속도 표시 (속도가 0이어도 즉시 "0.0"으로 표시)
+  if (speedValueEl && !window.StelvioGaugeSpring) {
+    // 우측에 속도 표시 (속도가 0이어도 즉시 "0.0"으로 표시) — 스프링 모듈이 있으면 rrDisplayFrame 이 3초 평균·순차 카운트로 그림
     rrSetDigital(speedValueEl, speed.toFixed(1));
   }
   if (maxSpeedValueEl) rrSetDigital(maxSpeedValueEl, speedometer.maxSpeed.toFixed(1));
@@ -1831,7 +1876,7 @@ function startRace() {
     window.rollerRaceState.needleAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
       window.rollerRaceState.needleAngles[s.id] = -90;
-      s.needleTargetSpeed = 0; s.needleDisplaySpeed = 0; s.needleTrailStep = undefined; s.needleDrawn = false;
+      rrResetSpeedDisplay(s); // 속도 숫자·바늘·3초 평균 버퍼 초기화
       const needle = document.getElementById(`needle-${s.id}`);
       if (needle) {
         needle.style.transition = 'none';
@@ -3160,8 +3205,8 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   const speedTextEl = document.getElementById(`straight-speed-text-${speedometerId}`);
   const distanceTextEl = document.getElementById(`straight-distance-text-${speedometerId}`);
   
-  if (speedTextEl) {
-    // 현재 속도 표시 (숫자만, 단위는 별도 span)
+  if (speedTextEl && !window.StelvioGaugeSpring) {
+    // 현재 속도 표시 (숫자만, 단위는 별도 span) — 스프링 모듈이 있으면 rrDisplayFrame 이 3초 평균·순차 카운트로 그림
     speedTextEl.textContent = speed.toFixed(1);
   }
   
@@ -5102,6 +5147,7 @@ function removeSpeedometer(speedometerId) {
     speedometer.totalDistance = 0;
     speedometer.totalRevolutions = 0;
     speedometer.lastRevolutions = 0;
+    rrResetSpeedDisplay(speedometer);
     
     // 저장
     saveSpeedometerList();
