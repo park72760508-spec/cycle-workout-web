@@ -33745,7 +33745,13 @@
             console.warn('[Register] Firestore 저장 재시도(' + (_saveAttempt + 1) + '/' + _saveRetryDelays.length + '):', _saveErr && _saveErr.message);
           }
         }
-        if (!_saveOk) throw _saveLastErr || new Error('Firestore 프로필 저장에 실패했습니다.');
+        if (!_saveOk) {
+          /* 2026-11-15: 프로필 저장이 끝내 실패하면 방금 만든 Auth 계정을 되돌려(삭제) "반쪽 가입(고아 계정)"이 남지 않게 한다.
+             방금 가입으로 로그인된 직후라 user.delete() 가 가능하다. 삭제도 실패하면 기존 자가복구(email-already-in-use 경로)가 이어서 처리한다. */
+          try { await user.delete(); console.warn('[Register] 프로필 저장 실패 → 방금 만든 Auth 계정 롤백 완료'); }
+          catch (_rbErr) { console.warn('[Register] Auth 계정 롤백 실패(자가복구 경로로 처리됨):', _rbErr && _rbErr.message); }
+          throw _saveLastErr || new Error('Firestore 프로필 저장에 실패했습니다.');
+        }
         console.log('✅ Firestore users 컬렉션에 저장 완료:', userData);
         if (typeof syncLoginAccountFlagForUser === 'function') {
           syncLoginAccountFlagForUser(user.uid, 'active').catch(function () {});
@@ -34037,7 +34043,7 @@
             break;
           default:
             if (errMsg.indexOf('프로필 저장 실패') === 0 || errMsg.indexOf('Firestore 프로필 저장') === 0) {
-              errorMessage = '계정은 만들어졌지만 가입 정보 저장이 지연되었습니다. 네트워크를 확인한 뒤 같은 정보로 "가입 완료"를 다시 눌러 주세요. (오류: ' + (err.code || 'save-failed') + ')';
+              errorMessage = '가입 정보 저장이 지연되어 가입이 완료되지 않았습니다(계정은 만들어지지 않았습니다). 네트워크를 확인한 뒤 같은 정보로 "가입 완료"를 다시 눌러 주세요. (오류: ' + (err.code || 'save-failed') + ')';
               console.error('[Register] 프로필 저장 최종 실패:', errMsg);
             } else if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
               errorMessage = '시스템이 아직 준비 중입니다. 잠시 후 다시 시도해주세요.';
