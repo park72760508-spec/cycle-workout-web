@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm5" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm8" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm5"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm8"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36455,17 +36455,29 @@
     </div>
 
     <!-- 결과 / 저장 -->
-    <div id="rrmResultModal" class="rrm-overlay hidden">
-      <div class="rrm-card">
-        <div class="rrm-card__title" id="rrmResultTitle">레이스 종료</div>
-        <div class="rrm-result">
-          <div><small>거리</small><b id="rrmResDist">0.00 km</b></div>
-          <div><small>시간</small><b id="rrmResTime">00:00</b></div>
-          <div><small>평균 속도</small><b id="rrmResAvg">0.0 km/h</b></div>
-          <div><small>최고 속도</small><b id="rrmResMax">0.0 km/h</b></div>
+    <div id="rrmResultModal" class="rrm-overlay rrm-result-modal hidden">
+      <div class="rrm-result-bg"><img src="assets/img/STELVIO AI.png" alt="Stelvio" /></div>
+      <div class="rrm-result-content">
+        <div class="rrm-result-header">
+          <h2 id="rrmResultTitle">수고하셨습니다</h2>
+          <p id="rrmResSub">레이스 결과가 저장됩니다</p>
+        </div>
+        <div class="rrm-result-stats">
+          <div><small>이동 거리</small><b id="rrmResDist">0.00km</b></div>
+          <div><small>레이스 시간</small><b id="rrmResTime">00:00</b></div>
+          <div><small>설정 목표</small><b id="rrmResGoal">-</b></div>
+        </div>
+        <div class="rrm-result-stats">
+          <div><small>평균 속도</small><b id="rrmResAvg">0.0km/h</b></div>
+          <div><small>최고 속도</small><b id="rrmResMax">0.0km/h</b></div>
+          <div><small>평균 파워</small><b id="rrmResPower">--</b></div>
+        </div>
+        <div class="rrm-result-stats rrm-result-stats--one">
+          <div><small>평균 심박수</small><b id="rrmResHr">--</b></div>
         </div>
         <div id="rrmSaveStatus" class="rrm-save-status">기록 저장 중...</div>
-        <div class="rrm-actions"><button type="button" id="rrmRetrySave" class="rrm-btn rrm-btn--ghost" style="display:none" onclick="rrmRetrySave()">다시 저장</button><button type="button" class="rrm-btn" onclick="rrmCloseResult()">확인</button></div>
+        <button type="button" id="rrmRetrySave" class="rrm-result-btn rrm-result-btn--ghost" style="display:none" onclick="rrmRetrySave()">다시 저장</button>
+        <button type="button" class="rrm-result-btn" onclick="rrmCloseResult()">확인</button>
       </div>
     </div>
   </div>

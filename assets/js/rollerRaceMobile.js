@@ -28,7 +28,7 @@
   var S = {
     mode: 'time', targetMin: 10, targetKm: 5, wheel: '25-622', metric: 'speed', lap: 'avg',
     status: 'idle',                // idle | countdown | running | done
-    startPerf: 0, startedAt: 0, elapsed: 0, dist: 0, maxKmh: 0, powSum: 0, powN: 0, clientId: '',
+    startPerf: 0, startedAt: 0, elapsed: 0, dist: 0, maxKmh: 0, powSum: 0, powN: 0, hrSum: 0, hrN: 0, clientId: '',
     // 센서(원시 CSC)
     rev: null, evT: null, rawKmh: 0, lastEvAt: 0, evInterval: 0, lastPacketAt: 0, stopped: true, speedOnly: false,
     boundChar: null,
@@ -176,7 +176,7 @@
   }
   function beginRace() {
     S.status = 'running';
-    S.startPerf = nowMs(); S.startedAt = Date.now(); S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0;
+    S.startPerf = nowMs(); S.startedAt = Date.now(); S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0;
     S.hist = []; S.lastHistAt = 0; S.lastTick = S.startPerf; S.saved = null;
     S.rev = null; S.evT = null;                                  // 시작 전에 돈 회전수가 거리에 섞이지 않게: 첫 패킷은 기준점만
     S.clientId = 'rr_' + String((w.currentUser && w.currentUser.id) || 'u').slice(0, 8) + '_' + S.startedAt;
@@ -185,7 +185,7 @@
     kick();
   }
   function resetRace() {
-    S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hist = [];
+    S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0; S.hist = [];
     var sc = $(SCREEN_ID); if (sc) sc.classList.remove('rrm-running', 'rrm-done');
     var info = $('rrm-segment-info'); if (info) info.textContent = '레이스 설정을 확인하고 시작하세요';
     render(true);
@@ -211,6 +211,7 @@
       max_speed_kmh: Math.round(S.maxKmh * 100) / 100, avg_power_w: S.powN ? Math.round(S.powSum / S.powN) : 0, wheel_size: S.wheel,
       started_at: new Date(S.startedAt).toISOString()
     };
+    S.resHr = S.hrN ? Math.round(S.hrSum / S.hrN) : 0;
     try { localStorage.setItem('rrMobileRaceLast', JSON.stringify(S.lastResult)); } catch (e) {}
     showResult(completed);
     render(true);
@@ -219,10 +220,13 @@
   /* ---------------- 결과 / 저장 ---------------- */
   function showResult(completed) {
     var r = S.lastResult; if (!r) return;
-    var t = $('rrmResultTitle'); if (t) t.textContent = completed ? '목표 달성! 레이스 완주' : '레이스 종료';
+    var t = $('rrmResultTitle'); if (t) t.textContent = completed ? '목표 달성! 레이스 완주' : '수고하셨습니다';
     function set(id, v) { var e = $(id); if (e) e.textContent = v; }
-    set('rrmResDist', r.distance_km.toFixed(2) + ' km'); set('rrmResTime', fmtHMS(r.elapsed_sec));
-    set('rrmResAvg', r.avg_speed_kmh.toFixed(1) + ' km/h'); set('rrmResMax', r.max_speed_kmh.toFixed(1) + ' km/h');
+    set('rrmResSub', completed ? '설정한 레이스에 도달해 결과가 자동 저장됩니다' : '레이스 결과가 저장됩니다');
+    set('rrmResDist', r.distance_km.toFixed(2) + 'km'); set('rrmResTime', fmtHMS(r.elapsed_sec));
+    set('rrmResAvg', r.avg_speed_kmh.toFixed(1) + 'km/h'); set('rrmResMax', r.max_speed_kmh.toFixed(1) + 'km/h');
+    set('rrmResPower', r.avg_power_w > 0 ? r.avg_power_w + 'W' : '--'); set('rrmResHr', S.resHr > 0 ? S.resHr + 'bpm' : '--');
+    set('rrmResGoal', r.mode === 'time' ? S.targetMin + '분' : S.targetKm + 'km');
     var m = $('rrmResultModal'); if (m) m.classList.remove('hidden');
     saveRecord();
   }
@@ -440,6 +444,8 @@
       if (raw > S.maxKmh) S.maxKmh = raw;
       var p = Number(w.liveData && w.liveData.power) || 0;
       if (p > 0) { S.powSum += p * dt; S.powN += dt; }
+      var hrv = Number(w.liveData && w.liveData.heartRate) || 0;
+      if (hrv > 0) { S.hrSum += hrv * dt; S.hrN += dt; }
       if (tn - S.lastHistAt >= 1000 || force) {
         S.lastHistAt = tn;
         S.hist.push([S.mode === 'time' ? S.elapsed : S.dist, S.elapsed > 0 ? S.dist / (S.elapsed / 3600) : 0]);

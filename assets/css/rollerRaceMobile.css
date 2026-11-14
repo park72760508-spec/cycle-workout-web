@@ -478,3 +478,26 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 
 /* LAP AVG ▼ 표시: 눈금 종류와 값이 맞지 않으면(예: 파워 눈금 위에 평균 속도) 숨김 */
 #rrMobileScreen[data-rrm-lapmatch="0"] .stelvio-gauge-lap-marker { display: none !important; }
+
+/* ===== 2026-11-15: 결과 팝업 — 기존 훈련 결과 화면(수고하셨습니다) 디자인 + 속도·이동거리 항목 ===== */
+#rrMobileScreen .rrm-result-modal { background: rgba(0,0,0,.85); z-index: 10100200; }
+#rrMobileScreen .rrm-result-bg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: .1; }
+#rrMobileScreen .rrm-result-bg img { max-width: 400px; max-height: 400px; width: 100%; height: auto; object-fit: contain; opacity: .08; filter: blur(1px); }
+#rrMobileScreen .rrm-result-content {
+  position: relative; background: rgba(30,30,30,.95); border: 2px solid #00d4aa; border-radius: 12px; padding: 16px 20px;
+  max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 32px rgba(0,212,170,.3); box-sizing: border-box;
+}
+#rrMobileScreen .rrm-result-header { text-align: center; margin-bottom: 16px; }
+#rrMobileScreen .rrm-result-header h2 { font-size: 1.5em; font-weight: bold; color: #00d4aa; margin: 0 0 4px; }
+#rrMobileScreen .rrm-result-header p { font-size: .9em; color: #fff; margin: 0; opacity: .9; }
+#rrMobileScreen .rrm-result-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+#rrMobileScreen .rrm-result-stats--one { grid-template-columns: 1fr; margin-bottom: 12px; }
+#rrMobileScreen .rrm-result-stats > div { background: rgba(0,212,170,.1); border: 1px solid rgba(0,212,170,.3); border-radius: 6px; padding: 6px 8px; text-align: center; }
+#rrMobileScreen .rrm-result-stats small { display: block; font-size: .7em; color: #aaa; margin-bottom: 3px; font-weight: 500; }
+#rrMobileScreen .rrm-result-stats b { font-size: 1.1em; font-weight: bold; color: #00d4aa; }
+#rrMobileScreen .rrm-result-content .rrm-save-status { text-align: center; }
+#rrMobileScreen .rrm-result-btn {
+  width: 100%; padding: 12px; margin-top: 6px; background: linear-gradient(135deg, #00d4aa 0%, #00a88a 100%); border: none; border-radius: 8px;
+  color: #000; font-size: 1em; font-weight: bold; cursor: pointer; box-shadow: 0 4px 12px rgba(0,212,170,.4); font-family: inherit;
+}
+#rrMobileScreen .rrm-result-btn--ghost { background: #1e293b; color: #cbd5e1; box-shadow: none; }
