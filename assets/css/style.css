@@ -25436,6 +25436,13 @@ html.global-hub-glass-nav-active #workoutScreen.screen.active .workout-view-cont
   }
 }
 
+/* STELVIO Race 수신기 활성화 버튼 표시등: 파란 버튼 위에서도 또렷하게 보이도록 흰색 구분띠(2026-11-14).
+   border 는 크기 안쪽이 아니라 바깥에 두르고(content-box), 기존 발광(box-shadow) 애니메이션과 충돌하지 않게 border 로 처리 */
+#receiverStatusIndicator {
+  box-sizing: content-box;
+  border: 2px solid #fff;
+}
+
 
 
 
