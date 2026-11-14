@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm3" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm4" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm3"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm4"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36306,10 +36306,26 @@
         <span id="rrm-dashboard-user-name" style="color: #000;">사용자</span>
       </div>
       <div id="rrm-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
-      <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
-        <button id="rrmSettingsBtn" type="button" class="rrm-gear" onclick="rrmOpenSettings()" aria-label="레이스 설정" title="레이스 설정"><img src="assets/img/setting1.png" alt="" onerror="this.style.display='none'"><span id="rrmSettingsSummary">시간 10분</span></button>
-        <!-- 센서 연결: 개인훈련 모바일 화면의 연결 버튼·드롭다운(앱에서는 기기 설정 팝업)을 이 화면이 열려 있는 동안 그대로 옮겨 사용 (rollerRaceMobile.js hostConnectWrap) -->
-        <div id="rrmConnectSlot" style="display: flex; align-items: center;"></div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+        <!-- 연결 트리 메뉴: [센서 연결] = 개인훈련 모바일 화면의 연결 버튼과 같은 Device Settings 팝업(저장된 기기 상태 창 포함) / [레이스 설정] -->
+        <div class="mobile-bluetooth-connect-wrap" style="position: relative; display: flex; align-items: center;">
+          <button id="rrmConnectBtn" class="mobile-bluetooth-connect-btn" onclick="rrmToggleConnectMenu(event)">
+            <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
+            <span>연결</span>
+          </button>
+          <div id="rrmConnectMenu" class="mobile-bluetooth-dropdown">
+            <div id="rrmSensorItem" class="mobile-bluetooth-dropdown-item" onclick="rrmOpenSensor()">
+              <img src="assets/img/wifi2.png" alt="센서 연결">
+              <span>센서 연결</span>
+              <span class="status" id="rrmSensorStatus">미연결</span>
+            </div>
+            <div id="rrmSettingsItem" class="mobile-bluetooth-dropdown-item" onclick="rrmOpenSettings()">
+              <img class="rrm-white-icon" src="assets/img/setting1.png" alt="레이스 설정" onerror="this.style.display='none'">
+              <span>레이스 설정</span>
+              <span class="status" id="rrmSettingsSummary">시간 10분</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 

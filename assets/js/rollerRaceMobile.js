@@ -125,7 +125,7 @@
   function rrmStart() {
     if (S.status === 'running' || S.status === 'countdown') return;
     bindWebSensor();
-    if (!sensorConnected()) { toast('속도계 센서를 먼저 연결해주세요.', 'warning'); openConnect(); return; }
+    if (!sensorConnected()) { toast('속도계 센서를 먼저 연결해주세요.', 'warning'); openSensorPopup(); return; }
     if (S.status === 'done') resetRace();
     S.status = 'countdown';
     var n = 3, ov = $('rrmCountdown'), num = $('rrmCountdownNum');
@@ -279,7 +279,7 @@
 
   /* ---------------- 메뉴(연결·속도/파워·LAP AVG) ---------------- */
   function closeMenus() {
-    ['rrmMetricMenu', 'rrmLapMenu'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('show'); });
+    ['rrmConnectMenu', 'rrmMetricMenu', 'rrmLapMenu'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('show'); });
   }
   function toggleMenu(id, ev, forceOpen) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
@@ -296,34 +296,17 @@
   function rrmSetMetric(m) { S.metric = m === 'power' ? 'power' : 'speed'; saveSettings(); closeMenus(); S.gp = null; S.pbuf.length = 0; S.powNum = 0; S.powNeedle = 0; render(true); }
   function rrmSetLap(m) { S.lap = m === 'power' ? 'power' : 'avg'; saveSettings(); closeMenus(); render(true); }
   /*
-   * 센서 연결(2026-11-15): 개인훈련 모바일 화면의 연결 버튼·드롭다운을 복제하지 않고 이 화면이 열려 있는 동안 헤더로 옮겨 그대로 사용한다.
-   *  - 앱: 연결 버튼 → toggleMobileBluetoothDropdown 이 가로채져 '기기 설정' 팝업이 뜸(브리지 interceptConnectButton)
-   *  - 웹: 원본 드롭다운(스마트 트레이너·심박계·파워미터·속도계 센서, 저장된 기기 재연결) + 원본 connectMobileBluetoothDevice 흐름
-   *  원본 id(mobileBluetoothConnectBtn 등)가 그대로 유지되므로 연결 상태 갱신(updateMobileBluetoothConnectionStatus)도 자동 반영된다.
+   * 센서 연결: 연결 버튼 → 트리 메뉴 [센서 연결 | 레이스 설정]. [센서 연결]은 개인훈련 모바일 화면에서 연결 버튼을 눌렀을 때와 같은
+   * Device Settings 팝업(저장된 기기 상태 창 포함, trainingDashboardBridge.openDeviceSettingPopup)을 연다. 앱에서는 먼저 자동 연결을 중단.
    */
-  var hosted = null;
-  function hostConnectWrap() {
-    if (hosted) return;
-    var btn = $('mobileBluetoothConnectBtn'), slot = $('rrmConnectSlot');
-    if (!btn || !slot) return;
-    var wrap = btn.closest ? btn.closest('.mobile-bluetooth-connect-wrap') : btn.parentNode;
-    if (!wrap || !wrap.parentNode || wrap.parentNode === slot) return;
-    hosted = { wrap: wrap, parent: wrap.parentNode, next: wrap.nextSibling };
-    slot.appendChild(wrap);
+  function rrmToggleConnectMenu(ev) { toggleMenu('rrmConnectMenu', ev); }
+  function openSensorPopup() {
+    closeMenus();
+    try { if (typeof w.abortAutoConnect === 'function') w.abortAutoConnect(); } catch (e) {}
+    if (typeof w.openDeviceSettingPopup === 'function') { try { w.openDeviceSettingPopup(); return; } catch (e) {} }
+    toast('센서 연결 화면을 열 수 없습니다. 잠시 후 다시 시도해주세요.', 'error');
   }
-  function restoreConnectWrap() {
-    if (!hosted) return;
-    try {
-      var dd = $('mobileBluetoothDropdown'); if (dd) dd.classList.remove('show');
-      if (hosted.next && hosted.next.parentNode === hosted.parent) hosted.parent.insertBefore(hosted.wrap, hosted.next); else hosted.parent.appendChild(hosted.wrap);
-    } catch (e) {}
-    hosted = null;
-  }
-  /** 연결 화면 열기: 연결 버튼을 누른 것과 같은 동작(앱=기기 설정 팝업, 웹=드롭다운) */
-  function openConnect() {
-    if (typeof w.toggleMobileBluetoothDropdown === 'function') { try { w.toggleMobileBluetoothDropdown(); return; } catch (e) {} }
-    var b = $('mobileBluetoothConnectBtn'); if (b) b.click();
-  }
+  var rrmOpenSensor = openSensorPopup;
   function rrmExit() {
     closeMenus();
     var go = function () {
@@ -511,6 +494,11 @@
       var left = S.mode === 'time' ? fmtMS(Math.max(0, tv - S.elapsed)) + ' left' : Math.max(0, tv - S.dist).toFixed(2) + 'km left';
       txt = 'RACE PROGRESS · ' + left; if (pl.textContent !== txt) pl.textContent = txt;
     }
+    var names = [];
+    if (w.connectedDevices) { if (w.connectedDevices.speed) names.push('속도계'); if (w.connectedDevices.powerMeter) names.push('파워'); if (w.connectedDevices.heartRate) names.push('심박'); if (w.connectedDevices.trainer) names.push('트레이너'); }
+    var web = names.length > 0, appOn = S.lastPacketAt && nowMs() - S.lastPacketAt < 8000;
+    var sst = $('rrmSensorStatus'); if (sst) { txt = web ? names.join('·') + ' 연결됨' : (appOn ? '속도계 연결됨' : '미연결'); if (sst.textContent !== txt) { sst.textContent = txt; sst.style.color = (web || appOn) ? '#00d4aa' : '#888'; } }
+    var cbn = $('rrmConnectBtn'); if (cbn) cbn.classList.toggle('has-connection', web || !!appOn);
     var sum = $('rrmSettingsSummary'); if (sum) { txt = S.mode === 'time' ? '시간 ' + S.targetMin + '분' : '거리 ' + S.targetKm + 'km'; if (sum.textContent !== txt) sum.textContent = txt; }
     // 그래프(1초마다)
     var tn = nowMs();
@@ -609,7 +597,7 @@
     S.active = true; loadSettingsOnce(); buildGauge();
     var nm = $('rrm-dashboard-user-name'); if (nm) nm.textContent = (w.currentUser && (w.currentUser.name || w.currentUser.userName)) || nm.textContent;
     if (S.status === 'done') resetRace();                       // 이전 레이스 결과 화면은 초기화하고 새로 시작
-    hostConnectWrap(); bindWebSensor(); retryUnsavedRecord();
+    bindWebSensor(); retryUnsavedRecord();
     w.addEventListener('speedUpdate', onSpeedUpdate); w.addEventListener('speedData', onSpeedData);
     S.bindT = setInterval(bindWebSensor, 2000);
     render(true); placeCaret(); kick();
@@ -626,7 +614,7 @@
     // 다른 경로(뒤로가기·하단 메뉴 등)로 화면을 떠나도 진행 중 레이스를 정리: 안 그러면 START 가 잠긴 채 남고 시간만 흘러간다
     if (S.status === 'running' || S.status === 'countdown') resetRace();
     if (S.idleT) { clearTimeout(S.idleT); S.idleT = null; }
-    closeMenus(); restoreConnectWrap();
+    closeMenus();
   }
   var settingsLoaded = false;
   function loadSettingsOnce() { if (!settingsLoaded) { loadSettings(); settingsLoaded = true; } }
@@ -641,13 +629,13 @@
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
-    if (t && t.closest && (t.closest('.rrm-menu') || t.closest('#rrmLapSelBtn'))) return;
+    if (t && t.closest && (t.closest('.rrm-menu') || t.closest('#rrmConnectMenu') || t.closest('#rrmConnectBtn') || t.closest('#rrmLapSelBtn'))) return;
     closeMenus();
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
 
   /* ---------------- 공개 ---------------- */
-  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExit = rrmExit;
+  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExit = rrmExit; w.rrmToggleConnectMenu = rrmToggleConnectMenu; w.rrmOpenSensor = rrmOpenSensor;
   w.rrmToggleMetricMenu = rrmToggleMetricMenu; w.rrmSetMetric = rrmSetMetric;
   w.rrmToggleLapMenu = rrmToggleLapMenu; w.rrmSetLap = rrmSetLap;
   w.rrmOpenSettings = rrmOpenSettings; w.rrmCloseSettings = rrmCloseSettings; w.rrmPickMode = rrmPickMode; w.rrmSaveSettings = rrmSaveSettings;
