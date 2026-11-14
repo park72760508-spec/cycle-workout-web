@@ -569,6 +569,7 @@ function updateSpeedometerNeedle(speedometerId, speed) {
    * 계산용 값(currentSpeed·최대/평균 속도·거리·순위)은 건드리지 않는다.
    */
   sp.dispRawSpeed = Math.max(0, Number(speed) || 0);
+  if (sp.dispRawSpeed > 0 && sp.dispStopped) { sp.dispStopped = false; sp.__sp3 = []; } // 다시 구르기 시작: 정지 해제, 3초 평균을 새로 시작
   sp.needleTargetSpeed = sp.dispRawSpeed;
   if (sp.needleDisplaySpeed === undefined) sp.needleDisplaySpeed = 0;
   rrStartNeedleLoop();
@@ -579,6 +580,7 @@ function rrResetSpeedDisplay(sp) {
   if (!sp) return;
   sp.dispRawSpeed = 0; sp.needleTargetSpeed = 0; sp.needleDisplaySpeed = 0; sp.needleTrailStep = undefined; sp.needleDrawn = false;
   sp.__gs = null; sp.__sp3 = []; sp.__txt = ''; sp.__els = null; sp.__ang = null;
+  sp.dispStopped = false; sp.__stopApplied = false; sp.lastEvtIntervalMs = 0; sp.postStopFirst = false;
   const v = document.getElementById(`speed-value-${sp.id}`); if (v) rrSetDigital(v, '0.0');
   const t = document.getElementById(`straight-speed-text-${sp.id}`); if (t) t.textContent = '0.0';
 }
@@ -599,9 +601,17 @@ function rrDisplayFrame() {
       let x, num, tgt = raw;
       if (SG && SG.avgHold && SG.step) {
         const buf = sp.__sp3 || (sp.__sp3 = []);
-        tgt = SG.avgHold(buf, raw, now, 3000, false);              // 3초 시간가중 평균
         const gs = sp.__gs || (sp.__gs = SG.create(sp.needleDisplaySpeed || 0));
-        SG.step(gs, tgt, now, { omega: 6, omegaZero: 9, eps: 0.05, minRate: 7, k: 3.5, maxRate: 45 });
+        let stepOpt = { omega: 6, omegaZero: 9, eps: 0.05, minRate: 7, k: 3.5, maxRate: 45 };
+        if (sp.dispStopped) {
+          // 정지 확정(3초 이상 새 휠 이벤트 없음): 평균을 건너뛰고 목표 0, 빠른 스프링·카운터(0 아래로 내려가지 않음). 정지 때만 작동.
+          if (!sp.__stopApplied) { sp.__stopApplied = true; buf.length = 0; buf.push({ t: now, p: 0 }); }
+          tgt = 0; stepOpt = { omega: 16, omegaZero: 16, eps: 0.3, minRate: 50, k: 8, maxRate: 300 };
+        } else {
+          sp.__stopApplied = false;
+          tgt = SG.avgHold(buf, raw, now, 3000, false);            // 3초 시간가중 평균(기존 그대로)
+        }
+        SG.step(gs, tgt, now, stepOpt);
         x = gs.x; num = gs.n;
         if (Math.abs(tgt - gs.x) > 0.05 || Math.abs(gs.n - tgt) > 0.05 || Math.abs(gs.v) > 0.2 || buf.length > 1) moving = true;
       } else {                                                      // 스프링 모듈이 없으면 기존 방식
@@ -6366,6 +6376,34 @@ function startConnectionStatusCheck() {
         return;
       }
 
+      // 2-a. 정지 확정 규칙 (2026-11-14): 새 휠 이벤트가 3초 이상 없으면(저속은 직전 이벤트 간격의 3배, 최대 5초) '바퀴 멈춤'으로 판단.
+      //      3초는 ANT+ 패킷 유실·지터(수백 ms)보다 훨씬 길어 오탐이 없고, 휠 1회전이 3초 넘게 걸리는 2.5km/h 미만(표시가 거의 0)에서만 영향이 있다.
+      //      정지 때만 작동 — 주행·감속 중의 표시 경로와 아래 기존 감속 로직은 변경하지 않았다.
+      //      기존 감속이 currentSpeed 를 먼저 0 으로 만든 경우에도 표시 정지 신호는 켠다(표시 전용 플래그).
+      if (speedometer.lastEventUpdate > 0) {
+        const sinceEvt = now - speedometer.lastEventUpdate;
+        const evtI = speedometer.lastEvtIntervalMs > 0 ? speedometer.lastEvtIntervalMs : 0; // 간격 기록이 없으면 고정 3초
+        const stopThr = Math.min(5000, Math.max(3000, 3.0 * evtI)); // 저속(8km/h 미만)은 이벤트 간격의 3배(최대 5초)로 유실 여유 확대
+        if (sinceEvt >= stopThr) {
+          if (!speedometer.dispStopped || speedometer.currentSpeed > 0) {
+            speedometer.dispStopped = true;           // 표시 전용: 3초 평균을 건너뛰고 빠르게 0 으로 (rrDisplayFrame)
+            if (speedometer.currentSpeed > 0) {
+              speedometer.filteredSpeed = 0;          // 재출발 첫 이벤트가 낡은 필터 값에 끌려 튀지 않도록 초기화
+              speedometer.speedHistorySmoothed = [];
+              speedometer.previousSpeed = 0;
+              speedometer.acceleration = 0;
+              speedometer.postStopFirst = true;       // 정지 후 첫 유효 이벤트는 변화율 제한기를 건너뜀(끊김 복귀 시 절반으로 표시되는 것 방지)
+              updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
+              speedometer.lastDecelerationCheck = now;
+            } else {
+              speedometer.postStopFirst = true;
+              updateSpeedometerNeedle(speedometer.id, 0); // 계산값은 이미 0 — 표시 루프만 깨워 정지 처리
+            }
+          }
+          return;
+        }
+      }
+
       // 2. [솔루션 1 적용] 가변 감속 예측 로직
       if (speedometer.currentSpeed > 0) {
         const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
@@ -6892,10 +6930,11 @@ function processSpeedCadenceData(deviceId, data) {
     const maxSpeedChange = 30; // km/h/s
     const speedChange = Math.abs(finalSpeed - speedometer.previousSpeed);
     const timeDiffSeconds = timeSinceLastUpdate; // 이미 초기화된 변수 사용
-    if (speedChange / timeDiffSeconds > maxSpeedChange) {
+    if (!speedometer.postStopFirst && speedChange / timeDiffSeconds > maxSpeedChange) {
       // 급격한 변화는 이전 값과의 중간값 사용
       finalSpeed = (finalSpeed + speedometer.previousSpeed) / 2;
     }
+    speedometer.postStopFirst = false; // 정지 후 첫 유효 이벤트에만 적용되는 예외(평소 주행은 영향 없음)
 
     // 경기 중일 때 거리 누적
     if (window.rollerRaceState.raceState === 'running') {
@@ -6909,6 +6948,7 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
+    speedometer.lastEvtIntervalMs = (timeDiff / 1024 * 1000) / Math.max(1, revDiff); // 정지 판정용: 직전 휠 이벤트 간격(회전 1회당 ms)
     speedometer.lastDecelerationCheck = now; // 새 이벤트 수신 시 감속 기준점 초기화
     speedometer.lastSpeedUpdateTime = now;
     speedometer.lastAcceleration = speedometer.acceleration;
