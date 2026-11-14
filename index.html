@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm13" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm14" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm11"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm14"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36362,9 +36362,10 @@
           <g id="rrm-gauge-speed-labels"></g>
 
           <!-- TARGET 자리: 누적 이동 거리(km, 0.00) — 정수는 가운데 정렬, 소수점 이하는 정수의 30% 크기 -->
-          <text id="rrm-ui-target-label" x="100" y="93" text-anchor="middle" fill="#888" font-size="6">DISTANCE km</text>
+          <text id="rrm-ui-target-label" x="100" y="93" text-anchor="middle" fill="#888" font-size="6">DISTANCE</text>
           <text id="rrm-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
           <text id="rrm-ui-target-dec" x="108" y="120" text-anchor="start" fill="#ff8c00" font-size="8.4" font-weight="bold">.00</text>
+          <text id="rrm-ui-target-unit" x="121" y="120" text-anchor="start" fill="#b8bec8" fill-opacity="0.85" font-size="5.5" font-weight="500">km</text>
 
           <!-- 현재 값(속도 또는 파워, 정수) + 단위 선택 -->
           <text id="rrm-ui-unit" class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">km/h</text>

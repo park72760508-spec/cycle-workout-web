@@ -523,3 +523,8 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 #rrMobileScreen .rrm-prog-track b.rrm-avatar { }
 #rrMobileScreen #rrmProgMax { min-width: 42px !important; }
 @media (prefers-reduced-motion: reduce) { #rrMobileScreen.rrm-running .rrm-prog-track b.rrm-avatar, #rrMobileScreen.rrm-running .rrm-leg { animation: none; } }
+
+/* 2026-11-15: DISTANCE 단위 km — 연한 회색 작은 글씨 */
+#rrMobileScreen .mobile-gauge-container svg text#rrm-ui-target-unit {
+  font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: normal !important; font-weight: 500 !important; fill: #b8bec8 !important; letter-spacing: .02em;
+}

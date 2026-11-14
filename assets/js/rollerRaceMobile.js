@@ -474,6 +474,8 @@
       var wc = ie.__wc || (ie.__wc = {}), wd = wc[ip] || 0;
       if (!wd) { try { wd = ie.getComputedTextLength(); } catch (e) {} if (wd > 0) wc[ip] = wd; }
       if (wd > 0) { de.setAttribute('x', (100 + wd / 2 + 1).toFixed(2)); de.__placed = true; }
+      var ue = $('rrm-ui-target-unit');
+      if (ue && de.__placed) { var dw = 0; try { dw = de.getComputedTextLength(); } catch (e) {} ue.setAttribute('x', (100 + wd / 2 + 1 + (dw > 0 ? dw : 12) + 1.5).toFixed(2)); }
     }
   }
 
