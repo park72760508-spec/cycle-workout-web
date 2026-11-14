@@ -524,6 +524,9 @@ async function saveTrainingResult(extra = {}) {
             // 라이딩 기록 워크아웃 그래프의 "실제 세그먼트별 평균 파워" 오버레이 계산용
             segments: resolvedSegments,
             distance_km: distanceKm,
+            // 2026-11-15: STELVIO Race 모바일 — 평균/최고 속도(있을 때만)
+            avg_speed_kmh: Number(extra.avg_speed_kmh) > 0 ? Math.round(Number(extra.avg_speed_kmh) * 100) / 100 : undefined,
+            max_speed_kmh: Number(extra.max_speed_kmh) > 0 ? Math.round(Number(extra.max_speed_kmh) * 100) / 100 : undefined,
             elevation_gain: null, // GPS 데이터가 있으면 추가 가능
             
             // 파워 & 부하

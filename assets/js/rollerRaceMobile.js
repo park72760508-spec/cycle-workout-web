@@ -174,18 +174,64 @@
       show();
     }, 1000);
   }
+  /* ---------------- 개인훈련 저장 로직 연동(resultManager.saveTrainingResult: 라이딩 기록·TSS·포인트) ---------------- */
+  var tmTimer = null;
+  function startTrainingSession() {
+    stopTrainingSession();
+    try {
+      var uid = w.currentUser && (w.currentUser.id || w.currentUser.uid);
+      if (w.trainingResults && typeof w.trainingResults.startSession === 'function' && uid) w.trainingResults.startSession(uid);
+      w.trainingMetrics = Object.assign(w.trainingMetrics || {}, { elapsedSec: 0, joules: 0, ra30: 0, np4sum: 0, count: 0, zeroStreak: 0 });
+      w.lastElapsedTime = 0;
+    } catch (e) { console.warn('[RaceMobile] 훈련 세션 시작 실패', e); }
+    tmTimer = setInterval(function () {
+      if (S.status !== 'running') return;
+      var ld = w.liveData || {}, tm = w.trainingMetrics; if (!tm) return;
+      var p = Math.max(0, Number(ld.power) || 0), hr = Number(ld.heartRate) || 0, cad = Number(ld.cadence) || 0;
+      var tr = w.trainingResults;
+      try {
+        if (tr && typeof tr.appendStreamSample === 'function') {
+          if (p > 0) tr.appendStreamSample('power', p); if (hr > 0) tr.appendStreamSample('hr', hr); if (cad > 0) tr.appendStreamSample('cadence', cad);
+        }
+      } catch (e) {}
+      var pauseZero = Number(w.STELVIO_TSS_PAUSE_ZERO_SEC) > 0 ? Number(w.STELVIO_TSS_PAUSE_ZERO_SEC) : 15;
+      tm.zeroStreak = p > 0 ? 0 : (tm.zeroStreak || 0) + 1;
+      if (p <= 0 && tm.zeroStreak > pauseZero) return;           // 일시정지 구간은 누적 제외(개인훈련과 동일)
+      tm.elapsedSec += 1; tm.joules += p; tm.ra30 += (p - tm.ra30) / 30; tm.np4sum += Math.pow(tm.ra30, 4); tm.count += 1;
+    }, 1000);
+  }
+  function stopTrainingSession() { if (tmTimer) { clearInterval(tmTimer); tmTimer = null; } }
+  /** 개인훈련 모바일과 같은 저장(라이딩 기록·TSS·포인트) + 이동거리·평균/최고 속도 포함. 같은 세션은 save_key 로 중복 저장되지 않음 */
+  function saveTrainingRecord(r) {
+    var tr = w.trainingResults;
+    if (!tr || typeof tr.saveTrainingResult !== 'function') return Promise.reject(new Error('trainingResults 없음'));
+    if (typeof tr.endSession === 'function') { try { tr.endSession(); } catch (e) {} }
+    var prevWorkout = w.currentWorkout, prevElapsed = w.lastElapsedTime, prevDist = w._indivDistanceKm;
+    var title = 'STELVIO Race · ' + (r.mode === 'time' ? S.targetMin + '분' : S.targetKm + 'km');
+    w.currentWorkout = { id: '', title: title, name: title, segments: [] };
+    w.lastElapsedTime = r.elapsed_sec; w._indivDistanceKm = r.distance_km;
+    var restore = function () { w.currentWorkout = prevWorkout; w.lastElapsedTime = prevElapsed; w._indivDistanceKm = prevDist; };
+    return tr.saveTrainingResult({
+      workoutId: '', workoutName: title, elapsedTime: r.elapsed_sec, completionType: r.completed ? 'normal' : 'manual',
+      distance_km: r.distance_km, avg_speed_kmh: r.avg_speed_kmh, max_speed_kmh: r.max_speed_kmh,
+      appVersion: '1.0.0', timestamp: new Date().toISOString(), source: 'race_mobile'
+    }).then(function (res) { restore(); if (!res || !res.success) throw new Error('save_failed'); return res; }, function (e) { restore(); throw e; });
+  }
+
   function beginRace() {
     S.status = 'running';
     S.startPerf = nowMs(); S.startedAt = Date.now(); S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0;
     S.hist = []; S.lastHistAt = 0; S.lastTick = S.startPerf; S.saved = null;
     S.rev = null; S.evT = null;                                  // 시작 전에 돈 회전수가 거리에 섞이지 않게: 첫 패킷은 기준점만
     S.clientId = 'rr_' + String((w.currentUser && w.currentUser.id) || 'u').slice(0, 8) + '_' + S.startedAt;
+    S.savedRace = false; S.savedTraining = false; S.trainRes = null;
+    startTrainingSession();
     var sc = $(SCREEN_ID); if (sc) { sc.classList.add('rrm-running'); sc.classList.remove('rrm-done'); }
     var info = $('rrm-segment-info'); if (info) info.textContent = S.mode === 'time' ? '시간 레이스 진행 중' : '거리 레이스 진행 중';
     kick();
   }
   function resetRace() {
-    S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0; S.hist = [];
+    stopTrainingSession(); S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0; S.hist = [];
     var sc = $(SCREEN_ID); if (sc) sc.classList.remove('rrm-running', 'rrm-done');
     var info = $('rrm-segment-info'); if (info) info.textContent = '레이스 설정을 확인하고 시작하세요';
     render(true);
@@ -202,7 +248,7 @@
     if (S.status !== 'running') return;
     tick(nowMs(), true);                                     // 마지막 값 반영
     if (completed && S.mode === 'time') S.elapsed = Math.min(S.elapsed, targetValue()); // 완주 기록은 목표 시간을 넘기지 않음
-    S.status = 'done';
+    S.status = 'done'; stopTrainingSession();
     var sc = $(SCREEN_ID); if (sc) { sc.classList.remove('rrm-running'); if (completed) sc.classList.add('rrm-done'); }
     var avg = S.elapsed > 0 ? S.dist / (S.elapsed / 3600) : 0;
     S.lastResult = {
@@ -237,15 +283,23 @@
   function saveRecord() {
     var r = S.lastResult;
     if (!r) return;
-    if (S.saved) { setSaveStatus('기록이 저장되었습니다.', 'ok'); return; }
+    if (S.savedRace && S.savedTraining) { setSaveStatus('기록이 저장되었습니다.', 'ok'); return; }
     if (r.elapsed_sec < 5 || r.distance_km <= 0) { setSaveStatus('이동 거리가 없어 기록을 저장하지 않았습니다.', ''); return; }
     setSaveStatus('기록 저장 중...', '');
-    postRecord(r).then(function () {
-      S.saved = true; setSaveStatus('기록이 저장되었습니다.', 'ok');
-    }).catch(function (e) {
-      console.warn('[RaceMobile] 기록 저장 실패', e);
-      setSaveStatus('기록 저장에 실패했습니다. 네트워크를 확인하고 [다시 저장]을 눌러주세요.', 'err');
+    var p1 = S.savedRace ? Promise.resolve() : postRecord(r).then(function () { S.savedRace = true; });
+    var p2 = S.savedTraining ? Promise.resolve() : saveTrainingRecord(r).then(function (res) { S.savedTraining = true; S.trainRes = res; showTrainingExtras(res); });
+    Promise.all([p1.catch(function (e) { console.warn('[RaceMobile] 레이스 기록 저장 실패', e); return 'x'; }), p2.catch(function (e) { console.warn('[RaceMobile] 훈련 기록 저장 실패', e); return 'x'; })]).then(function (rs) {
+      var ok = S.savedRace && S.savedTraining;
+      S.saved = ok;
+      if (ok) setSaveStatus('기록이 저장되었습니다.', 'ok');
+      else setSaveStatus('기록 저장에 실패했습니다. 네트워크를 확인하고 [다시 저장]을 눌러주세요.', 'err');
     });
+  }
+  function showTrainingExtras(res) {
+    function set(id, v) { var e = $(id); if (e) e.textContent = v; }
+    var mu = (res && res.mileageUpdate) || w.lastMileageUpdate || null;
+    set('rrmResTss', res && res.tss > 0 ? String(Math.round(res.tss)) : '--');
+    set('rrmResPoints', mu && mu.earned_points != null ? String(Math.round(mu.earned_points)) : '--');
   }
   /** 서버 저장(멱등: 같은 client_id 는 중복 저장되지 않음). 성공하면 localStorage 의 마지막 기록에 saved 표시 */
   function postRecord(r) {

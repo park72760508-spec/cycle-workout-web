@@ -829,6 +829,8 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         // 기본 정보 (Context)
         duration_sec: durationSec,
         distance_km: trainingData.distance_km || null,
+        ...(Number(trainingData.avg_speed_kmh) > 0 && { avg_speed_kmh: Number(trainingData.avg_speed_kmh) }),
+        ...(Number(trainingData.max_speed_kmh) > 0 && { max_speed_kmh: Number(trainingData.max_speed_kmh) }),
         elevation_gain: trainingData.elevation_gain || null,
         weight: userWeight,
         

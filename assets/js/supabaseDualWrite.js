@@ -1101,6 +1101,8 @@ function buildFallbackLogFromTrainingData(trainingData, txResult) {
     date: dateStr,
     duration_sec: Number(td.duration) || 0,
     distance_km: td.distance_km,
+    avg_speed_kmh: td.avg_speed_kmh,
+    max_speed_kmh: td.max_speed_kmh,
     elevation_gain: td.elevation_gain,
     weighted_watts: td.weighted_watts,
     avg_watts: td.avg_watts,

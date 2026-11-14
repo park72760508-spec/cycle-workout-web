@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm8" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm10" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -10961,7 +10961,7 @@
     (async function() {
       let saveTrainingSession, getUserTrainingLogs, getTrainingLogsByDateRange;
       try {
-        var mod = await import('./assets/js/trainingResultService.js?v=20261108save');
+        var mod = await import('./assets/js/trainingResultService.js?v=20261115spd');
         if (mod && typeof mod === 'object') {
           saveTrainingSession = mod.saveTrainingSession;
           getUserTrainingLogs = mod.getUserTrainingLogs;
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm9"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm10"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -35233,7 +35233,7 @@
 <script src="assets/js/stelvioRtss.js"></script>
 <script src="assets/js/stravaManager.js"></script>
 <script src="assets/js/trainingResultsManager.js?v=20261020outdoor"></script>
-<script src="assets/js/resultManager.js?v=20261111quota"></script>
+<script src="assets/js/resultManager.js?v=20261115spd"></script>
 <script src="assets/js/trainingPendingQueue.js?v=20261108save"></script>
 <script src="assets/js/bluetooth.js?v=20261101recon"></script>
 <script src="assets/js/ErgController.js"></script>
@@ -36472,8 +36472,10 @@
           <div><small>최고 속도</small><b id="rrmResMax">0.0km/h</b></div>
           <div><small>평균 파워</small><b id="rrmResPower">--</b></div>
         </div>
-        <div class="rrm-result-stats rrm-result-stats--one">
+        <div class="rrm-result-stats">
           <div><small>평균 심박수</small><b id="rrmResHr">--</b></div>
+          <div><small>TSS</small><b id="rrmResTss">--</b></div>
+          <div><small>획득 포인트</small><b id="rrmResPoints">--</b></div>
         </div>
         <div id="rrmSaveStatus" class="rrm-save-status">기록 저장 중...</div>
         <button type="button" id="rrmRetrySave" class="rrm-result-btn rrm-result-btn--ghost" style="display:none" onclick="rrmRetrySave()">다시 저장</button>
