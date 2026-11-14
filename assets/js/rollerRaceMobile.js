@@ -46,7 +46,7 @@
       if (o.targetKm > 0) S.targetKm = Math.min(500, o.targetKm);
       if (WHEEL_SPECS[o.wheel]) S.wheel = o.wheel;
       if (o.metric === 'speed' || o.metric === 'power') S.metric = o.metric;
-      if (o.lap === 'avg' || o.lap === 'kmh') S.lap = o.lap;
+      if (o.lap === 'avg' || o.lap === 'power') S.lap = o.lap;
     } catch (e) {}
   }
   function saveSettings() {
@@ -125,7 +125,7 @@
   function rrmStart() {
     if (S.status === 'running' || S.status === 'countdown') return;
     bindWebSensor();
-    if (!sensorConnected()) { toast('속도계 센서를 먼저 연결해주세요.', 'warning'); rrmToggleConnectMenu(null, true); return; }
+    if (!sensorConnected()) { toast('속도계 센서를 먼저 연결해주세요.', 'warning'); openConnect(); return; }
     if (S.status === 'done') resetRace();
     S.status = 'countdown';
     var n = 3, ov = $('rrmCountdown'), num = $('rrmCountdownNum');
@@ -279,7 +279,7 @@
 
   /* ---------------- 메뉴(연결·속도/파워·LAP AVG) ---------------- */
   function closeMenus() {
-    ['rrmBluetoothDropdown', 'rrmMetricMenu', 'rrmLapMenu'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('show'); });
+    ['rrmMetricMenu', 'rrmLapMenu'].forEach(function (id) { var e = $(id); if (e) e.classList.remove('show'); });
   }
   function toggleMenu(id, ev, forceOpen) {
     if (ev && ev.stopPropagation) ev.stopPropagation();
@@ -287,21 +287,42 @@
     var open = forceOpen === true ? true : !e.classList.contains('show');
     closeMenus(); if (open) e.classList.add('show');
   }
-  function rrmToggleConnectMenu(ev, force) { toggleMenu('rrmBluetoothDropdown', ev, force); }
   function rrmToggleMetricMenu(ev) { markMenu('rrmMetricMenu', 'data-metric', S.metric); toggleMenu('rrmMetricMenu', ev); }
   function rrmToggleLapMenu(ev) { markMenu('rrmLapMenu', 'data-lap', S.lap); toggleMenu('rrmLapMenu', ev); }
   function markMenu(id, attr, val) {
     var m = $(id); if (!m) return;
     Array.prototype.forEach.call(m.querySelectorAll('button'), function (b) { b.classList.toggle('is-on', b.getAttribute(attr) === val); });
   }
-  function rrmSetMetric(m) { S.metric = m === 'power' ? 'power' : 'speed'; saveSettings(); closeMenus(); S.gp = null; S.pbuf.length = 0; S.powNum = 0; render(true); }
-  function rrmSetLap(m) { S.lap = m === 'kmh' ? 'kmh' : 'avg'; saveSettings(); closeMenus(); render(true); }
-  function rrmConnect(type) {
-    closeMenus();
-    if (typeof w.connectMobileBluetoothDevice === 'function') {
-      try { var p = w.connectMobileBluetoothDevice(type); if (p && p.then) p.then(function () { setTimeout(bindWebSensor, 400); }, function () {}); } catch (e) { toast('연결을 시작하지 못했습니다.', 'error'); }
-    } else toast('센서 연결 기능을 불러오지 못했습니다.', 'error');
-    setTimeout(bindWebSensor, 1500); setTimeout(bindWebSensor, 4000);
+  function rrmSetMetric(m) { S.metric = m === 'power' ? 'power' : 'speed'; saveSettings(); closeMenus(); S.gp = null; S.pbuf.length = 0; S.powNum = 0; S.powNeedle = 0; render(true); }
+  function rrmSetLap(m) { S.lap = m === 'power' ? 'power' : 'avg'; saveSettings(); closeMenus(); render(true); }
+  /*
+   * 센서 연결(2026-11-15): 개인훈련 모바일 화면의 연결 버튼·드롭다운을 복제하지 않고 이 화면이 열려 있는 동안 헤더로 옮겨 그대로 사용한다.
+   *  - 앱: 연결 버튼 → toggleMobileBluetoothDropdown 이 가로채져 '기기 설정' 팝업이 뜸(브리지 interceptConnectButton)
+   *  - 웹: 원본 드롭다운(스마트 트레이너·심박계·파워미터·속도계 센서, 저장된 기기 재연결) + 원본 connectMobileBluetoothDevice 흐름
+   *  원본 id(mobileBluetoothConnectBtn 등)가 그대로 유지되므로 연결 상태 갱신(updateMobileBluetoothConnectionStatus)도 자동 반영된다.
+   */
+  var hosted = null;
+  function hostConnectWrap() {
+    if (hosted) return;
+    var btn = $('mobileBluetoothConnectBtn'), slot = $('rrmConnectSlot');
+    if (!btn || !slot) return;
+    var wrap = btn.closest ? btn.closest('.mobile-bluetooth-connect-wrap') : btn.parentNode;
+    if (!wrap || !wrap.parentNode || wrap.parentNode === slot) return;
+    hosted = { wrap: wrap, parent: wrap.parentNode, next: wrap.nextSibling };
+    slot.appendChild(wrap);
+  }
+  function restoreConnectWrap() {
+    if (!hosted) return;
+    try {
+      var dd = $('mobileBluetoothDropdown'); if (dd) dd.classList.remove('show');
+      if (hosted.next && hosted.next.parentNode === hosted.parent) hosted.parent.insertBefore(hosted.wrap, hosted.next); else hosted.parent.appendChild(hosted.wrap);
+    } catch (e) {}
+    hosted = null;
+  }
+  /** 연결 화면 열기: 연결 버튼을 누른 것과 같은 동작(앱=기기 설정 팝업, 웹=드롭다운) */
+  function openConnect() {
+    if (typeof w.toggleMobileBluetoothDropdown === 'function') { try { w.toggleMobileBluetoothDropdown(); return; } catch (e) {} }
+    var b = $('mobileBluetoothConnectBtn'); if (b) b.click();
   }
   function rrmExit() {
     closeMenus();
@@ -315,8 +336,43 @@
   }
 
   /* ---------------- 속도계 눈금 ---------------- */
+  function ftpNow() {
+    return Number((w.currentUser && w.currentUser.ftp) || w.userFTP || w.mobileUserFTP) || 200;
+  }
+  var labelsKey = '';
+  /** 바깥 눈금값 + 안쪽 파란 속도값 — 현재값(파워/속도)에 따라 구성이 바뀜 */
+  function renderLabels() {
+    var ftp = ftpNow(), key = S.metric + '|' + ftp;
+    if (key === labelsKey) return; labelsKey = key;
+    var outer = $('rrm-gauge-labels'), inner = $('rrm-gauge-speed-labels'), h = '', i;
+    if (outer) {
+      if (S.metric === 'power') {           // 개인훈련 모바일 화면과 동일: FTP 배수 파워값(FTP 는 빨강, 0 은 '0 w')
+        var mults = [0, 0.33, 0.67, 1, 1.33, 1.67, 2];
+        for (i = 0; i < mults.length; i++) {
+          var a = (180 + (i / 6) * 180) % 360, rad = a * Math.PI / 180, val = Math.round(ftp * mults[i]);
+          h += '<text x="' + (100 + 98 * Math.cos(rad)).toFixed(2) + '" y="' + (140 + 98 * Math.sin(rad)).toFixed(2) + '" text-anchor="middle" dominant-baseline="middle" fill="' + (i === 3 ? '#ef4444' : '#ffffff') + '" font-size="10" font-weight="600">' + (val === 0 ? '0 w' : val) + '</text>';
+        }
+      } else {                              // 속도 선택: 눈금값을 속도(0~120 km/h)로
+        for (i = 0; i <= 6; i++) {
+          var a2 = (180 + (i / 6) * 180) % 360, r2 = a2 * Math.PI / 180, v = i * 20;
+          h += '<text x="' + (100 + 98 * Math.cos(r2)).toFixed(2) + '" y="' + (140 + 98 * Math.sin(r2)).toFixed(2) + '" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="10" font-weight="600">' + v + '</text>';
+        }
+      }
+      outer.innerHTML = h;
+    }
+    if (inner) {                            // 원호 안쪽 파란 속도값: 파워 모드에서만(원본과 동일, 0 km/h 는 3시)
+      var l = '';
+      if (S.metric === 'power') for (i = 0; i <= 6; i++) {
+        var a3 = (360 - (i / 6) * 180) * Math.PI / 180;
+        l += '<text x="' + (100 + 60 * Math.cos(a3)).toFixed(2) + '" y="' + (140 + 60 * Math.sin(a3)).toFixed(2) + '" text-anchor="middle" dominant-baseline="middle" fill="#4595e6" font-size="6">' + (i === 0 ? '0 km/h' : i * 20) + '</text>';
+      }
+      inner.innerHTML = l;
+    }
+    var sh = S.metric === 'power' ? '' : 'none';
+    ['rrm-gauge-speed-arc', 'rrm-gauge-speed-dot', 'rrm-gauge-speed-dot-value'].forEach(function (id) { var e = $(id); if (e) e.style.display = sh; });
+  }
   function buildGauge() {
-    var ticks = $('rrm-gauge-ticks'), labels = $('rrm-gauge-speed-labels');
+    var ticks = $('rrm-gauge-ticks');
     if (ticks && !ticks.__built) {
       var h = '';
       for (var i = 0; i <= 24; i++) {
@@ -326,14 +382,7 @@
       }
       ticks.innerHTML = h; ticks.__built = true;
     }
-    if (labels && !labels.__built) {
-      var l = '';
-      [0, 20, 40, 60, 80, 100, 120].forEach(function (v, i) {
-        var a = (180 + (i / 6) * 180) * Math.PI / 180, r = 58;
-        l += '<text x="' + (100 + r * Math.cos(a)).toFixed(2) + '" y="' + (140 + r * Math.sin(a)).toFixed(2) + '" text-anchor="middle" dominant-baseline="middle" fill="#4595e6" font-size="6.5">' + v + '</text>';
-      });
-      labels.innerHTML = l; labels.__built = true;
-    }
+    labelsKey = ''; renderLabels();
   }
 
   /* ---------------- 소수점 이하 글자(정수 가운데 정렬 + 30% 크기) ---------------- */
@@ -401,9 +450,9 @@
         var pw = Number(w.liveData && w.liveData.power); if (!isFinite(pw) || pw < 0) pw = 0;
         if (!S.gp) S.gp = SG.create(0);
         SG.step(S.gp, SG.avgHold(S.pbuf, pw, tn, 3000, true), tn, { omega: 8, omegaZero: 10, eps: 0.3, minRate: 25, k: 4, maxRate: 300 });
-        S.powNum = S.gp.n;
+        S.powNum = S.gp.n; S.powNeedle = S.gp.x;
       }
-    } else { S.needle = raw; S.speedNum = raw; S.powNum = Number(w.liveData && w.liveData.power) || 0; }
+    } else { S.needle = raw; S.speedNum = raw; S.powNum = Number(w.liveData && w.liveData.power) || 0; S.powNeedle = S.powNum; }
   }
 
   function render(force) {
@@ -411,43 +460,58 @@
     var txt;
     // 헤더 타이머: 경과 시간
     var tm = $('rrm-main-timer'); if (tm) { txt = fmtHMS(S.elapsed); if (tm.textContent !== txt) tm.textContent = txt; }
-    // 바늘·원호
-    var needle = $('rrm-gauge-needle');
-    var ratio = Math.min(Math.max((S.needle || 0) / GAUGE_MAX, 0), 1);
+    // 모드별 눈금(파워/속도)과 파란 속도 요소 표시 여부
+    renderLabels();
+    // 바늘: 파워 모드 = 파워(FTP×2 스케일, 개인훈련 모바일 화면과 동일), 속도 모드 = 속도(0~120 km/h)
+    var needle = $('rrm-gauge-needle'), spd = Math.max(0, S.needle || 0);
+    var ratio = S.metric === 'power'
+      ? Math.min(Math.max((S.powNeedle || 0) / (ftpNow() * 2), 0), 1)
+      : Math.min(Math.max(spd / GAUGE_MAX, 0), 1);
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
-    var arc = $('rrm-gauge-speed-arc'); if (arc) arc.style.strokeDashoffset = (251.33 * (1 - ratio)).toFixed(2);
-    // 중앙 큰 숫자 + 단위
+    if (S.metric === 'power') {                                // 원호 안쪽 파란 속도: 오른쪽(0)에서 왼쪽으로 채움 + 끝점 점과 속도값
+      var sr = Math.min(Math.max(spd / GAUGE_MAX, 0), 1), arc = $('rrm-gauge-speed-arc');
+      if (arc) arc.style.strokeDashoffset = (251.33 * (1 - sr)).toFixed(2);
+      var dot = $('rrm-gauge-speed-dot'), dv = $('rrm-gauge-speed-dot-value');
+      if (dot && dv) {
+        var rad = (360 - sr * 180) * Math.PI / 180, cx = (100 + 80 * Math.cos(rad)).toFixed(2), cy = (140 + 80 * Math.sin(rad)).toFixed(2);
+        dot.setAttribute('cx', cx); dot.setAttribute('cy', cy); dv.setAttribute('x', cx); dv.setAttribute('y', cy);
+        txt = String(Math.round(spd)); if (dv.textContent !== txt) dv.textContent = txt;
+      }
+    }
+    // 중앙 큰 숫자(정수만) + 단위
     var cur = $('rrm-ui-current-power'), unit = $('rrm-ui-unit');
     if (cur) {
-      txt = S.metric === 'power' ? ((w.connectedDevices && w.connectedDevices.powerMeter) ? String(Math.round(S.powNum || 0)) : '--') : Math.max(0, S.speedNum || 0).toFixed(1);
+      txt = S.metric === 'power' ? ((w.connectedDevices && w.connectedDevices.powerMeter) ? String(Math.round(S.powNum || 0)) : '--') : String(Math.round(Math.max(0, S.speedNum || 0)));
       if (cur.textContent !== txt) cur.textContent = txt;
     }
-    if (unit) { var u = S.metric === 'power' ? 'W' : 'km/h'; if (unit.textContent !== u) { unit.textContent = u; placeCaret(); } }
+    if (unit) { var u = S.metric === 'power' ? 'WATTS' : 'km/h'; if (unit.textContent !== u) { unit.textContent = u; placeCaret(); } }
     // TARGET 자리: 누적 거리
     setSplitDist(S.dist);
-    // 통계: MAX / LAP AVG(선택) / 남은 값
-    var mx = $('rrm-ui-max'); if (mx) { txt = (S.maxKmh || 0).toFixed(1); if (mx.textContent !== txt) mx.textContent = txt; }
+    // 하단 정보: 개인훈련 모바일 화면과 같은 구성 — CADENCE(rpm) · LAP AVG(▾ 선택) · HEART RATE(bpm)
+    var ld = w.liveData || {};
+    var cad = $('rrm-ui-cadence'); if (cad) { txt = String(Math.round(Number(ld.cadence) || 0)); if (cad.textContent !== txt) cad.textContent = txt; }
+    var hr = $('rrm-ui-hr'); if (hr) { txt = String(Math.round(Number(ld.heartRate) || 0)); if (hr.textContent !== txt) hr.textContent = txt; }
     var avg = S.elapsed > 0 ? S.dist / (S.elapsed / 3600) : 0;
-    var lap = $('rrm-ui-lap-power'), lt = $('rrmLapSelText');
-    if (lap) { txt = (S.lap === 'avg' ? avg : Math.max(0, S.speedNum || 0)).toFixed(1); if (lap.textContent !== txt) lap.textContent = txt; }
-    if (lt) { txt = S.lap === 'avg' ? 'SPEED AVG' : 'km/h'; if (lt.textContent !== txt) lt.textContent = txt; }
-    var tv = targetValue(), rem = $('rrm-ui-remain'), remU = $('rrm-ui-remain-unit'), remL = $('rrm-remain-label');
-    if (rem) {
-      if (S.mode === 'time') { txt = fmtMS(Math.max(0, tv - S.elapsed)); if (remU) remU.textContent = ''; if (remL) remL.textContent = 'TIME LEFT'; }
-      else { txt = Math.max(0, tv - S.dist).toFixed(2); if (remU) remU.textContent = 'km'; if (remL) remL.textContent = 'DIST LEFT'; }
-      if (rem.textContent !== txt) rem.textContent = txt;
+    var lap = $('rrm-ui-lap-power'), lu = $('rrm-ui-lap-unit'), lt = $('rrmLapSelText');
+    if (lap) {
+      txt = S.lap === 'avg' ? avg.toFixed(1) : String(S.powN > 0 ? Math.round(S.powSum / S.powN) : 0);   // SPEED AVG: 평균 속도(km/h) / LAP AVG: 레이스 시작 후 평균 파워(w)
+      if (lap.textContent !== txt) lap.textContent = txt;
     }
+    if (lu) { txt = S.lap === 'avg' ? 'km/h' : 'w'; if (lu.textContent !== txt) lu.textContent = txt; }
+    if (lt) { txt = S.lap === 'avg' ? 'SPEED AVG' : 'LAP AVG'; if (lt.textContent !== txt) lt.textContent = txt; }
+    var tv = targetValue();
     // 진행율 바
     var pct = tv > 0 ? Math.min(1, (S.mode === 'time' ? S.elapsed / tv : S.dist / tv)) : 0;
     var fill = $('rrmProgFill'), th = $('rrmProgThumb'), pp = $('rrmProgPct');
     if (fill) fill.style.width = (pct * 100).toFixed(2) + '%'; if (th) th.style.left = (pct * 100).toFixed(2) + '%';
     if (pp) { txt = Math.floor(pct * 100) + '%'; if (pp.textContent !== txt) pp.textContent = txt; }
     var pmax = $('rrmProgMax'); if (pmax) { txt = S.mode === 'time' ? fmtMS(tv) : tv.toFixed(1) + 'km'; if (pmax.textContent !== txt) pmax.textContent = txt; }
-    var pl = $('rrmProgLabel'); if (pl) { txt = S.mode === 'time' ? 'RACE PROGRESS · TIME' : 'RACE PROGRESS · DISTANCE'; if (pl.textContent !== txt) pl.textContent = txt; }
+    var pl = $('rrmProgLabel');
+    if (pl) {
+      var left = S.mode === 'time' ? fmtMS(Math.max(0, tv - S.elapsed)) + ' left' : Math.max(0, tv - S.dist).toFixed(2) + 'km left';
+      txt = 'RACE PROGRESS · ' + left; if (pl.textContent !== txt) pl.textContent = txt;
+    }
     var sum = $('rrmSettingsSummary'); if (sum) { txt = S.mode === 'time' ? '시간 ' + S.targetMin + '분' : '거리 ' + S.targetKm + 'km'; if (sum.textContent !== txt) sum.textContent = txt; }
-    // 연결 상태
-    var st = $('rrmSpeedStatus'); if (st) { txt = sensorConnected() ? '연결됨' : '미연결'; if (st.textContent !== txt) st.textContent = txt; st.classList.toggle('connected', txt === '연결됨'); }
-    var ps = $('rrmPMStatus'); if (ps) { txt = (w.connectedDevices && w.connectedDevices.powerMeter) ? '연결됨' : '미연결'; if (ps.textContent !== txt) ps.textContent = txt; ps.classList.toggle('connected', txt === '연결됨'); }
     // 그래프(1초마다)
     var tn = nowMs();
     if (force || tn - (S.lastGraphAt || 0) >= 1000) { S.lastGraphAt = tn; drawGraph(); }
@@ -545,7 +609,7 @@
     S.active = true; loadSettingsOnce(); buildGauge();
     var nm = $('rrm-dashboard-user-name'); if (nm) nm.textContent = (w.currentUser && (w.currentUser.name || w.currentUser.userName)) || nm.textContent;
     if (S.status === 'done') resetRace();                       // 이전 레이스 결과 화면은 초기화하고 새로 시작
-    bindWebSensor(); retryUnsavedRecord();
+    hostConnectWrap(); bindWebSensor(); retryUnsavedRecord();
     w.addEventListener('speedUpdate', onSpeedUpdate); w.addEventListener('speedData', onSpeedData);
     S.bindT = setInterval(bindWebSensor, 2000);
     render(true); placeCaret(); kick();
@@ -562,7 +626,7 @@
     // 다른 경로(뒤로가기·하단 메뉴 등)로 화면을 떠나도 진행 중 레이스를 정리: 안 그러면 START 가 잠긴 채 남고 시간만 흘러간다
     if (S.status === 'running' || S.status === 'countdown') resetRace();
     if (S.idleT) { clearTimeout(S.idleT); S.idleT = null; }
-    closeMenus();
+    closeMenus(); restoreConnectWrap();
   }
   var settingsLoaded = false;
   function loadSettingsOnce() { if (!settingsLoaded) { loadSettings(); settingsLoaded = true; } }
@@ -577,14 +641,13 @@
   }
   document.addEventListener('click', function (e) {
     var t = e.target;
-    if (t && t.closest && (t.closest('.rrm-menu') || t.closest('#rrmBluetoothConnectBtn') || t.closest('#rrmLapSelBtn'))) return;
+    if (t && t.closest && (t.closest('.rrm-menu') || t.closest('#rrmLapSelBtn'))) return;
     closeMenus();
   });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
 
   /* ---------------- 공개 ---------------- */
   w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExit = rrmExit;
-  w.rrmConnect = rrmConnect; w.rrmToggleConnectMenu = rrmToggleConnectMenu;
   w.rrmToggleMetricMenu = rrmToggleMetricMenu; w.rrmSetMetric = rrmSetMetric;
   w.rrmToggleLapMenu = rrmToggleLapMenu; w.rrmSetLap = rrmSetLap;
   w.rrmOpenSettings = rrmOpenSettings; w.rrmCloseSettings = rrmCloseSettings; w.rrmPickMode = rrmPickMode; w.rrmSaveSettings = rrmSaveSettings;

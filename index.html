@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm2" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm3" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm2"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm3"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36306,34 +36306,10 @@
         <span id="rrm-dashboard-user-name" style="color: #000;">사용자</span>
       </div>
       <div id="rrm-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
-      <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
-        <div class="mobile-bluetooth-connect-wrap" style="position: relative; display: flex; align-items: center;">
-          <button id="rrmBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="rrmToggleConnectMenu(event)">
-            <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
-            <span>연결</span>
-          </button>
-          <div id="rrmBluetoothDropdown" class="mobile-bluetooth-dropdown">
-            <div id="rrmSpeedItem" class="mobile-bluetooth-dropdown-item" onclick="rrmConnect('speed')">
-              <img src="assets/img/s(01).png" alt="속도계 센서">
-              <span>속도계 센서</span>
-              <span class="status" id="rrmSpeedStatus">미연결</span>
-            </div>
-            <div id="rrmPMItem" class="mobile-bluetooth-dropdown-item" onclick="rrmConnect('powerMeter')">
-              <img src="assets/img/power_i.png" alt="파워미터">
-              <span>파워미터 (선택)</span>
-              <span class="status" id="rrmPMStatus">미연결</span>
-            </div>
-            <div id="rrmSettingsItem" class="mobile-bluetooth-dropdown-item" onclick="rrmOpenSettings()">
-              <img src="assets/img/setting1.png" alt="레이스 설정" onerror="this.style.display='none'">
-              <span>레이스 설정</span>
-              <span class="status" id="rrmSettingsSummary">시간 10분</span>
-            </div>
-            <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="rrmExit()">
-              <img src="assets/img/logout.png" alt="종료">
-              <span>종료</span>
-            </div>
-          </div>
-        </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;">
+        <button id="rrmSettingsBtn" type="button" class="rrm-gear" onclick="rrmOpenSettings()" aria-label="레이스 설정" title="레이스 설정"><img src="assets/img/setting1.png" alt="" onerror="this.style.display='none'"><span id="rrmSettingsSummary">시간 10분</span></button>
+        <!-- 센서 연결: 개인훈련 모바일 화면의 연결 버튼·드롭다운(앱에서는 기기 설정 팝업)을 이 화면이 열려 있는 동안 그대로 옮겨 사용 (rollerRaceMobile.js hostConnectWrap) -->
+        <div id="rrmConnectSlot" style="display: flex; align-items: center;"></div>
       </div>
     </div>
 
@@ -36351,9 +36327,12 @@
         <div id="rrmGaugeBox" class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0;">
         <svg id="rrmGaugeSvg" viewBox="-15 0 230 260" style="width:100%; height:100%;">
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
-          <!-- 현재 속도까지 채워지는 원호(일렉트릭 블루) -->
-          <path id="rrm-gauge-speed-arc" d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
+          <!-- 속도 오버레이(파워 모드에서만): 원호 안쪽 파란 속도 — 0km/h 는 3시, 오른쪽에서 왼쪽으로 채워짐(개인훈련 모바일 화면과 동일) -->
+          <path id="rrm-gauge-speed-arc" d="M 180 140 A 80 80 0 0 0 20 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
           <g id="rrm-gauge-ticks"></g>
+          <!-- 원호 바깥 눈금값: 파워 모드 = FTP 기준 파워값, 속도 모드 = 속도값(0~120 km/h) -->
+          <g id="rrm-gauge-labels"></g>
+          <!-- 원호 안쪽 파란 속도값(파워 모드에서만 표시) -->
           <g id="rrm-gauge-speed-labels"></g>
 
           <!-- TARGET 자리: 누적 이동 거리(km, 0.00) — 정수는 가운데 정렬, 소수점 이하는 정수의 30% 크기 -->
@@ -36361,16 +36340,19 @@
           <text id="rrm-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
           <text id="rrm-ui-target-dec" x="108" y="120" text-anchor="start" fill="#ff8c00" font-size="8.4" font-weight="bold">.00</text>
 
-          <!-- 현재 값(속도 또는 파워) + 단위 선택 -->
+          <!-- 현재 값(속도 또는 파워, 정수) + 단위 선택 -->
           <text id="rrm-ui-unit" class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">km/h</text>
           <path id="rrm-unit-caret" d="M 0 0 L 6 0 L 3 3.6 Z" fill="#9fb0cc" transform="translate(112,156.2)"/>
           <rect x="72" y="149" width="56" height="16" fill="transparent" pointer-events="all" style="cursor:pointer" role="button" aria-label="속도·파워 선택" onclick="rrmToggleMetricMenu(event)"/>
-          <text id="rrm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0.0</text>
+          <text id="rrm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
 
           <g id="rrm-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
             <circle cx="0" cy="0" r="6" fill="#fff"/>
           </g>
+          <!-- 점·속도값(파워 모드에서만): 속도 원호 끝에 표시 -->
+          <circle id="rrm-gauge-speed-dot" cx="180" cy="140" r="4" fill="#4da6ff"/>
+          <text id="rrm-gauge-speed-dot-value" x="180" y="140" text-anchor="middle" dominant-baseline="middle" fill="#ffffff" font-size="5" font-weight="bold">0</text>
 
           <!-- 버튼: 시작(기록 시작) · 종료(저장) -->
           <g id="rrmControlPanel">
@@ -36398,24 +36380,24 @@
       </div>
     </div>
 
-    <!-- 통계: MAX · LAP AVG(SPEED AVG / km/h 선택) · 남은 값 -->
+    <!-- 하단 정보: 개인훈련 모바일 화면과 같은 구성 — CADENCE(rpm) · LAP AVG(▾ 선택: 평균 속도/랩 평균 파워) · HEART RATE(bpm) -->
     <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 7.5px 0; border-top: 1px solid #333;">
       <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
-        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">MAX SPEED</div>
-        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="rrm-ui-max">0.0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">CADENCE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="rrm-ui-cadence">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">rpm</span></div>
       </div>
-      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333; position: relative;">
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
         <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;"><button id="rrmLapSelBtn" type="button" class="rrm-sel" onclick="rrmToggleLapMenu(event)"><span id="rrmLapSelText">SPEED AVG</span><i class="rrm-caret"></i></button></div>
-        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="rrm-ui-lap-power">0.0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="rrm-ui-lap-power">0.0</span><span class="unit" id="rrm-ui-lap-unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
       </div>
       <div class="mobile-stat-box" style="text-align: center;">
-        <div class="mobile-stat-label" id="rrm-remain-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">REMAIN</div>
-        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="rrm-ui-remain">10:00</span><span class="unit" id="rrm-ui-remain-unit" style="font-size: 0.5em; color: #aaa;"></span></div>
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">HEART RATE</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="rrm-ui-hr">0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">bpm</span></div>
       </div>
       <div id="rrmLapMenu" class="rrm-menu rrm-menu--up">
-          <button type="button" data-lap="avg" onclick="rrmSetLap('avg')">SPEED AVG <small>평균 속도</small></button>
-          <button type="button" data-lap="kmh" onclick="rrmSetLap('kmh')">km/h <small>현재 속도</small></button>
-        </div>
+        <button type="button" data-lap="avg" onclick="rrmSetLap('avg')">SPEED AVG <small>평균 속도 km/h</small></button>
+        <button type="button" data-lap="power" onclick="rrmSetLap('power')">LAP AVG <small>평균 파워 w</small></button>
+      </div>
     </div>
 
     <!-- 레이스 진행율 바 (목표값 조절 바 디자인 활용) -->
