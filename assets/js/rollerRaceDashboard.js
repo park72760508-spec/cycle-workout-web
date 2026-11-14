@@ -578,8 +578,7 @@ function updateSpeedometerNeedle(speedometerId, speed) {
 function rrResetSpeedDisplay(sp) {
   if (!sp) return;
   sp.dispRawSpeed = 0; sp.needleTargetSpeed = 0; sp.needleDisplaySpeed = 0; sp.needleTrailStep = undefined; sp.needleDrawn = false;
-  sp.lastEvtIntervalMs = 0;
-  sp.__gs = null; sp.__sp3 = []; sp.__sp0 = []; sp.__stopped = false; sp.__z0 = 0; sp.__lastNZ = 0; sp.__txt = ''; sp.__els = null; sp.__ang = null;
+  sp.__gs = null; sp.__sp3 = []; sp.__txt = ''; sp.__els = null; sp.__ang = null;
   const v = document.getElementById(`speed-value-${sp.id}`); if (v) rrSetDigital(v, '0.0');
   const t = document.getElementById(`straight-speed-text-${sp.id}`); if (t) t.textContent = '0.0';
 }
@@ -599,35 +598,12 @@ function rrDisplayFrame() {
       const raw = sp.dispRawSpeed || 0;
       let x, num, tgt = raw;
       if (SG && SG.avgHold && SG.step) {
-        /*
-         * 2026-11-14 비대칭 표시(정지는 즉시, 상승은 부드럽게):
-         *  - 상승·안정: 3초 시간가중 평균 + 스프링(omega 6)
-         *  - 뚜렷한 하락(0.5초 평균이 3초 평균보다 0.8km/h 넘게 낮음): 0.5초 평균 + 더 빠른 스프링 → 제동·감속을 바로 따라감
-         *  - 정지 확정(센서 계층이 보낸 0 이 120ms 이상 유지): 평균을 건너뛰고 목표 0 + 아주 빠른 스프링·카운터(30km/h → 0.0 약 0.4초, 0 아래로 내려가지 않음)
-         */
+        const buf = sp.__sp3 || (sp.__sp3 = []);
+        tgt = SG.avgHold(buf, raw, now, 3000, false);              // 3초 시간가중 평균
         const gs = sp.__gs || (sp.__gs = SG.create(sp.needleDisplaySpeed || 0));
-        const L = sp.__sp3 || (sp.__sp3 = []), S = sp.__sp0 || (sp.__sp0 = []);
-        if (raw > 0) {
-          sp.__z0 = 0; sp.__lastNZ = raw;
-          if (sp.__stopped) { sp.__stopped = false; L.length = 0; S.length = 0; }   // 재출발: 평균을 새로 시작
-        } else if (!sp.__stopped) {
-          if (!sp.__z0) sp.__z0 = now;
-          if (now - sp.__z0 >= 120) { sp.__stopped = true; L.length = 0; S.length = 0; L.push({ t: now, p: 0 }); S.push({ t: now, p: 0 }); }
-        }
-        let opt;
-        if (sp.__stopped) {
-          tgt = 0; opt = { omega: 18, omegaZero: 18, eps: 0.3, minRate: 60, k: 9, maxRate: 400 };
-        } else {
-          const r = raw > 0 ? raw : (sp.__lastNZ || 0);                // 0 이 아직 확정 전(120ms)이면 직전 값 유지
-          const a3 = SG.avgHold(L, r, now, 3000, false), aS = SG.avgHold(S, r, now, 500, false);
-          tgt = (aS < a3 - 0.8) ? aS : a3;
-          opt = (tgt < gs.x - 0.5) ? { omega: 9, omegaZero: 9, eps: 0.05, minRate: 14, k: 6, maxRate: 120 }
-                                   : { omega: 6, omegaZero: 6, eps: 0.05, minRate: 7, k: 3.5, maxRate: 45 };
-        }
-        SG.step(gs, tgt, now, opt);
+        SG.step(gs, tgt, now, { omega: 6, omegaZero: 9, eps: 0.05, minRate: 7, k: 3.5, maxRate: 45 });
         x = gs.x; num = gs.n;
-        if (Math.abs(tgt - gs.x) > 0.05 || Math.abs(gs.n - tgt) > 0.05 || Math.abs(gs.v) > 0.2 || L.length > 1) moving = true;
-        if (raw <= 0 && !sp.__stopped) moving = true; // 0 이 들어왔지만 정지 확정(120ms) 전 — 루프를 멈추지 않고 확정까지 진행
+        if (Math.abs(tgt - gs.x) > 0.05 || Math.abs(gs.n - tgt) > 0.05 || Math.abs(gs.v) > 0.2 || buf.length > 1) moving = true;
       } else {                                                      // 스프링 모듈이 없으면 기존 방식
         const cur = sp.needleDisplaySpeed || 0, diff = raw - cur;
         if (Math.abs(diff) > 0.1) { x = cur + diff * 0.15; moving = true; } else { x = raw; }
@@ -6386,29 +6362,33 @@ function startConnectionStatusCheck() {
       const timeSinceLastPacket = now - (speedometer.lastPacketTime || 0);
       if (timeSinceLastPacket > 5000) {
         updateSpeedometerConnectionStatus(speedometer.id, false, 'timeout');
-        if (speedometer.currentSpeed > 0 || speedometer.dispRawSpeed > 0) updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance); // 0 확정 뒤에는 200ms 마다 반복 호출하지 않음
+        updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
         return;
       }
 
-      // 2. 정지 감지 (2026-11-14 개선): 예전 방식은 임계값을 '이미 감쇠된' currentSpeed 로 매 틱 다시 계산해 감쇠가 도중에 멈추고
-      //    정지 후 0 이 되기까지 8~12초가 걸렸다. 이제 임계값은 마지막 '새 휠 이벤트'의 간격으로 고정:
-      //    max(0.8초, 2×직전 이벤트 간격)(최대 5초) 동안 새 이벤트가 없으면 정지로 보고 0 을 한 번에 기록한다.
-      //    (ANT+ 4Hz 패킷 2~3개 유실 = 0.5~0.75초는 0.8초 하한으로 흡수, 저속은 이벤트 간격 기반으로 자동 완화)
+      // 2. [솔루션 1 적용] 가변 감속 예측 로직
       if (speedometer.currentSpeed > 0) {
         const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
         const circumferenceM = wheelSpec.circumference / 1000;
-        const fallbackInterval = (circumferenceM / (speedometer.currentSpeed / 3.6)) * 1000; // 직전 간격 기록이 없을 때만
-        const evtInterval = speedometer.lastEvtIntervalMs > 0 ? speedometer.lastEvtIntervalMs : fallbackInterval;
+        
+        // 현재 속도에서 1회전에 걸려야 할 예상 시간
+        const expectedInterval = (circumferenceM / (speedometer.currentSpeed / 3.6)) * 1000;
         const timeSinceLastEvent = now - (speedometer.lastEventUpdate || 0);
-        const stopThr = Math.min(5000, Math.max(800, 2.0 * evtInterval));
-        if (timeSinceLastEvent > stopThr) {
-          // 필터 상태 초기화: 재출발 첫 이벤트가 낡은 EMA/이력에 끌려 튀지 않도록
-          speedometer.filteredSpeed = 0;
-          speedometer.speedHistorySmoothed = [];
-          speedometer.previousSpeed = 0;
-          speedometer.acceleration = 0;
-          updateSpeedometerData(speedometer.id, 0, speedometer.totalDistance);
-          speedometer.lastDecelerationCheck = now;
+
+        // 예상 시간보다 1.5배 지연되면 즉시 감속 시작
+        // [보완] 지수적 감쇠 처리 (바늘이 스르륵 멈추도록)
+        // [수정] 센서 이벤트 지터(패킷 지연)로 인한 순간 0 급락 방지: 임계값 상향(예상 간격 2배, 최소 1.2초)
+        if (timeSinceLastEvent > Math.max(expectedInterval * 2.0, 1200)) {
+            // 경과 시간에 따른 자연스러운 감속. 직전 체크 이후 시간(dt)을 상한(400ms)으로 제한해
+            // 오래된 기준점(lastDecelerationCheck) 때문에 한 번에 0으로 떨어지는 문제 제거
+            const dt = Math.min(Math.max(now - (speedometer.lastDecelerationCheck || now), 0), 400);
+            const decayFactor = Math.pow(0.5, (dt || 200) / 400); // 400ms마다 반감
+            let predictedSpeed = speedometer.currentSpeed * decayFactor;
+            
+            if (predictedSpeed < 1.0) predictedSpeed = 0;
+            
+            updateSpeedometerData(speedometer.id, predictedSpeed, speedometer.totalDistance);
+            speedometer.lastDecelerationCheck = now; // 시간 기준점 갱신
         }
       }
       } catch (eChk) { rrWarnThrottled('chk' + speedometer.id, '[Race] 트랙 ' + speedometer.id + ' 상태 체크 오류(계속):', eChk); }
@@ -6929,7 +6909,6 @@ function processSpeedCadenceData(deviceId, data) {
     speedometer.lastRevolutions = revolutions;
     speedometer.lastEventTime = eventTime;
     speedometer.lastEventUpdate = now;
-    speedometer.lastEvtIntervalMs = (timeDiff / 1024 * 1000) / Math.max(1, revDiff); // 정지 판정용: 직전 휠 이벤트 간격(회전 1회당 ms)
     speedometer.lastDecelerationCheck = now; // 새 이벤트 수신 시 감속 기준점 초기화
     speedometer.lastSpeedUpdateTime = now;
     speedometer.lastAcceleration = speedometer.acceleration;
