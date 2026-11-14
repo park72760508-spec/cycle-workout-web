@@ -30,7 +30,7 @@
     }
   }
 
-  var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen'];
+  var TARGET_SCREENS = ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen', 'rrMobileScreen'];
   var AUTO_CONNECT_SENT_KEY = '_stelvioTrainingAutoConnectSent';
   /** 자동 연결 진행 중 플래그 — 사용자 수동 클릭 시 중단(Abort)용 */
   var AUTO_CONNECT_IN_PROGRESS_KEY = '_stelvioAutoConnectInProgress';

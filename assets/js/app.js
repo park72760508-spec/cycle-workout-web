@@ -5802,6 +5802,11 @@ document.addEventListener("DOMContentLoaded", () => {
           initRollerRaceDashboard();
         }, 100);
       }
+    } else if (mode === 'raceMobile') {
+      // STELVIO Race 휴대폰 개인 기록 모니터 (assets/js/rollerRaceMobile.js 가 화면 활성화를 감지해 초기화)
+      if (typeof showScreen === 'function') {
+        showScreen('rrMobileScreen');
+      }
     } else if (mode === 'training') {
       if (typeof showScreen === 'function') {
         showScreen('indoorTrainingDashboardScreen');

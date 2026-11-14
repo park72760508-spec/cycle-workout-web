@@ -4089,7 +4089,8 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261114led" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm2" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -5456,13 +5457,18 @@
     </div>
   </div>
 
-  <!-- Indoor Race PC 전용 안내 -->
-  <div id="indoorRacePcOnlyModal" class="stelvio-coming-soon-modal indoor-race-pc-only-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000070;" aria-modal="true" role="dialog" aria-labelledby="indoorRacePcOnlyTitle">
+  <!-- STELVIO Race 화면 선택 (기존 'PC 전용 안내' 팝업을 선택 화면으로 변경, 2026-11-15) -->
+  <div id="indoorRacePcOnlyModal" class="stelvio-coming-soon-modal indoor-race-pc-only-modal hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; align-items: center; justify-content: center; z-index: 10000070;">
     <div class="stelvio-coming-soon-overlay indoor-race-pc-only-overlay" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal(false);"></div>
     <div class="stelvio-coming-soon-content indoor-race-pc-only-content">
-      <p id="indoorRacePcOnlyTitle" class="stelvio-coming-soon-message indoor-race-pc-only-message">PC 전용 화면입니다.</p>
-      <div class="device-reset-confirm-buttons">
-        <button type="button" class="stelvio-coming-soon-btn device-reset-confirm-btn device-reset-confirm-ok" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal(true);">확인</button>
+      <p id="indoorRacePcOnlyTitle" class="stelvio-coming-soon-message indoor-race-pc-only-message">STELVIO Race 화면을 선택하세요</p>
+      <div class="indoor-race-choice-list">
+        <button type="button" id="indoorRaceChoiceMobile" class="stelvio-coming-soon-btn device-reset-confirm-btn indoor-race-choice" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal('mobile');">
+          <b>휴대폰 · 개인 기록 모니터</b><small>센서 연결 · 시간/거리 레이스 · 기록 저장</small><em class="indoor-race-choice__badge">추천</em>
+        </button>
+        <button type="button" id="indoorRaceChoicePc" class="stelvio-coming-soon-btn device-reset-confirm-btn indoor-race-choice" onclick="if(typeof closeIndoorRacePcOnlyModal==='function')closeIndoorRacePcOnlyModal('pc');">
+          <b>PC · 레이스 대시보드</b><small>다중 트랙 · ANT+ 수신기 (PC 전용 화면)</small><em class="indoor-race-choice__badge">추천</em>
+        </button>
       </div>
     </div>
   </div>
@@ -30190,6 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm2"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -33077,22 +33084,34 @@
       window.__deviceSettingsReturnScreenId = null;
       if (typeof showScreen === 'function') showScreen(id);
     }
+    /** STELVIO Race 화면 선택 팝업: 접속 기기(휴대폰/PC)에 맞는 항목을 '추천'으로 강조해 위쪽에 둔다 */
+    function stelvioRaceIsPhone() {
+      if (typeof window.isCoachMobilePhone === 'function') { try { return !!window.isCoachMobilePhone(); } catch (e) {} }
+      var ua = navigator.userAgent || '';
+      if (/iPhone|iPod/.test(ua) || (/Android/i.test(ua) && /Mobile/i.test(ua))) return true;
+      try { return window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600; } catch (e) { return false; }
+    }
     function showIndoorRacePcOnlyModal() {
       var m = document.getElementById('indoorRacePcOnlyModal');
-      if (m) {
-        m.classList.remove('hidden');
-        m.style.display = 'flex';
+      if (!m) { if (typeof window.selectIndoorMode === 'function') window.selectIndoorMode('race'); return; }
+      var phone = stelvioRaceIsPhone();
+      var bm = document.getElementById('indoorRaceChoiceMobile'), bp = document.getElementById('indoorRaceChoicePc');
+      if (bm && bp && bm.parentNode) {
+        bm.parentNode.insertBefore(phone ? bm : bp, bm.parentNode.firstChild); // 추천 항목을 위로
+        bm.classList.toggle('is-recommended', phone); bp.classList.toggle('is-recommended', !phone);
       }
+      m.classList.remove('hidden');
+      m.style.display = 'flex';
     }
-    function closeIndoorRacePcOnlyModal(proceedToRace) {
+    /** choice: 'pc' | 'mobile' | true(기존 호출 호환 = PC) | false(닫기) */
+    function closeIndoorRacePcOnlyModal(choice) {
       var m = document.getElementById('indoorRacePcOnlyModal');
       if (m) {
         m.classList.add('hidden');
         m.style.display = 'none';
       }
-      if (proceedToRace && typeof window.selectIndoorMode === 'function') {
-        window.selectIndoorMode('race');
-      }
+      if (choice === 'mobile' && typeof window.selectIndoorMode === 'function') window.selectIndoorMode('raceMobile');
+      else if ((choice === 'pc' || choice === true) && typeof window.selectIndoorMode === 'function') window.selectIndoorMode('race');
     }
     window.openDeviceSettingScreenFrom = openDeviceSettingScreenFrom;
     window.goBackFromDeviceSettingsScreen = goBackFromDeviceSettingsScreen;
@@ -35227,7 +35246,7 @@
 <script>window.__bluetoothIndividualIdPrefix = 'indiv-';</script>
 <!-- 공통 타이머 모듈 (절대 시간 + rAF 기반, setInterval 배제) -->
 <script src="assets/js/trainingTimerModule.js"></script>
-<script src="assets/js/stelvioWakeLock.js?v=20261021rnkeep"></script>
+<script src="assets/js/stelvioWakeLock.js?v=20261115rrm"></script>
 <script src="assets/js/wakeLockManager.js"></script>
 <script src="assets/js/gaugeSpring.js?v=20261114avg"></script>
 <script src="assets/js/bluetoothIndividual.js?v=20261110spring2"></script>
@@ -35242,7 +35261,7 @@
   <script src="assets/js/deviceBridgeStorage.js?v=20261107del"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261107del"></script>
-  <script src="assets/js/app.js?v=20261111quota"></script>
+  <script src="assets/js/app.js?v=20261115rrm"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   
@@ -35262,7 +35281,7 @@
         
         <div class="grid-2 gap-10" style="margin-bottom: 20px;">
           <!-- Indoor Race 버튼 -->
-          <button class="btn btn-device" id="btnIndoorRace" onclick="selectIndoorMode('race')">
+          <button class="btn btn-device" id="btnIndoorRace" onclick="if(typeof showIndoorRacePcOnlyModal==='function'){closeIndoorModeSelectionModal();showIndoorRacePcOnlyModal();}else{selectIndoorMode('race');}">
             <img src="assets/img/personals.png" alt="Indoor Race" class="device-btn-icon" />
             <span>Indoor Race</span>
           </button>
@@ -36265,6 +36284,188 @@
     </div>
   </div>
 
+  <!-- ========== STELVIO Race 모바일 개인 기록 모니터 (2026-11-15) — 개인훈련 모바일 화면 골격 + 평로라 레이스 항목. JS: assets/js/rollerRaceMobile.js, CSS: assets/css/rollerRaceMobile.css ========== -->
+  <style>
+    #rrMobileScreen .mobile-start-pulse-wrap { pointer-events: none; }
+    #rrMobileScreen .mobile-start-pulse-wrap.pulse-active circle.mobile-start-pulse-ring {
+      transform-box: fill-box; transform-origin: center; animation: mobile-start-mascot-pulse 1.5s ease-out infinite;
+    }
+    #rrMobileScreen .mobile-start-pulse-wrap.pulse-hidden { visibility: hidden; pointer-events: none; }
+  </style>
+  <div id="rrMobileScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Noto Sans KR', 'Pretendard', sans-serif; margin: 0; overflow: hidden; display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; min-height: -webkit-fill-available;">
+    <!-- 헤더: 사용자(누르면 종료) · 경과 시간 · 연결/설정 메뉴 -->
+    <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative; z-index: 10001;">
+      <div id="rrm-dashboard-user-name-wrap" class="mobile-dashboard-user-name-wrap" onclick="rrmExit()" style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; background-color: #00d4aa; color: #000; border-radius: 6px; padding: 2px 10px; line-height: 1.25; font-weight: 600; font-size: 1em; box-sizing: border-box;" title="뒤로가기">
+        <img src="assets/img/left_a.png" alt="" class="mobile-user-name-icon" style="height: 1em; width: auto; object-fit: contain; flex-shrink: 0;" onerror="this.style.display='none'">
+        <span id="rrm-dashboard-user-name" style="color: #000;">사용자</span>
+      </div>
+      <div id="rrm-main-timer" class="mobile-timer" style="position: absolute; left: 50%; transform: translateX(-50%); font-size: 1.5em; font-weight: bold; font-variant-numeric: tabular-nums; color: #fff;">00:00:00</div>
+      <div style="display: flex; align-items: center; gap: 12px; margin-left: auto;">
+        <div class="mobile-bluetooth-connect-wrap" style="position: relative; display: flex; align-items: center;">
+          <button id="rrmBluetoothConnectBtn" class="mobile-bluetooth-connect-btn" onclick="rrmToggleConnectMenu(event)">
+            <img src="assets/img/wifi2.png" alt="연결" class="mobile-bluetooth-icon" style="width: 16px; height: 16px;">
+            <span>연결</span>
+          </button>
+          <div id="rrmBluetoothDropdown" class="mobile-bluetooth-dropdown">
+            <div id="rrmSpeedItem" class="mobile-bluetooth-dropdown-item" onclick="rrmConnect('speed')">
+              <img src="assets/img/s(01).png" alt="속도계 센서">
+              <span>속도계 센서</span>
+              <span class="status" id="rrmSpeedStatus">미연결</span>
+            </div>
+            <div id="rrmPMItem" class="mobile-bluetooth-dropdown-item" onclick="rrmConnect('powerMeter')">
+              <img src="assets/img/power_i.png" alt="파워미터">
+              <span>파워미터 (선택)</span>
+              <span class="status" id="rrmPMStatus">미연결</span>
+            </div>
+            <div id="rrmSettingsItem" class="mobile-bluetooth-dropdown-item" onclick="rrmOpenSettings()">
+              <img src="assets/img/setting1.png" alt="레이스 설정" onerror="this.style.display='none'">
+              <span>레이스 설정</span>
+              <span class="status" id="rrmSettingsSummary">시간 10분</span>
+            </div>
+            <div class="mobile-bluetooth-dropdown-item mobile-bluetooth-dropdown-item-exit" onclick="rrmExit()">
+              <img src="assets/img/logout.png" alt="종료">
+              <span>종료</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 그래프: X 축 = 목표 시간 또는 목표 거리, Y 축 = 평균 속도 -->
+    <div class="mobile-segment-graph-section">
+      <div class="mobile-segment-graph-container" style="position: relative;">
+        <canvas id="rrmRaceGraph"></canvas>
+      </div>
+      <div id="rrm-segment-info" class="mobile-segment-info">레이스 설정을 확인하고 시작하세요</div>
+    </div>
+
+    <!-- 속도계 -->
+    <div class="mobile-main-content">
+      <div class="mobile-gauge-segment-wrap">
+        <div id="rrmGaugeBox" class="mobile-gauge-container" style="width: 100%; aspect-ratio: 230/260; position: relative; margin: 0; padding: 0;">
+        <svg id="rrmGaugeSvg" viewBox="-15 0 230 260" style="width:100%; height:100%;">
+          <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
+          <!-- 현재 속도까지 채워지는 원호(일렉트릭 블루) -->
+          <path id="rrm-gauge-speed-arc" d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
+          <g id="rrm-gauge-ticks"></g>
+          <g id="rrm-gauge-speed-labels"></g>
+
+          <!-- TARGET 자리: 누적 이동 거리(km, 0.00) — 정수는 가운데 정렬, 소수점 이하는 정수의 30% 크기 -->
+          <text id="rrm-ui-target-label" x="100" y="93" text-anchor="middle" fill="#888" font-size="6">DISTANCE km</text>
+          <text id="rrm-ui-target-power" x="100" y="120" text-anchor="middle" fill="#ff8c00" font-size="28" font-weight="bold">0</text>
+          <text id="rrm-ui-target-dec" x="108" y="120" text-anchor="start" fill="#ff8c00" font-size="8.4" font-weight="bold">.00</text>
+
+          <!-- 현재 값(속도 또는 파워) + 단위 선택 -->
+          <text id="rrm-ui-unit" class="gauge-unit-watts" x="100" y="160" text-anchor="middle" fill="#aaa" font-size="8.4">km/h</text>
+          <path id="rrm-unit-caret" d="M 0 0 L 6 0 L 3 3.6 Z" fill="#9fb0cc" transform="translate(112,156.2)"/>
+          <rect x="72" y="149" width="56" height="16" fill="transparent" pointer-events="all" style="cursor:pointer" role="button" aria-label="속도·파워 선택" onclick="rrmToggleMetricMenu(event)"/>
+          <text id="rrm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0.0</text>
+
+          <g id="rrm-gauge-needle" transform="translate(100, 140) rotate(-90)">
+            <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
+            <circle cx="0" cy="0" r="6" fill="#fff"/>
+          </g>
+
+          <!-- 버튼: 시작(기록 시작) · 종료(저장) -->
+          <g id="rrmControlPanel">
+            <g id="rrmStartPulseWrap" class="mobile-start-pulse-wrap pulse-active" transform="translate(70, 221)">
+              <circle class="mobile-start-pulse-ring" cx="0" cy="0" r="14" fill="none" stroke="#00d4aa" stroke-width="2" />
+            </g>
+            <g id="rrmBtnStart" class="svg-btn-group" onclick="rrmStart()">
+              <circle class="svg-neon-circle" cx="70" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image id="rrmImgStart" class="svg-btn-icon" x="62" y="213" width="16" height="16" href="assets/img/play0.png" pointer-events="none" />
+              <circle class="svg-btn-hit-area" cx="70" cy="221" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+            </g>
+            <g id="rrmBtnStop" class="svg-btn-group" onclick="rrmStop()">
+              <circle class="svg-neon-circle" cx="130" cy="221" r="9" fill="#ffffff" stroke="#ccc" stroke-width="0.2" />
+              <image class="svg-btn-icon" x="122" y="213" width="16" height="16" href="assets/img/stop0.png" pointer-events="none" />
+              <circle class="svg-btn-hit-area" cx="130" cy="221" r="22" fill="#fff" fill-opacity="0" stroke="none" pointer-events="all" />
+            </g>
+          </g>
+        </svg>
+        <!-- 속도·파워 선택 목록(단위 옆 화살표) -->
+        <div id="rrmMetricMenu" class="rrm-menu" style="left:50%; top:62.5%;">
+          <button type="button" data-metric="speed" onclick="rrmSetMetric('speed')">속도 <small>km/h</small></button>
+          <button type="button" data-metric="power" onclick="rrmSetMetric('power')">파워 <small>W</small></button>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 통계: MAX · LAP AVG(SPEED AVG / km/h 선택) · 남은 값 -->
+    <div class="mobile-stats-footer" style="display: grid; grid-template-columns: 1fr 1fr 1fr; background-color: #1e1e1e; padding: 7.5px 0; border-top: 1px solid #333;">
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">MAX SPEED</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #00d4aa;"><span id="rrm-ui-max">0.0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center; border-right: 1px solid #333; position: relative;">
+        <div class="mobile-stat-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;"><button id="rrmLapSelBtn" type="button" class="rrm-sel" onclick="rrmToggleLapMenu(event)"><span id="rrmLapSelText">SPEED AVG</span><i class="rrm-caret"></i></button></div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff8c00;"><span id="rrm-ui-lap-power">0.0</span><span class="unit" style="font-size: 0.5em; color: #aaa;">km/h</span></div>
+      </div>
+      <div class="mobile-stat-box" style="text-align: center;">
+        <div class="mobile-stat-label" id="rrm-remain-label" style="font-size: 0.8em; color: #888; margin-bottom: 2.5px;">REMAIN</div>
+        <div class="mobile-stat-value" style="font-size: 1.8em; font-weight: bold; color: #ff4444;"><span id="rrm-ui-remain">10:00</span><span class="unit" id="rrm-ui-remain-unit" style="font-size: 0.5em; color: #aaa;"></span></div>
+      </div>
+      <div id="rrmLapMenu" class="rrm-menu rrm-menu--up">
+          <button type="button" data-lap="avg" onclick="rrmSetLap('avg')">SPEED AVG <small>평균 속도</small></button>
+          <button type="button" data-lap="kmh" onclick="rrmSetLap('kmh')">km/h <small>현재 속도</small></button>
+        </div>
+    </div>
+
+    <!-- 레이스 진행율 바 (목표값 조절 바 디자인 활용) -->
+    <div class="mobile-individual-intensity-adjustment-container" style="display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 20px; background: rgba(26, 29, 41, 0.6); border-top: 1px solid #333;">
+      <div class="mobile-individual-intensity-adjustment-slider-wrapper" style="display: flex; align-items: center; gap: 10px; width: 100%; max-width: 400px;">
+        <span class="mobile-individual-intensity-adjustment-min" id="rrmProgMin" style="font-size: 11px; color: #64748b; min-width: 35px; text-align: center;">0</span>
+        <div class="rrm-prog-track" id="rrmProgTrack"><i id="rrmProgFill"></i><b id="rrmProgThumb"></b></div>
+        <span class="mobile-individual-intensity-adjustment-max" id="rrmProgMax" style="font-size: 11px; color: #64748b; min-width: 35px; text-align: center;">10:00</span>
+      </div>
+      <div class="mobile-individual-intensity-adjustment-label" style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">
+        <span id="rrmProgLabel">RACE PROGRESS</span>
+        <span class="mobile-individual-intensity-adjustment-value" id="rrmProgPct" style="font-size: 16px; font-weight: 700; color: #9ca3af; min-width: 45px; text-align: center;">0%</span>
+      </div>
+    </div>
+
+    <!-- 시작 카운트다운 -->
+    <div id="rrmCountdown" class="rrm-overlay hidden"><div id="rrmCountdownNum" class="rrm-countdown-num">3</div></div>
+
+    <!-- 레이스 설정 -->
+    <div id="rrmSettingsModal" class="rrm-overlay hidden" onclick="if(event.target===this)rrmCloseSettings()">
+      <div class="rrm-card">
+        <div class="rrm-card__title">레이스 설정</div>
+        <div class="rrm-seg" role="tablist">
+          <button type="button" id="rrmModeTime" onclick="rrmPickMode('time')">시간 <small>목표 시간 레이스</small></button>
+          <button type="button" id="rrmModeDist" onclick="rrmPickMode('distance')">거리 <small>목표 거리 레이스</small></button>
+        </div>
+        <label class="rrm-field"><span id="rrmTargetLabel">목표 시간 (분)</span>
+          <input id="rrmTargetInput" type="number" inputmode="decimal" min="1" max="600" step="1" value="10"></label>
+        <div id="rrmPresets" class="rrm-presets"></div>
+        <label class="rrm-field"><span>바퀴 규격 (속도·거리 계산)</span>
+          <select id="rrmWheelSelect">
+            <option value="23-622">700x23C (2096mm)</option>
+            <option value="25-622">700x25C (2105mm)</option>
+            <option value="28-622">700x28C (2136mm)</option>
+            <option value="32-622">700x32C (2155mm)</option>
+          </select></label>
+        <div class="rrm-actions"><button type="button" class="rrm-btn rrm-btn--ghost" onclick="rrmCloseSettings()">닫기</button><button type="button" class="rrm-btn" onclick="rrmSaveSettings()">저장</button></div>
+      </div>
+    </div>
+
+    <!-- 결과 / 저장 -->
+    <div id="rrmResultModal" class="rrm-overlay hidden">
+      <div class="rrm-card">
+        <div class="rrm-card__title" id="rrmResultTitle">레이스 종료</div>
+        <div class="rrm-result">
+          <div><small>거리</small><b id="rrmResDist">0.00 km</b></div>
+          <div><small>시간</small><b id="rrmResTime">00:00</b></div>
+          <div><small>평균 속도</small><b id="rrmResAvg">0.0 km/h</b></div>
+          <div><small>최고 속도</small><b id="rrmResMax">0.0 km/h</b></div>
+        </div>
+        <div id="rrmSaveStatus" class="rrm-save-status">기록 저장 중...</div>
+        <div class="rrm-actions"><button type="button" id="rrmRetrySave" class="rrm-btn rrm-btn--ghost" style="display:none" onclick="rrmRetrySave()">다시 저장</button><button type="button" class="rrm-btn" onclick="rrmCloseResult()">확인</button></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ========== 아웃도어 라이딩 (2026-10-19) — 모바일 훈련 화면 구성 기반, GPS 속도·거리 + GPX 코스 내비게이션 (assets/js/outdoorRide.js) ========== -->
   <div id="outdoorRideScreen" class="screen" style="background-color: #121212; color: #ffffff; font-family: 'Noto Sans KR', 'Pretendard', sans-serif; margin: 0; overflow: hidden; flex-direction: column; min-height: 100vh; min-height: 100dvh;">
     <div class="mobile-dashboard-header" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; background-color: #1e1e1e; border-bottom: 1px solid #333; position: relative; z-index: 10001;">
@@ -36656,7 +36857,7 @@
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->
   <script src="assets/js/stelvioRankingLiveSync.js"></script>
   <!-- 훈련 대시보드 브릿지: AUTO_CONNECT(마운트 1회) + deviceError UI 폴백 및 cleanup (showScreen 최종 래핑) -->
-  <script src="assets/js/trainingDashboardBridge.js?v=20261101recon"></script>
+  <script src="assets/js/trainingDashboardBridge.js?v=20261115rrm"></script>
   
   <!-- Performance Dashboard 화면 (AI 분석 대시보드) - Direct Integration (No Iframe) -->
   <!-- 스피너: position fixed 오버레이(레이아웃 영향 없음), 대시보드 본 화면만 스크롤 영역에 표시 -->
