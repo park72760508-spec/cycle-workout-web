@@ -504,7 +504,7 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 
 /* ===== 2026-11-15: 진행 위치 아이콘 → PC 레이스 트랙의 져지 입은 자전거 선수 아바타(흰색·파랑 져지) ===== */
 #rrMobileScreen .rrm-prog-track b.rrm-avatar {
-  width: 24px; height: 14px; margin: -7px 0 0 -12px; border-radius: 0; background: none !important; box-shadow: none !important; transform: none; z-index: 2;
+  width: 31px; height: 18px; margin: -9px 0 0 -15.5px; border-radius: 0; background: none !important; box-shadow: none !important; transform: none; z-index: 2;
   filter: drop-shadow(0 0 1px rgba(56,189,248,.7));
 }
 #rrMobileScreen .rrm-prog-track b.rrm-avatar svg { display: block; overflow: visible; }
