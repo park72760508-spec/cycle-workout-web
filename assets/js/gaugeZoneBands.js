@@ -202,9 +202,17 @@
     else needle.parentNode.appendChild(zoneText);
     var lastLabel = null;
     function update() {
-      var m = /rotate\(\s*(-?[\d.]+)/.exec(needle.getAttribute('transform') || '');
-      var angle = m ? Number(m[1]) : -90;
-      var ftpRatio = ((angle + 90) / 180) * 2;
+      var ftpRatio = null;
+      /* 2026-11-15: 바늘이 파워가 아닌 값(STELVIO Race 모바일의 속도 모드)을 가리킬 때는 화면이 현재 파워/FTP 비율을 직접 알려 준다
+         (svg.__stelvioZoneRatio — 함수가 숫자를 돌려주면 그 값, null 이면 바늘 각도 사용). 다른 화면은 이 함수가 없어 동작 변화 없음. */
+      if (typeof svg.__stelvioZoneRatio === 'function') {
+        try { var r = svg.__stelvioZoneRatio(); if (typeof r === 'number' && isFinite(r)) ftpRatio = r; } catch (e) {}
+      }
+      if (ftpRatio === null) {
+        var m = /rotate\(\s*(-?[\d.]+)/.exec(needle.getAttribute('transform') || '');
+        var angle = m ? Number(m[1]) : -90;
+        ftpRatio = ((angle + 90) / 180) * 2;
+      }
       var idx = zoneIndexForFtpRatio(ftpRatio);
       highlightZone(bands, idx);
       var label = idx >= 0 ? 'Z' + (idx + 1) : '';
@@ -214,6 +222,7 @@
       }
     }
     update();
+    svg.__stelvioZoneUpdate = update; // 바늘이 안 움직여도(속도 모드에서 파워만 변할 때) 화면이 존 강조를 갱신할 수 있게 노출
     new MutationObserver(update).observe(needle, { attributes: true, attributeFilter: ['transform'] });
   }
 

@@ -475,3 +475,6 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 /* 연결 트리 메뉴의 레이스 설정 아이콘: 흰색 */
 #rrMobileScreen .rrm-white-icon { filter: brightness(0) invert(1); }
 #rrMobileScreen #rrmConnectMenu .mobile-bluetooth-dropdown-item .status { white-space: nowrap; }
+
+/* LAP AVG ▼ 표시: 눈금 종류와 값이 맞지 않으면(예: 파워 눈금 위에 평균 속도) 숨김 */
+#rrMobileScreen[data-rrm-lapmatch="0"] .stelvio-gauge-lap-marker { display: none !important; }

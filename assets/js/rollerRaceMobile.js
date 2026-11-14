@@ -34,7 +34,7 @@
     boundChar: null,
     // 표시(평균·스프링)
     gs: null, gp: null, buf: [], stopApplied: false,
-    pbuf: [], hist: [], lastHistAt: 0, lastTick: 0, rafId: null, active: false, saved: null, lastResult: null
+    pbuf: [], zbuf: [], zonePower: 0, hist: [], lastHistAt: 0, lastTick: 0, rafId: null, active: false, saved: null, lastResult: null
   };
 
   /* ---------------- 설정 저장/복원 ---------------- */
@@ -428,6 +428,11 @@
       }
       SG.step(S.gs, tgt, tn, opt);
       S.needle = S.gs.x; S.speedNum = S.gs.n;
+      // Zone 띠 강조용 현재 파워(3초 평균, 두 모드 공통): 파워미터가 연결됐을 때만 계산(속도 모드에서도 파워 존 표시)
+      if (w.connectedDevices && w.connectedDevices.powerMeter) {
+        var zp = Number(w.liveData && w.liveData.power); if (!isFinite(zp) || zp < 0) zp = 0;
+        S.zonePower = SG.avgHold(S.zbuf, zp, tn, 3000, true);
+      } else { S.zonePower = 0; if (S.zbuf.length) S.zbuf.length = 0; }
       // 파워(선택했을 때만 계산): 전용 버퍼 3초 시간가중 평균(순간 0 제외) + 정수 카운트 — 공용 평균 함수를 매 프레임 부르지 않음(발열·다른 화면 버퍼 오염 방지)
       if (S.metric === 'power') {
         var pw = Number(w.liveData && w.liveData.power); if (!isFinite(pw) || pw < 0) pw = 0;
@@ -451,6 +456,11 @@
       ? Math.min(Math.max((S.powNeedle || 0) / (ftpNow() * 2), 0), 1)
       : Math.min(Math.max(spd / GAUGE_MAX, 0), 1);
     if (needle) needle.setAttribute('transform', 'translate(100, 140) rotate(' + (-90 + ratio * 180).toFixed(2) + ')');
+    // Zone 띠: 속도 모드에서도 현재 파워 존이 강조되도록 갱신(바늘이 안 움직여도)
+    var gz = $('rrmGaugeSvg'); if (gz && typeof gz.__stelvioZoneUpdate === 'function') gz.__stelvioZoneUpdate();
+    // LAP AVG ▼ 표시는 눈금 종류와 값이 맞을 때만(속도 눈금+SPEED AVG / 파워 눈금+LAP AVG 파워)
+    var scr = $(SCREEN_ID), lapOk = (S.metric === 'speed' && S.lap === 'avg') || (S.metric === 'power' && S.lap === 'power') ? '1' : '0';
+    if (scr && scr.getAttribute('data-rrm-lapmatch') !== lapOk) scr.setAttribute('data-rrm-lapmatch', lapOk);
     if (S.metric === 'power') {                                // 원호 안쪽 파란 속도: 오른쪽(0)에서 왼쪽으로 채움 + 끝점 점과 속도값
       var sr = Math.min(Math.max(spd / GAUGE_MAX, 0), 1), arc = $('rrm-gauge-speed-arc');
       if (arc) arc.style.strokeDashoffset = (251.33 * (1 - sr)).toFixed(2);
@@ -477,7 +487,7 @@
     var avg = S.elapsed > 0 ? S.dist / (S.elapsed / 3600) : 0;
     var lap = $('rrm-ui-lap-power'), lu = $('rrm-ui-lap-unit'), lt = $('rrmLapSelText');
     if (lap) {
-      txt = S.lap === 'avg' ? avg.toFixed(1) : String(S.powN > 0 ? Math.round(S.powSum / S.powN) : 0);   // SPEED AVG: 평균 속도(km/h) / LAP AVG: 레이스 시작 후 평균 파워(w)
+      txt = S.lap === 'avg' ? String(Math.round(avg)) : String(S.powN > 0 ? Math.round(S.powSum / S.powN) : 0);   // SPEED AVG: 평균 속도(km/h) / LAP AVG: 레이스 시작 후 평균 파워(w)
       if (lap.textContent !== txt) lap.textContent = txt;
     }
     if (lu) { txt = S.lap === 'avg' ? 'km/h' : 'w'; if (lu.textContent !== txt) lu.textContent = txt; }
@@ -563,6 +573,7 @@
   function idleSettled() {
     if (S.status === 'running' || S.status === 'countdown') return false;
     var g = S.gs;
+    if (S.metric === 'power' && w.connectedDevices && w.connectedDevices.powerMeter && Number(w.liveData && w.liveData.power) > 0) return false;   // 파워 모드에서 파워가 들어오는 동안은 부드러운 바늘을 위해 프레임 루프 유지
     return S.stopped && (!g || (Math.abs(g.x) < 0.05 && Math.abs(g.n) < 0.05 && Math.abs(g.v) < 0.2)) && !(S.gp && S.metric === 'power' && S.gp.n > 0.05);
   }
   function frame() {
@@ -597,6 +608,8 @@
     S.active = true; loadSettingsOnce(); buildGauge();
     var nm = $('rrm-dashboard-user-name'); if (nm) nm.textContent = (w.currentUser && (w.currentUser.name || w.currentUser.userName)) || nm.textContent;
     if (S.status === 'done') resetRace();                       // 이전 레이스 결과 화면은 초기화하고 새로 시작
+    var gsvg = $('rrmGaugeSvg');
+    if (gsvg) gsvg.__stelvioZoneRatio = function () { return S.metric === 'speed' ? (S.zonePower || 0) / ftpNow() : null; };  // 속도 모드: 현재 파워 존 / 파워 모드: 바늘(=파워) 기준(기본 동작)
     bindWebSensor(); retryUnsavedRecord();
     w.addEventListener('speedUpdate', onSpeedUpdate); w.addEventListener('speedData', onSpeedData);
     S.bindT = setInterval(bindWebSensor, 2000);
