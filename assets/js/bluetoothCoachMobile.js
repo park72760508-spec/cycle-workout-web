@@ -314,6 +314,14 @@
     window.drawSegmentGraph(w.segments, idx, 'coachmSegmentGraph', Number(cs.totalElapsedTime) || 0);
   }
 
+  /** 코치 화면 표시용 3초 시간가중 평균 파워(순간 0 제외, 2026-11-14). 계산(달성률·순위)은 pm.currentPower 원본을 그대로 쓴다. */
+  function avg3(pm) {
+    var raw = Number(pm && pm.currentPower) || 0;
+    var SG = window.StelvioGaugeSpring;
+    if (!pm || !SG || !SG.avgHold) return raw;
+    return SG.avgHold(pm.__pw3 || (pm.__pw3 = []), raw, performance.now(), 3000, true);
+  }
+
   function loopBody() {
     if (!isActive()) return false;
     checkLoadingDone();
@@ -325,7 +333,7 @@
       }
     }
     var pm = selectedPm();
-    var target = pm && pm.userName ? Math.max(0, Number(pm.currentPower) || 0) : 0;
+    var target = pm && pm.userName ? Math.max(0, avg3(pm)) : 0; // 3초 시간가중 평균(표시 전용)
     var diff = target - st.displayPower;
     if (window.StelvioGaugeSpring) {
       // 2026-11-10 스프링 바늘 + 정수 순차 카운트 숫자 (표시 전용, 계산은 pm.currentPower 그대로)
@@ -836,7 +844,7 @@
       }
       put('.coachm-mcard__no', String(pm.id));
       put('.coachm-mcard__name', pm.userName ? String(pm.userName) : '비어 있음');
-      put('.coachm-mcard__pw', pm.userName ? String(Math.round(Number(pm.currentPower) || 0)) : '–');
+      put('.coachm-mcard__pw', pm.userName ? String(Math.round(avg3(pm))) : '–');
       put('.coachm-mcard__lap', pm.userName ? monitorNum(pm.segmentPower) : '–');
       put('.coachm-mcard__rpm', pm.userName ? monitorNum(pm.cadence) : '–');
       put('.coachm-mcard__bpm', pm.userName ? monitorNum(pm.heartRate) : '–');

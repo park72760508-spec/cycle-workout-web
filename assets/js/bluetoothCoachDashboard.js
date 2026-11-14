@@ -1179,7 +1179,11 @@ function startGaugeAnimationLoop() {
     window.bluetoothCoachState.powerMeters.forEach(pm => {
       if (!pm.connected) return;
 
-      const target = pm.currentPower || 0;
+      // 2026-11-14 코치 화면 표시값은 3초 시간가중 평균(순간 0 제외) — 순간값의 큰 낙차 방지. 달성률·순위 등 계산은 pm.currentPower 원본 그대로.
+      const rawPower = pm.currentPower || 0;
+      const target = window.StelvioGaugeSpring && window.StelvioGaugeSpring.avgHold
+        ? window.StelvioGaugeSpring.avgHold(pm.__pw3 || (pm.__pw3 = []), rawPower, now, 3000, true)
+        : rawPower;
       const current = pm.displayPower || 0;
       const diff = target - current;
       const absDiff = Math.abs(diff);
@@ -1190,7 +1194,7 @@ function startGaugeAnimationLoop() {
         window.StelvioGaugeSpring.step(gs, target, now);
         pm.displayPower = gs.x;
         // 숫자는 3초 평균(updatePowerMeterUI) 값을 따라가고, 최근 3초 내 갱신이 없으면 현재 파워를 따라감
-        const txtTarget = (pm.__txtAt && now - pm.__txtAt < 3000 && pm.__txtPower != null) ? pm.__txtPower : target;
+        const txtTarget = target; // 바늘과 같은 3초 평균
         const gn = pm.__gn || (pm.__gn = window.StelvioGaugeSpring.create(txtTarget));
         window.StelvioGaugeSpring.step(gn, txtTarget, now);
         const txtEl = document.getElementById(`current-power-value-${pm.id}`);

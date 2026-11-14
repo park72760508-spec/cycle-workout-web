@@ -53,5 +53,28 @@
       if (!go) { clearInterval(timers[id]); timers[id] = null; }
     }, 33);
   }
-  w.StelvioGaugeSpring = { create: create, step: step, fallback: fallback };
+  /*
+   * 3초 시간가중 평균(코치 화면 표시용, 2026-11-14): 참가자는 순간 파워를 값이 3W 이상 바뀔 때(또는 5초 하트비트)만 보내므로,
+   * 받은 값이 "다음 값이 올 때까지 유지"된다고 보고 최근 windowMs 동안의 평균을 구한다. 순간적인 0(센서 끊김)은 참가자 화면과 같이 제외하고,
+   * 창 안이 전부 0이면 0. buf 는 호출자가 보관(예: pm.__pw3 = []), now 는 항상 같은 시계(performance.now)로.
+   * 표시 전용 — 달성률·순위·점수 계산에는 쓰지 않는다.
+   */
+  function avgHold(buf, p, now, windowMs, skipZero) {
+    windowMs = windowMs || 3000;
+    p = Number(p); if (!isFinite(p) || p < 0) p = 0;
+    var last = buf.length ? buf[buf.length - 1] : null;
+    if (!last || last.p !== p) buf.push({ t: now, p: p });
+    var cut = now - windowMs;
+    while (buf.length > 1 && buf[1].t <= cut) buf.shift();
+    if (buf.length > 120) buf.splice(0, buf.length - 120);
+    var start = Math.max(cut, buf[0].t), sum = 0, span = 0;
+    for (var i = 0; i < buf.length; i++) {
+      var t0 = Math.max(buf[i].t, start), t1 = i + 1 < buf.length ? buf[i + 1].t : now;
+      if (t1 <= t0) continue;
+      if (skipZero && buf[i].p <= 0) continue;
+      sum += buf[i].p * (t1 - t0); span += (t1 - t0);
+    }
+    return span > 0 ? sum / span : (skipZero ? 0 : p);
+  }
+  w.StelvioGaugeSpring = { create: create, step: step, fallback: fallback, avgHold: avgHold };
 })(window);
