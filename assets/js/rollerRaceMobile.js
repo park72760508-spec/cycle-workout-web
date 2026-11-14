@@ -195,8 +195,8 @@
     if (S.status !== 'running') return;
     var run = function () { finishRace(false); };
     if (typeof w.showStelvioExitConfirmPopup === 'function') {
-      w.showStelvioExitConfirmPopup(run, { message: '레이스를 종료하고 기록을 저장할까요?', cancelText: '계속', okText: '종료·저장' });
-    } else if (confirm('레이스를 종료하고 기록을 저장할까요?')) run();
+      w.showStelvioExitConfirmPopup(run, { message: '정말 종료하시겠습니까? 현재까지 레이스가 저장됩니다.', cancelText: '취소', okText: '종료' });
+    } else if (confirm('정말 종료하시겠습니까? 현재까지 레이스가 저장됩니다.')) run();
   }
   function finishRace(completed) {
     if (S.status !== 'running') return;
