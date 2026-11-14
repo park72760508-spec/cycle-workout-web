@@ -735,7 +735,62 @@
       if (!firestoreV9 || !collectionFn || !docFn || !setDocFn) throw new Error('Firestore V9가 초기화되지 않았습니다.');
       var usersRef = collectionFn(firestoreV9, 'users');
       var userDocRef = docFn(usersRef, uid);
-      await setDocFn(userDocRef, userData);
+      /* 2026-11-14: 가입 직후 Android(WebView·셀룰러·일부 통신사/보안앱)에서 Firestore SDK 연결(롱폴링)이 막히면
+         setDoc 이 서버 응답을 못 받아 오래 멈추거나 실패 → Auth 계정만 생기고 users 문서가 없는 "고아 계정"이 남음.
+         SDK 저장을 10초로 제한하고, 실패·지연이면 같은 문서를 HTTPS REST(이미 받은 ID 토큰)로 한 번 더 저장한다.
+         보안 규칙은 동일(본인 uid 문서만 쓰기 가능). */
+      var sdkErr = null;
+      try {
+        await Promise.race([
+          setDocFn(userDocRef, userData),
+          new Promise(function (_, rej) { setTimeout(function () { rej(new Error('firestore-sdk-timeout')); }, 10000); })
+        ]);
+        return;
+      } catch (e) { sdkErr = e; }
+      try {
+        await window.stelvioSaveUserDocViaRest(uid, userData);
+        console.warn('[Register] SDK 저장 실패 → REST 저장 성공:', sdkErr && (sdkErr.code || sdkErr.message));
+      } catch (restErr) {
+        var combined = new Error('프로필 저장 실패 (SDK: ' + ((sdkErr && (sdkErr.code || sdkErr.message)) || '-') + ' / REST: ' + ((restErr && (restErr.code || restErr.message)) || '-') + ')');
+        combined.code = (sdkErr && sdkErr.code) || (restErr && restErr.code) || 'save-failed';
+        throw combined;
+      }
+    };
+
+    /** users/{uid} 문서를 Firestore REST 로 저장(primitive 필드만 — 가입 userData 는 모두 string/number/boolean). */
+    window.stelvioSaveUserDocViaRest = async function (uid, userData) {
+      var au = window.authV9 && window.authV9.currentUser;
+      var cfg = window.__FIREBASE_CONFIG__ || (window.authV9 && window.authV9.app && window.authV9.app.options) || {};
+      if (!au || au.uid !== uid) throw new Error('rest-no-auth');
+      if (!cfg.projectId) throw new Error('rest-no-project');
+      var token = await au.getIdToken();
+      var fields = {};
+      Object.keys(userData).forEach(function (k) {
+        var v = userData[k];
+        if (v === undefined) return;
+        if (v === null) fields[k] = { nullValue: null };
+        else if (typeof v === 'boolean') fields[k] = { booleanValue: v };
+        else if (typeof v === 'number') {
+          if (!isFinite(v)) return;
+          fields[k] = Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
+        }
+        else fields[k] = { stringValue: String(v) };
+      });
+      var ctrl = (typeof AbortController === 'function') ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 15000);
+      try {
+        var res = await fetch('https://firestore.googleapis.com/v1/projects/' + cfg.projectId + '/databases/(default)/documents/users/' + encodeURIComponent(uid), {
+          method: 'PATCH',
+          headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: fields }),
+          signal: ctrl ? ctrl.signal : undefined
+        });
+        if (!res.ok) {
+          var e = new Error('rest-http-' + res.status);
+          e.code = 'rest-http-' + res.status;
+          throw e;
+        }
+      } finally { clearTimeout(timer); }
     };
 
     /* 로그인 직후 프로필 1건 조회 고속 경로 (2026-10-05).
@@ -33962,15 +34017,18 @@
             errorMessage = '네트워크 연결을 확인한 뒤 다시 시도해주세요.';
             break;
           default:
-            if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
+            if (errMsg.indexOf('프로필 저장 실패') === 0 || errMsg.indexOf('Firestore 프로필 저장') === 0) {
+              errorMessage = '계정은 만들어졌지만 가입 정보 저장이 지연되었습니다. 네트워크를 확인한 뒤 같은 정보로 "가입 완료"를 다시 눌러 주세요. (오류: ' + (err.code || 'save-failed') + ')';
+              console.error('[Register] 프로필 저장 최종 실패:', errMsg);
+            } else if (errMsg.indexOf('destructur') !== -1 || errMsg.indexOf('Right side') !== -1 || errMsg.indexOf('준비되지 않았습니다') !== -1) {
               errorMessage = '시스템이 아직 준비 중입니다. 잠시 후 다시 시도해주세요.';
             } else if (errMsg && errMsg.length < 80 && !/^[a-z]+:\s*/.test(errMsg)) {
               errorMessage = errMsg;
             }
         }
-        
+
         showRegisterStatus('❌ ' + errorMessage, 'error');
-        
+
         if (typeof showToast === 'function') {
           showToast(errorMessage);
         }
