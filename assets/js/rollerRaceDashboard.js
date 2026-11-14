@@ -1498,6 +1498,16 @@ function toggleTargetTime() {
 /**
  * 타겟 설정 저장
  */
+/** 바퀴 규격 변경: 즉시 저장·적용(속도·이동거리는 설정된 바퀴 둘레로 계산) */
+function rrSetWheelSize(v) {
+  if (!WHEEL_SPECS[v]) return;
+  window.rollerRaceState.raceSettings.wheelSize = v;
+  try { localStorage.setItem('rollerRaceSettings', JSON.stringify(window.rollerRaceState.raceSettings)); } catch (e) {}
+  const m = document.getElementById('wheelSize'); if (m) m.value = v;
+  if (typeof showToast === 'function') showToast('바퀴 규격이 ' + WHEEL_SPECS[v].size + ' (' + WHEEL_SPECS[v].circumference + 'mm)로 적용되었습니다.');
+}
+window.rrSetWheelSize = rrSetWheelSize;
+
 function saveTargetSettings() {
   const distanceEnabled = document.getElementById('targetDistanceEnabled');
   const distanceValue = document.getElementById('targetDistanceValue');
@@ -1530,6 +1540,9 @@ function saveTargetSettings() {
     }
   }
   
+  const wheelSel = document.getElementById('targetWheelSize');
+  if (wheelSel && WHEEL_SPECS[wheelSel.value]) settings.wheelSize = wheelSel.value;
+
   // 저장
   try {
     localStorage.setItem('rollerRaceSettings', JSON.stringify(settings));
@@ -1575,6 +1588,7 @@ function updateTargetSettingsDisplay() {
   if (!displayText) {
     displayText = '타겟 미설정';
   }
+  { const ws = WHEEL_SPECS[settings.wheelSize]; if (ws) displayText += ' / 바퀴: ' + ws.size; }
   
   targetDisplayEl.textContent = displayText;
   targetDisplayEl.style.display = displayText ? 'inline-block' : 'none';
@@ -1592,6 +1606,9 @@ function loadTargetSettings() {
   const timeEnabled = document.getElementById('targetTimeEnabled');
   const timeValue = document.getElementById('targetTimeValue');
   
+  const wheelSelL = document.getElementById('targetWheelSize');
+  if (wheelSelL) wheelSelL.value = WHEEL_SPECS[settings.wheelSize] ? settings.wheelSize : '25-622';
+
   if (distanceEnabled) distanceEnabled.checked = settings.endByDistance || false;
   if (distanceValue) distanceValue.value = settings.targetDistance || 10;
   if (distanceMode) distanceMode.value = settings.distanceMode || 'total';
@@ -5282,6 +5299,7 @@ function updateRaceSettingsUI() {
   if (endByTime) endByTime.checked = settings.endByTime;
   if (targetTime) targetTime.value = settings.targetTime || 60;
   if (wheelSize) wheelSize.value = settings.wheelSize || '25-622';
+  const wheelSel2 = document.getElementById('targetWheelSize'); if (wheelSel2) wheelSel2.value = WHEEL_SPECS[settings.wheelSize] ? settings.wheelSize : '25-622';
 }
 
 /**
@@ -7074,7 +7092,7 @@ window.processRaceData = function(payload) {
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = 2.096; // 700x23c
+            const wheelCircumference = ((WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622']).circumference) / 1000; // 설정된 바퀴 둘레(m)
             const speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             
             // 실제 UI 업데이트 실행

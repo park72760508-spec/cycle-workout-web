@@ -35460,6 +35460,16 @@
             </div>
           </div>
           
+          <!-- 바퀴 규격: 선택 즉시 저장되어 속도·이동거리 계산(바퀴 둘레)에 적용 -->
+          <div class="target-setting-compact-item">
+            <label class="target-checkbox-label" for="targetWheelSize"><span>바퀴</span></label>
+            <select id="targetWheelSize" class="target-select-small" onchange="rrSetWheelSize(this.value)" title="바퀴 규격(둘레)에 따라 속도·이동거리가 계산됩니다">
+              <option value="23-622">700x23C (2,096mm)</option>
+              <option value="25-622" selected>700x25C (2,105mm)</option>
+              <option value="28-622">700x28C (2,136mm)</option>
+              <option value="32-622">700x32C (2,155mm)</option>
+            </select>
+          </div>
           <button class="btn btn-success btn-xs" onclick="saveTargetSettings()" style="padding: 4px 12px; font-size: 12px;">
             설정
           </button>
@@ -36874,7 +36884,7 @@
   <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
 
   <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js?v=20261114stop3s"></script>
+  <script src="assets/js/rollerRaceDashboard.js?v=20261115wheel"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js?v=20261104dur1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->
