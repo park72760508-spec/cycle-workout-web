@@ -500,7 +500,7 @@
     var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
     if (!id) return;
     var rssi = Number(detail.rssi);
-    var opts = { rssi: isFinite(rssi) && rssi < 0 ? rssi : null };
+    var opts = { rssi: isFinite(rssi) && rssi < 0 ? rssi : null, antId: antIdFrom(detail, String(id), name) };
 
     if (!deviceMatchesCategory(detail, targetType)) {
       /* 2026-10-19: 카테고리 판별(서비스 UUID·이름 키워드)에 안 맞아도 이름이 있는 기기는 버리지 않고
@@ -544,6 +544,9 @@
 
   /** 신호가 강한(가까운) 기기가 위로 — 신호 정보가 없는 기기는 아래 */
   function placeByRssi(list, li) {
+    /* 2026-11-15: 실시간 순서 변동 방지 — 먼저 검색된 순서를 유지하고 새 기기는 항상 맨 뒤에 추가(신호 세기로 재정렬하지 않음) */
+    if (li.parentNode !== list || list.lastChild !== li) { if (!li.parentNode) list.appendChild(li); }
+    return;
     var r = li.dataset.rssi !== undefined && li.dataset.rssi !== '' ? Number(li.dataset.rssi) : -999;
     var kids = list.children;
     for (var i = 0; i < kids.length; i++) {
@@ -565,6 +568,10 @@
     if (!li) return;
     var nameEl = li.querySelector('.device-scan-name');
     if (nameEl && name && name !== '알 수 없는 기기' && nameEl.textContent !== name) nameEl.textContent = name;
+    if (opts && opts.antId) {
+      var idEl = li.querySelector('.device-scan-id');
+      if (idEl) idEl.textContent = idLabel(idStr, opts.antId);
+    }
     if (opts && opts.rssi != null) {
       li.dataset.rssi = String(opts.rssi);
       var old = li.querySelector('.device-scan-signal');
@@ -576,17 +583,29 @@
     var main = document.getElementById(LIST_ID);
     var inOther = li.parentNode && li.parentNode.id === OTHER_LIST_ID;
     if (inOther && opts && !opts.other && main) {
-      placeByRssi(main, li);
+      main.appendChild(li);
       updateOtherWrap();
-    } else if (li.parentNode) {
-      placeByRssi(li.parentNode, li);
     }
+    /* 이미 목록에 있는 기기는 위치 유지(기타→본 목록 승격 시에만 맨 뒤로) */
   }
 
   /**
    * 2026-11-07: 기기 ID 표기 — 긴 UUID/MAC 대신 끝 6자리만 "ID 790D02" 로 짧게(가민 연결 화면처럼 기기명 + 짧은 ID).
    * 숫자만 있는 ID(ANT+ 등)는 그대로 표시. 전체 ID 는 길게 눌렀을 때 title 로 확인.
    */
+  /** Garmin 기기에 저장되는 센서 ID(ANT+ 장치 번호)를 찾는다: 앱이 보낸 값 > 숫자 ID > 기기명 끝/구분자 뒤 숫자 */
+  function antIdFrom(detail, idStr, name) {
+    var d = detail || {};
+    var v = d.antId != null ? d.antId : (d.antDeviceNumber != null ? d.antDeviceNumber : (d.deviceNumber != null ? d.deviceNumber : null));
+    if (v != null && /^\d{1,8}$/.test(String(v).trim())) return String(v).trim();
+    if (/^\d{1,8}$/.test(String(idStr || '').trim())) return String(idStr).trim();
+    var m = String(name || '').match(/(?:[:#_\-\s])(\d{4,8})\s*$/) || String(name || '').match(/(\d{4,8})\s*$/);
+    return m ? m[1] : '';
+  }
+  function idLabel(idStr, antId) {
+    var s = shortDeviceId(idStr);
+    return antId && ('ID ' + antId) !== s ? 'ANT+ ID ' + antId + ' · ' + s : (antId ? 'ANT+ ID ' + antId : s);
+  }
   function shortDeviceId(id) {
     var raw = String(id == null ? '' : id).trim();
     if (!raw) return '';
@@ -623,7 +642,7 @@
     var li = document.createElement('li');
     li.dataset.deviceId = idStr;
     if (opts.rssi != null) li.dataset.rssi = String(opts.rssi);
-    li.innerHTML = signalBars(opts.rssi) + '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id" title="' + escapeHtml(idStr) + '">' + escapeHtml(shortDeviceId(idStr)) + '</span>';
+    li.innerHTML = signalBars(opts.rssi) + '<span class="device-scan-name">' + escapeHtml(String(name || '알 수 없는 기기')) + '</span><span class="device-scan-id" title="' + escapeHtml(idStr) + '">' + escapeHtml(idLabel(idStr, opts.antId)) + '</span>';
     li.addEventListener('click', function () {
       var deviceId = li.dataset.deviceId;
       var deviceTypeToConnect = savedTargetType;
@@ -667,7 +686,7 @@
         }
       }, CONNECT_FALLBACK_MS);
     });
-    placeByRssi(list, li);
+    list.appendChild(li);
     if (opts.other) updateOtherWrap();
   }
 
