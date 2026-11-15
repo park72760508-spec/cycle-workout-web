@@ -306,7 +306,7 @@
       var li = document.createElement('li');
       li.dataset.deviceId = deviceId;
       li.classList.add('device-scan-item-saved');
-      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id" title="' + escapeHtml(deviceId) + '">' + escapeHtml(idLabel(deviceId, antIdFrom(null, deviceId, deviceName))) + '</span>' +
+      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id" title="' + escapeHtml(deviceId) + '">' + escapeHtml(idLabel(deviceId, (function () { try { return (JSON.parse(localStorage.getItem('stelvio_saved_device_ant_ids') || '{}')[storageKey]) || antIdFrom(null, deviceId, deviceName); } catch (e) { return antIdFrom(null, deviceId, deviceName); } })())) + '</span>' +
         '<button type="button" class="device-scan-del" aria-label="저장된 센서 삭제" title="저장된 센서 삭제">' +
         '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>';
       // 삭제 아이콘: 첫 탭 = "삭제?" 확인 상태, 한 번 더 탭하면 저장된 센서 삭제 (3초 안에 다시 안 누르면 원복)

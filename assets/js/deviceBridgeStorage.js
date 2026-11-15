@@ -119,6 +119,13 @@
     var key = normalizeDeviceType(deviceType);
     if (!key) return;
     saveDevice(key, deviceId, deviceName);
+    try {                                                   // 센서 공통 ID(antId, 앱이 전달) 보관 — 저장된 기기 목록에 표시
+      if (detail.antId != null && /^\d{1,8}$/.test(String(detail.antId))) {
+        var am = JSON.parse(localStorage.getItem('stelvio_saved_device_ant_ids') || '{}');
+        am[key] = String(detail.antId);
+        localStorage.setItem('stelvio_saved_device_ant_ids', JSON.stringify(am));
+      }
+    } catch (e) { /* no-op */ }
     if (typeof console !== 'undefined' && console.log) {
       console.log('[deviceBridgeStorage] deviceConnected saved:', key, deviceId, deviceName || '(no name)');
     }
