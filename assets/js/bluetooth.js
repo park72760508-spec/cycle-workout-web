@@ -1509,7 +1509,7 @@ var _webReconnect = {};
 function isOnTrainingScreenForReconnect() {
   try {
     var B = window.StelvioTrainingDashboardBridge;
-    var ids = (B && B.TARGET_SCREENS) || ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen'];
+    var ids = (B && B.TARGET_SCREENS) || ['trainingScreen', 'mobileDashboardScreen', 'bluetoothTrainingCoachScreen', 'bluetoothIndividualScreen', 'bluetoothCoachMobileScreen', 'rrMobileScreen'];
     for (var i = 0; i < ids.length; i++) {
       var el = document.getElementById(ids[i]);
       if (el && (el.classList.contains('active') || (el.offsetParent !== null && getComputedStyle(el).display !== 'none'))) return true;
@@ -1599,11 +1599,12 @@ function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
   var delay;
   if (attemptIndex < WEB_RECONNECT_BACKOFF_MS.length) {
     delay = WEB_RECONNECT_BACKOFF_MS[attemptIndex];
-  } else if (isOnTrainingScreenForReconnect() && Date.now() - st.startedAt < WEB_RECONNECT_MAX_MS) {
-    // 훈련 화면: 휴식 후 기기를 다시 켤 때까지 계속 시도
-    if (!st.noticed) { st.noticed = true; webReconnectFailNotice(deviceType, true); }
+  } else if (Date.now() - st.startedAt < WEB_RECONNECT_MAX_MS) {
+    // 2026-11-15 화면과 무관하게 슬립(슬림 모드)에서 깨어날 때까지 계속 시도(훈련 화면 밖은 30초 간격, 광고 감지 시 즉시)
+    var onTr = isOnTrainingScreenForReconnect();
+    if (onTr && !st.noticed) { st.noticed = true; webReconnectFailNotice(deviceType, true); }
     watchWebDeviceAdvertisement(deviceType, deviceId);
-    delay = WEB_RECONNECT_STEADY_MS;
+    delay = onTr ? WEB_RECONNECT_STEADY_MS : 30000;
   } else {
     console.warn('[bluetooth] 최대 재연결 시도 횟수 초과. 연결 실패.');
     stopWebReconnect(deviceType);
@@ -1615,6 +1616,19 @@ function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
     doWebReconnectAttempt(deviceType);
   }, delay);
 }
+/** 훈련 화면 진입 등: 끊긴(연결됐다가 해제된) 저장 기기를 즉시 재연결 대상으로 되살림 */
+window.StelvioResumeWebReconnect = function (reason) {
+  try {
+    if (!isWebEnvironment() || isAppEnvironment()) return;
+    var dropped = window._stelvioDisconnectedTypes || {};
+    ['heartRate', 'powerMeter', 'trainer', 'speed'].forEach(function (t) {
+      if (!dropped[t] || (window.connectedDevices && window.connectedDevices[t])) return;
+      if (_webReconnect[t]) { runWebReconnectAttemptNow(t, reason || 'resume'); return; }
+      var list = getSavedDevicesByType(t);
+      if (list.length > 0) scheduleWebReconnectWithBackoff(t, list[0].deviceId, 0);
+    });
+  } catch (e) {}
+};
 var _webReconnectHooks = false;
 var _webReconnectKickAt = 0;
 function installWebReconnectResumeHooks() {

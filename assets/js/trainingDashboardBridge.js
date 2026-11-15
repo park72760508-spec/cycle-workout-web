@@ -727,6 +727,8 @@
   var RECONNECT_ATTEMPT_MS = 25000;
   var RECONNECT_LABEL = { hr: '심박계', power: '파워미터', trainer: '스마트로라', speed: '속도계' };
   var KEY_TO_AC_TYPE = { heartRate: 'hr', powerMeter: 'power', trainer: 'trainer', speed: 'speed' };
+  /** 훈련 화면 밖에서 끊긴 기기(type → 시각). 훈련 화면 진입 시 재연결 세션에 반영 */
+  var _dropMemo = {};
   function ensureReconnectSession() {
     if (_acSession) return _acSession;
     // 10분 연결 대기는 이미 지난 것으로 보고(표시 없음) 재연결만 수행
@@ -739,7 +741,11 @@
     var t = KEY_TO_AC_TYPE[key];
     if (!t || !isAppEnvironmentNow()) return;
     var active = getActiveScreenId();
-    if (!active || !isTargetScreen(active)) return;
+    if (!active || !isTargetScreen(active)) {
+      // 2026-11-15 센서 연결/기기 설정 등 훈련 화면 밖에서 슬립(슬림 모드)으로 끊긴 기기도 기억 → 훈련 화면 진입 시 즉시 재연결 대상
+      _dropMemo[t] = Date.now();
+      return;
+    }
     var sess = ensureReconnectSession();
     sess.seen[t] = true;
     sess.drop[t] = { at: Date.now(), tries: 0, nextAt: Date.now() };
@@ -788,9 +794,25 @@
   /** 훈련 화면 진입 시 호출 — 첫 요청 + 연결 대기 시작 */
   function startAutoConnectSession() {
     stopAutoConnectSession(true);
-    if (!isAppEnvironmentNow()) { sendRequestAutoConnect(); return; }
+    if (!isAppEnvironmentNow()) {
+      // 웹: 슬립으로 끊겨 재연결을 포기했던 기기를 훈련 화면 진입 시 다시 시도
+      try { if (typeof global.StelvioResumeWebReconnect === 'function') global.StelvioResumeWebReconnect('screen-enter'); } catch (eRw) {}
+      sendRequestAutoConnect();
+      return;
+    }
     installReconnectResumeHooks();
     _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {}, drop: {}, lastDropType: null };
+    // 훈련 화면 밖에서 끊긴 기기: 10분 연결 대기 이후에도 계속 재연결(우선순위 높음)
+    (function seedDropMemo() {
+      var cc = global.connectedDevices || {};
+      Object.keys(_dropMemo).forEach(function (t) {
+        if (!cc[AUTO_CONNECT_TYPE_KEY[t]]) {
+          _acSession.seen[t] = true;
+          _acSession.drop[t] = { at: _dropMemo[t], tries: 0, nextAt: Date.now() };
+        }
+      });
+      _dropMemo = {};
+    })();
     tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
     if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
