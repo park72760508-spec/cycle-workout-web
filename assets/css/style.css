@@ -38927,3 +38927,93 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-15: Race 트랙 선수명 = 우측 이동거리 정수부 폰트 크기(26px), 완주 구간 채움 */
 #rollerRaceDashboardScreen .track-name-inside .track-name-text { font-size: 26px !important; max-width: 300px; padding: 3px 18px 3px 12px; }
 #rollerRaceDashboardScreen .track-done-fill { transition: width .5s linear; pointer-events: none; }
+
+/* 트랙 행: 선택된 바퀴 규격 표시 (ID 아래) */
+#rollerRaceDashboardScreen .list-item-id-section { flex-direction: column; align-items: flex-start; gap: 2px; }
+#rollerRaceDashboardScreen .list-item-wheel { font: italic 700 11px/1 'Barlow Semi Condensed', sans-serif; letter-spacing: .06em; color: #22d3ee; white-space: nowrap; }
+
+/* ===================== STELVIO Race PC — 화이트 모드 (2026-11-15) =====================
+   #rollerRaceDashboardScreen.rr-theme-light : RACE 컨셉(이탤릭 폰트·레드/시안 포인트·사선 패널)은 유지하고 어두운 배경을 밝은 톤으로 */
+#rollerRaceDashboardScreen.rr-theme-light { background: linear-gradient(180deg, #f8fbff 0%, #eaf2fb 100%); color: #0f172a; }
+#rollerRaceDashboardScreen.rr-theme-light .race-title-text { color: #0f172a !important; }
+#rollerRaceDashboardScreen.rr-theme-light .race-logo-spin { background-color: #0f172a; }
+@keyframes rrLogoSpinLight {
+  0%   { transform: perspective(300px) rotateY(0deg);   background-color:#0f172a; animation-timing-function:linear; }
+  60%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  85%  { transform: perspective(300px) rotateY(360deg); background-color:#ff1a1a; }
+  100% { transform: perspective(300px) rotateY(360deg); background-color:#0f172a; }
+}
+#rollerRaceDashboardScreen.rr-theme-light .race-logo-spin { animation-name: rrLogoSpinLight; }
+#rollerRaceDashboardScreen.rr-theme-light .rr-welcome__text { color: #0f172a; }
+
+/* 전광판 */
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display {
+  background: linear-gradient(135deg, #ffffff 0%, #f1f6fd 60%, #e6effa 100%);
+  box-shadow: 0 6px 20px rgba(30, 64, 120, .14), inset 0 0 30px rgba(255, 59, 59, .04);
+}
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-label { color: #475569; }
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-value .digital-number { color: #0f172a; text-shadow: none; }
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-unit { color: #0891b2; text-shadow: none; }
+
+/* 순위 전광판 */
+#rollerRaceDashboardScreen.rr-theme-light .rank-item { background: linear-gradient(90deg, #ffffff 0%, #eef4fc 55%, #e2ecf8 100%); box-shadow: inset 0 -2px 0 rgba(15,23,42,.08); }
+#rollerRaceDashboardScreen.rr-theme-light .rank-item::before { background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 26%, transparent) 0%, transparent 45%); }
+#rollerRaceDashboardScreen.rr-theme-light .rank-item::after { background: linear-gradient(100deg, transparent, rgba(255,255,255,.7), transparent); }
+#rollerRaceDashboardScreen.rr-theme-light .rank-name { color: #0f172a; text-shadow: none; }
+#rollerRaceDashboardScreen.rr-theme-light .rank-distance { color: #d97706; }
+#rollerRaceDashboardScreen.rr-theme-light .rank-item.rr-leader .rank-distance { color: #0891b2; text-shadow: none; }
+
+/* 속도계 카드 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-container { background: #ffffff; border: 1px solid #d5e2f3; box-shadow: 0 4px 16px rgba(30, 64, 120, .10); backdrop-filter: none; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-pairing-name { color: #0f172a !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-header .speedometer-name { background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 90%, #fff) 0%, color-mix(in srgb, var(--rr-c) 55%, #fff) 100%) !important; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+#rollerRaceDashboardScreen.rr-theme-light .status-text { color: #475569 !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-arc-bg { stroke: rgba(15, 23, 42, .18); }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-ticks line { stroke: #64748b !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-labels text { fill: #0f172a !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-svg > text { fill: #475569 !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-svg circle[r="7"] { fill: #ffffff; }
+
+/* 속도계 정보 블럭 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.connected,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.warning,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.disconnected {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--st) 16%, #ffffff) 0%, #f3f7fc 100%) !important;
+  box-shadow: inset 0 8px 14px -12px var(--st), 0 3px 10px color-mix(in srgb, var(--st) 18%, transparent);
+}
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-stat-value { color: #334155; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-value { color: #0f172a; text-shadow: none; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .distance-value { color: color-mix(in srgb, var(--st) 80%, #000); text-shadow: none; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-stat-label,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-unit-bottom { color: #64748b !important; }
+
+/* 트랙 행 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-list-item { background: #ffffff; border: 1px solid #d5e2f3; box-shadow: 0 2px 8px rgba(30, 64, 120, .08); }
+#rollerRaceDashboardScreen.rr-theme-light .list-item-id { color: #64748b; }
+#rollerRaceDashboardScreen.rr-theme-light .list-item-wheel { color: #0891b2; }
+#rollerRaceDashboardScreen.rr-theme-light .list-item-track-number .list-item-name { background: linear-gradient(90deg, color-mix(in srgb, var(--rr-c) 90%, #fff) 0%, color-mix(in srgb, var(--rr-c) 55%, #fff) 100%); color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
+#rollerRaceDashboardScreen.rr-theme-light .track-name-inside .track-name-text { background: linear-gradient(90deg, rgba(255,255,255,.95), rgba(236,243,252,.85)); color: #0f172a !important; text-shadow: none !important; }
+#rollerRaceDashboardScreen.rr-theme-light .track-stats-inside .track-stat-value { color: #0f172a; text-shadow: none; }
+#rollerRaceDashboardScreen.rr-theme-light .track-stats-inside .track-stat-unit { color: #475569; }
+/* 경기장 트랙: 밝은 아스팔트·잔디 */
+#rollerRaceDashboardScreen.rr-theme-light linearGradient[id^="trk-asphalt-"] stop:nth-child(1),
+#rollerRaceDashboardScreen.rr-theme-light linearGradient[id^="trk-asphalt-"] stop:nth-child(3) { stop-color: #cfd8e3; }
+#rollerRaceDashboardScreen.rr-theme-light linearGradient[id^="trk-asphalt-"] stop:nth-child(2) { stop-color: #bcc8d6; }
+#rollerRaceDashboardScreen.rr-theme-light linearGradient[id^="trk-grass-"] stop:nth-child(1) { stop-color: #b7e4a0; }
+#rollerRaceDashboardScreen.rr-theme-light linearGradient[id^="trk-grass-"] stop:nth-child(2) { stop-color: #8fd170; }
+#rollerRaceDashboardScreen.rr-theme-light .straight-track-svg line[stroke="#fff"] { stroke: #64748b; }
+
+/* 하단 설정 줄 / 버튼 / 입력 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-list-section { background: transparent; }
+#rollerRaceDashboardScreen.rr-theme-light.rr-split .speedometer-list-section > .list-header { background: rgba(255,255,255,.96); border-top: 1px solid #d5e2f3; }
+#rollerRaceDashboardScreen.rr-theme-light .list-header h3,
+#rollerRaceDashboardScreen.rr-theme-light .target-checkbox-label,
+#rollerRaceDashboardScreen.rr-theme-light .target-unit { color: #0f172a; }
+#rollerRaceDashboardScreen.rr-theme-light .target-input-small,
+#rollerRaceDashboardScreen.rr-theme-light .target-input-time,
+#rollerRaceDashboardScreen.rr-theme-light .target-select-small { background: #ffffff; color: #0f172a; border: 1px solid #b6c6dc; }
+#rollerRaceDashboardScreen.rr-theme-light .list-header-actions .btn-secondary { background: linear-gradient(180deg, #8da2c4, #5b6f93) !important; }
+#rollerRaceDashboardScreen.rr-theme-light .enhanced-control-btn { box-shadow: 0 2px 8px rgba(30, 64, 120, .2); }
+#rollerRaceDashboardScreen.rr-theme-light .rr-diag-btn { background: linear-gradient(180deg, #e6f4ff, #cfe6fa); color: #0c4a6e; border-color: #9cc7ea; }
+#rollerRaceDashboardScreen.rr-theme-light .rr-wp-btn { background: #ffffff; color: #0f172a; border-color: #b6c6dc; }

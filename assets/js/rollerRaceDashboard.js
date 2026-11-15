@@ -2250,6 +2250,8 @@ function saveSpeedometerPairing() {
                 if (item) {
                     const idEl = item.querySelector('.list-item-id');
                     if (idEl) idEl.textContent = `ID: ${speedometer.deviceId || '미설정'}`;
+                    const whEl = item.querySelector('.list-item-wheel');
+                    if (whEl) whEl.textContent = rrWheelSpecFor(speedometer).size.replace(/ /g, '');
                     const nm = item.querySelector('.track-name-text');
                     if (nm) nm.textContent = speedometer.pairingName || '';
                     av.setAttribute('data-name', speedometer.pairingName || '');
@@ -2741,6 +2743,7 @@ function updateSpeedometerListUI() {
       <!-- ID -->
       <div class="list-item-id-section">
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
+        <span class="list-item-wheel" id="track-wheel-${speedometer.id}">${rrWheelSpecFor(speedometer).size.replace(/ /g, '')}</span>
       </div>
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
@@ -7753,3 +7756,24 @@ document.addEventListener('keydown', function (e) {
 });
 window.rrWsOpen = rrWsOpen;
 window.rrWsClose = rrWsClose;
+
+
+/* ===== STELVIO Race PC 화면 모드(다크/화이트) ===== */
+function rrThemeGet() {
+  try { return localStorage.getItem('rrRaceTheme') === 'light' ? 'light' : 'dark'; } catch (e) { return 'dark'; }
+}
+function rrThemeApply(mode) {
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  if (scr) scr.classList.toggle('rr-theme-light', mode === 'light');
+  document.querySelectorAll('input[name="rrThemeMode"]').forEach(function (r) { r.checked = (r.value === mode); });
+}
+function rrThemeSet(mode) {
+  mode = mode === 'light' ? 'light' : 'dark';
+  try { localStorage.setItem('rrRaceTheme', mode); } catch (e) {}
+  rrThemeApply(mode);
+}
+window.rrThemeSet = rrThemeSet;
+(function () {
+  function init() { rrThemeApply(rrThemeGet()); }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
