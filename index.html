@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm19"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm20"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36348,7 +36348,7 @@
         <svg id="rrmGaugeSvg" viewBox="-15 0 230 260" style="width:100%; height:100%;">
           <path d="M 20 140 A 80 80 0 0 1 180 140" fill="none" stroke="#333" stroke-width="12" stroke-linecap="round"/>
           <!-- 속도 모드 속도 띠: 원호를 왼쪽(0km/h)에서 시계방향으로 속도값만큼 연두색으로 채움 -->
-          <path id="rrm-gauge-speed-band" d="M 35 140 A 65 65 0 0 1 165 140" fill="none" stroke="#a3e635" stroke-width="6" stroke-linecap="butt" style="stroke-dasharray: 204.2 204.2; stroke-dashoffset: 204.2; display:none; filter: drop-shadow(0 0 4px rgba(163,230,53,.55));"/>
+          <path id="rrm-gauge-speed-band" d="M 23.3 140 A 76.7 76.7 0 0 1 176.7 140" fill="none" stroke="#a3e635" stroke-width="4.4" stroke-linecap="butt" style="stroke-dasharray: 241 241; stroke-dashoffset: 241; display:none; filter: drop-shadow(0 0 4px rgba(163,230,53,.55));"/>
           <!-- 속도 오버레이(파워 모드에서만): 원호 안쪽 파란 속도 — 0km/h 는 3시, 오른쪽에서 왼쪽으로 채워짐(개인훈련 모바일 화면과 동일) -->
           <path id="rrm-gauge-speed-arc" d="M 180 140 A 80 80 0 0 0 20 140" fill="none" stroke="rgba(0, 153, 255, 0.5)" stroke-width="12" stroke-linecap="round" style="stroke-dasharray: 251.33 251.33; stroke-dashoffset: 251.33;"/>
           <g id="rrm-gauge-ticks"></g>
