@@ -39130,3 +39130,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 기기 검색 목록: ANT+ ID 표기가 길어도 한 줄 말줄임 */
 .device-scan-list li .device-scan-id { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
+
+.device-scan-list li .device-scan-id:empty { display: none; }

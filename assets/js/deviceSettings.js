@@ -306,7 +306,7 @@
       var li = document.createElement('li');
       li.dataset.deviceId = deviceId;
       li.classList.add('device-scan-item-saved');
-      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id" title="' + escapeHtml(deviceId) + '">' + escapeHtml(shortDeviceId(deviceId)) + '</span>' +
+      li.innerHTML = '<span class="device-scan-name">' + escapeHtml(deviceName) + '</span><span class="device-scan-id" title="' + escapeHtml(deviceId) + '">' + escapeHtml(idLabel(deviceId, antIdFrom(null, deviceId, deviceName))) + '</span>' +
         '<button type="button" class="device-scan-del" aria-label="저장된 센서 삭제" title="저장된 센서 삭제">' +
         '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6"/></svg></button>';
       // 삭제 아이콘: 첫 탭 = "삭제?" 확인 상태, 한 번 더 탭하면 저장된 센서 삭제 (3초 안에 다시 안 누르면 원복)
@@ -612,9 +612,9 @@
     var m = String(name || '').match(/(?:[:#_\-\s])(\d{4,8})\s*$/) || String(name || '').match(/(\d{4,8})\s*$/);
     return m ? m[1] : '';
   }
+  /* 폰마다 달라지는 BLE 식별자(iOS=폰별 임의 UUID, Android=MAC)는 표시하지 않고, 기기 고유의 공통 ID(ANT+ 장치 번호/기기명 속 번호)만 표시 */
   function idLabel(idStr, antId) {
-    var s = shortDeviceId(idStr);
-    return antId && ('ID ' + antId) !== s ? 'ANT+ ID ' + antId + ' · ' + s : (antId ? 'ANT+ ID ' + antId : s);
+    return antId ? 'ANT+ ID ' + antId : '';
   }
   /** UUID·MAC·긴 16진 코드처럼 사용자가 알아볼 수 없는 문자열이면 '' (기기 이름으로 쓰지 않음) */
   function cleanName(n) {
