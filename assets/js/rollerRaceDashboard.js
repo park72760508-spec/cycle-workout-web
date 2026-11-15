@@ -7766,6 +7766,7 @@ function rrThemeApply(mode) {
   const scr = document.getElementById('rollerRaceDashboardScreen');
   if (scr) scr.classList.toggle('rr-theme-light', mode === 'light');
   document.querySelectorAll('input[name="rrThemeMode"]').forEach(function (r) { r.checked = (r.value === mode); });
+  const tb = document.getElementById('btnRaceThemeToggle'); if (tb) tb.textContent = mode === 'light' ? '다크 모드' : '화이트 모드';
 }
 function rrThemeSet(mode) {
   mode = mode === 'light' ? 'light' : 'dark';
@@ -7773,6 +7774,7 @@ function rrThemeSet(mode) {
   rrThemeApply(mode);
 }
 window.rrThemeSet = rrThemeSet;
+window.rrThemeToggle = function () { rrThemeSet(rrThemeGet() === 'light' ? 'dark' : 'light'); };
 (function () {
   function init() { rrThemeApply(rrThemeGet()); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
