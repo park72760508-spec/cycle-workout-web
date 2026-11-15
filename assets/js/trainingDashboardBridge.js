@@ -1449,6 +1449,34 @@
     parseSpeedUpdate: parseSpeedUpdate,
     parseHeartRateUpdate: parseHeartRateUpdate
   };
+  /**
+   * 연결 버튼 클릭 → 화면 진입 때와 같은 센서 연결 로직(저장된 센서 순차 연결 + 슬립 복귀 재연결)을 새로 구동.
+   * 대상: 훈련화면·모바일 대시보드·개인훈련(Player/태블릿)·그룹훈련 참석자 모바일·STELVIO Race 휴대폰 화면의 연결 버튼.
+   * 기존 버튼 동작(메뉴/센서 연결 팝업)은 그대로 두고, 그 직후 연결 세션을 재시작한다.
+   */
+  var CONNECT_BUTTON_IDS = ['trainingScreenBluetoothConnectBtn', 'mobileBluetoothConnectBtn', 'indiv-bluetoothConnectBtn', 'coachmMenuBtn', 'rrmConnectBtn'];
+  var _lastSensorConnectKickAt = 0;
+  function startSensorConnectFromButton() {
+    var now = Date.now();
+    if (now - _lastSensorConnectKickAt < 1500) return; // 연타 방지
+    _lastSensorConnectKickAt = now;
+    try { mountTrainingDashboardBridge(); } catch (e0) {}
+    try { startAutoConnectSession(); } catch (e1) {
+      try { sendRequestAutoConnect(); } catch (e2) {}
+    }
+    if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 연결 버튼 클릭 → 센서 연결 로직 재구동');
+  }
+  document.addEventListener('click', function (ev) {
+    var t = ev.target;
+    while (t && t !== document) {
+      if (t.id && CONNECT_BUTTON_IDS.indexOf(t.id) !== -1) {
+        setTimeout(startSensorConnectFromButton, 80); // 버튼 자체 핸들러(메뉴/팝업 열기·기존 자동연결 중단) 처리 후 실행
+        return;
+      }
+      t = t.parentNode;
+    }
+  }, false);
+  global.StelvioStartSensorConnect = startSensorConnectFromButton;
   global.abortAutoConnect = abortAutoConnect;
   global.StelvioTriggerAutoConnect = triggerAutoConnectNow;
   global.openDeviceSettingPopup = openDeviceSettingPopup;
