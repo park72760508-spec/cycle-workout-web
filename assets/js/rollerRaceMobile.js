@@ -239,10 +239,20 @@
   function rrmStop() {
     if (S.status === 'countdown') { clearInterval(cdTimer); cdTimer = null; var ov = $('rrmCountdown'); if (ov) ov.classList.add('hidden'); S.status = 'idle'; return; }
     if (S.status !== 'running') return;
-    var run = function () { finishRace(false); };
-    if (typeof w.showStelvioExitConfirmPopup === 'function') {
-      w.showStelvioExitConfirmPopup(run, { message: '정말 종료하시겠습니까? 현재까지 레이스가 저장됩니다.', cancelText: '취소', okText: '종료' });
-    } else if (confirm('정말 종료하시겠습니까? 현재까지 레이스가 저장됩니다.')) run();
+    var m = $('rrmExitModal'); if (m) m.classList.remove('hidden');
+    else if (confirm('정말 종료하시겠습니까?\n현재까지 레이스를 저장하려면 확인, 저장 없이 종료하려면 취소를 누르세요.')) finishRace(false); else discardRace();
+  }
+  /** 종료 확인 팝업 선택: save = 현재까지 기록 저장 후 결과 표시, discard = 저장하지 않고 종료, 팝업 바깥 = 계속 진행 */
+  function rrmExitChoose(choice) {
+    var m = $('rrmExitModal'); if (m) m.classList.add('hidden');
+    if (S.status !== 'running') return;
+    if (choice === 'save') finishRace(false);
+    else if (choice === 'discard') discardRace();
+  }
+  function discardRace() {
+    if (S.status !== 'running') return;
+    resetRace();
+    toast('레이스를 저장하지 않고 종료했습니다.', 'info');
   }
   function finishRace(completed) {
     if (S.status !== 'running') return;
@@ -750,7 +760,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
 
   /* ---------------- 공개 ---------------- */
-  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExit = rrmExit; w.rrmToggleConnectMenu = rrmToggleConnectMenu; w.rrmOpenSensor = rrmOpenSensor;
+  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExitChoose = rrmExitChoose; w.rrmExit = rrmExit; w.rrmToggleConnectMenu = rrmToggleConnectMenu; w.rrmOpenSensor = rrmOpenSensor;
   w.rrmToggleMetricMenu = rrmToggleMetricMenu; w.rrmSetMetric = rrmSetMetric;
   w.rrmToggleLapMenu = rrmToggleLapMenu; w.rrmSetLap = rrmSetLap;
   w.rrmOpenSettings = rrmOpenSettings; w.rrmCloseSettings = rrmCloseSettings; w.rrmPickMode = rrmPickMode; w.rrmSaveSettings = rrmSaveSettings;

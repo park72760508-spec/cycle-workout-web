@@ -528,3 +528,9 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 #rrMobileScreen .mobile-gauge-container svg text#rrm-ui-target-unit {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: normal !important; font-weight: 500 !important; fill: #b8bec8 !important; letter-spacing: .02em;
 }
+
+/* 종료 확인 팝업 */
+#rrMobileScreen .rrm-exit-card { max-width: 340px; text-align: center; padding: 22px 18px 16px; }
+#rrMobileScreen .rrm-exit-msg { margin: 0 0 16px; color: #fff; font-size: 15px; line-height: 1.6; font-weight: 600; word-break: keep-all; }
+#rrMobileScreen .rrm-exit-btns { display: flex; gap: 10px; }
+#rrMobileScreen .rrm-exit-btns .rrm-btn { flex: 1; padding: 12px 0; }
