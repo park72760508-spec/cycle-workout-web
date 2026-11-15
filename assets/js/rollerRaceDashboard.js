@@ -2824,8 +2824,8 @@ function updateSpeedometerListUI() {
             </g>
             <!-- 탑뷰(하늘에서 내려다본) 사이클 선수 아바타: 진행 방향 → -->
             <ellipse cx="0.8" cy="1.2" rx="12" ry="4.6" fill="#000" opacity="0.28"/>
-            <ellipse cx="-8" cy="0" rx="4.3" ry="1.3" fill="#111" stroke="#e5e7eb" stroke-width="0.6"/>
-            <ellipse cx="8" cy="0" rx="4.3" ry="1.3" fill="#111" stroke="#e5e7eb" stroke-width="0.6"/>
+            <ellipse cx="-8" cy="0" rx="4.3" ry="1.3" fill="#111" stroke="#e5e7eb" stroke-width="1"/>
+            <ellipse cx="8" cy="0" rx="4.3" ry="1.3" fill="#111" stroke="#e5e7eb" stroke-width="1"/>
             <line x1="-8" y1="0" x2="8" y2="0" stroke="#cbd5e1" stroke-width="1.1" stroke-linecap="round"/>
             <line x1="5.2" y1="-3.8" x2="5.2" y2="3.8" stroke="#e5e7eb" stroke-width="1" stroke-linecap="round"/>
             <ellipse cx="-3.4" cy="-1.7" rx="2.3" ry="0.9" fill="#1f2937"/>
@@ -2833,9 +2833,9 @@ function updateSpeedometerListUI() {
             <g class="mascot-color-ring" id="mascot-color-ring-${speedometer.id}" opacity="0.95">
               <line x1="2.2" y1="-1.9" x2="5.2" y2="-3.6" stroke="${getMascotColor(speedometer.id)}" stroke-width="1.3" stroke-linecap="round"/>
               <line x1="2.2" y1="1.9" x2="5.2" y2="3.6" stroke="${getMascotColor(speedometer.id)}" stroke-width="1.3" stroke-linecap="round"/>
-              <ellipse cx="-0.6" cy="0" rx="5.4" ry="2.9" fill="${getMascotColor(speedometer.id)}" stroke="#ffffff" stroke-width="0.5"/>
+              <ellipse cx="-0.6" cy="0" rx="5.4" ry="2.9" fill="${getMascotColor(speedometer.id)}" stroke="#ffffff" stroke-width="1.5" paint-order="stroke"/>
             </g>
-            <ellipse cx="3.4" cy="0" rx="2.3" ry="1.9" fill="#ffffff" stroke="#111827" stroke-width="0.6"/>
+            <ellipse cx="3.4" cy="0" rx="2.3" ry="1.9" fill="#ffffff" stroke="#111827" stroke-width="1.1"/>
             <line x1="2.4" y1="0" x2="4.4" y2="0" stroke="#9ca3af" stroke-width="0.5"/>
           </g>
           

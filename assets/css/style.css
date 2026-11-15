@@ -39060,3 +39060,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-info:not(.connected) .rr-dec { opacity: .85; }
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-stat-label,
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-unit-bottom { color: #475569 !important; font-weight: 700; }
+
+/* 경기장 선수 아바타: 테두리 굵게 + 어두운 외곽 그림자로 식별성 강화 */
+#rollerRaceDashboardScreen .straight-race-mascot { filter: drop-shadow(0 0 1.2px rgba(0,0,0,.9)); }
