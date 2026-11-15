@@ -39109,13 +39109,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .track-rank-badge[data-pos="2"] { color: #12161d; background: linear-gradient(180deg, #f1f5f9, #94a3b8); }
 #rollerRaceDashboardScreen .track-rank-badge[data-pos="3"] { color: #190b02; background: linear-gradient(180deg, #f0a56b, #b45f1f); }
 
-/* 화이트 모드: 누적거리·경과시간 블럭 — 연한 레드 톤 배경 + 사선 패턴(속도계 정보 블럭과 동일 톤) */
-#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display .scoreboard-item:nth-child(-n+2) {
+/* 화이트 모드: 전광판 전체(누적거리·경과시간·순위 포함) 큰 블럭에 연한 레드 톤 배경 + 사선 패턴 */
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display {
   --st: #ff3b3b;
   background:
     repeating-linear-gradient(45deg, color-mix(in srgb, var(--st) 6%, transparent) 0 2px, transparent 2px 7px),
     linear-gradient(180deg, color-mix(in srgb, var(--st) 12%, #ffffff) 0%, #fdf6f7 100%);
-  border-top: 3px solid var(--st);
-  box-shadow: inset 0 8px 14px -12px var(--st), 0 3px 10px color-mix(in srgb, var(--st) 14%, transparent);
-  border-radius: 2px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--st) 14%, transparent);
 }
