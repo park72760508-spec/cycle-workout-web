@@ -39117,3 +39117,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(180deg, color-mix(in srgb, var(--st) 12%, #ffffff) 0%, #fdf6f7 100%);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--st) 14%, transparent);
 }
+
+/* 센서 연결(기기 설정) 카드: 기기명이 길어도 카드 폭이 늘어나지 않고 말줄임(...) 처리 */
+.device-setting-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.device-setting-item { min-width: 0; max-width: 100%; box-sizing: border-box; overflow: hidden; }
+.device-setting-item .device-setting-label,
+.device-setting-item .device-setting-status,
+.device-setting-item .device-setting-id {
+  display: block; max-width: 100%; min-width: 0; box-sizing: border-box;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center;
+}
