@@ -485,6 +485,7 @@
         localName: detail.localName || '(없음)',
         deviceName: detail.deviceName || '(없음)',
         uuids: uuidList,
+        adv: detail.adv || '(없음)',
         id: detail.id != null ? detail.id : detail.deviceId
       });
     }
@@ -614,7 +615,8 @@
   }
   /* 폰마다 달라지는 BLE 식별자(iOS=폰별 임의 UUID, Android=MAC)는 표시하지 않고, 기기 고유의 공통 ID(ANT+ 장치 번호/기기명 속 번호)만 표시 */
   function idLabel(idStr, antId) {
-    return antId ? 'ANT+ ID ' + antId : '';
+    /* 번호를 아직 알 수 없으면(광고에 없음) 연결 후 시리얼에서 읽어 표시한다고 안내 */
+    return antId ? 'ANT+ ID ' + antId : 'ANT+ ID: 연결 후 확인';
   }
   /** UUID·MAC·긴 16진 코드처럼 사용자가 알아볼 수 없는 문자열이면 '' (기기 이름으로 쓰지 않음) */
   function cleanName(n) {
@@ -736,6 +738,10 @@
     }
     if (idEl) {
       var nameToShow = cleanName(deviceName) || (deviceId ? shortDeviceId(deviceId) : '');
+      try {
+        var am = JSON.parse(localStorage.getItem('stelvio_saved_device_ant_ids') || '{}')[deviceType];
+        if (am && nameToShow) nameToShow += ' · ANT+ ' + am;
+      } catch (e) {}
       idEl.textContent = nameToShow;
       idEl.style.display = nameToShow ? 'block' : 'none';
     }
