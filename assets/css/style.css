@@ -39087,3 +39087,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(90deg, rgba(15,23,42,.06) 1px, transparent 1px) 0 0 / 8px 8px,
     linear-gradient(180deg, #e4ecf6 0%, #f6f9fd 55%, #ffffff 100%);
 }
+
+/* 화이트 모드 v6: 바늘 궤적선 — 얇은 맑은 녹색 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-needle-path line { stroke: #16c55e !important; stroke-opacity: .9; stroke-width: 1; }
