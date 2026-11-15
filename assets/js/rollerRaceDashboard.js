@@ -3257,8 +3257,21 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   }
   
   if (distanceTextEl) {
-    // 이동거리 표시 (숫자만, 단위는 별도 span)
-    distanceTextEl.textContent = distance.toFixed(2);
+    // 거리 경기(목표 거리 설정): 남은 거리 / 시간 경기: 이동거리 (숫자만, 단위는 별도 span, 소문자 km)
+    var __st = window.rollerRaceState && window.rollerRaceState.raceSettings;
+    var __shown = distance;
+    if (__st && __st.endByDistance && Number(__st.targetDistance) > 0) {
+      var __base = distance;
+      if (__st.distanceMode === 'total') {
+        __base = (window.rollerRaceState.speedometers || [])
+          .filter(function (s) { return s.deviceId && s.connected; })
+          .reduce(function (sum, s) { return sum + (Number(s.totalDistance) || 0); }, 0);
+      }
+      __shown = Math.max(0, Number(__st.targetDistance) - __base);
+    }
+    distanceTextEl.textContent = __shown.toFixed(2);
+    var __unit = distanceTextEl.parentNode && distanceTextEl.parentNode.querySelector('.track-stat-unit');
+    if (__unit) __unit.textContent = 'km';
   }
   
   // 속도값이 인지되면 마스코트 색깔띠 원에 깜빡임 효과 및 펄스 효과 적용
