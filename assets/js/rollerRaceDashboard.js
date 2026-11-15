@@ -1901,6 +1901,7 @@ function startRace() {
     
     window.rollerRaceState.speedometers.forEach(s => {
       s.finishTime = null;
+      s.distFrozen = false;
     });
     
     window.rollerRaceState.needleAngles = {};
@@ -6998,7 +6999,17 @@ function processSpeedCadenceData(deviceId, data) {
 
     // 경기 중일 때 거리 누적
     if (window.rollerRaceState.raceState === 'running') {
-      speedometer.totalDistance += (distM / 1000);
+      // 2026-11-16 개인 거리 모드: 목표 거리에 도달한 선수는 그 지점에서 거리 고정(마지막 주자를 기다리는 동안 계속 누적돼
+      // 휴대폰 기록(목표 도달 즉시 종료)보다 PC 거리가 커지던 문제 수정)
+      const rsCfg = window.rollerRaceState.raceSettings || {};
+      const indivCap = rsCfg.endByDistance && rsCfg.distanceMode === 'individual' && rsCfg.targetDistance > 0 ? rsCfg.targetDistance : 0;
+      if (!(indivCap && speedometer.distFrozen)) {
+        speedometer.totalDistance += (distM / 1000);
+        if (indivCap && speedometer.totalDistance >= indivCap) {
+          speedometer.totalDistance = indivCap;
+          speedometer.distFrozen = true;
+        }
+      }
     }
 
     // 6. UI 업데이트 (가민 스타일: 최종 필터링된 속도 사용)
