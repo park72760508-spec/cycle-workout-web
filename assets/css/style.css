@@ -39067,3 +39067,23 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 화이트 모드 v4: 바늘 궤적선 청록(시인성) + 이동거리 진한 그레이 */
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-needle-path line { stroke: #0b9fae !important; stroke-opacity: .85; stroke-width: 1.8; }
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-value { color: #374151; }
+
+/* 화이트 모드 v5: 정보 블럭 = 상태색 사선 무늬, 속도계 다이얼 = 격자 카본 패턴 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.connected,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.warning,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.disconnected {
+  background:
+    repeating-linear-gradient(45deg, color-mix(in srgb, var(--st) 16%, transparent) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, color-mix(in srgb, var(--st) 18%, #ffffff) 0%, #f4f8fd 100%) !important;
+}
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-dial {
+  background:
+    radial-gradient(120% 90% at 50% 100%, rgba(255,255,255,.9) 0%, rgba(255,255,255,0) 60%),
+    /* 카본 위브: 2색 체커 + 얇은 격자선 */
+    linear-gradient(45deg, rgba(15,23,42,.075) 25%, transparent 25%, transparent 75%, rgba(15,23,42,.075) 75%) 0 0 / 8px 8px,
+    linear-gradient(45deg, rgba(15,23,42,.075) 25%, transparent 25%, transparent 75%, rgba(15,23,42,.075) 75%) 4px 4px / 8px 8px,
+    linear-gradient(0deg, rgba(15,23,42,.06) 1px, transparent 1px) 0 0 / 8px 8px,
+    linear-gradient(90deg, rgba(15,23,42,.06) 1px, transparent 1px) 0 0 / 8px 8px,
+    linear-gradient(180deg, #e4ecf6 0%, #f6f9fd 55%, #ffffff 100%);
+}
