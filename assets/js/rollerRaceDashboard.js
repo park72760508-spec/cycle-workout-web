@@ -2751,6 +2751,7 @@ function updateSpeedometerListUI() {
         <!-- 이름 표시 (주황색 블럭 안 왼쪽) -->
         <div class="track-name-inside">
           <span class="track-name-text">${pairingName || ''}</span>
+          <span class="track-rank-badge" id="track-rank-badge-${speedometer.id}" data-pos="" aria-hidden="true"></span>
         </div>
         <!-- 속도 및 이동거리 표시 (주황색 블럭 안 오른쪽 끝) -->
         <div class="track-stats-inside">
@@ -3277,6 +3278,19 @@ function updateStraightTrackRank(speedometerId, rank) {
   const rankGroupEl = document.getElementById(`straight-rank-group-${speedometerId}`);
   const rankTextEl = document.getElementById(`straight-rank-text-${speedometerId}`);
   const polyEl = document.getElementById(`straight-rank-poly-${speedometerId}`);
+  const badgeEl = document.getElementById(`track-rank-badge-${speedometerId}`);
+  if (badgeEl) {
+    // 이름 우측 상단 배지: 순위 표시(1ST/2ND/3RD/nTH), 1~3위는 금·은·동
+    if (rank && rank > 0) {
+      const bsuf = rank === 1 ? 'ST' : rank === 2 ? 'ND' : rank === 3 ? 'RD' : 'TH';
+      const btxt = `${rank}${bsuf}`;
+      if (badgeEl.textContent !== btxt) badgeEl.textContent = btxt;
+      badgeEl.setAttribute('data-pos', rank <= 3 ? String(rank) : 'n');
+      badgeEl.style.display = 'inline-block';
+    } else {
+      badgeEl.style.display = 'none';
+    }
+  }
   if (!rankGroupEl || !rankTextEl) return;
   
   if (rank && rank > 0) {

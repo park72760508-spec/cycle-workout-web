@@ -39093,3 +39093,18 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 속도계 진단값(pps) 표시 제외 */
 #rollerRaceDashboardScreen .rr-pps { display: none !important; }
+
+/* 경기장 트랙 순위 라벨: 선수명 우측 상단 배지 (기존 출발선 왼쪽 라벨은 숨김) */
+#rollerRaceDashboardScreen g[id^="straight-rank-group-"] { display: none; }
+#rollerRaceDashboardScreen .track-name-inside { overflow: visible; }
+#rollerRaceDashboardScreen .track-rank-badge {
+  display: none; position: absolute; top: -9px; right: -14px; z-index: 12;
+  padding: 2px 9px 2px 8px; border: 1px solid rgba(255,255,255,.7);
+  font: italic 900 13px/1.1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .04em; white-space: nowrap;
+  color: #fff; background: linear-gradient(180deg, #4b5a78, #2b3550);
+  clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%);
+  box-shadow: 0 2px 6px rgba(0,0,0,.45); filter: drop-shadow(0 1px 2px rgba(0,0,0,.5));
+}
+#rollerRaceDashboardScreen .track-rank-badge[data-pos="1"] { color: #1a1200; background: linear-gradient(180deg, #ffe27a, #f5a50b); }
+#rollerRaceDashboardScreen .track-rank-badge[data-pos="2"] { color: #12161d; background: linear-gradient(180deg, #f1f5f9, #94a3b8); }
+#rollerRaceDashboardScreen .track-rank-badge[data-pos="3"] { color: #190b02; background: linear-gradient(180deg, #f0a56b, #b45f1f); }
