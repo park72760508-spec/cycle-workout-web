@@ -536,3 +536,10 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 #rrMobileScreen .rrm-exit-msg { margin: 0 0 16px; color: #fff; font-size: 15px; line-height: 1.6; font-weight: 600; word-break: keep-all; }
 #rrMobileScreen .rrm-exit-btns { display: flex; gap: 10px; }
 #rrMobileScreen .rrm-exit-btns .rrm-btn { flex: 1; padding: 12px 0; }
+
+/* 연결 버튼: 센서 연결 로직 진행 중 "연결중" 표시(앰버, 깜빡임) — 완료되면 "연결" + 연결됨 색 */
+#rrMobileScreen .mobile-bluetooth-connect-btn.auto-connecting,
+#rrMobileScreen .mobile-bluetooth-connect-btn.has-connection.auto-connecting {
+  background: linear-gradient(180deg, #fbbf24, #b45309) !important; color: #1a1200 !important; animation: rrmConnBlink 1.1s ease-in-out infinite;
+}
+@keyframes rrmConnBlink { 0%,100% { opacity: 1; } 50% { opacity: .65; } }

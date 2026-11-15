@@ -450,6 +450,12 @@
       mobileBtn.classList.toggle('auto-connecting', !!connecting);
       setAutoConnectStatusNextToButton(mobileBtn, !!connecting, statusText);
     }
+    var rrmBtn = document.getElementById('rrmConnectBtn');          // STELVIO Race 휴대폰 화면: 연결중 ↔ 연결 라벨
+    if (rrmBtn) {
+      var spanRrm = rrmBtn.querySelector('span');
+      if (spanRrm) spanRrm.textContent = label;
+      rrmBtn.classList.toggle('auto-connecting', !!connecting);
+    }
     if (tsBtn) {
       var spanTs = tsBtn.querySelector('span');
       if (spanTs) spanTs.textContent = label;
@@ -1464,6 +1470,21 @@
     try { startAutoConnectSession(); } catch (e1) {
       try { sendRequestAutoConnect(); } catch (e2) {}
     }
+    // 연결할 저장된 센서가 남아 있으면 '연결중' 라벨 표시(완료·타임아웃 시 clearAutoConnectInProgress 가 '연결'로 복구)
+    try {
+      var savedMap = (global.StelvioDeviceBridgeStorage && global.StelvioDeviceBridgeStorage.loadSavedDevices && global.StelvioDeviceBridgeStorage.loadSavedDevices()) || {};
+      var conn = global.connectedDevices || {};
+      var needs = Object.keys(savedMap).some(function (t) { return savedMap[t] && !conn[AUTO_CONNECT_TYPE_KEY[t]]; });
+      if (needs && isAppEnvironmentNow()) {
+        global[AUTO_CONNECT_IN_PROGRESS_KEY] = true;
+        setConnectButtonConnectingLabel(true);
+        if (_autoConnectTimeoutId != null) clearTimeout(_autoConnectTimeoutId);
+        _autoConnectTimeoutId = setTimeout(function () {
+          _autoConnectTimeoutId = null;
+          if (global[AUTO_CONNECT_IN_PROGRESS_KEY]) clearAutoConnectInProgress();
+        }, AUTO_CONNECT_TIMEOUT_MS);
+      }
+    } catch (e3) {}
     if (typeof console !== 'undefined' && console.log) console.log('[trainingDashboardBridge] 연결 버튼 클릭 → 센서 연결 로직 재구동');
   }
   document.addEventListener('click', function (ev) {
