@@ -296,8 +296,7 @@
     var deviceId = saved && saved[storageKey] ? String(saved[storageKey]).trim() : null;
     if (!deviceId) return;
     var names = typeof global.StelvioDeviceBridgeStorage.loadSavedDeviceNames === 'function' ? global.StelvioDeviceBridgeStorage.loadSavedDeviceNames() : {};
-    var deviceName = (names && names[storageKey]) ? String(names[storageKey]).trim() : '저장된 기기';
-    if (!deviceName) deviceName = '저장된 기기';
+    var deviceName = cleanName(names && names[storageKey]) || '저장된 기기';
     deviceName = deviceName + ' (저장됨)';
     var list = document.getElementById(LIST_ID);
     if (list && !addedDeviceIds.has(deviceId)) {
@@ -464,7 +463,7 @@
     for (var i = 0; i < devices.length; i++) {
       var d = devices[i];
       var id = d.id != null ? d.id : d.deviceId;
-      var name = (d.name || d.deviceName || '').trim() || '알 수 없는 기기';
+      var name = cleanName(d.name || d.deviceName || '') || '알 수 없는 기기';
       if (id) addDeviceItemToList(String(id), name);
     }
   }
@@ -497,7 +496,7 @@
     if (!hasNameOrLocalName(detail) && !deviceMatchesCategory(detail, targetType)) return;
 
     var id = detail.id != null ? detail.id : detail.deviceId;
-    var name = (detail.name || detail.deviceName || detail.localName || '').trim() || '알 수 없는 기기';
+    var name = cleanName(detail.name || detail.deviceName || detail.localName || '') || '알 수 없는 기기';
     if (!id) return;
     var rssi = Number(detail.rssi);
     var opts = { rssi: isFinite(rssi) && rssi < 0 ? rssi : null, antId: antIdFrom(detail, String(id), name) };
@@ -567,7 +566,18 @@
     var li = document.querySelector('#' + LIST_ID + ' ' + sel) || document.querySelector('#' + OTHER_LIST_ID + ' ' + sel);
     if (!li) return;
     var nameEl = li.querySelector('.device-scan-name');
-    if (nameEl && name && name !== '알 수 없는 기기' && nameEl.textContent !== name) nameEl.textContent = name;
+    if (nameEl && name && name !== '알 수 없는 기기' && nameEl.textContent !== name) {
+      if (li.classList.contains('device-scan-item-saved')) {
+        /* 저장된 기기: 검색에서 실제 기기 이름이 확인되면 코드형 이름 대신 이 이름으로 표시·저장 */
+        nameEl.textContent = name + ' (저장됨)';
+        try {
+          var api = global.StelvioDeviceBridgeStorage;
+          if (api && typeof api.saveDevice === 'function' && savedTargetType) api.saveDevice(storageKeyOfType(savedTargetType), idStr, name);
+        } catch (e) {}
+      } else {
+        nameEl.textContent = name;
+      }
+    }
     if (opts && opts.antId) {
       var idEl = li.querySelector('.device-scan-id');
       if (idEl) idEl.textContent = idLabel(idStr, opts.antId);
@@ -605,6 +615,15 @@
   function idLabel(idStr, antId) {
     var s = shortDeviceId(idStr);
     return antId && ('ID ' + antId) !== s ? 'ANT+ ID ' + antId + ' · ' + s : (antId ? 'ANT+ ID ' + antId : s);
+  }
+  /** UUID·MAC·긴 16진 코드처럼 사용자가 알아볼 수 없는 문자열이면 '' (기기 이름으로 쓰지 않음) */
+  function cleanName(n) {
+    var t = String(n == null ? '' : n).trim();
+    if (!t) return '';
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/i.test(t)) return '';
+    if (/^([0-9a-f]{2}[:\-]){5}[0-9a-f]{2}$/i.test(t)) return '';
+    if (/^[0-9a-f]{12,}$/i.test(t)) return '';
+    return t;
   }
   function shortDeviceId(id) {
     var raw = String(id == null ? '' : id).trim();
@@ -716,7 +735,7 @@
       statusEl.style.color = '#00d4aa';
     }
     if (idEl) {
-      var nameToShow = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : (deviceId ? shortDeviceId(deviceId) : '');
+      var nameToShow = cleanName(deviceName) || (deviceId ? shortDeviceId(deviceId) : '');
       idEl.textContent = nameToShow;
       idEl.style.display = nameToShow ? 'block' : 'none';
     }
@@ -738,7 +757,7 @@
       statusEl.style.color = '#9ca3af';
     }
     if (idEl && (deviceId || deviceName)) {
-      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : shortDeviceId(deviceId);
+      idEl.textContent = cleanName(deviceName) || shortDeviceId(deviceId);
       idEl.style.display = 'block';
     }
     setDeviceCardIconAndLabel(deviceType, false);
@@ -759,8 +778,8 @@
       statusEl.textContent = '저장됨';
       statusEl.style.color = '#00d4aa';
     }
-    if (idEl && (deviceId || (deviceName && String(deviceName).trim()))) {
-      idEl.textContent = (deviceName && String(deviceName).trim()) ? String(deviceName).trim() : shortDeviceId(deviceId);
+    if (idEl && (deviceId || cleanName(deviceName))) {
+      idEl.textContent = cleanName(deviceName) || shortDeviceId(deviceId);
       idEl.style.display = 'block';
     }
     setDeviceCardIconAndLabel(deviceType, false);
