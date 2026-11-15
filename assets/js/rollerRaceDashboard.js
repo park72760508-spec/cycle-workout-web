@@ -364,7 +364,6 @@ function createSpeedometerElement(speedometer) {
       <div class="connection-status-center" id="status-${speedometer.id}" style="position: static !important; left: auto !important; transform: none !important; flex: 0 0 auto !important; text-align: right !important; margin-left: auto !important; order: 3 !important; justify-content: flex-end !important;">
         <span class="status-dot disconnected"></span>
         <span class="status-text">미연결</span>
-        <span class="rr-pps" id="pps-${speedometer.id}" style="margin-left:6px;font:italic 800 10px 'Barlow Semi Condensed',sans-serif;letter-spacing:.04em"></span>
       </div>
     </div>
     <div class="speedometer-dial">
@@ -5224,6 +5223,9 @@ function saveSpeedometerList() {
       wheelSize: WHEEL_SPECS[s.wheelSize] ? s.wheelSize : '25-622'
     }));
     localStorage.setItem('rollerRaceSpeedometers', JSON.stringify(data));
+    // 바퀴 규격은 별도 키에도 이중 저장(트랙 목록이 초기화돼도 PC에 저장된 값을 복원)
+    const wmap = {}; data.forEach(d => { wmap[d.id] = d.wheelSize; });
+    localStorage.setItem('rollerRaceWheelSizes', JSON.stringify(wmap));
   } catch (error) {
     console.error('[속도계 목록 저장 오류]', error);
   }
@@ -5256,6 +5258,11 @@ function loadSpeedometerList() {
       window.rollerRaceState.speedometers[i] = new SpeedometerData(i + 1, `트랙${i + 1}`);
     }
   }
+  // PC(localStorage)에 저장된 트랙별 바퀴 규격 적용
+  try {
+    const wmap = JSON.parse(localStorage.getItem('rollerRaceWheelSizes') || '{}');
+    window.rollerRaceState.speedometers.forEach(sp => { if (sp && WHEEL_SPECS[wmap[sp.id]]) sp.wheelSize = wmap[sp.id]; });
+  } catch (e) {}
 }
 
 /**
