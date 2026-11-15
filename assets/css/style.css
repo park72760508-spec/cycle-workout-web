@@ -39063,3 +39063,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 경기장 선수 아바타: 테두리 굵게 + 어두운 외곽 그림자로 식별성 강화 */
 #rollerRaceDashboardScreen .straight-race-mascot { filter: drop-shadow(0 0 1.2px rgba(0,0,0,.9)); }
+
+/* 화이트 모드 v4: 바늘 궤적선 청록(시인성) + 이동거리 진한 그레이 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-needle-path line { stroke: #0b9fae !important; stroke-opacity: .85; stroke-width: 1.8; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-value { color: #374151; }
