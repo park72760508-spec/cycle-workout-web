@@ -4090,7 +4090,7 @@
 
   <!-- 외부 스타일 -->
   <link rel="stylesheet" href="assets/css/style.css?v=20261115rrm" />
-  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm16" />
+  <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm17" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
   <!-- 스플래시 로고 선로딩 (Android WebView 첫 페인트 가속) -->
@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261111heat"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm16"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261115rrm17"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -35460,16 +35460,6 @@
             </div>
           </div>
           
-          <!-- 바퀴 규격: 선택 즉시 저장되어 속도·이동거리 계산(바퀴 둘레)에 적용 -->
-          <div class="target-setting-compact-item">
-            <label class="target-checkbox-label" for="targetWheelSize"><span>바퀴</span></label>
-            <select id="targetWheelSize" class="target-select-small" onchange="rrSetWheelSize(this.value)" title="바퀴 규격(둘레)에 따라 속도·이동거리가 계산됩니다">
-              <option value="23-622">700x23C (2,096mm)</option>
-              <option value="25-622" selected>700x25C (2,105mm)</option>
-              <option value="28-622">700x28C (2,136mm)</option>
-              <option value="32-622">700x32C (2,155mm)</option>
-            </select>
-          </div>
           <button class="btn btn-success btn-xs" onclick="saveTargetSettings()" style="padding: 4px 12px; font-size: 12px;">
             설정
           </button>
@@ -35532,18 +35522,6 @@
           <button class="modal-close" onclick="closeRaceSettingsModal()">✖</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
-            <label>바퀴 규격 (로드바이크 700C 휠셋)</label>
-            <select id="wheelSize" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 8px;">
-              <option value="23-622">23-622 (700 x 23C) - 구형 로드, 트랙 - 2,096 mm</option>
-              <option value="25-622" selected>25-622 (700 x 25C) - 로드 표준 - 2,105 mm</option>
-              <option value="28-622">28-622 (700 x 28C) - 엔듀런스, 최신 로드 - 2,136 mm</option>
-              <option value="32-622">32-622 (700 x 32C) - 그래블, 하이브리드 - 2,155 mm</option>
-            </select>
-            <small style="display: block; margin-top: 4px; color: #666;">
-              이동 거리 계산: 총 회전수 × 둘레(mm) / 1,000,000
-            </small>
-          </div>
           <div class="form-group" style="margin-top: 20px;">
             <label>경기 종료 조건</label>
             <div class="form-row">
@@ -35591,6 +35569,15 @@
               <button type="button" class="btn btn-sm btn-secondary" id="rrAvatarAdjBtn" style="display:none" onclick="rrAvatarReadjust()">위치 조정</button>
               <button type="button" class="btn btn-sm btn-danger" id="rrAvatarDelBtn" style="display:none" onclick="rrAvatarRemove()">삭제</button>
             </div>
+          </div>
+          <div class="form-group">
+            <label>바퀴 규격 <small style="color:#888;font-weight:400;">(이 트랙의 속도·거리 계산에 적용)</small></label>
+            <select id="speedometerWheelSize" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+              <option value="23-622">700x23C (2,096mm)</option>
+              <option value="25-622" selected>700x25C (2,105mm)</option>
+              <option value="28-622">700x28C (2,136mm)</option>
+              <option value="32-622">700x32C (2,155mm)</option>
+            </select>
           </div>
           <div class="form-group">
             <label>ANT+ 디바이스 선택</label>
@@ -36372,6 +36359,7 @@
           <path id="rrm-unit-caret" d="M 0 0 L 6 0 L 3 3.6 Z" fill="#9fb0cc" transform="translate(112,156.2)"/>
           <rect x="72" y="149" width="56" height="16" fill="transparent" pointer-events="all" style="cursor:pointer" role="button" aria-label="속도·파워 선택" onclick="rrmToggleMetricMenu(event)"/>
           <text id="rrm-ui-current-power" x="100" y="200" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold">0</text>
+          <text id="rrm-ui-current-dec" x="124" y="200" text-anchor="start" fill="#fff" font-size="14.4" font-weight="bold"></text>
 
           <g id="rrm-gauge-needle" transform="translate(100, 140) rotate(-90)">
             <line x1="0" y1="0" x2="0" y2="-75" stroke="#ff0000" stroke-width="4" stroke-linecap="round"/>
@@ -36895,7 +36883,7 @@
   <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
 
   <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js?v=20261115wheel"></script>
+  <script src="assets/js/rollerRaceDashboard.js?v=20261115wheel2"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js?v=20261104dur1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->

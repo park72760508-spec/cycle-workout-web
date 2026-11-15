@@ -351,10 +351,12 @@ html.global-hub-nav-over-subscribe #rrMobileScreen.active {
 /* ===================== RACE 전용 (2026-11-15) ===================== */
 /* 소수점 이하 글자: 정수와 같은 글꼴, 크기는 정수의 30% (SVG font-size 속성 28 → 8.4) */
 #rrMobileScreen .mobile-gauge-container svg text#rrm-ui-target-dec,
+#rrMobileScreen .mobile-gauge-container svg text#rrm-ui-current-dec,
 #rrMobileScreen .mobile-gauge-container svg text#rrm-ui-unit {
   font-family: 'Barlow Semi Condensed', sans-serif !important; font-style: italic !important; font-weight: 800 !important; font-variant-numeric: tabular-nums;
 }
 #rrMobileScreen #rrm-ui-target-dec { fill: #ff8c00; }
+#rrMobileScreen #rrm-ui-current-dec { fill: #fff; filter: drop-shadow(0 0 6px rgba(34, 211, 238, .45)); }
 #rrMobileScreen #rrm-ui-unit { letter-spacing: .06em; }
 
 /* 드롭다운 목록(속도·파워 선택 / LAP AVG 선택) */

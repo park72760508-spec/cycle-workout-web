@@ -221,7 +221,7 @@
   function beginRace() {
     S.status = 'running';
     S.startPerf = nowMs(); S.startedAt = Date.now(); S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0;
-    S.hist = []; S.lastHistAt = 0; S.lastTick = S.startPerf; S.saved = null;
+    S.hist = []; S.histStep = 1000; S.lastHistAt = 0; S.lastTick = S.startPerf; S.saved = null;
     S.rev = null; S.evT = null;                                  // 시작 전에 돈 회전수가 거리에 섞이지 않게: 첫 패킷은 기준점만
     S.clientId = 'rr_' + String((w.currentUser && w.currentUser.id) || 'u').slice(0, 8) + '_' + S.startedAt;
     S.savedRace = false; S.savedTraining = false; S.trainRes = null;
@@ -231,7 +231,7 @@
     kick();
   }
   function resetRace() {
-    stopTrainingSession(); S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0; S.hist = [];
+    stopTrainingSession(); S.status = 'idle'; S.elapsed = 0; S.dist = 0; S.maxKmh = 0; S.powSum = 0; S.powN = 0; S.hrSum = 0; S.hrN = 0; S.hist = []; S.histStep = 1000;
     var sc = $(SCREEN_ID); if (sc) sc.classList.remove('rrm-running', 'rrm-done');
     var info = $('rrm-segment-info'); if (info) info.textContent = '레이스 설정을 확인하고 시작하세요';
     render(true);
@@ -489,6 +489,21 @@
     }
   }
 
+  /* 현재 속도: 소수점 첫째 자리까지, 소수부는 정수 폰트의 30% 크기, 정수부는 중앙 고정 */
+  function setSplitSpeed(v) {
+    var s = (Math.floor(Math.max(0, v) * 10 + 1e-6) / 10).toFixed(1), dot = s.indexOf('.');
+    var ip = s.slice(0, dot), dp = s.slice(dot);
+    var ie = $('rrm-ui-current-power'), de = $('rrm-ui-current-dec'); if (!ie || !de) return;
+    var changed = false;
+    if (ie.textContent !== ip) { ie.textContent = ip; changed = true; }
+    if (de.textContent !== dp) { de.textContent = dp; changed = true; }
+    if (changed || !de.__placed) {
+      var wc = ie.__wc || (ie.__wc = {}), wd = wc[ip] || 0;
+      if (!wd) { try { wd = ie.getComputedTextLength(); } catch (e) {} if (wd > 0) wc[ip] = wd; }
+      if (wd > 0) { de.setAttribute('x', (100 + wd / 2 + 1).toFixed(2)); de.__placed = true; }
+    }
+  }
+
   /* ---------------- 프레임 루프: 샘플링 + 표시(3초 평균·스프링) ---------------- */
   function tick(tn, force) {
     var SG = w.StelvioGaugeSpring;
@@ -512,10 +527,15 @@
       if (p > 0) { S.powSum += p * dt; S.powN += dt; }
       var hrv = Number(w.liveData && w.liveData.heartRate) || 0;
       if (hrv > 0) { S.hrSum += hrv * dt; S.hrN += dt; }
-      if (tn - S.lastHistAt >= 1000 || force) {
+      if (tn - S.lastHistAt >= (S.histStep || 1000) || force) {
         S.lastHistAt = tn;
         S.hist.push([S.mode === 'time' ? S.elapsed : S.dist, S.elapsed > 0 ? S.dist / (S.elapsed / 3600) : 0]);
-        if (S.hist.length > 4000) S.hist.splice(0, S.hist.length - 4000);
+        if (S.hist.length > 1500) {                              // 오래된 구간을 버리지 않고 절반으로 솎아내 전체 구간 유지(장시간 레이스에서 앞부분 그래프 소실 방지)
+          var thin = [], hk;
+          for (hk = 0; hk < S.hist.length; hk += 2) thin.push(S.hist[hk]);
+          if ((S.hist.length - 1) % 2) thin.push(S.hist[S.hist.length - 1]);
+          S.hist = thin; S.histStep = (S.histStep || 1000) * 2;
+        }
       }
       if (!force) {
         var tv = targetValue();
@@ -586,8 +606,13 @@
     // 중앙 큰 숫자(정수만) + 단위
     var cur = $('rrm-ui-current-power'), unit = $('rrm-ui-unit');
     if (cur) {
-      txt = S.metric === 'power' ? ((w.connectedDevices && w.connectedDevices.powerMeter) ? String(Math.round(S.powNum || 0)) : '--') : String(Math.round(Math.max(0, S.speedNum || 0)));
-      if (cur.textContent !== txt) cur.textContent = txt;
+      if (S.metric === 'power') {
+        txt = (w.connectedDevices && w.connectedDevices.powerMeter) ? String(Math.round(S.powNum || 0)) : '--';
+        if (cur.textContent !== txt) cur.textContent = txt;
+        var cdec0 = $('rrm-ui-current-dec'); if (cdec0 && cdec0.textContent) cdec0.textContent = '';
+      } else {
+        setSplitSpeed(Math.max(0, S.speedNum || 0));
+      }
     }
     if (unit) { var u = S.metric === 'power' ? 'WATTS' : 'km/h'; if (unit.textContent !== u) { unit.textContent = u; placeCaret(); } }
     // TARGET 자리: 누적 거리

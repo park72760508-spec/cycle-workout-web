@@ -186,12 +186,19 @@ function rrOpenAntDiag() {
 }
 window.rrOpenAntDiag = rrOpenAntDiag;
 
+/** 트랙별 바퀴 규격 스펙(둘레 mm). 트랙에 설정이 없으면 기본 25-622 */
+function rrWheelSpecFor(sp) {
+  const key = sp && sp.wheelSize;
+  return WHEEL_SPECS[key] || WHEEL_SPECS['25-622'];
+}
+
 class SpeedometerData {
   constructor(id, name, deviceId = null) {
     this.id = id;
     this.name = name;
     this.deviceId = deviceId;
     this.pairingName = null; // 페어링 시 설정되는 이름 (트랙명과 별도)
+    this.wheelSize = '25-622'; // 트랙별 바퀴 규격 (속도·거리 계산에 사용)
     this.connected = false;
     this.currentSpeed = 0; // km/h
     this.maxSpeed = 0; // km/h
@@ -1540,8 +1547,6 @@ function saveTargetSettings() {
     }
   }
   
-  const wheelSel = document.getElementById('targetWheelSize');
-  if (wheelSel && WHEEL_SPECS[wheelSel.value]) settings.wheelSize = wheelSel.value;
 
   // 저장
   try {
@@ -1588,7 +1593,6 @@ function updateTargetSettingsDisplay() {
   if (!displayText) {
     displayText = '타겟 미설정';
   }
-  { const ws = WHEEL_SPECS[settings.wheelSize]; if (ws) displayText += ' / 바퀴: ' + ws.size; }
   
   targetDisplayEl.textContent = displayText;
   targetDisplayEl.style.display = displayText ? 'inline-block' : 'none';
@@ -2125,6 +2129,8 @@ async function pairSpeedometer(speedometerId) {
       try { rrAvatarModalRefresh(); } catch (e) {}
     }
     if (deviceIdInput) deviceIdInput.value = speedometer.deviceId || '';
+    const wheelInput = document.getElementById('speedometerWheelSize');
+    if (wheelInput) wheelInput.value = WHEEL_SPECS[speedometer.wheelSize] ? speedometer.wheelSize : '25-622';
     // 기존 showAddSpeedometerModal 함수 호출 (자동 활성화 비활성화)
     showAddSpeedometerModal(false); 
   }
@@ -2173,6 +2179,8 @@ function saveSpeedometerPairing() {
         // 페어링 이름을 별도로 저장 (deviceId 옆에 표시용)
         // 빈 문자열이어도 저장 (사용자가 의도적으로 빈 값으로 설정할 수 있음)
         speedometer.pairingName = pairingName || null;
+        const wheelInputSave = document.getElementById('speedometerWheelSize');
+        if (wheelInputSave && WHEEL_SPECS[wheelInputSave.value]) speedometer.wheelSize = wheelInputSave.value;
         
         console.log('[페어링 저장]', {
             speedometerId: targetId,
@@ -5166,6 +5174,7 @@ function removeSpeedometer(speedometerId) {
     speedometer.name = `트랙${speedometerId}`;
     speedometer.deviceId = null;
     speedometer.pairingName = null;
+    speedometer.wheelSize = '25-622';
     speedometer.currentSpeed = 0;
     speedometer.maxSpeed = 0;
     speedometer.averageSpeed = 0;
@@ -5201,7 +5210,8 @@ function saveSpeedometerList() {
       id: s.id,
       name: s.name,
       deviceId: s.deviceId,
-      pairingName: s.pairingName || null
+      pairingName: s.pairingName || null,
+      wheelSize: WHEEL_SPECS[s.wheelSize] ? s.wheelSize : '25-622'
     }));
     localStorage.setItem('rollerRaceSpeedometers', JSON.stringify(data));
   } catch (error) {
@@ -5222,6 +5232,7 @@ function loadSpeedometerList() {
         if (item.pairingName) {
           speedometer.pairingName = item.pairingName;
         }
+        if (WHEEL_SPECS[item.wheelSize]) speedometer.wheelSize = item.wheelSize;
         window.rollerRaceState.speedometers[item.id - 1] = speedometer;
       });
     }
@@ -6424,7 +6435,7 @@ function startConnectionStatusCheck() {
 
       // 2. [솔루션 1 적용] 가변 감속 예측 로직
       if (speedometer.currentSpeed > 0) {
-        const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+        const wheelSpec = rrWheelSpecFor(speedometer);
         const circumferenceM = wheelSpec.circumference / 1000;
         
         // 현재 속도에서 1회전에 걸려야 할 예상 시간
@@ -6863,7 +6874,7 @@ function processSpeedCadenceData(deviceId, data) {
 
   // 4. 속도 계산 및 필터 적용 (가민 스타일: 정밀 계산)
   if (timeDiff > 0 && revDiff > 0) {
-    const wheelSpec = WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622'];
+    const wheelSpec = rrWheelSpecFor(speedometer);
     const distM = (revDiff * wheelSpec.circumference) / 1000;
     const timeS = timeDiff / 1024;
     
@@ -7092,7 +7103,7 @@ window.processRaceData = function(payload) {
         if (timeDiff < 0) timeDiff += 65536;
 
         if (timeDiff > 0 && revDiff > 0) {
-            const wheelCircumference = ((WHEEL_SPECS[window.rollerRaceState.raceSettings.wheelSize] || WHEEL_SPECS['25-622']).circumference) / 1000; // 설정된 바퀴 둘레(m)
+            const wheelCircumference = rrWheelSpecFor(window.rollerRaceState.speedometers[trackIndex]).circumference / 1000; // 설정된 바퀴 둘레(m)
             const speed = (revDiff * wheelCircumference * 1024 * 3.6) / timeDiff;
             
             // 실제 UI 업데이트 실행
