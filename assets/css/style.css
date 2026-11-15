@@ -39132,3 +39132,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .device-scan-list li .device-scan-id { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
 
 .device-scan-list li .device-scan-id:empty { display: none; }
+
+/* 화이트 모드: 환영 문구 — 검정·회색 톤(주황 그라데이션/글로우 대체) */
+#rollerRaceDashboardScreen.rr-theme-light .rr-ch {
+  background: linear-gradient(100deg, #111827 0%, #4b5563 25%, #9ca3af 40%, #4b5563 55%, #111827 75%, #111827 100%); background-size: 250% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+}
+#rollerRaceDashboardScreen.rr-theme-light .rr-welcome__text { animation-name: rrWelcomeFloatLight; }
+@keyframes rrWelcomeFloatLight {
+  0%, 100% { transform: translateY(0); filter: drop-shadow(0 2px 4px rgba(15,23,42,.18)); }
+  50% { transform: translateY(-3px); filter: drop-shadow(0 4px 8px rgba(15,23,42,.30)); }
+}
