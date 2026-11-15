@@ -2771,6 +2771,9 @@ function updateSpeedometerListUI() {
             <pattern id="trk-check-${speedometer.id}" width="4" height="4" patternUnits="userSpaceOnUse">
               <rect width="4" height="4" fill="#fff"/><rect width="2" height="2" fill="#111"/><rect x="2" y="2" width="2" height="2" fill="#111"/>
             </pattern>
+            <linearGradient id="trk-done-${speedometer.id}" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#22d3ee"/>
+            </linearGradient>
             <linearGradient id="trk-gloss-${speedometer.id}" x1="0" y1="0" x2="0" y2="1">
               <stop offset="0" stop-color="#fff" stop-opacity="0.18"/><stop offset="0.5" stop-color="#fff" stop-opacity="0"/>
             </linearGradient>
@@ -2786,6 +2789,8 @@ function updateSpeedometerListUI() {
           <line x1="45" y1="20" x2="890" y2="20" stroke="#fde68a" stroke-width="1" stroke-dasharray="10,8" opacity="0.275"/>
           <!-- 거리 눈금 (10% 단위) -->
           ${[1,2,3,4,5,6,7,8,9].map(k => { const x = 35 + 865 * k / 10; return `<line x1="${x}" y1="4" x2="${x}" y2="8" stroke="#fff" stroke-width="0.8" opacity="0.45"/><line x1="${x}" y1="32" x2="${x}" y2="36" stroke="#fff" stroke-width="0.8" opacity="0.45"/>`; }).join('')}
+          <!-- 완주 구간 채움: 출발선~아바타 위치, 흰색 → 페어링 버튼색 그라데이션 -->
+          <rect class="track-done-fill" id="track-done-${speedometer.id}" x="35" y="4" width="0" height="32" fill="url(#trk-done-${speedometer.id})" opacity="0.85"/>
           <!-- 광택 -->
           <rect x="35" y="4" width="865" height="32" fill="url(#trk-gloss-${speedometer.id})"/>
           <!-- 대회 거리 표시(도로 바닥) -->
@@ -3226,6 +3231,8 @@ function updateStraightTrackMascot(speedometerId, targetProgress, forceImmediate
   
   mascotEl.classList.add('moving');
   mascotEl.setAttribute('transform', `translate(${x}, ${y})`);
+  const doneEl = document.getElementById(`track-done-${speedometerId}`);
+  if (doneEl) doneEl.setAttribute('width', Math.max(0, Math.min(trackLength, x - startX)).toFixed(1));
   
   // 애니메이션 완료 후 클래스 제거
   setTimeout(() => {

@@ -38923,3 +38923,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-fwd.is-on { background: #2563eb; border-color: #1d4ed8; color: #ffffff; font-weight: 800; box-shadow: 0 0 0 2px rgba(37, 99, 235, .28), inset 0 -3px 0 #1e40af; }
 #outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-rev { background: #f3f4f6; border: 1.5px solid #e5e7eb; color: #9ca3af; font-weight: 700; box-shadow: none; }
 #outdoorRideScreen .outd-busrt__dirs.is-stopmode .outd-busrt__dir.is-rev.is-on { background: #6b7280; border-color: #4b5563; color: #ffffff; font-weight: 800; box-shadow: 0 0 0 2px rgba(107, 114, 128, .28), inset 0 -3px 0 #374151; }
+
+/* 2026-11-15: Race 트랙 선수명 = 우측 이동거리 정수부 폰트 크기(26px), 완주 구간 채움 */
+#rollerRaceDashboardScreen .track-name-inside .track-name-text { font-size: 26px !important; max-width: 300px; padding: 3px 18px 3px 12px; }
+#rollerRaceDashboardScreen .track-done-fill { transition: width .5s linear; pointer-events: none; }
