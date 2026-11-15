@@ -39049,3 +39049,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 /* 트랙 행 카드: 흰 카드 위에 레드 포인트 */
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-list-item { border-left: 4px solid #ff3b3b; }
+
+/* 화이트 모드 v3: 속도계 정보 블럭 값(평속·이동거리·속도) — 선명한 톤 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info { --st: #f97316; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info.connected { --st: #16a34a; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-stat-value { color: #0070e0; }            /* 평속: 선명한 블루 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-value { color: #e8102a; }                 /* 이동거리: 레이싱 레드 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .distance-value { color: var(--st); }            /* 속도: 수신 중 그린 / 대기 오렌지 */
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info:not(.connected) .rr-int,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info:not(.connected) .rr-dec { opacity: .85; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-stat-label,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info .speed-unit-bottom { color: #475569 !important; font-weight: 700; }
