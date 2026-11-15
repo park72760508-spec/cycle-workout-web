@@ -6625,6 +6625,7 @@ function generateRaceReportPDF() {
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">이동거리(km)</th>
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">평균속도(km/h)</th>
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">최고속도(km/h)</th>
+              <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">바퀴(mm)</th>
               <th style="padding: 10px; text-align: center; border: 1px solid #ddd;">Total Time</th>
             </tr>
           </thead>
@@ -6656,6 +6657,7 @@ function generateRaceReportPDF() {
                   <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${distance}</td>
                   <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${avgSpeed}</td>
                   <td style="padding: 8px; text-align: right; border: 1px solid #ddd;">${maxSpeed}</td>
+                  <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${rrWheelSpecFor(speedometer).circumference}</td>
                   <td style="padding: 8px; text-align: center; border: 1px solid #ddd;">${elapsedTime}</td>
                 </tr>
               `;
