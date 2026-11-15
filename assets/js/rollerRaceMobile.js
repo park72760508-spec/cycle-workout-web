@@ -593,6 +593,11 @@
     // LAP AVG ▼ 표시는 눈금 종류와 값이 맞을 때만(속도 눈금+SPEED AVG / 파워 눈금+LAP AVG 파워)
     var scr = $(SCREEN_ID), lapOk = (S.metric === 'speed' && S.lap === 'avg') || (S.metric === 'power' && S.lap === 'power') ? '1' : '0';
     if (scr && scr.getAttribute('data-rrm-lapmatch') !== lapOk) scr.setAttribute('data-rrm-lapmatch', lapOk);
+    var band = $('rrm-gauge-speed-band');                      // 속도 모드: 원호 위 연두색 속도 띠(바늘과 같은 비율)
+    if (band) {
+      if (S.metric === 'power') { if (band.style.display !== 'none') band.style.display = 'none'; }
+      else { if (band.style.display === 'none') band.style.display = ''; band.style.strokeDashoffset = (251.33 * (1 - ratio)).toFixed(2); }
+    }
     if (S.metric === 'power') {                                // 원호 안쪽 파란 속도: 오른쪽(0)에서 왼쪽으로 채움 + 끝점 점과 속도값
       var sr = Math.min(Math.max(spd / GAUGE_MAX, 0), 1), arc = $('rrm-gauge-speed-arc');
       if (arc) arc.style.strokeDashoffset = (251.33 * (1 - sr)).toFixed(2);
