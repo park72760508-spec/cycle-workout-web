@@ -39162,3 +39162,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 .stelvio-global-spinner__label { color: #fff; font-size: 15px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
 @keyframes stelvioSpinnerRot { to { transform: rotate(360deg); } }
+
+/* 2026-11-17: Live Training Session — 내가 신청한 트랙 강조 */
+.player-track-item.player-track-mine { box-shadow: inset 4px 0 0 #2e74e8; background: rgba(46, 116, 232, 0.07); }

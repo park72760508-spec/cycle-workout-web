@@ -2193,7 +2193,7 @@ async function renderPlayerList() {
     const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
     
     return `
-      <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
+      <div class="player-track-item${trackUserId && currentUserId && trackUserId === currentUserId ? ' player-track-mine' : ''}" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}"${trackUserId && currentUserId && trackUserId === currentUserId ? ' data-mine="1"' : ''}>
         <div class="player-track-number-fixed">
           <div class="player-track-number-header">
             트랙${track.trackNumber}
@@ -2252,6 +2252,15 @@ async function renderPlayerList() {
     `;
   }).join('');
   
+  // 내가 신청한 트랙 위치로 스크롤(2026-11-17)
+  try {
+    var __mine2 = playerListContent.querySelector('.player-track-item[data-mine="1"]');
+    if (__mine2) {
+      var __goMine2 = function () { try { __mine2.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) { try { __mine2.scrollIntoView(); } catch (e2) {} } };
+      requestAnimationFrame(__goMine2);
+      setTimeout(__goMine2, 300);
+    }
+  } catch (e) {}
   // 일괄 퇴실 버튼 표시 여부 (grade=1,3만 표시)
   const btnClearAllTracks = document.getElementById('btnClearAllTracks');
   if (btnClearAllTracks) {
@@ -6991,7 +7000,7 @@ function renderBluetoothPlayerListToContainer(container, data) {
     const deviceIconsHtml = deviceIcons.length > 0 ? deviceIcons.join('') : '';
     
     return `
-      <div class="player-track-item" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}">
+      <div class="player-track-item${trackUserId && currentUserId && trackUserId === currentUserId ? ' player-track-mine' : ''}" data-track-number="${track.trackNumber}" data-room-id="${roomId || ''}"${trackUserId && currentUserId && trackUserId === currentUserId ? ' data-mine="1"' : ''}>
         <div class="player-track-number-fixed">
           <div class="player-track-number-header">
             트랙${track.trackNumber}
@@ -7062,6 +7071,15 @@ function renderBluetoothPlayerListToContainer(container, data) {
     `;
   }).join('');
   container.innerHTML = tracksHtml;
+  // 내가 신청한 트랙 위치로 스크롤(2026-11-17): 신청 후 목록이 새로 그려져도 Enter 를 바로 누를 수 있게 한다.
+  try {
+    var __mine = container.querySelector('.player-track-item[data-mine="1"]');
+    if (__mine) {
+      var __goMine = function () { try { __mine.scrollIntoView({ block: 'center', behavior: 'auto' }); } catch (e) { try { __mine.scrollIntoView(); } catch (e2) {} } };
+      requestAnimationFrame(__goMine);
+      setTimeout(__goMine, 300); // 로딩 스피너→목록 교체로 높이가 바뀐 뒤 한 번 더
+    }
+  } catch (e) {}
   const btnClearAllTracks = document.getElementById('btnClearAllBluetoothTracks');
   if (btnClearAllTracks) {
     if (isAdmin || userGrade === '3' || userGrade === 3) btnClearAllTracks.style.display = 'inline-flex';
