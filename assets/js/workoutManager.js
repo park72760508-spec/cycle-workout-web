@@ -4931,6 +4931,7 @@ async function selectWorkout(workoutId) {
   var workoutLoadingProgress = document.getElementById('workoutLoadingProgress');
   if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
   if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
+  if (typeof window.stelvioShowSpinner === 'function') window.stelvioShowSpinner('워크아웃을 훈련 준비 화면에 올리는 중...', 15000);
   
   try {
     console.log('Selecting workout with ID:', workoutId);
@@ -5010,6 +5011,7 @@ async function selectWorkout(workoutId) {
     window.showToast('워크아웃 선택 중 오류가 발생했습니다.');
   } finally {
     if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'none'; }
+    if (typeof window.stelvioHideSpinner === 'function') window.stelvioHideSpinner(800); // 훈련 준비 화면 그래프 렌더 완료 후 해제
     if (selectButton && originalButtonText) {
       selectButton.textContent = originalButtonText;
       selectButton.disabled = false;

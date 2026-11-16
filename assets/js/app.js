@@ -16571,6 +16571,38 @@ function openWorkoutScreenChoiceModal() {
 }
 
 /**
+ * 전역 오버레이 원 스피너 (2026-11-17): 워크아웃 선택/업로드 중임을 화면 중앙에 표시.
+ * stelvioShowSpinner(문구, 자동해제ms) / stelvioHideSpinner(지연ms) — 자동해제는 오류 시 영구 표시 방지용.
+ */
+var __stelvioSpinnerTimer = null;
+function stelvioShowSpinner(label, maxMs) {
+  try {
+    var el = document.getElementById('stelvioGlobalSpinner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'stelvioGlobalSpinner';
+      el.className = 'stelvio-global-spinner';
+      el.innerHTML = '<div class="stelvio-global-spinner__ring"></div><div class="stelvio-global-spinner__label"></div>';
+      document.body.appendChild(el);
+    }
+    el.querySelector('.stelvio-global-spinner__label').textContent = label || '';
+    el.classList.add('show');
+    if (__stelvioSpinnerTimer) clearTimeout(__stelvioSpinnerTimer);
+    __stelvioSpinnerTimer = setTimeout(stelvioHideSpinner, maxMs || 8000);
+  } catch (e) {}
+}
+function stelvioHideSpinner(delayMs) {
+  if (delayMs > 0) { setTimeout(stelvioHideSpinner, delayMs); return; }
+  try {
+    if (__stelvioSpinnerTimer) { clearTimeout(__stelvioSpinnerTimer); __stelvioSpinnerTimer = null; }
+    var el = document.getElementById('stelvioGlobalSpinner');
+    if (el) el.classList.remove('show');
+  } catch (e) {}
+}
+window.stelvioShowSpinner = stelvioShowSpinner;
+window.stelvioHideSpinner = stelvioHideSpinner;
+
+/**
  * 워크아웃 화면 선택 팝업 닫기
  */
 function closeWorkoutScreenChoiceModal() {
@@ -16588,6 +16620,8 @@ function closeWorkoutScreenChoiceModal() {
  */
 function chooseWorkoutScreenType(type) {
   closeWorkoutScreenChoiceModal();
+  stelvioShowSpinner(type === 'graph' ? '워크아웃 목록을 불러오는 중...' : '워크아웃 목록을 여는 중...');
+  stelvioHideSpinner(type === 'graph' ? 900 : 600);
   if (type === 'graph') {
     if (typeof showScreen === 'function') {
       showScreen('workoutScreen');
@@ -16619,6 +16653,8 @@ function chooseWorkoutScreenType(type) {
  */
 async function openWorkoutSelectionForTrainingReady() {
   try {
+    stelvioShowSpinner('워크아웃 선택 준비 중...');
+    stelvioHideSpinner(500);
     openWorkoutScreenChoiceModal();
   } catch (error) {
     console.error('[Training Ready] 워크아웃 화면 선택 팝업 열기 오류:', error);
