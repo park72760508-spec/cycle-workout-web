@@ -10859,34 +10859,42 @@
               previewExpectedIntensity.textContent = expectedTSS;
             }
             
-            // 세그먼트 그래프 그리기
-            var segmentPreview = document.getElementById('segmentPreview');
-            var segmentPreviewPlaceholder = document.getElementById('segmentPreviewPlaceholder');
-            if (segmentPreviewPlaceholder) {
-              segmentPreviewPlaceholder.style.display = 'none';
-            }
+            // 세그먼트 그래프: 훈련 준비 화면 표준 렌더러(워크아웃 카드형 미리보기)로 그린다.
+            // 2026-11-17: 예전엔 'canvas' 만 지우고 새 캔버스를 붙여, 이전에 선택한 워크아웃 카드(div#segmentPreviewGraph)가 그대로 남아
+            // 나의 훈련 목록에서 선택한 워크아웃 그래프가 바로 반영되지 않았다.
+            if (typeof window.updateTrainingReadyScreenWithWorkout === 'function') {
+              window.updateTrainingReadyScreenWithWorkout(workout);
+            } else {
+              // 세그먼트 그래프 그리기
+              var segmentPreview = document.getElementById('segmentPreview');
+              var segmentPreviewPlaceholder = document.getElementById('segmentPreviewPlaceholder');
+              if (segmentPreviewPlaceholder) {
+                segmentPreviewPlaceholder.style.display = 'none';
+              }
             
-            // 기존 캔버스 제거 및 새로 생성
-            var existingCanvas = segmentPreview.querySelector('canvas');
-            if (existingCanvas) {
-              existingCanvas.remove();
-            }
+              // 기존 캔버스 제거 및 새로 생성
+              var existingCanvas = segmentPreview.querySelector('canvas');
+              if (existingCanvas) {
+                existingCanvas.remove();
+              }
             
-            var canvas = document.createElement('canvas');
-            canvas.id = 'segmentPreviewGraph';
-            canvas.style.width = '100%';
-            canvas.style.height = '180px';
-            segmentPreview.appendChild(canvas);
+              var canvas = document.createElement('canvas');
+              canvas.id = 'segmentPreviewGraph';
+              canvas.style.width = '100%';
+              canvas.style.height = '180px';
+              segmentPreview.appendChild(canvas);
             
-            // 그래프 그리기
-            if (typeof drawSegmentGraph === 'function') {
-              setTimeout(function() {
-                drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
-              }, 100);
-            } else if (typeof window.drawSegmentGraph === 'function') {
-              setTimeout(function() {
-                window.drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
-              }, 100);
+              // 그래프 그리기
+              if (typeof drawSegmentGraph === 'function') {
+                setTimeout(function() {
+                  drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
+                }, 100);
+              } else if (typeof window.drawSegmentGraph === 'function') {
+                setTimeout(function() {
+                  window.drawSegmentGraph(segments, -1, 'segmentPreviewGraph');
+                }, 100);
+              }
+            
             }
             
             // 훈련 시작 버튼 활성화
