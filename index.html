@@ -30196,7 +30196,7 @@
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261116transit"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261111h"></script>
-  <script src="assets/js/rollerRaceMobile.js?v=20261116band2"></script>
+  <script src="assets/js/rollerRaceMobile.js?v=20261116rc1"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
        원본 .jsx 수정 시 반드시 재컴파일: node scripts/compile-jsx.mjs assets/js/openRiding/OpenRidingScreens.jsx
@@ -36323,6 +36323,11 @@
               <span>센서 연결</span>
               <span class="status" id="rrmSensorStatus">미연결</span>
             </div>
+            <div id="rrmReconnectItem" class="mobile-bluetooth-dropdown-item" onclick="rrmReconnectSensors()">
+              <img src="assets/img/wifi2.png" alt="재연결">
+              <span>재연결</span>
+              <span class="status">저장된 센서</span>
+            </div>
             <div id="rrmSettingsItem" class="mobile-bluetooth-dropdown-item" onclick="rrmOpenSettings()">
               <img class="rrm-white-icon" src="assets/img/setting1.png" alt="레이스 설정" onerror="this.style.display='none'">
               <span>레이스 설정</span>
@@ -36907,7 +36912,7 @@
   <!-- CYCLE 주간 TSS 랭킹 Supabase Realtime (ranking_build_meta.ranking_metrics_live) -->
   <script src="assets/js/stelvioRankingLiveSync.js"></script>
   <!-- 훈련 대시보드 브릿지: AUTO_CONNECT(마운트 1회) + deviceError UI 폴백 및 cleanup (showScreen 최종 래핑) -->
-  <script src="assets/js/trainingDashboardBridge.js?v=20261115lbl"></script>
+  <script src="assets/js/trainingDashboardBridge.js?v=20261116rc1"></script>
   
   <!-- Performance Dashboard 화면 (AI 분석 대시보드) - Direct Integration (No Iframe) -->
   <!-- 스피너: position fixed 오버레이(레이아웃 영향 없음), 대시보드 본 화면만 스크롤 영역에 표시 -->

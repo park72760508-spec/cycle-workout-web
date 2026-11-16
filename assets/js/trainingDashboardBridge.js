@@ -1462,9 +1462,9 @@
    */
   var CONNECT_BUTTON_IDS = ['trainingScreenBluetoothConnectBtn', 'mobileBluetoothConnectBtn', 'indiv-bluetoothConnectBtn', 'coachmMenuBtn', 'rrmConnectBtn'];
   var _lastSensorConnectKickAt = 0;
-  function startSensorConnectFromButton() {
+  function startSensorConnectFromButton(force) {
     var now = Date.now();
-    if (now - _lastSensorConnectKickAt < 1500) return; // 연타 방지
+    if (force !== true && now - _lastSensorConnectKickAt < 1500) return; // 연타 방지(수동 재연결 메뉴는 force)
     _lastSensorConnectKickAt = now;
     try { mountTrainingDashboardBridge(); } catch (e0) {}
     try { startAutoConnectSession(); } catch (e1) {
@@ -1498,6 +1498,8 @@
     }
   }, false);
   global.StelvioStartSensorConnect = startSensorConnectFromButton;
+  // 수동 재연결(STELVIO Race 휴대폰 연결 메뉴 > 재연결): 연결 후 해제된 저장 센서를 다시 연결
+  global.StelvioReconnectSavedSensors = function () { startSensorConnectFromButton(true); };
   global.abortAutoConnect = abortAutoConnect;
   global.StelvioTriggerAutoConnect = triggerAutoConnectNow;
   global.openDeviceSettingPopup = openDeviceSettingPopup;

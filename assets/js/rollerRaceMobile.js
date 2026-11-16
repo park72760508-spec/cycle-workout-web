@@ -404,6 +404,13 @@
    * Device Settings 팝업(저장된 기기 상태 창 포함, trainingDashboardBridge.openDeviceSettingPopup)을 연다. 앱에서는 먼저 자동 연결을 중단.
    */
   function rrmToggleConnectMenu(ev) { toggleMenu('rrmConnectMenu', ev); }
+  // 재연결: 센서 연결에 저장된 기기 목록에 대해 연결 로직 재구동(연결 후 끊긴 센서 수동 복구)
+  function rrmReconnectSensors() {
+    var m = $('rrmConnectMenu'); if (m) m.classList.remove('show');
+    if (typeof w.StelvioReconnectSavedSensors === 'function') w.StelvioReconnectSavedSensors();
+    else if (typeof w.StelvioStartSensorConnect === 'function') w.StelvioStartSensorConnect(true);
+    if (typeof w.showToast === 'function') w.showToast('저장된 센서 재연결을 시작합니다');
+  }
   function openSensorPopup() {
     closeMenus();
     try { if (typeof w.abortAutoConnect === 'function') w.abortAutoConnect(); } catch (e) {}
@@ -790,7 +797,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
 
   /* ---------------- 공개 ---------------- */
-  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExitChoose = rrmExitChoose; w.rrmExit = rrmExit; w.rrmToggleConnectMenu = rrmToggleConnectMenu; w.rrmOpenSensor = rrmOpenSensor;
+  w.rrmStart = rrmStart; w.rrmStop = rrmStop; w.rrmExitChoose = rrmExitChoose; w.rrmExit = rrmExit; w.rrmToggleConnectMenu = rrmToggleConnectMenu; w.rrmReconnectSensors = rrmReconnectSensors; w.rrmOpenSensor = rrmOpenSensor;
   w.rrmToggleMetricMenu = rrmToggleMetricMenu; w.rrmSetMetric = rrmSetMetric;
   w.rrmToggleLapMenu = rrmToggleLapMenu; w.rrmSetLap = rrmSetLap;
   w.rrmOpenSettings = rrmOpenSettings; w.rrmCloseSettings = rrmCloseSettings; w.rrmPickMode = rrmPickMode; w.rrmSaveSettings = rrmSaveSettings;
