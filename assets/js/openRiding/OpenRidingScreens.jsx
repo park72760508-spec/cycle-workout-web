@@ -3741,7 +3741,7 @@ function openRidingRenderSelectedDayListPanelTitleIconsShared(ride, userId, invi
     stIcon = (
       <span
         className={
-          'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30' +
+          'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-800 text-white shadow-sm ring-1 ring-green-900/40' +
           fade
         }
         title="참석 확정"
@@ -3767,7 +3767,7 @@ function openRidingRenderSelectedDayListPanelTitleIconsShared(ride, userId, invi
     stIcon = (
       <span
         className={
-          'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25' +
+          'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30' +
           fade
         }
         title="참석 가능"
@@ -3891,7 +3891,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
     showParticipantConfirmedIcon = openRidingIsParticipantConfirmedShared(r, userId);
   }
   var attendeeCheckCircleClass =
-    'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30';
+    'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-800 text-white shadow-sm ring-1 ring-green-900/40';
   var spectatorBrowseCircleClass =
     'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-slate-300/90 text-slate-700 shadow-sm ring-1 ring-slate-400/35';
   var showSpectatorBrowseIcon = false;
@@ -3941,7 +3941,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
           ) : null}
           {showMyRideInvitedGreen ? (
             <span
-              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25"
+              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30"
               title="초대받은 라이딩 · 참석 미확정"
               aria-label="초대받은 라이딩 · 참석 미확정"
             >
@@ -3952,7 +3952,7 @@ function openRidingRenderMonthRideListRowShared(r, extra, ctx) {
           ) : null}
           {showMyRideRed ? (
             <span
-              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30"
+              className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-green-800 text-white shadow-sm ring-1 ring-green-900/40"
               title="참석 확정"
               aria-label="참석 확정"
             >
@@ -4514,7 +4514,7 @@ function OpenRidingBottomGlassNav(props) {
           <span className="open-riding-bottom-glass-nav__icon-wrap relative inline-flex items-center justify-center">
             {iconMoim()}
             {pendingInvitedRidesCount > 0 ? (
-              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-emerald-600 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
+              <span className="open-riding-bottom-glass-nav__badge absolute flex items-center justify-center rounded-full bg-orange-500 text-white font-bold leading-none border-2 border-white shadow-sm pointer-events-none" style={{ minWidth: '17px', height: '17px', fontSize: pendingInvitedRidesCount > 9 ? 9 : 10, paddingLeft: pendingInvitedRidesCount > 9 ? 3 : 4, paddingRight: pendingInvitedRidesCount > 9 ? 3 : 4, top: 0, left: 0, transform: 'translate(-45%, -40%)' }} aria-hidden="true">
                 {pendingInvitedRidesCount > 99 ? '99+' : pendingInvitedRidesCount}
               </span>
             ) : null}
@@ -6144,7 +6144,7 @@ function OpenRidingCalendarMain(props) {
             role="note"
           >
           <span className="inline-flex items-center gap-1 shrink-0">
-            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-700/25">
+            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-orange-500 text-white shadow-sm ring-1 ring-orange-600/30">
               <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M2.5 6L5 8.5L9.5 3.5" />
               </svg>
@@ -6155,7 +6155,7 @@ function OpenRidingCalendarMain(props) {
             |
           </span>
           <span className="inline-flex items-center gap-1 shrink-0">
-            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-sm ring-1 ring-red-700/30">
+            <span className="inline-flex h-[14px] w-[14px] shrink-0 items-center justify-center rounded-full bg-green-800 text-white shadow-sm ring-1 ring-green-900/40">
               <svg className="h-2 w-2" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M2.5 6L5 8.5L9.5 3.5" />
               </svg>
@@ -6288,7 +6288,7 @@ function OpenRidingCalendarMain(props) {
                          이미 있는데(모임 배지 자체가 이미 표시됨) 이 조기 return 블록에서만 빠져 있던
                          것이라, 이번달 셀과 동일한 배지 위치·크기로 추가한다. */
                       <span
-                        className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 bg-red-600"
+                        className="open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 bg-green-800"
                         style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% + 11.31px)', transform: 'translate(-50%, -50%)' }}
                         title="참석 확정"
                         aria-hidden
@@ -6405,7 +6405,7 @@ function OpenRidingCalendarMain(props) {
                     <span
                       className={
                         'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
-                        (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
+                        (isPastCell ? 'bg-green-700/60 opacity-90' : 'bg-green-800')
                       }
                       style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% + 11.31px)', transform: 'translate(-50%, -50%)' }}
                       title="참석 확정"
@@ -6456,7 +6456,7 @@ function OpenRidingCalendarMain(props) {
             </div>
             <div className="flex gap-2 items-center min-w-0">
               <span
-                className="open-riding-cal-legend-badge shrink-0 inline-flex items-center justify-center rounded-full bg-red-600 text-white ring-1 ring-white/90 shadow-sm"
+                className="open-riding-cal-legend-badge shrink-0 inline-flex items-center justify-center rounded-full bg-green-800 text-white ring-1 ring-white/90 shadow-sm"
                 style={{ width: '12px', height: '12px' }}
                 aria-hidden
               >
@@ -8691,7 +8691,7 @@ function OpenRidingGroupCalendarSection(props) {
                   <span
                     className={
                       'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
-                      (isPastCell ? 'bg-red-400/75 opacity-90' : 'bg-red-600')
+                      (isPastCell ? 'bg-green-700/60 opacity-90' : 'bg-green-800')
                     }
                     style={{ width: '11px', height: '11px', top: 'calc(50% - 11.31px)', left: 'calc(50% + 11.31px)', transform: 'translate(-50%, -50%)' }}
                     title="참석 확정"
