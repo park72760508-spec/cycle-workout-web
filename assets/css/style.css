@@ -39146,3 +39146,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-16: Race 트랙 우측 거리 단위는 소문자 km */
 #rollerRaceDashboardScreen .track-stats-inside .track-stat-unit { text-transform: none; }
+
+/* 2026-11-16: STELVIO Race PC 속도계 '준비됨' 표시등 = 페어링 버튼 색(시안 #22d3ee) */
+#rollerRaceDashboardScreen .status-dot.ready { background: #22d3ee; box-shadow: 0 0 6px rgba(34, 211, 238, 0.7); }

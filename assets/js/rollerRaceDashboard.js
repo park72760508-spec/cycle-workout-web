@@ -2663,7 +2663,7 @@ function updateSpeedometerConnectionStatus(speedometerId, connected, status = nu
   
   // 상태 표시 업데이트
   if (finalStatus === 'connected') {
-    dot.classList.remove('disconnected');
+    dot.classList.remove('disconnected', 'ready');
     dot.classList.add('connected');
     if (text) text.textContent = statusText;
     
@@ -2675,10 +2675,11 @@ function updateSpeedometerConnectionStatus(speedometerId, connected, status = nu
   } else {
     // 준비됨, 타임아웃 또는 미연결: 주황색 배경
     if (finalStatus === 'ready' || finalStatus === 'timeout') {
-      dot.classList.remove('disconnected');
-      dot.classList.add('connected');
+      // 준비됨: 페어링 버튼 색(시안)의 표시등 — .status-dot.ready (style.css)
+      dot.classList.remove('disconnected', 'connected');
+      dot.classList.add('ready');
     } else {
-      dot.classList.remove('connected');
+      dot.classList.remove('connected', 'ready');
       dot.classList.add('disconnected');
     }
     if (text) text.textContent = statusText;
