@@ -941,7 +941,7 @@ function generateBluetoothCoachPowerMeterLabels(powerMeterId) {
   const radius = 80;
   const maxPos = 120;
   
-  const ftp = powerMeter.userFTP || null;
+  const ftp = bcGaugeFtp(powerMeter);
   const useFTPValue = !!ftp;
   const majorPositions = [0, 20, 40, 60, 80, 100, 120];
   
@@ -1091,8 +1091,8 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   
   // FTP 대비 % 위첨자 표시
   const ftpPercentEl = document.getElementById(`ftp-percent-${powerMeterId}`);
-  if (ftpPercentEl && powerMeter.userFTP && powerMeter.userFTP > 0) {
-    const ftpPercent = Math.round((powerMeter.currentPower / powerMeter.userFTP) * 100);
+  if (ftpPercentEl && bcGaugeFtp(powerMeter) > 0) {
+    const ftpPercent = Math.round((powerMeter.currentPower / bcGaugeFtp(powerMeter)) * 100);
     if (powerMeter.currentPower > 0) {
       // 파워값의 실제 너비를 계산하여 우측에 배치
       // 파워값 폰트 크기 43.2px의 50% = 21.6px (위첨자 크기)
@@ -1123,7 +1123,7 @@ function updatePowerMeterNeedle(powerMeterId, power) {
   // 정상 작동 시에는 애니메이션 루프가 displayPower를 부드럽게 업데이트함
   
   // 즉시 업데이트가 필요한 경우를 위한 폴백 (애니메이션 루프가 실행되지 않을 때)
-  const gaugeMaxPower = powerMeter.userFTP ? powerMeter.userFTP * 1.5 : 300;
+  const gaugeMaxPower = bcGaugeFtp(powerMeter) ? bcGaugeFtp(powerMeter) * 1.5 : 300;
   const ratio = Math.min(Math.max(powerMeter.currentPower / gaugeMaxPower, 0), 1);
   const angle = -90 + (ratio * 180); // -90도(왼쪽)에서 90도(오른쪽)까지
   
@@ -1239,7 +1239,7 @@ function startGaugeAnimationLoop() {
       }
 
       // FTP 기반 최대 파워 계산 (FTP × 2)
-      const ftp = pm.userFTP || 200;
+      const ftp = bcGaugeFtp(pm) || 200;
       const maxPower = ftp * 2;
       let ratio = Math.min(Math.max(pm.displayPower / maxPower, 0), 1);
       
@@ -1563,9 +1563,10 @@ async function loadInitialUserDataForTracks() {
               const initFTP = initBase ? Math.round(initBase * powerMeter.__intensityAdj) : initBase; // 목표값 조절 반영(오늘 적용 FTP)
               if (initFTP) {
                 const prevFTP = powerMeter.userFTP;
+                const prevBaseInit = powerMeter.__baseFTP;
                 powerMeter.__baseFTP = initBase;
                 powerMeter.userFTP = initFTP;
-                if (Number(prevFTP) !== Number(initFTP)) {
+                if (Number(prevFTP) !== Number(initFTP) || Number(prevBaseInit) !== Number(initBase)) {
                   console.log(`[Bluetooth Coach] 초기 로드: 트랙 ${trackId} FTP 적용: ${initFTP}`);
                   updateBluetoothCoachPowerMeterTicks(trackId);
                 }
@@ -1680,6 +1681,16 @@ if (typeof window !== 'undefined' && !window.__bluetoothCoachInfoBarTimer) {
  * 프로필 FTP(>0)가 있으면 우선, 없으면 트랙 값. 사용자별 10분 캐시.
  */
 var __bcProfileFtpCache = {};
+/**
+ * 2026-11-17 계기판(눈금 숫자·바늘 배율·FTP%)은 Player 화면과 같은 '프로필 FTP'(조절 전 값)를 쓴다.
+ * userFTP 는 '프로필 FTP × 목표값 조절'(목표 파워·달성도·순위 배점용)이라 눈금에 쓰면 Player(예: 245)와 PC(260)가 달라 보였다.
+ */
+function bcGaugeFtp(pm) {
+  var b = pm && Number(pm.__baseFTP);
+  if (b > 0) return b;
+  var u = pm && Number(pm.userFTP);
+  return u > 0 ? u : null;
+}
 function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
   var uid = userId ? String(userId) : '';
   var trackN = Number(trackFtp) > 0 ? Number(trackFtp) : null;
@@ -1695,7 +1706,7 @@ function bluetoothCoachResolveFtp(powerMeter, userId, trackFtp) {
       __bcProfileFtpCache[uid] = { ftp: f > 0 ? f : null, weight: w > 0 ? w : null, at: Date.now(), pending: false };
       // 응답이 온 시점에 같은 사용자가 그 트랙에 있으면 계기판 갱신
       var fEff = f > 0 ? Math.round(f * (Number(powerMeter && powerMeter.__intensityAdj) > 0 ? Number(powerMeter.__intensityAdj) : 1)) : 0;
-      if (f > 0 && powerMeter && String(powerMeter.userId || '') === uid && Number(powerMeter.userFTP) !== fEff) {
+      if (f > 0 && powerMeter && String(powerMeter.userId || '') === uid && (Number(powerMeter.userFTP) !== fEff || Number(powerMeter.__baseFTP) !== f)) {
         powerMeter.__baseFTP = f;
         powerMeter.userFTP = fEff;
         if (w > 0) powerMeter.userWeight = w;
@@ -1727,6 +1738,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   
   // FTP 변경 감지를 위해 이전 값 저장 (업데이트 전에)
   const prevFTP = powerMeter.userFTP;
+  const prevBaseFTP = powerMeter.__baseFTP;
   
   // FTP 업데이트 — 프로필 FTP 우선(트랙 값은 신청 시점 복사본이라 오래될 수 있음)
   const resolvedFTP = bluetoothCoachResolveFtp(powerMeter, userData.userId, userData.ftp);
@@ -1740,12 +1752,13 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   } else if (prevFTP && powerMeter.__ftpUid && powerMeter.__ftpUid !== ftpUid) {
     // 트랙 사용자가 바뀌었는데 새 사용자 FTP를 아직 모르면 이전 사용자 FTP를 남기지 않는다(비율 표시로 복귀)
     powerMeter.userFTP = null;
+    powerMeter.__baseFTP = null;
     updateBluetoothCoachPowerMeterTicks(trackId);
   }
   powerMeter.__ftpUid = ftpUid;
   
   // FTP 변경 시 눈금 업데이트
-  if (resolvedFTP && Number(resolvedFTP) !== Number(prevFTP)) {
+  if (resolvedFTP && (Number(resolvedFTP) !== Number(prevBaseFTP) || Number(powerMeter.userFTP) !== Number(prevFTP))) {
     console.log(`[Bluetooth Coach] 트랙 ${trackId} FTP 변경: ${prevFTP || '없음'} → ${resolvedFTP}`);
     updateBluetoothCoachPowerMeterTicks(trackId);
   }
@@ -1791,7 +1804,7 @@ function updatePowerMeterDataFromFirebase(trackId, userData) {
   updateBluetoothCoachConnectionStatus(trackId);
   
   // 바늘 궤적 업데이트 (목표 파워 및 궤적 표시)
-  const ftp = powerMeter.userFTP || 200;
+  const ftp = bcGaugeFtp(powerMeter) || 200;
   const gaugeMaxPower = ftp * 2; // 게이지 최대값 (FTP의 200%)
   const currentPower = powerMeter.currentPower || 0;
   const ratio = Math.min(Math.max(currentPower / gaugeMaxPower, 0), 1);
@@ -1816,9 +1829,9 @@ function updatePowerMeterUI(trackId) {
   
   // FTP 대비 % 위첨자 표시 (updatePowerMeterNeedle에서도 처리되지만 여기서도 업데이트)
   const ftpPercentEl = document.getElementById(`ftp-percent-${trackId}`);
-  if (ftpPercentEl && powerMeter.userFTP && powerMeter.userFTP > 0) {
+  if (ftpPercentEl && bcGaugeFtp(powerMeter) > 0) {
     const currentPower = powerMeter.currentPower || 0;
-    const ftpPercent = Math.round((currentPower / powerMeter.userFTP) * 100);
+    const ftpPercent = Math.round((currentPower / bcGaugeFtp(powerMeter)) * 100);
     if (currentPower > 0) {
       const powerText = String(Math.round(currentPower));
       const avgCharWidth = 43.2 * 0.6;
@@ -2113,7 +2126,8 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
   if (!powerMeter.connected) currentPower = 0;
 
   // 1. 기본 설정값 로드
-  const ftp = powerMeter.userFTP || 200;
+  const ftp = bcGaugeFtp(powerMeter) || 200; // 계기판 눈금 배율(Player와 동일한 프로필 FTP)
+  const targetFtp = Number(powerMeter.userFTP) > 0 ? Number(powerMeter.userFTP) : ftp; // 목표 파워는 '오늘 적용 FTP'(목표값 조절 반영)
   const maxPower = ftp * 2; // 게이지 최대값 (FTP의 200%)
   
   // 2. 훈련 상태 확인
@@ -2136,7 +2150,7 @@ function updateBluetoothCoachPowerMeterTrail(powerMeterId, currentPower, current
     const currentSegment = segments[currentSegmentIndex] || segments[0]; 
     
     // 목표 파워 계산 (휴대폰 Coach와 같은 함수)
-    targetPower = bluetoothCoachSegmentTargetPower(currentSegment, ftp);
+    targetPower = bluetoothCoachSegmentTargetPower(currentSegment, targetFtp);
     
     // 현재 랩파워 (Segment Average Power) 가져오기
     segmentPower = powerMeter.segmentPower || 0;
@@ -2189,7 +2203,7 @@ function refreshBluetoothCoachIdleTargetBands() {
   if (!st || !Array.isArray(st.powerMeters)) return;
   st.powerMeters.forEach(pm => {
     if (pm.connected) { pm.__bandKey = ''; return; }
-    const key = [st.trainingState, st.currentSegmentIndex, pm.userId || pm.userName || '', pm.userFTP || 0, Math.round(pm.segmentPower || 0)].join('|');
+    const key = [st.trainingState, st.currentSegmentIndex, pm.userId || pm.userName || '', pm.userFTP || 0, pm.__baseFTP || 0, Math.round(pm.segmentPower || 0)].join('|');
     if (pm.__bandKey === key) return;
     pm.__bandKey = key;
     try { updateBluetoothCoachPowerMeterTrail(pm.id, 0, -90, pm); } catch (e) {}
@@ -2360,6 +2374,8 @@ function resetPowerMeterData(trackId) {
   powerMeter.screenId = null;
   powerMeter.screenName = null;
   powerMeter.userFTP = null;
+  powerMeter.__baseFTP = null;
+  powerMeter.__intensityAdj = 1;
   
   // UI 초기화
   const userNameEl = document.getElementById(`user-icon-${trackId}`);
@@ -2397,7 +2413,7 @@ function updateBluetoothCoachPowerMeterTicks(powerMeterId) {
     updatePowerMeterNeedle(powerMeterId, powerMeter.currentPower || 0);
   } else if (needleEl) {
     // updatePowerMeterNeedle이 없을 경우 직접 업데이트
-    const gaugeMaxPower = powerMeter.userFTP ? powerMeter.userFTP * 1.5 : 300;
+    const gaugeMaxPower = bcGaugeFtp(powerMeter) ? bcGaugeFtp(powerMeter) * 1.5 : 300;
     const currentPower = powerMeter.currentPower || 0;
     const ratio = Math.min(Math.max(currentPower / gaugeMaxPower, 0), 1);
     const angle = -90 + (ratio * 180);
@@ -3484,7 +3500,7 @@ function applyBluetoothCoachSelectedWorkout(loadedWorkout) {
     
     // 목표 파워 궤적 업데이트 (초기 상태)
     const currentPower = pm.currentPower || 0;
-    const ftp = pm.userFTP || 200;
+    const ftp = bcGaugeFtp(pm) || 200;
     const maxPower = ftp * 2;
     const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
     const angle = -90 + (ratio * 180);
@@ -4069,7 +4085,7 @@ function skipCurrentBluetoothCoachSegmentTraining() {
       
       // 목표 파워 궤적 업데이트
       const currentPower = pm.currentPower || 0;
-      const ftp = pm.userFTP || 200;
+      const ftp = bcGaugeFtp(pm) || 200;
       const maxPower = ftp * 2;
       const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
       const angle = -90 + (ratio * 180);
@@ -4310,7 +4326,7 @@ function startBluetoothCoachTrainingTimer() {
               
               // 목표 파워 궤적 업데이트
               const currentPower = pm.currentPower || 0;
-              const ftp = pm.userFTP || 200;
+              const ftp = bcGaugeFtp(pm) || 200;
               const maxPower = ftp * 2;
               const ratio = Math.min(Math.max(currentPower / maxPower, 0), 1);
               const angle = -90 + (ratio * 180);
