@@ -39215,3 +39215,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .workout-card__flow-btn img { width: 20px; height: 20px; object-fit: contain; }
 .workout-card__flow-btn:disabled { opacity: .45; cursor: default; }
 .workout-card__flow-btn[data-w="1"] { background: #ede9fe; border-color: #8b5cf6; }
+
+/* 훈련 준비 화면: 워크아웃 블럭(이름·통계·그래프)이 화면 높이에 맞춰 눌려 잘리던 문제 →
+   블럭은 축소되지 않게(flex-shrink:0) 하고 화면 자체가 스크롤되도록 한다 */
+#trainingReadyScreen.active {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain !important;
+  touch-action: pan-y;
+}
+#trainingReadyScreen .connection-main-container,
+#trainingReadyScreen .connection-form-container,
+#trainingReadyScreen .connection-form-card,
+#trainingReadyScreen .training-ready-workout-block,
+#trainingReadyScreen .training-ready-select-dashboard,
+#trainingReadyScreen .segment-preview.segment-preview-graph {
+  flex-shrink: 0 !important;
+}
+#trainingReadyScreen .connection-form-card {
+  padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)) !important;
+}
