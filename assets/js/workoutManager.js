@@ -4407,6 +4407,10 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   const idArg = isClubWorkout ? `'${String(workout.id).replace(/[^0-9a-fA-F-]/g, '')}'` : workout.id;
   const isAdmin = (grade === '1' || grade === '3') && !isClubWorkout;
   const categoryLabel = typeof getWorkoutCategoryId === 'function' ? getWorkoutCategoryId(workout) : '';
+  window.__workoutFlowCache = window.__workoutFlowCache || {};
+  window.__workoutFlowCache[String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '')] = workout;
+  const flowFtp = Number(window.currentUser && window.currentUser.ftp) || 0;
+  const flowText = (typeof window.buildWorkoutFlowSummary === 'function' && Array.isArray(workout.segments)) ? window.buildWorkoutFlowSummary(workout, 0) : '';
   const isSelected = window.currentWorkout && String(window.currentWorkout.id) === String(workout.id);
   const selectedCheck = isSelected ? '<img src="assets/img/check2.png" alt="선택됨" class="workout-card__title-check" />' : '';
   const selectedClass = isSelected ? ' workout-card--selected' : '';
@@ -4442,9 +4446,30 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
         <span class="workout-card__meta"><img src="assets/img/tss.png" alt="TSS" class="workout-card__meta-icon-img" /> TSS ${String(tss)}</span>
         ${categoryLabel ? `<span class="workout-card__category">${escapeHtml(categoryLabel)}</span>` : ''}
       </div>
+      ${flowText ? `<div class="workout-card__flow" onclick="event.stopPropagation()">
+        <p class="workout-card__flow-text" id="workout-flow-text-${workout.id}">${escapeHtml(flowText)}</p>
+        <button type="button" class="workout-card__flow-btn" data-w="0" onclick="event.stopPropagation(); toggleWorkoutFlowUnit(this, '${String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '')}')" title="${flowFtp > 0 ? '내 FTP(' + flowFtp + 'W) 기준 W 값으로 보기' : 'FTP 정보가 없습니다'}"${flowFtp > 0 ? '' : ' disabled'}>
+          <img src="assets/img/power_i.png" alt="파워미터" />
+        </button>
+      </div>` : ''}
     </div>
   `;
 }
+
+/** 워크아웃 카드 요약 % ↔ 내 FTP W 전환(아령=파워미터 아이콘) */
+window.__workoutFlowCache = window.__workoutFlowCache || {};
+function toggleWorkoutFlowUnit(btn, id) {
+  const w = window.__workoutFlowCache[id];
+  const textEl = document.getElementById('workout-flow-text-' + id);
+  if (!btn || !w || !textEl || typeof window.buildWorkoutFlowSummary !== 'function') return;
+  const ftp = Number(window.currentUser && window.currentUser.ftp) || 0;
+  const on = btn.getAttribute('data-w') !== '1';
+  btn.setAttribute('data-w', on ? '1' : '0');
+  textEl.textContent = window.buildWorkoutFlowSummary(w, on ? ftp : 0);
+  const img = btn.querySelector('img');
+  if (img) img.src = on ? 'assets/img/power_b.png' : 'assets/img/power_i.png';
+}
+window.toggleWorkoutFlowUnit = toggleWorkoutFlowUnit;
 
 /**
  * WorkoutCard 그리드 렌더링 (workoutList에 카드 표시)

@@ -39207,3 +39207,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   flex: 1 1 0 !important;
   min-height: 0 !important;
 }
+
+/* 워크아웃 카드: 요약 + 파워미터(아령) 아이콘 */
+.workout-card__flow { display: flex; align-items: flex-start; gap: 8px; padding: 6px 4px 0; }
+.workout-card__flow-text { flex: 1; margin: 0; font-size: 11px; line-height: 1.5; color: #475569; font-family: ui-monospace, Menlo, monospace; word-break: break-word; }
+.workout-card__flow-btn { flex: 0 0 auto; width: 28px; height: 28px; padding: 3px; border: 1px solid #cbd5e1; border-radius: 6px; background: #fff; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.workout-card__flow-btn img { width: 20px; height: 20px; object-fit: contain; }
+.workout-card__flow-btn:disabled { opacity: .45; cursor: default; }
+.workout-card__flow-btn[data-w="1"] { background: #ede9fe; border-color: #8b5cf6; }
