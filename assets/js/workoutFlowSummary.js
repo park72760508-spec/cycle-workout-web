@@ -75,8 +75,7 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
         i += r.cover; rep = true;
       } else {
         var d0 = arr[i];
-        /* 웜업 영역의 선두 단일 정상 구간은 "12m(60%)" 형식 */
-        parts.push(parts.length === 0 && d0.f && !d0.to ? fmtT(d0.sec) + '(' + fmtV(d0.f) + unit + ')' : desc(d0));
+        parts.push(desc(d0));
         i++;
       }
     }
