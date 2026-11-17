@@ -6719,7 +6719,7 @@ function clubMissionStepStyle(state) {
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
 
-/** 워크아웃 요약 문자열(예: WD 10m(55→70%) | 12m@68% | 3 X (6m@80% + 3m@60%) | CD 6m(60→40%)).
+/** 워크아웃 요약 문자열(예: WU 10m(55→70%) | 12m@68% | 3 X (6m@80% + 3m@60%) | CD 6m(60→40%)).
  * ftp > 0 이면 % 값을 W 로 환산, 1분 미만은 초(s)로 표기. */
 function buildWorkoutFlowSummary(workout, ftp) {
   var segs = (workout && workout.segments) || [];
@@ -6761,8 +6761,17 @@ function buildWorkoutFlowSummary(workout, ftp) {
       var j = i, tot = 0;
       while (j < ns.length && ns[j].type === n.type) { tot += ns[j].sec; j++; }
       var first = ns[i], last = ns[j - 1];
-      var f = first.f, to = last.to || last.f;
-      out.push((n.type === 'warmup' ? 'WD ' : 'CD ') + fmtT(tot) + (f && to && f !== to ? '(' + fmtV(f) + '→' + fmtV(to) + unit + ')' : f ? '@' + fmtV(f) + unit : ''));
+      var f = first.f, to = last.to || last.f, lab = (n.type === 'warmup' ? 'WU ' : 'CD ') + fmtT(tot);
+      if (j - i > 1) {
+        /* 계단식(오프너 포함 등) 여러 구간이면 최소~최대 범위로 표기 */
+        var lo = Infinity, hi = 0;
+        for (var q = i; q < j; q++) {
+          [ns[q].f, ns[q].to].forEach(function (v) { if (v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
+        }
+        out.push(lab + (hi > 0 ? (lo === hi ? '@' + fmtV(lo) + unit : '(' + fmtV(lo) + '~' + fmtV(hi) + unit + ')') : ''));
+      } else {
+        out.push(lab + (f && to && f !== to ? '(' + fmtV(f) + '→' + fmtV(to) + unit + ')' : f ? '@' + fmtV(f) + unit : ''));
+      }
       i = j;
       continue;
     }
@@ -6803,9 +6812,7 @@ function OpenRidingWorkoutFlowSummary(props) {
         disabled={!(ftp > 0)}
         onClick={function () { setShowW(!showW); }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
-        </svg>
+        <img src={showW ? 'assets/img/power_g.png' : 'assets/img/power_i.png'} alt="파워미터" width="20" height="20" style={{ width: 20, height: 20, objectFit: 'contain' }} />
       </button>
     </div>
   );
