@@ -393,7 +393,7 @@
         var seg = { label: label, segment_type: (k === 'warmup' ? 'warmup' : (k === 'cooldown' ? 'cooldown' : 'interval')), duration_sec: Math.round(mm * 60), target_type: 'ftp_pct', target_value: f, ramp: f !== t ? 'linear' : 'none' };
         if (f !== t) seg.ramp_to_value = t;
         segs.push(seg);
-        flow.push((k === 'warmup' ? 'WD ' : (k === 'cooldown' ? 'CD ' : 'RAMP ')) + fmtMin(mm) + (f !== t ? '(' + f + '→' + t + '%)' : '@' + f + '%'));
+        flow.push((k === 'warmup' ? 'WU ' : (k === 'cooldown' ? 'CD ' : 'RAMP ')) + fmtMin(mm) + (f !== t ? '(' + f + '→' + t + '%)' : '@' + f + '%'));
       }
     });
     return { segments: segs, flow: flow.join(' | ') };
