@@ -373,7 +373,7 @@ h1,h2,h3,h4 { font-weight: 600; }
 /* 인증 화면과 동일: 모바일/블루투스 개인훈련 대시보드·스플래시·성과 대시보드 제외한 모든 활성 화면 — 화면 단위 스크롤 (스크롤 방지/고정 없음) */
 /* 화면이 뷰포트 전체로 확장 — 하단 구분 영역 없이 넓게 사용 (min-height로 확장, -webkit-fill-available로 Safari 대응) */
 /* 모바일: 100dvh = 보이는 뷰포트 높이(주소창·하단 메뉴 반영) → 하단이 브라우저 메뉴에 가려지거나 스크롤 고정 방지 */
-.screen.active:not(#mobileDashboardScreen):not(#rrMobileScreen):not(#bluetoothCoachMobileScreen):not(#outdoorRideScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
+.screen.active:not(#bluetoothPlayerListScreen):not(#mobileDashboardScreen):not(#rrMobileScreen):not(#bluetoothCoachMobileScreen):not(#outdoorRideScreen):not(#bluetoothTrainingCoachScreen):not(#splashScreen):not(#performanceDashboardScreen):not(#runDashboardScreen):not(#authScreen):not(#stelvioRankingScreen):not(#runningRankingScreen):not(#basecampScreen):not(#sportCategoryScreen):not(#runBasecampScreen):not(#indoorTrainingSubScreen):not(#marketHomeScreen):not(#marketItemFormScreen):not(#marketItemDetailScreen):not(#marketMyPageScreen) {
   /* iOS/Bluefy: position fixed + inset 0으로 뷰포트 전체 채움 (하단 회색 바 근본 해결) */
   position: fixed !important;
   top: 0 !important;
@@ -39192,3 +39192,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   padding-bottom: 0 !important;
 }
 #bluetoothPlayerListScreen .connection-device-section .player-list-content > .player-track-item:last-child { margin-bottom: 0 !important; }
+
+/* Live Training Session: 상단 여백 기준으로 하단 여백 동일 적용 (범용 .screen.active 규칙에서 제외했으므로 아래가 적용됨) */
+#bluetoothPlayerListScreen.active {
+  padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-top, 0px)) 20px !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
