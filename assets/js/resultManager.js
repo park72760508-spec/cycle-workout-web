@@ -87,11 +87,28 @@ if (typeof postJSONWithProxy !== 'function') {
     state.currentTrainingSession.endTime = new Date().toISOString();
   }
 
-  function appendStreamSample(type, value, time = new Date()) {
+  function appendStreamSample(type, value, time = new Date(), segIndex) {
     const keyMap = { power: 'powerData', heartRate: 'hrData', hr: 'hrData', cadence: 'cadenceData' };
     const key = keyMap[type] || `${type}Data`;
     if (!state.currentTrainingSession[key]) state.currentTrainingSession[key] = [];
     state.currentTrainingSession[key].push({ t: toISO(time), v: Number(value) || 0 });
+    markSegmentStart(segIndex, time);
+  }
+
+  /**
+   * 구간(세그먼트)이 실제로 바뀐 시각 기록(2026-11-17) — 구간별 평균 파워를 목표 구간 길이 누적이 아니라
+   * 훈련 중 실제 경계로 계산하기 위함. segIndex 가 이전과 달라질 때마다 {i, t} 한 건 추가.
+   */
+  function markSegmentStart(segIndex, time) {
+    try {
+      const ss = state.currentTrainingSession;
+      const idx = Number(segIndex);
+      if (!ss || segIndex == null || !isFinite(idx) || idx < 0) return;
+      if (!ss.segmentMarks) ss.segmentMarks = [];
+      const last = ss.segmentMarks[ss.segmentMarks.length - 1];
+      if (last && last.i === idx) return;
+      ss.segmentMarks.push({ i: idx, t: toISO(time || new Date()) });
+    } catch (e) {}
   }
 
   // ---------------------------
@@ -510,6 +527,9 @@ async function saveTrainingResult(extra = {}) {
           const __saveKey = currentUserId + '_' + (__sessStart ? new Date(__sessStart).getTime() : Date.now());
           const trainingData = {
             save_key: __saveKey,
+            // 구간별 평균 파워 계산용: 훈련 시작 시각 + 실제 구간 전환 시각(없으면 목표 길이 누적으로 폴백)
+            session_start: (state.currentTrainingSession && state.currentTrainingSession.startTime) || null,
+            segment_marks: (state.currentTrainingSession && state.currentTrainingSession.segmentMarks) || null,
             // 필수 필드
             duration: totalSeconds,
             weighted_watts: finalNP,
@@ -1308,6 +1328,7 @@ async function saveTrainingResult(extra = {}) {
     startSession,
     endSession,
     appendStreamSample,
+    markSegmentStart,
     // 세그먼트 기록
     recordSegmentResult,
     // 저장/조회

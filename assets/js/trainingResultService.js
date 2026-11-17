@@ -406,6 +406,61 @@ function computeSegmentAvgWatts(oneHzWatts, segments) {
 }
 
 /**
+ * 시간 스탬프가 있는 파워 샘플로 구간별 실제 평균 파워 계산(2026-11-17).
+ * - 기준 시각: 훈련 시작(sessionStart) — 첫 샘플 시각이 아님(시작 지연으로 전 구간이 밀리는 것 방지)
+ * - 샘플이 없는 초는 0W(코스팅·정지)로 본다. 기록은 파워>0 일 때만 남으므로 빈 초를 직전 값으로 채우면
+ *   휴식 구간이 앞 인터벌 값으로 부풀고 훈련 종료 후 값이 계속 이어진다(기존 오류).
+ * - 구간 경계: 훈련 중 기록한 실제 전환 시각(marks)이 있으면 그것을, 없는 구간은 목표 길이 누적을 사용.
+ * @returns {number[]|null}
+ */
+function computeSegmentAvgWattsFromSamples(samples, segments, sessionStart, marks) {
+  if (!samples || !samples.length || !segments || !segments.length) return null;
+  const firstT = samples[0] && samples[0].t != null ? new Date(samples[0].t).getTime() : NaN;
+  if (Number.isNaN(firstT)) return null;
+  let t0 = sessionStart ? new Date(sessionStart).getTime() : firstT;
+  if (Number.isNaN(t0) || t0 > firstT) t0 = firstT;
+  const perSec = new Map();
+  for (let i = 0; i < samples.length; i++) {
+    const smp = samples[i];
+    if (!smp || smp.t == null) continue;
+    const ms = new Date(smp.t).getTime();
+    if (Number.isNaN(ms)) continue;
+    const sec = Math.floor((ms - t0) / 1000);
+    if (sec < 0) continue;
+    perSec.set(sec, Number(smp.v) || 0);
+  }
+  const durs = segments.map((sg) => Math.max(0, Math.round(Number((sg && (sg.duration_sec || sg.duration)) || 0))));
+  const markSec = {};
+  (Array.isArray(marks) ? marks : []).forEach((m) => {
+    const idx = Number(m && m.i);
+    const ms = m && m.t != null ? new Date(m.t).getTime() : NaN;
+    if (isFinite(idx) && !Number.isNaN(ms) && markSec[idx] === undefined) markSec[idx] = Math.max(0, (ms - t0) / 1000);
+  });
+  // 구간 시작(초): 실제 전환 시각 우선, 없으면 이전 구간 시작 + 목표 길이
+  const starts = [];
+  for (let i = 0; i < segments.length; i++) {
+    if (markSec[i] !== undefined) starts.push(markSec[i]);
+    else starts.push(i === 0 ? 0 : starts[i - 1] + durs[i - 1]);
+  }
+  let lastSample = 0;
+  perSec.forEach((_, k) => { if (k > lastSample) lastSample = k; });
+  const result = [];
+  let hasAny = false;
+  for (let i = 0; i < segments.length; i++) {
+    if (durs[i] <= 0) { result.push(null); continue; }
+    const a = Math.round(starts[i]);
+    const b = i + 1 < segments.length && markSec[i + 1] !== undefined ? Math.round(starts[i + 1]) : a + durs[i];
+    if (b <= a || a > lastSample + 5) { result.push(null); continue; }
+    let sum = 0;
+    for (let s = a; s < b; s++) sum += perSec.get(s) || 0;
+    const avg = Math.round(sum / (b - a));
+    result.push(avg);
+    hasAny = true;
+  }
+  return hasAny ? result : null;
+}
+
+/**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
  *
@@ -796,9 +851,11 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
       const max60minWatts = wattsArray && wattsArray.length >= 3600 ? calculateMaxAveragePower(wattsArray, 3600) : null;
 
       // 세그먼트별 실제 평균 파워 (라이딩 기록 워크아웃 그래프 오버레이용) — 인도어 구조화 워크아웃에서만 존재
+      // 2026-11-17: 타임스탬프 샘플 + 훈련 시작/실제 구간 전환 시각 기준(빈 초는 0W). 계산 불가 시 기존 방식으로 폴백.
       const segmentAvgWatts =
         Array.isArray(trainingData.segments) && trainingData.segments.length
-          ? computeSegmentAvgWatts(smoothedForFtp, trainingData.segments)
+          ? (computeSegmentAvgWattsFromSamples(trainingData.powerData, trainingData.segments, trainingData.session_start, trainingData.segment_marks)
+              || computeSegmentAvgWatts(smoothedForFtp, trainingData.segments))
           : null;
 
       let maxWattsResolved =

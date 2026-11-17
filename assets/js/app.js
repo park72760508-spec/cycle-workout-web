@@ -20305,6 +20305,8 @@ function startMobileTrainingTimerLoop() {
     
     if (window.trainingResults && typeof window.trainingResults.appendStreamSample === 'function') {
       const now = new Date();
+      // 구간 전환 시각 기록(파워 0W 구간에서도 경계가 남도록 매초 호출)
+      if (typeof window.trainingResults.markSegmentStart === 'function') window.trainingResults.markSegmentStart(mts.segIndex, now);
       if (powerValue > 0) {
         window.trainingResults.appendStreamSample('power', powerValue, now);
       }

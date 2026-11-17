@@ -2121,6 +2121,8 @@ function updateDashboard(data = null) {
     
     // 실시간 데이터를 resultManager에 기록 (훈련 진행 중일 때만)
     if (window.trainingResults && typeof window.trainingResults.appendStreamSample === 'function') {
+        // 구간 전환 시각 기록(파워 0W 구간에서도 경계가 남도록 매초 호출)
+        if (typeof window.trainingResults.markSegmentStart === 'function' && currentSegmentIndex >= 0) window.trainingResults.markSegmentStart(currentSegmentIndex, new Date());
         // 파워 데이터 기록
         if (powerValue > 0) {
             window.trainingResults.appendStreamSample('power', powerValue);
