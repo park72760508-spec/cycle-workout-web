@@ -39200,3 +39200,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   min-height: 0 !important;
   overflow: hidden !important;
 }
+
+/* Live Training Session: 기본 .player-list-content의 max-height(100vh-260px)가 목록을 중간에서 끊어 하단 빈 공간 발생 → 해제 */
+#bluetoothPlayerListScreen .connection-device-section .player-list-content {
+  max-height: none !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+}
