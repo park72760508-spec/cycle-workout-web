@@ -54,8 +54,9 @@
   document.addEventListener('click', function (e) {
     var t = e.target;
     if (!t || !t.closest) return;
-    var sec = t.closest('.mobile-segment-graph-section');
-    if (!sec || !sec.querySelector('#mobileIndividualSegmentGraph')) return;
+    /* 모바일 개인/그룹 훈련 화면 + 블루투스 개인훈련 통합 화면(그룹훈련 Live Training Room 참가자) 그래프 */
+    var sec = t.closest('.mobile-segment-graph-section') || t.closest('.indiv-segment-graph-section');
+    if (!sec || !(sec.querySelector('#mobileIndividualSegmentGraph') || sec.querySelector('#indiv-individualSegmentGraph'))) return;
     var w = window.currentWorkout;
     if (!w) return;
     show(w);
