@@ -39170,3 +39170,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #bluetoothPlayerListScreen .connection-device-section { padding-left: 4px !important; padding-right: 4px !important; }
 #bluetoothPlayerListScreen .player-list-content { padding-left: 0 !important; padding-right: 0 !important; }
 #bluetoothPlayerListScreen .player-list-content .player-track-item { padding-left: 8px !important; padding-right: 8px !important; margin-left: 0; margin-right: 0; }
+
+/* Live Training Session: 화면을 뷰포트에 맞추고 하단 여백 = 상단 여백(20px) */
+#bluetoothPlayerListScreen.active {
+  box-sizing: border-box !important;
+  min-height: 0 !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  padding: 20px 20px 20px 20px !important;
+}
