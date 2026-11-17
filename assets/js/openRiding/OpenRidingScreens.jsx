@@ -6721,7 +6721,7 @@ function clubMissionStepStyle(state) {
 
 /** 워크아웃 요약 문자열(예: WU 10m(55→70%) | 12m@68% | 3 X (6m@80% + 3m@60%) | CD 6m(60→40%)).
  * ftp > 0 이면 % 값을 W 로 환산, 1분 미만은 초(s)로 표기. */
-function buildWorkoutFlowSummary(workout, ftp) {
+function openRidingFlowSummaryText(workout, ftp) {
   return typeof window !== 'undefined' && typeof window.buildWorkoutFlowSummary === 'function' ? window.buildWorkoutFlowSummary(workout, ftp) : '';
 }
 
@@ -6731,7 +6731,7 @@ function OpenRidingWorkoutFlowSummary(props) {
   var showW = _w[0];
   var setShowW = _w[1];
   var ftp = typeof window !== 'undefined' && window.currentUser ? Number(window.currentUser.ftp) || 0 : 0;
-  var text = buildWorkoutFlowSummary(props.workout, showW ? ftp : 0);
+  var text = openRidingFlowSummaryText(props.workout, showW ? ftp : 0);
   if (!text) return null;
   return (
     <div className="flex items-start gap-2 px-1 pt-1">
