@@ -33,7 +33,11 @@
     ensureCss(); close();
     var ftp = Number(window.currentUser && window.currentUser.ftp) || 0;
     var rows = (workout && typeof window.buildWorkoutFlowRows === 'function') ? window.buildWorkoutFlowRows(workout, ftp) : [];
-    var mins = workout ? Math.round((Number(workout.total_seconds || workout.totalSeconds) || 0) / 60) : 0;
+    var totSec = workout ? (Number(workout.total_seconds || workout.totalSeconds) || 0) : 0;
+    if (!totSec && workout && Array.isArray(workout.segments)) {
+      totSec = workout.segments.reduce(function (a, g) { return a + (Number(g && (g.duration_sec != null ? g.duration_sec : g.duration)) || 0); }, 0);
+    }
+    var mins = Math.round(totSec / 60);
     var meta = (mins ? mins + '분' : '') + (ftp ? (mins ? ' · ' : '') + '내 FTP ' + ftp + 'W' : '');
     var body = rows.length
       ? '<table class="wso-table"><colgroup><col style="width:17%"><col style="width:43%"><col style="width:40%"></colgroup>' +
