@@ -6812,7 +6812,7 @@ function OpenRidingWorkoutFlowSummary(props) {
         disabled={!(ftp > 0)}
         onClick={function () { setShowW(!showW); }}
       >
-        <img src={showW ? 'assets/img/power_g.png' : 'assets/img/power_i.png'} alt="파워미터" width="20" height="20" style={{ width: 20, height: 20, objectFit: 'contain' }} />
+        <img src={showW ? 'assets/img/power_b.png' : 'assets/img/power_i.png'} alt="파워미터" width="20" height="20" style={{ width: 20, height: 20, objectFit: 'contain' }} />
       </button>
     </div>
   );
