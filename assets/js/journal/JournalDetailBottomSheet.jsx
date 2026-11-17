@@ -423,7 +423,7 @@
     }
     if (pts.length < 2) return null;
     var isTime = ser.mode !== 'distance';
-    var W = 320, H = 150, L = 30, R = 8, T = 10, B = 24;
+    var W = 320, H = 150, L = 52, R = 8, T = 10, B = 24;
     var cw = W - L - R, ch = H - T - B;
     var maxX = Math.max(Number(ser.target) || 0, pts[pts.length - 1][0], 0.0001);
     var maxY = 0;
@@ -443,7 +443,7 @@
     var els = [];
     yTicks.forEach(function (v, i) {
       els.push(React.createElement('line', { key: 'g' + i, x1: L, x2: W - R, y1: yOf(v), y2: yOf(v), stroke: 'rgba(100,116,139,0.28)', strokeWidth: 1 }));
-      els.push(React.createElement('text', { key: 'y' + i, x: L - 4, y: yOf(v) + 3, fontSize: 9, textAnchor: 'end', fill: '#64748b' }, v));
+      els.push(React.createElement('text', { key: 'y' + i, x: L - 4, y: yOf(v) + 3, fontSize: 9, textAnchor: 'end', fill: '#64748b' }, i === 0 ? v + ' km/h' : v));
     });
     [0, 0.5, 1].forEach(function (f, i) {
       els.push(React.createElement('text', { key: 'x' + i, x: xOf(maxX * f), y: H - 8, fontSize: 9, textAnchor: f === 0 ? 'start' : (f === 1 ? 'end' : 'middle'), fill: '#64748b' }, xLabel(f)));
