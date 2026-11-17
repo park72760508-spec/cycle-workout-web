@@ -451,7 +451,7 @@
     els.push(React.createElement('path', { key: 'area', d: area, fill: 'rgba(34,197,94,0.18)' }));
     els.push(React.createElement('path', { key: 'line', d: line, fill: 'none', stroke: '#16a34a', strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' }));
     return React.createElement('div', { className: 'journal-race-speed-graph', style: { margin: '8px 0 12px' } },
-      React.createElement('div', { style: { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 4 } }, 'STELVIO Race · 평균 속도 (km/h) ' + (isTime ? '- 시간' : '- 거리')),
+      React.createElement('div', { style: { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 4 } }, 'STELVIO Race · 평균 속도 (km/h) ' + (isTime ? '- 시간' : '- 거리') + (ser.approx ? ' (평균 속도 기준)' : '')),
       React.createElement('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', style: { display: 'block', background: 'rgba(241,245,249,0.7)', borderRadius: 10 }, role: 'img', 'aria-label': 'STELVIO Race 속도 그래프' }, els));
   }
   function journalLogHasSpeedPeaks(log) {
@@ -1138,6 +1138,16 @@
       var all = (logsForRoute || []).concat((logsForRoute && logsForRoute._companionStelvioLogs) || []);
       for (var ri = 0; ri < all.length; ri++) {
         if (all[ri] && all[ri].race_speed_series && Array.isArray(all[ri].race_speed_series.x)) return all[ri].race_speed_series;
+      }
+      // 속도 시계열이 저장되기 전의 STELVIO Race 기록: 평균 속도 값으로 평평하게 표시(approx)
+      for (var rj = 0; rj < all.length; rj++) {
+        var rl = all[rj];
+        if (!rl || !/^STELVIO Race/i.test(String(rl.title || ''))) continue;
+        var avgSp = Number(rl.avg_speed_kmh), dKm = Number(rl.distance_km), dSec = Number(rl.duration_sec);
+        if (!(avgSp > 0)) continue;
+        var isDist = /km/i.test(String(rl.title || '')) && !/분/.test(String(rl.title || ''));
+        if (isDist && dKm > 0) return { mode: 'distance', target: dKm, x: [0, dKm], y: [avgSp, avgSp], approx: true };
+        if (dSec > 0) return { mode: 'time', target: dSec, x: [0, dSec], y: [avgSp, avgSp], approx: true };
       }
       return null;
     })();
