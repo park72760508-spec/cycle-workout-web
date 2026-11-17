@@ -510,6 +510,7 @@ async function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidNamespace)
     // 2026-10-20: 아웃도어 라이딩(GPS) — 값이 있을 때만 보냄(다른 기록 저장 시 기존 값을 null 로 덮지 않게)
     ...(log.max_speed_kmh != null && Number(log.max_speed_kmh) > 0 ? { max_speed_kmh: num(log.max_speed_kmh) } : {}),
     ...(log.moving_time_sec != null && Number(log.moving_time_sec) > 0 ? { moving_time_sec: int(log.moving_time_sec) } : {}),
+    ...(log.race_speed_series && Array.isArray(log.race_speed_series.x) && log.race_speed_series.x.length ? { race_speed_series_json: log.race_speed_series } : {}),
     weight_at_ride_kg: num(log.weight),
     ftp_at_time: num(log.ftp_at_time),
     avg_watts: num(log.avg_watts),
@@ -1103,6 +1104,7 @@ function buildFallbackLogFromTrainingData(trainingData, txResult) {
     distance_km: td.distance_km,
     avg_speed_kmh: td.avg_speed_kmh,
     max_speed_kmh: td.max_speed_kmh,
+    race_speed_series: td.race_speed_series,
     elevation_gain: td.elevation_gain,
     weighted_watts: td.weighted_watts,
     avg_watts: td.avg_watts,

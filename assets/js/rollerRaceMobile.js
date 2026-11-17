@@ -202,6 +202,20 @@
   }
   function stopTrainingSession() { if (tmTimer) { clearInterval(tmTimer); tmTimer = null; } }
   /** 개인훈련 모바일과 같은 저장(라이딩 기록·TSS·포인트) + 이동거리·평균/최고 속도 포함. 같은 세션은 save_key 로 중복 저장되지 않음 */
+  /** 레이스 속도 그래프(시간/거리 대비 평균 속도) 시계열 — 라이딩 기록 Summary 에서 다시 그리기 위해 저장(최대 ~120점) */
+  function buildRaceSpeedSeries() {
+    try {
+      var h = S.hist || [];
+      if (h.length < 2) return null;
+      var step = Math.max(1, Math.ceil(h.length / 120)), xs = [], ys = [], i;
+      for (i = 0; i < h.length; i += step) { xs.push(Math.round(h[i][0] * 100) / 100); ys.push(Math.round(h[i][1] * 10) / 10); }
+      var last = h[h.length - 1], lx = Math.round(last[0] * 100) / 100;
+      if (xs[xs.length - 1] !== lx) { xs.push(lx); ys.push(Math.round(last[1] * 10) / 10); }
+      // Firestore 는 중첩 배열을 저장할 수 없어 x·y 두 개의 평면 배열로 보관
+      return { mode: S.mode, target: S.mode === 'time' ? S.targetMin * 60 : S.targetKm, x: xs, y: ys };
+    } catch (e) { return null; }
+  }
+
   function saveTrainingRecord(r) {
     var tr = w.trainingResults;
     if (!tr || typeof tr.saveTrainingResult !== 'function') return Promise.reject(new Error('trainingResults 없음'));
@@ -214,6 +228,7 @@
     return tr.saveTrainingResult({
       workoutId: '', workoutName: title, elapsedTime: r.elapsed_sec, completionType: r.completed ? 'normal' : 'manual',
       distance_km: r.distance_km, avg_speed_kmh: r.avg_speed_kmh, max_speed_kmh: r.max_speed_kmh,
+      race_speed_series: buildRaceSpeedSeries(),
       appVersion: '1.0.0', timestamp: new Date().toISOString(), source: 'race_mobile'
     }).then(function (res) { restore(); if (!res || !res.success) throw new Error('save_failed'); return res; }, function (e) { restore(); throw e; });
   }

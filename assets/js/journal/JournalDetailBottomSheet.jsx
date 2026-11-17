@@ -412,6 +412,48 @@
     if (!(peak > 0) || !(v > 0)) return false;
     return Math.round(v * 10) >= Math.round(peak * 10);
   }
+  /* 2026-11-17: STELVIO Race 휴대폰 기록 — 워크아웃·코스맵이 없으므로 레이스 화면의 속도 그래프(시간/거리 대비 평균 속도)를 그대로 표시 */
+  function JournalRaceSpeedGraph(props) {
+    var ser = props.series;
+    var pts = [];
+    if (ser && Array.isArray(ser.x) && Array.isArray(ser.y)) {
+      for (var qi = 0; qi < Math.min(ser.x.length, ser.y.length); qi++) {
+        if (isFinite(Number(ser.x[qi])) && isFinite(Number(ser.y[qi]))) pts.push([Number(ser.x[qi]), Number(ser.y[qi])]);
+      }
+    }
+    if (pts.length < 2) return null;
+    var isTime = ser.mode !== 'distance';
+    var W = 320, H = 150, L = 30, R = 8, T = 10, B = 24;
+    var cw = W - L - R, ch = H - T - B;
+    var maxX = Math.max(Number(ser.target) || 0, pts[pts.length - 1][0], 0.0001);
+    var maxY = 0;
+    pts.forEach(function (p) { if (p[1] > maxY) maxY = p[1]; });
+    maxY = Math.max(10, Math.ceil(maxY / 10) * 10);
+    function xOf(v) { return L + (v / maxX) * cw; }
+    function yOf(v) { return T + ch - (v / maxY) * ch; }
+    var line = pts.map(function (p, i) { return (i ? 'L' : 'M') + xOf(p[0]).toFixed(1) + ' ' + yOf(p[1]).toFixed(1); }).join(' ');
+    var area = line + ' L' + xOf(pts[pts.length - 1][0]).toFixed(1) + ' ' + (T + ch) + ' L' + xOf(pts[0][0]).toFixed(1) + ' ' + (T + ch) + ' Z';
+    var yTicks = [0, 0.5, 1].map(function (f) { return Math.round(maxY * f); });
+    function xLabel(f) {
+      var v = maxX * f;
+      if (!isTime) return (Math.round(v * 10) / 10) + 'km';
+      var m = Math.round(v / 60);
+      return m + '분';
+    }
+    var els = [];
+    yTicks.forEach(function (v, i) {
+      els.push(React.createElement('line', { key: 'g' + i, x1: L, x2: W - R, y1: yOf(v), y2: yOf(v), stroke: 'rgba(100,116,139,0.28)', strokeWidth: 1 }));
+      els.push(React.createElement('text', { key: 'y' + i, x: L - 4, y: yOf(v) + 3, fontSize: 9, textAnchor: 'end', fill: '#64748b' }, v));
+    });
+    [0, 0.5, 1].forEach(function (f, i) {
+      els.push(React.createElement('text', { key: 'x' + i, x: xOf(maxX * f), y: H - 8, fontSize: 9, textAnchor: f === 0 ? 'start' : (f === 1 ? 'end' : 'middle'), fill: '#64748b' }, xLabel(f)));
+    });
+    els.push(React.createElement('path', { key: 'area', d: area, fill: 'rgba(34,197,94,0.18)' }));
+    els.push(React.createElement('path', { key: 'line', d: line, fill: 'none', stroke: '#16a34a', strokeWidth: 2, strokeLinejoin: 'round', strokeLinecap: 'round' }));
+    return React.createElement('div', { className: 'journal-race-speed-graph', style: { margin: '8px 0 12px' } },
+      React.createElement('div', { style: { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 4 } }, 'STELVIO Race · 평균 속도 (km/h) ' + (isTime ? '- 시간' : '- 거리')),
+      React.createElement('svg', { viewBox: '0 0 ' + W + ' ' + H, width: '100%', style: { display: 'block', background: 'rgba(241,245,249,0.7)', borderRadius: 10 }, role: 'img', 'aria-label': 'STELVIO Race 속도 그래프' }, els));
+  }
   function journalLogHasSpeedPeaks(log) {
     if (!log) return false;
     return SPEED_PEAK_FIELDS.some(function(f) { return Number(log[f]) > 0; });
@@ -1091,6 +1133,14 @@
       graphUtils && typeof graphUtils.resolveStelvioLogWithActualPower === 'function'
         ? graphUtils.resolveStelvioLogWithActualPower(log, logsForRoute)
         : null;
+    var raceSeries = (function () {
+      if (log && log.race_speed_series && Array.isArray(log.race_speed_series.x)) return log.race_speed_series;
+      var all = (logsForRoute || []).concat((logsForRoute && logsForRoute._companionStelvioLogs) || []);
+      for (var ri = 0; ri < all.length; ri++) {
+        if (all[ri] && all[ri].race_speed_series && Array.isArray(all[ri].race_speed_series.x)) return all[ri].race_speed_series;
+      }
+      return null;
+    })();
     var spd = log.avg_speed_kmh != null && Number(log.avg_speed_kmh) > 0
       ? Number(log.avg_speed_kmh)
       : avgSpeedKmhFromDistanceTime(log.distance_km, log.duration_sec);
@@ -1125,6 +1175,10 @@
           'journal-tab-content journal-tab-content--summary-route' +
           (showWorkoutGraph ? ' journal-tab-content--summary-workout' : '')
       },
+      /* 2026-11-17: STELVIO Race 기록(워크아웃·코스 없음) — 레이스 속도 그래프 */
+      (!routeInfo.hasRoute && !workoutId && raceSeries)
+        ? React.createElement(JournalRaceSpeedGraph, { key: 'race-spd', series: raceSeries })
+        : null,
       /* 2026-10-25: Summary 탭 경로 지도 제거(요청) — 실내 워크아웃 그래프는 유지 */
       showWorkoutGraph
           ? React.createElement(WorkoutGraph, {

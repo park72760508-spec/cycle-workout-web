@@ -547,6 +547,7 @@ async function saveTrainingResult(extra = {}) {
             // 2026-11-15: STELVIO Race 모바일 — 평균/최고 속도(있을 때만)
             avg_speed_kmh: Number(extra.avg_speed_kmh) > 0 ? Math.round(Number(extra.avg_speed_kmh) * 100) / 100 : undefined,
             max_speed_kmh: Number(extra.max_speed_kmh) > 0 ? Math.round(Number(extra.max_speed_kmh) * 100) / 100 : undefined,
+            race_speed_series: extra.race_speed_series && Array.isArray(extra.race_speed_series.x) ? extra.race_speed_series : undefined,
             elevation_gain: null, // GPS 데이터가 있으면 추가 가능
             
             // 파워 & 부하

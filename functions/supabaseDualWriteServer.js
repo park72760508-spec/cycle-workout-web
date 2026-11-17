@@ -506,6 +506,7 @@ function mapTrainingLogToRideRow(firebaseUid, logDocId, log, uidConfig) {
     }
   }
   { const ms = num(log.max_speed_kmh); if (ms != null && ms > 0) row.max_speed_kmh = ms; } // 최고 속도(값 있을 때만)
+  if (log.race_speed_series && Array.isArray(log.race_speed_series.x) && log.race_speed_series.x.length) row.race_speed_series_json = log.race_speed_series; // Race 속도 그래프
   return row;
 }
 

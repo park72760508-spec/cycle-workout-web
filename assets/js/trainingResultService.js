@@ -888,6 +888,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         distance_km: trainingData.distance_km || null,
         ...(Number(trainingData.avg_speed_kmh) > 0 && { avg_speed_kmh: Number(trainingData.avg_speed_kmh) }),
         ...(Number(trainingData.max_speed_kmh) > 0 && { max_speed_kmh: Number(trainingData.max_speed_kmh) }),
+        ...(trainingData.race_speed_series && Array.isArray(trainingData.race_speed_series.x) && { race_speed_series: trainingData.race_speed_series }),
         elevation_gain: trainingData.elevation_gain || null,
         weight: userWeight,
         
