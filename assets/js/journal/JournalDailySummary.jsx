@@ -306,6 +306,9 @@
       graphUtils && typeof graphUtils.resolveStelvioLogWithActualPower === 'function'
         ? graphUtils.resolveStelvioLogWithActualPower(null, logsExpanded)
         : null;
+    var raceSeriesDay = !routeProfile.hasRoute && !workoutId && typeof window.resolveRaceSpeedSeries === 'function'
+      ? window.resolveRaceSpeedSeries(null, logs)
+      : null;
     var mapKey =
       (selectedDate || '') +
       '-seg' +
@@ -385,6 +388,8 @@
             mapHeight: 200,
             className: 'journal-daily-summary-course-map'
           })
+        : (!showWorkoutGraph && raceSeriesDay && window.JournalRaceSpeedGraph)
+          ? React.createElement(window.JournalRaceSpeedGraph, { key: 'race-' + (selectedDate || ''), series: raceSeriesDay })
         : showWorkoutGraph
           ? React.createElement(WorkoutGraph, {
               key: 'wo-' + workoutId + '-' + (selectedDate || ''),
