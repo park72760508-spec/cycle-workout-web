@@ -335,7 +335,10 @@
         if (!selectedDate || !trainingLogs) return [];
         var raw = trainingLogs[selectedDate];
         if (!raw || !raw.length) return [];
-        return raw.slice();
+        // slice() 는 배열에 붙은 _companionStelvioLogs(Strava 우선 시 숨겨진 STELVIO 동반 로그)를 잃으므로 함께 복사
+        var cp = raw.slice();
+        if (raw._companionStelvioLogs) cp._companionStelvioLogs = raw._companionStelvioLogs;
+        return cp;
       },
       [selectedDate, trainingLogs]
     );
@@ -359,7 +362,9 @@
           : null;
       if (!userId) return;
       var cancelled = false;
-      var chain = Promise.resolve(logsForSelectedDate.slice());
+      var __base0 = logsForSelectedDate.slice();
+      if (logsForSelectedDate._companionStelvioLogs) __base0._companionStelvioLogs = logsForSelectedDate._companionStelvioLogs;
+      var chain = Promise.resolve(__base0);
       if (typeof enrichHrFn === 'function') {
         chain = chain.then(function (base) {
           return enrichHrFn(userId, base);

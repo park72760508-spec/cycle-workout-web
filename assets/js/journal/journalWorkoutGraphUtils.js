@@ -178,7 +178,10 @@
     for (var i = 0; i < fsLogs.length; i++) {
       var l = fsLogs[i];
       if (!isStelvioActivityLog(l)) continue;
-      if (l.workout_id == null || String(l.workout_id).trim() === '') continue;
+      var hasWo = !(l.workout_id == null || String(l.workout_id).trim() === '');
+      // 2026-11-17: 워크아웃이 없는 STELVIO Race 기록도 동반 로그로 붙여 일별 요약에서 속도 그래프를 그린다
+      var isRace = /^STELVIO Race/i.test(String(l.title || '')) || (l.race_speed_series && Array.isArray(l.race_speed_series.x));
+      if (!hasWo && !isRace) continue;
       companions.push(l);
     }
     if (!companions.length) return logs;
