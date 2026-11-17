@@ -6727,7 +6727,10 @@ function openRidingFlowSummaryText(workout, ftp) {
 
 /** 그룹세션 워크아웃 요약 + 아령 아이콘(클릭 시 % ↔ 내 FTP W 환산 전환) */
 function OpenRidingWorkoutFlowSummary(props) {
-  var _w = useState(false);
+  var wkKey = props.workout && props.workout.id != null ? String(props.workout.id) : '';
+  var _w = useState(function () {
+    return !!(typeof window !== 'undefined' && window.__workoutFlowW && wkKey && window.__workoutFlowW[wkKey]);
+  });
   var showW = _w[0];
   var setShowW = _w[1];
   var ftp = typeof window !== 'undefined' && window.currentUser ? Number(window.currentUser.ftp) || 0 : 0;
@@ -6745,7 +6748,11 @@ function OpenRidingWorkoutFlowSummary(props) {
         title={ftp > 0 ? (showW ? '% 값으로 보기' : '내 FTP(' + ftp + 'W) 기준 W 값으로 보기') : 'FTP 정보가 없습니다'}
         aria-pressed={showW}
         disabled={!(ftp > 0)}
-        onClick={function () { setShowW(!showW); }}
+        onClick={function () {
+          var nv = !showW;
+          if (typeof window !== 'undefined' && wkKey) { window.__workoutFlowW = window.__workoutFlowW || {}; window.__workoutFlowW[wkKey] = nv; }
+          setShowW(nv);
+        }}
       >
         <img src={showW ? 'assets/img/power_b.png' : 'assets/img/power_i.png'} alt="파워미터" width="20" height="20" style={{ width: 20, height: 20, objectFit: 'contain' }} />
       </button>

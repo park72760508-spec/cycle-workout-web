@@ -4410,7 +4410,10 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
   window.__workoutFlowCache = window.__workoutFlowCache || {};
   window.__workoutFlowCache[String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '')] = workout;
   const flowFtp = Number(window.currentUser && window.currentUser.ftp) || 0;
-  const flowText = (typeof window.buildWorkoutFlowSummary === 'function' && Array.isArray(workout.segments)) ? window.buildWorkoutFlowSummary(workout, 0) : '';
+  window.__workoutFlowW = window.__workoutFlowW || {};
+  const flowKey = String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '');
+  const flowOnW = !!window.__workoutFlowW[flowKey] && flowFtp > 0;
+  const flowText = (typeof window.buildWorkoutFlowSummary === 'function' && Array.isArray(workout.segments)) ? window.buildWorkoutFlowSummary(workout, flowOnW ? flowFtp : 0) : '';
   const isSelected = window.currentWorkout && String(window.currentWorkout.id) === String(workout.id);
   const selectedCheck = isSelected ? '<img src="assets/img/check2.png" alt="선택됨" class="workout-card__title-check" />' : '';
   const selectedClass = isSelected ? ' workout-card--selected' : '';
@@ -4448,8 +4451,8 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
       </div>
       ${flowText ? `<div class="workout-card__flow" onclick="event.stopPropagation()">
         <p class="workout-card__flow-text" id="workout-flow-text-${workout.id}">${escapeHtml(flowText)}</p>
-        <button type="button" class="workout-card__flow-btn" data-w="0" onclick="event.stopPropagation(); toggleWorkoutFlowUnit(this, '${String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '')}')" title="${flowFtp > 0 ? '내 FTP(' + flowFtp + 'W) 기준 W 값으로 보기' : 'FTP 정보가 없습니다'}"${flowFtp > 0 ? '' : ' disabled'}>
-          <img src="assets/img/power_i.png" alt="파워미터" />
+        <button type="button" class="workout-card__flow-btn" data-w="${flowOnW ? 1 : 0}" onclick="event.stopPropagation(); toggleWorkoutFlowUnit(this, '${String(workout.id).replace(/[^0-9a-zA-Z_-]/g, '')}')" title="${flowFtp > 0 ? '내 FTP(' + flowFtp + 'W) 기준 W 값으로 보기' : 'FTP 정보가 없습니다'}"${flowFtp > 0 ? '' : ' disabled'}>
+          <img src="${flowOnW ? 'assets/img/power_b.png' : 'assets/img/power_i.png'}" alt="파워미터" />
         </button>
       </div>` : ''}
     </div>
@@ -4465,6 +4468,8 @@ function toggleWorkoutFlowUnit(btn, id) {
   const ftp = Number(window.currentUser && window.currentUser.ftp) || 0;
   const on = btn.getAttribute('data-w') !== '1';
   btn.setAttribute('data-w', on ? '1' : '0');
+  window.__workoutFlowW = window.__workoutFlowW || {};
+  window.__workoutFlowW[id] = on; /* 목록 재렌더 시에도 선택 유지 */
   textEl.textContent = window.buildWorkoutFlowSummary(w, on ? ftp : 0);
   const img = btn.querySelector('img');
   if (img) img.src = on ? 'assets/img/power_b.png' : 'assets/img/power_i.png';
