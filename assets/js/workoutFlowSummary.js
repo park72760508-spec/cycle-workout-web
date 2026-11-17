@@ -73,7 +73,12 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
         for (var w = 0; w < r.L; w++) ps.push(desc(arr[i + w]));
         parts.push(r.k + ' X (' + ps.join(' + ') + ')');
         i += r.cover; rep = true;
-      } else { parts.push(desc(arr[i])); i++; }
+      } else {
+        var d0 = arr[i];
+        /* 웜업 영역의 선두 단일 정상 구간은 "12m(60%)" 형식 */
+        parts.push(parts.length === 0 && d0.f && !d0.to ? fmtT(d0.sec) + '(' + fmtV(d0.f) + unit + ')' : desc(d0));
+        i++;
+      }
     }
     return { text: parts.join(' + '), repeated: rep };
   }
