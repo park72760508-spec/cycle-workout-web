@@ -136,3 +136,19 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
   return out.join(' | ');
 };
 })();
+
+/** 구간별 요약 행: [{kind:'WU'|'INT'|'CD', content:'…%', detail:'…W'}] — content 는 % 표기, detail 은 내 FTP 기준 W 표기(FTP 없으면 '') */
+(function () {
+  window.buildWorkoutFlowRows = function (workout, ftp) {
+    var pct = window.buildWorkoutFlowSummary(workout, 0);
+    if (!pct) return [];
+    var w = Number(ftp) > 0 ? window.buildWorkoutFlowSummary(workout, Number(ftp)) : '';
+    var A = pct.split(' | '), B = w ? w.split(' | ') : [];
+    return A.map(function (txt, i) {
+      var kind = 'INT', c = txt, d = B.length === A.length ? B[i] : '';
+      if (/^WU /.test(txt)) { kind = 'WU'; c = txt.slice(3); d = d.replace(/^WU /, ''); }
+      else if (/^CD /.test(txt)) { kind = 'CD'; c = txt.slice(3); d = d.replace(/^CD /, ''); }
+      return { kind: kind, content: c, detail: d };
+    });
+  };
+})();
