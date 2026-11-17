@@ -39179,3 +39179,16 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   height: 100dvh !important;
   padding: 20px 20px 20px 20px !important;
 }
+
+/* Live Training Session: 흰색 바탕 하단 여백 = 상단 여백, 마지막 트랙 카드 아래 불필요한 여백 제거 */
+#bluetoothPlayerListScreen .connection-form-card { padding: 0 !important; }
+#bluetoothPlayerListScreen .connection-device-section.basecamp-device-section {
+  margin-bottom: 0 !important;
+  padding-top: 15px !important;
+  padding-bottom: 15px !important;
+}
+#bluetoothPlayerListScreen .connection-device-section .player-list-content {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+#bluetoothPlayerListScreen .connection-device-section .player-list-content > .player-track-item:last-child { margin-bottom: 0 !important; }
