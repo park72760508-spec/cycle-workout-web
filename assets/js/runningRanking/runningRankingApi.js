@@ -22,12 +22,52 @@
      신선도 판정(isStaleLeaderboardCache/CACHE_TTL_MS/pv 비교)은 그대로 유지 — 저장 위치만 추가. */
   var RUN_LB_LS_KEY = 'stelvio_run_leaderboard_cache_v1';
 
+  /* 큰 캐시(수백 KB~MB)는 localStorage(5MB 한도)를 잠식해 다른 저장을 막으므로 IndexedDB 에 보관.
+     작은 캐시(400K자 이하)는 기존처럼 localStorage 에도 저장해 동기 즉시 복원 유지. */
+  var RUN_LB_IDB = { name: 'stelvio_run_lb', store: 'kv', key: 'leaderboard', dbp: null };
+  function runLbIdbOpen() {
+    if (RUN_LB_IDB.dbp) return RUN_LB_IDB.dbp;
+    RUN_LB_IDB.dbp = new Promise(function (resolve) {
+      try {
+        if (!window.indexedDB) return resolve(null);
+        var req = indexedDB.open(RUN_LB_IDB.name, 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore(RUN_LB_IDB.store); };
+        req.onsuccess = function () { resolve(req.result); };
+        req.onerror = function () { resolve(null); };
+      } catch (e) { resolve(null); }
+    });
+    return RUN_LB_IDB.dbp;
+  }
+  function runLbIdbPut(obj) {
+    return runLbIdbOpen().then(function (db) {
+      if (!db) return;
+      try { db.transaction(RUN_LB_IDB.store, 'readwrite').objectStore(RUN_LB_IDB.store).put(obj, RUN_LB_IDB.key); } catch (e) {}
+    });
+  }
+  function runLbIdbGet() {
+    return runLbIdbOpen().then(function (db) {
+      if (!db) return null;
+      return new Promise(function (resolve) {
+        try {
+          var req = db.transaction(RUN_LB_IDB.store, 'readonly').objectStore(RUN_LB_IDB.store).get(RUN_LB_IDB.key);
+          req.onsuccess = function () { resolve(req.result || null); };
+          req.onerror = function () { resolve(null); };
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+  function runLbIdbDel() {
+    return runLbIdbOpen().then(function (db) {
+      if (!db) return;
+      try { db.transaction(RUN_LB_IDB.store, 'readwrite').objectStore(RUN_LB_IDB.store).delete(RUN_LB_IDB.key); } catch (e) {}
+    });
+  }
+
   function persistCacheToLocalStorage() {
     try {
       if (!_cache.rows || !_cache.rows.length) return;
+      runLbIdbPut(_cache); // 대용량 대비 IndexedDB 에 항상 보관
       var json = JSON.stringify(_cache);
-      /* 1.8MB(UTF-16 약 3.6MB)까지 커져 localStorage(5MB)를 점유 → 워크아웃 캐시 등 다른 저장이 용량 초과.
-         400K자 초과면 영속 저장 생략(메모리 캐시만) + 기존 대용량 키 제거 */
       if (json.length > 400000) { try { localStorage.removeItem(RUN_LB_LS_KEY); } catch (e0) {} return; }
       localStorage.setItem(RUN_LB_LS_KEY, json);
     } catch (e) {
@@ -59,6 +99,23 @@
     }
   }
   hydrateCacheFromLocalStorage();
+  /* localStorage 에 없으면(대용량이라 생략됨) IndexedDB 에서 복원 — fetchLeaderboard 는 이 Promise 를 기다린 뒤 신선도 판정 */
+  var _hydratedP = (_cache.rows && _cache.rows.length) ? Promise.resolve() : runLbIdbGet().then(function (parsed) {
+    if (_cache.rows && _cache.rows.length) return; // 그 사이 네트워크로 채워졌으면 유지
+    if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
+      _cache = {
+        at: Number(parsed.at) || 0,
+        pv: parsed.pv || '',
+        rows: parsed.rows,
+        rankMovementByKey: parsed.rankMovementByKey || null,
+        rankMovementAsOfSeoul: parsed.rankMovementAsOfSeoul || '',
+        rankMovementSource: parsed.rankMovementSource || '',
+        leaderboardSource: parsed.leaderboardSource || '',
+        leaderboardAsOfSeoul: parsed.leaderboardAsOfSeoul || '',
+        error: null
+      };
+    }
+  }).catch(function () {});
 
   function getConfig() {
     return window.runningRankingConfig || { API_URL: '', CACHE_TTL_MS: 3600000 };
@@ -139,7 +196,8 @@
   function fetchLeaderboard(opts) {
     opts = opts || {};
     var cfg = getConfig();
-    return resolvePrivacyVersion(opts.force).then(function (pv) {
+    return Promise.all([resolvePrivacyVersion(opts.force), _hydratedP]).then(function (pair) {
+      var pv = pair[0];
       var now = Date.now();
       var minScoringVersion = cfg.LEADERBOARD_SCORING_VERSION || cfg.GC_SCORING_VERSION || 2;
       var isPrevWeekReq = opts.week === 'prev';
@@ -250,6 +308,7 @@
     try {
       localStorage.removeItem(RUN_LB_LS_KEY);
     } catch (e) {}
+    runLbIdbDel();
   }
 
   function getCachedRows() {
