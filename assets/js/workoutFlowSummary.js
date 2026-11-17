@@ -41,10 +41,64 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
   }
   function sig(n) { return n.sec + '|' + n.f + '|' + n.to + '|' + n.rpm; }
   function isEdge(n) { return n.type === 'warmup' || n.type === 'cooldown'; }
+  /* 반복 블록 탐지: arr[i..] 에서 길이 L(1~8) 블록이 연속 2회 이상 반복되면 {L,k,cover} — 가장 많이 덮는 L 우선(동률이면 짧은 L) */
+  function findRepeat(arr, i, allowEdge) {
+    var best = { L: 0, k: 1, cover: 0 };
+    for (var L = 1; L <= 8; L++) {
+      if (i + L > arr.length) break;
+      var okBlock = true;
+      for (var z = 0; z < L; z++) { if (!allowEdge && isEdge(arr[i + z])) { okBlock = false; break; } }
+      if (!okBlock) break;
+      var k = 1;
+      while (i + (k + 1) * L <= arr.length) {
+        var same = true;
+        for (var y = 0; y < L; y++) {
+          var cand = arr[i + k * L + y];
+          if ((!allowEdge && isEdge(cand)) || sig(cand) !== sig(arr[i + y])) { same = false; break; }
+        }
+        if (!same) break;
+        k++;
+      }
+      if (k >= 2 && k * L > best.cover) best = { L: L, k: k, cover: k * L };
+    }
+    return best;
+  }
+  /* 구간 배열을 "a + k X (b + c) + ..." 로 압축 */
+  function compress(arr) {
+    var parts = [], i = 0, rep = false;
+    while (i < arr.length) {
+      var r = findRepeat(arr, i, true);
+      if (r.L > 0) {
+        var ps = [];
+        for (var w = 0; w < r.L; w++) ps.push(desc(arr[i + w]));
+        parts.push(r.k + ' X (' + ps.join(' + ') + ')');
+        i += r.cover; rep = true;
+      } else { parts.push(desc(arr[i])); i++; }
+    }
+    return { text: parts.join(' + '), repeated: rep };
+  }
   var ns = segs.map(norm).filter(function (n) { return n.sec > 0; });
   var out = [], i = 0;
   while (i < ns.length) {
     var n = ns[i];
+    if (n.type === 'warmup') {
+      /* 웜업 구간에 반복(예: 10s@120% + 50s@60% 4회)이 섞여 있으면 첫~마지막 웜업 구간을 압축:
+       * "WU 12m@60% + 4 X (10s@120% + 50s@60%)" — 마지막 웜업 바로 뒤 비웜업 1구간이 반복 블록의 짝이면 포함 */
+      var lastW = i;
+      for (var u = i; u < ns.length; u++) if (ns[u].type === 'warmup') lastW = u;
+      var region = ns.slice(i, lastW + 1);
+      var ext = lastW + 1 < ns.length && !isEdge(ns[lastW + 1]) ? region.concat([ns[lastW + 1]]) : null;
+      var cr = compress(region), usedLen = region.length;
+      if (ext) {
+        var cx = compress(ext);
+        if (cx.repeated && /\)$/.test(cx.text)) { cr = cx; usedLen = ext.length; }
+      }
+      if (cr.repeated) {
+        out.push('WU ' + cr.text);
+        i += usedLen;
+        continue;
+      }
+    }
     if (isEdge(n)) {
       /* 같은 종류(웜업/쿨다운)가 연속이면 하나로 합쳐 표기 */
       var j = i, tot = 0;
@@ -64,30 +118,12 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
       i = j;
       continue;
     }
-    /* 반복 블록 탐지: 길이 L(1~8) 블록이 연속 2회 이상 반복되면 "k X (a + b + c)" — 가장 많이 덮는 L 우선(동률이면 짧은 L) */
-    var bestL = 0, bestK = 1, bestCover = 0;
-    for (var L = 1; L <= 8; L++) {
-      if (i + L > ns.length) break;
-      var okBlock = true;
-      for (var z = 0; z < L; z++) { if (isEdge(ns[i + z])) { okBlock = false; break; } }
-      if (!okBlock) break;
-      var k = 1;
-      while (i + (k + 1) * L <= ns.length) {
-        var same = true;
-        for (var y = 0; y < L; y++) {
-          var cand = ns[i + k * L + y];
-          if (isEdge(cand) || sig(cand) !== sig(ns[i + y])) { same = false; break; }
-        }
-        if (!same) break;
-        k++;
-      }
-      if (k >= 2 && k * L > bestCover) { bestL = L; bestK = k; bestCover = k * L; }
-    }
-    if (bestL > 0) {
+    var rb = findRepeat(ns, i, false);
+    if (rb.L > 0) {
       var parts = [];
-      for (var w = 0; w < bestL; w++) parts.push(desc(ns[i + w]));
-      out.push(bestK + ' X (' + parts.join(' + ') + ')');
-      i += bestCover;
+      for (var w = 0; w < rb.L; w++) parts.push(desc(ns[i + w]));
+      out.push(rb.k + ' X (' + parts.join(' + ') + ')');
+      i += rb.cover;
       continue;
     }
     out.push(desc(n));
