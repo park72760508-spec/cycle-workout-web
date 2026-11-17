@@ -2691,11 +2691,52 @@ function wkSegIdbClear() {
   });
 }
 
+/* 워크아웃 목록 캐시: localStorage 가 가득 차 있어도 동작하도록 메모리 + IndexedDB 이중 보관 */
+var WK_LIST_MEM = null; // { workouts, timestamp, count }
+function wkListIdbPut(workoutsNoSeg, timestamp, count) {
+  return wkSegIdbOpen().then(function (db) {
+    if (!db) return;
+    try { db.transaction(WK_SEG_IDB.store, 'readwrite').objectStore(WK_SEG_IDB.store).put({ t: timestamp, list: workoutsNoSeg, count: count }, '__list'); } catch (e) {}
+  });
+}
+(function wkListIdbPreload() {
+  wkSegIdbOpen().then(function (db) {
+    if (!db) return;
+    try {
+      var req = db.transaction(WK_SEG_IDB.store, 'readonly').objectStore(WK_SEG_IDB.store).get('__list');
+      req.onsuccess = function () {
+        var v = req.result;
+        if (v && Array.isArray(v.list) && !WK_LIST_MEM && Date.now() - v.t < 24 * 3600 * 1000) {
+          WK_LIST_MEM = { workouts: v.list, timestamp: v.t, count: v.count || v.list.length };
+        }
+      };
+    } catch (e) {}
+  });
+})();
+/** localStorage 용량 초과 시 어떤 키가 공간을 차지하는지 1회 진단(원인 파악용) */
+var __wkQuotaDiagDone = false;
+function wkLogLocalStorageUsageOnce() {
+  if (__wkQuotaDiagDone) return;
+  __wkQuotaDiagDone = true;
+  try {
+    var rows = [], total = 0;
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i), v = localStorage.getItem(k) || '';
+      var sz = (k.length + v.length) * 2; total += sz; rows.push([k, sz]);
+    }
+    rows.sort(function (a, b) { return b[1] - a[1]; });
+    console.warn('[Workout Cache] localStorage 사용량 ' + Math.round(total / 1024) + 'KB, 상위 키:',
+      rows.slice(0, 6).map(function (r) { return r[0] + '=' + Math.round(r[1] / 1024) + 'KB'; }).join(', '));
+  } catch (e) {}
+}
+
 function getWorkoutCache() {
   try {
     const cached = localStorage.getItem(WORKOUT_CACHE_KEY);
     const timestamp = localStorage.getItem(WORKOUT_CACHE_TIMESTAMP_KEY);
     const count = parseInt(localStorage.getItem(WORKOUT_CACHE_COUNT_KEY) || '0', 10);
+    
+    if (!(cached && timestamp) && WK_LIST_MEM) return WK_LIST_MEM;
     
     if (cached && timestamp) {
       const workouts = JSON.parse(cached);
@@ -2742,6 +2783,7 @@ function setWorkoutCache(workouts) {
   try {
     const timestamp = Date.now();
     const count = Array.isArray(workouts) ? workouts.length : 0;
+    WK_LIST_MEM = { workouts: workouts, timestamp: timestamp, count: count }; // 메모리 미러(세그먼트 포함)
     
     // 세그먼트가 포함된 워크아웃과 없는 워크아웃 분리
     const workoutsWithoutSegments = workouts.map(workout => {
@@ -2751,7 +2793,9 @@ function setWorkoutCache(workouts) {
       return workoutWithoutSegments;
     });
     
-    // 먼저 세그먼트 없이 저장 시도
+    wkListIdbPut(workoutsWithoutSegments, timestamp, count); // IndexedDB 영구 보관(용량 여유)
+    
+    // 먼저 세그먼트 없이 저장 시도 (localStorage — 실패해도 위 메모리/IDB 로 동작)
     try {
       const dataToStore = JSON.stringify(workoutsWithoutSegments);
       const dataSize = new Blob([dataToStore]).size;
@@ -2814,7 +2858,8 @@ function setWorkoutCache(workouts) {
     } catch (storageError) {
       // QuotaExceededError 처리
       if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
-        console.warn('[Workout Cache] localStorage 용량 초과 - 세그먼트 없이 재시도');
+        wkLogLocalStorageUsageOnce();
+        console.log('[Workout Cache] localStorage 용량 초과 - 세그먼트 없이 재시도');
         // 세그먼트 없이 다시 시도
         try {
           localStorage.removeItem('stelvio_workouts_segments_cache'); // 세그먼트 캐시 삭제(먼저 비워 공간 확보)
@@ -2824,7 +2869,7 @@ function setWorkoutCache(workouts) {
           console.log('[Workout Cache] 세그먼트 제외하여 캐시 저장 완료:', count, '개 워크아웃');
         } catch (retryErr) {
           /* localStorage 가 가득 찬 경우 — 목록 캐시 없이 동작(세그먼트는 IndexedDB 캐시 사용). 에러로 취급하지 않음 */
-          console.warn('[Workout Cache] localStorage 여유 없음 — 목록 캐시 생략');
+          console.log('[Workout Cache] localStorage 여유 없음 — IndexedDB/메모리 캐시 사용');
         }
       } else {
         throw storageError;
