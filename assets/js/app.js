@@ -19300,6 +19300,7 @@ function showMobileTrainingResultModal(status = null) {
   const avgPowerEl = safeGetElement('mobile-result-avg-power', { silent: true });
   const npEl = safeGetElement('mobile-result-np', { silent: true });
   const tssEl = safeGetElement('mobile-result-tss', { silent: true });
+  const ifEl = safeGetElement('mobile-result-if', { silent: true });
   const hrAvgEl = safeGetElement('mobile-result-hr-avg', { silent: true });
   const caloriesEl = safeGetElement('mobile-result-calories', { silent: true });
   
@@ -19307,6 +19308,7 @@ function showMobileTrainingResultModal(status = null) {
   if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
   if (npEl) npEl.textContent = `${np}W`;
   if (tssEl) tssEl.textContent = `${tss}`;
+  if (ifEl) { const __ftp = window.currentUser?.ftp || window.userFTP || window.mobileUserFTP || 200; ifEl.textContent = __ftp > 0 ? (np / __ftp).toFixed(2) : '0.00'; }
   if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
   if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
   

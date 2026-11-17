@@ -4328,6 +4328,7 @@ function showBluetoothTrainingResultModal(status = null) {
     const avgPowerEl = __indivEl('result-avg-power');
     const npEl = __indivEl('result-np');
     const tssEl = __indivEl('result-tss');
+    const ifEl = __indivEl('result-if');
     const hrAvgEl = __indivEl('result-hr-avg');
     const caloriesEl = __indivEl('result-calories');
     
@@ -4335,6 +4336,7 @@ function showBluetoothTrainingResultModal(status = null) {
     if (avgPowerEl) avgPowerEl.textContent = `${stats.avgPower || 0}W`;
     if (npEl) npEl.textContent = `${np}W`;
     if (tssEl) tssEl.textContent = `${tss}`;
+    if (ifEl) { const __ftp = window.currentUser?.ftp || userFTP || 200; ifEl.textContent = __ftp > 0 ? (np / __ftp).toFixed(2) : '0.00'; }
     if (hrAvgEl) hrAvgEl.textContent = `${stats.avgHR || 0}bpm`;
     if (caloriesEl) caloriesEl.textContent = `${calories}kcal`;
     
