@@ -6719,6 +6719,98 @@ function clubMissionStepStyle(state) {
   return { background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd' };
 }
 
+/** 워크아웃 요약 문자열(예: WD 10m(55→70%) | 12m@68% | 3 X (6m@80% + 3m@60%) | CD 6m(60→40%)).
+ * ftp > 0 이면 % 값을 W 로 환산, 1분 미만은 초(s)로 표기. */
+function buildWorkoutFlowSummary(workout, ftp) {
+  var segs = (workout && workout.segments) || [];
+  var useW = Number(ftp) > 0;
+  function dur(sg) {
+    var d = typeof sg.duration_sec === 'number' ? sg.duration_sec : typeof sg.duration === 'number' ? sg.duration : 0;
+    return Math.max(0, Math.round(d));
+  }
+  function pctOf(v) {
+    if (typeof v === 'string') v = v.split(/[~/]/)[0];
+    else if (Array.isArray(v)) v = v[0];
+    var n = Number(v);
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+  function fmtT(sec) {
+    if (sec < 60) return sec + 's';
+    var m = Math.floor(sec / 60), r = sec % 60;
+    return r ? m + 'm' + r + 's' : m + 'm';
+  }
+  function fmtV(p) { return useW ? Math.round((p * Number(ftp)) / 100) : Math.round(p); }
+  var unit = useW ? 'W' : '%';
+  function norm(sg) {
+    var t = sg.target_type || 'ftp_pct';
+    var f = t === 'ftp_pct' || t === 'dual' ? pctOf(sg.target_value) : 0;
+    var to = sg.ramp && sg.ramp !== 'none' && sg.ramp_to_value != null ? pctOf(sg.ramp_to_value) : 0;
+    return { sec: dur(sg), f: f, to: to && to !== f ? to : 0, type: String(sg.segment_type || '') };
+  }
+  function desc(n) {
+    if (!n.f) return fmtT(n.sec);
+    return n.to ? fmtT(n.sec) + '(' + fmtV(n.f) + '→' + fmtV(n.to) + unit + ')' : fmtT(n.sec) + '@' + fmtV(n.f) + unit;
+  }
+  function sig(n) { return n.sec + '|' + n.f + '|' + n.to; }
+  var ns = segs.map(norm).filter(function (n) { return n.sec > 0; });
+  var out = [], i = 0;
+  while (i < ns.length) {
+    var n = ns[i];
+    if (n.type === 'warmup' || n.type === 'cooldown') {
+      /* 같은 종류(웜업/쿨다운)가 연속이면 하나로 합쳐 시작→끝 값으로 표기 */
+      var j = i, tot = 0;
+      while (j < ns.length && ns[j].type === n.type) { tot += ns[j].sec; j++; }
+      var first = ns[i], last = ns[j - 1];
+      var f = first.f, to = last.to || last.f;
+      out.push((n.type === 'warmup' ? 'WD ' : 'CD ') + fmtT(tot) + (f && to && f !== to ? '(' + fmtV(f) + '→' + fmtV(to) + unit + ')' : f ? '@' + fmtV(f) + unit : ''));
+      i = j;
+      continue;
+    }
+    if (i + 1 < ns.length && ns[i + 1].type !== 'warmup' && ns[i + 1].type !== 'cooldown') {
+      var a = ns[i], b = ns[i + 1], k = 1;
+      while (i + 2 * k + 1 < ns.length && sig(ns[i + 2 * k]) === sig(a) && sig(ns[i + 2 * k + 1]) === sig(b)) k++;
+      if (k >= 2) {
+        out.push(k + ' X (' + desc(a) + ' + ' + desc(b) + ')');
+        i += 2 * k;
+        continue;
+      }
+    }
+    out.push(desc(n));
+    i++;
+  }
+  return out.join(' | ');
+}
+
+/** 그룹세션 워크아웃 요약 + 아령 아이콘(클릭 시 % ↔ 내 FTP W 환산 전환) */
+function OpenRidingWorkoutFlowSummary(props) {
+  var _w = useState(false);
+  var showW = _w[0];
+  var setShowW = _w[1];
+  var ftp = typeof window !== 'undefined' && window.currentUser ? Number(window.currentUser.ftp) || 0 : 0;
+  var text = buildWorkoutFlowSummary(props.workout, showW ? ftp : 0);
+  if (!text) return null;
+  return (
+    <div className="flex items-start gap-2 px-1 pt-1">
+      <p className="m-0 flex-1 text-xs text-slate-600 leading-relaxed break-words" style={{ fontFamily: 'ui-monospace, Menlo, monospace' }}>
+        {text}
+      </p>
+      <button
+        type="button"
+        className="shrink-0 w-7 h-7 inline-flex items-center justify-center rounded-md border border-slate-300 bg-white"
+        style={showW ? { background: '#ede9fe', borderColor: '#8b5cf6', color: '#6d28d9' } : { color: '#64748b' }}
+        title={ftp > 0 ? (showW ? '% 값으로 보기' : '내 FTP(' + ftp + 'W) 기준 W 값으로 보기') : 'FTP 정보가 없습니다'}
+        aria-pressed={showW}
+        disabled={!(ftp > 0)}
+        onClick={function () { setShowW(!showW); }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /**
  * 워크아웃 선택기 — 그룹세션 라이딩 생성 화면의 "STELVIO 워크아웃 / 클럽 전용 워크아웃" 선택기와 동일 마크업.
  * 목록 로드·세그먼트 캐시는 부모(미션 생성 폼)가 한 번만 수행하고 여러 미션 단계가 공유한다.
@@ -13174,6 +13266,7 @@ function OpenRidingDetail(props) {
                     <span className="workout-card__category">{window.getWorkoutCategoryId(groupSessionWorkout)}</span>
                   ) : null}
                 </div>
+                <OpenRidingWorkoutFlowSummary workout={groupSessionWorkout} />
               </>
             ) : (
               <p className="m-0">등록된 워크아웃 정보를 불러올 수 없습니다.</p>
