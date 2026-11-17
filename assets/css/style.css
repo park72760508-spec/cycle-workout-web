@@ -39165,3 +39165,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 2026-11-17: Live Training Session — 내가 신청한 트랙 강조 */
 .player-track-item.player-track-mine { box-shadow: inset 4px 0 0 #2e74e8; background: rgba(46, 116, 232, 0.07); }
+
+/* Live Training Session: 트랙 블럭 좌우 여백 최소화 → 블럭 폭 확장 */
+#bluetoothPlayerListScreen .connection-device-section { padding-left: 4px !important; padding-right: 4px !important; }
+#bluetoothPlayerListScreen .player-list-content { padding-left: 0 !important; padding-right: 0 !important; }
+#bluetoothPlayerListScreen .player-list-content .player-track-item { padding-left: 8px !important; padding-right: 8px !important; margin-left: 0; margin-right: 0; }
