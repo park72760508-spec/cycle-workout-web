@@ -4587,7 +4587,9 @@ function renderWorkoutCard(workout, _roomStatusMap = {}, _roomCodeMap = {}, grad
 window.__workoutFlowCache = window.__workoutFlowCache || {};
 function toggleWorkoutFlowUnit(btn, id) {
   const w = window.__workoutFlowCache[id];
-  const textEl = document.getElementById('workout-flow-text-' + id);
+  /* 같은 워크아웃이 화면에 중복 렌더되어도(id 중복) 클릭한 버튼이 속한 카드의 텍스트를 바꾼다 */
+  const flowBox = btn && btn.closest ? btn.closest('.workout-card__flow') : null;
+  const textEl = (flowBox && flowBox.querySelector('.workout-card__flow-text')) || document.getElementById('workout-flow-text-' + id);
   if (!btn || !w || !textEl || typeof window.buildWorkoutFlowSummary !== 'function') return;
   const ftp = Number(window.currentUser && window.currentUser.ftp) || 0;
   const on = btn.getAttribute('data-w') !== '1';
