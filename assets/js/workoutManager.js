@@ -2643,6 +2643,54 @@ const WORKOUT_CACHE_COUNT_KEY = 'stelvio_workouts_cache_count';
 /**
  * 워크아웃 캐시에서 데이터 가져오기
  */
+/* ===== 세그먼트 IndexedDB 캐시 — localStorage(5MB)는 워크아웃 172개 규모에서 항상 용량 초과로
+ * 세그먼트가 저장되지 않아 접속할 때마다 전부 재조회(수십 초)하던 문제 해결 ===== */
+var WK_SEG_IDB = { name: 'stelvio_wk_segments', store: 'seg', ttlMs: 24 * 3600 * 1000, dbp: null };
+function wkSegIdbOpen() {
+  if (WK_SEG_IDB.dbp) return WK_SEG_IDB.dbp;
+  WK_SEG_IDB.dbp = new Promise(function (resolve) {
+    try {
+      if (!window.indexedDB) return resolve(null);
+      var req = indexedDB.open(WK_SEG_IDB.name, 1);
+      req.onupgradeneeded = function () { req.result.createObjectStore(WK_SEG_IDB.store); };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { resolve(null); };
+    } catch (e) { resolve(null); }
+  });
+  return WK_SEG_IDB.dbp;
+}
+function wkSegIdbPut(id, segs) {
+  return wkSegIdbOpen().then(function (db) {
+    if (!db) return;
+    try { db.transaction(WK_SEG_IDB.store, 'readwrite').objectStore(WK_SEG_IDB.store).put({ t: Date.now(), segs: segs }, String(id)); } catch (e) {}
+  });
+}
+function wkSegIdbLoadAll() {
+  return wkSegIdbOpen().then(function (db) {
+    if (!db) return {};
+    return new Promise(function (resolve) {
+      var out = {}, now = Date.now();
+      try {
+        var req = db.transaction(WK_SEG_IDB.store, 'readonly').objectStore(WK_SEG_IDB.store).openCursor();
+        req.onsuccess = function () {
+          var c = req.result;
+          if (!c) return resolve(out);
+          var v = c.value;
+          if (v && Array.isArray(v.segs) && v.segs.length && now - v.t < WK_SEG_IDB.ttlMs) out[c.key] = v.segs;
+          c.continue();
+        };
+        req.onerror = function () { resolve(out); };
+      } catch (e) { resolve(out); }
+    });
+  });
+}
+function wkSegIdbClear() {
+  return wkSegIdbOpen().then(function (db) {
+    if (!db) return;
+    try { db.transaction(WK_SEG_IDB.store, 'readwrite').objectStore(WK_SEG_IDB.store).clear(); } catch (e) {}
+  });
+}
+
 function getWorkoutCache() {
   try {
     const cached = localStorage.getItem(WORKOUT_CACHE_KEY);
@@ -2768,11 +2816,16 @@ function setWorkoutCache(workouts) {
       if (storageError.name === 'QuotaExceededError' || storageError.code === 22) {
         console.warn('[Workout Cache] localStorage 용량 초과 - 세그먼트 없이 재시도');
         // 세그먼트 없이 다시 시도
-        localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(workoutsWithoutSegments));
-        localStorage.setItem(WORKOUT_CACHE_TIMESTAMP_KEY, String(timestamp));
-        localStorage.setItem(WORKOUT_CACHE_COUNT_KEY, String(count));
-        localStorage.removeItem('stelvio_workouts_segments_cache'); // 세그먼트 캐시 삭제
-        console.log('[Workout Cache] 세그먼트 제외하여 캐시 저장 완료:', count, '개 워크아웃');
+        try {
+          localStorage.removeItem('stelvio_workouts_segments_cache'); // 세그먼트 캐시 삭제(먼저 비워 공간 확보)
+          localStorage.setItem(WORKOUT_CACHE_KEY, JSON.stringify(workoutsWithoutSegments));
+          localStorage.setItem(WORKOUT_CACHE_TIMESTAMP_KEY, String(timestamp));
+          localStorage.setItem(WORKOUT_CACHE_COUNT_KEY, String(count));
+          console.log('[Workout Cache] 세그먼트 제외하여 캐시 저장 완료:', count, '개 워크아웃');
+        } catch (retryErr) {
+          /* localStorage 가 가득 찬 경우 — 목록 캐시 없이 동작(세그먼트는 IndexedDB 캐시 사용). 에러로 취급하지 않음 */
+          console.warn('[Workout Cache] localStorage 여유 없음 — 목록 캐시 생략');
+        }
       } else {
         throw storageError;
       }
@@ -2792,6 +2845,7 @@ function clearWorkoutCache() {
     localStorage.removeItem(WORKOUT_CACHE_TIMESTAMP_KEY);
     localStorage.removeItem(WORKOUT_CACHE_COUNT_KEY);
     localStorage.removeItem('stelvio_workouts_segments_cache'); // 세그먼트 캐시도 삭제
+    wkSegIdbClear();
     console.log('[Workout Cache] 캐시 삭제 완료');
   } catch (e) {
     console.warn('[Workout Cache] 캐시 삭제 실패:', e);
@@ -2966,11 +3020,12 @@ async function apiGetWorkout(id) {
 /**
  * WorkoutSegments 시트에서 workout id로 세그먼트 목록 조회
  */
-async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
+async function apiGetWorkoutSegments(workoutId, forceRefresh = false, opts) {
   if (!workoutId) return [];
+  const bulkMode = !!(opts && opts.bulk); // 백그라운드 일괄 조회: 건별 localStorage 캐시 읽기/쓰기 생략(O(n²) 직렬화 방지)
   
   // 캐시에서 세그먼트 확인 (워크아웃 캐시에 세그먼트가 포함되어 있을 수 있음)
-  if (!forceRefresh) {
+  if (!forceRefresh && !bulkMode) {
     try {
       const cache = getWorkoutCache();
       if (cache && cache.workouts && Array.isArray(cache.workouts)) {
@@ -3006,7 +3061,8 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
     }
     
     // 세그먼트를 가져온 후 워크아웃 캐시에 업데이트
-    if (segs.length > 0) {
+    if (segs.length > 0 && bulkMode) { wkSegIdbPut(workoutId, segs); }
+    if (segs.length > 0 && !bulkMode) {
       try {
         const cache = getWorkoutCache();
         if (cache && cache.workouts && Array.isArray(cache.workouts)) {
@@ -3033,7 +3089,7 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false) {
     console.warn('apiGetWorkoutSegments 실패:', workoutId, error);
     
     // 오류 발생 시 캐시에서 다시 시도
-    if (!forceRefresh) {
+    if (!forceRefresh && !bulkMode) {
       try {
         const cache = getWorkoutCache();
         if (cache && cache.workouts && Array.isArray(cache.workouts)) {
@@ -3439,13 +3495,34 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
 
   console.log('[loadWorkouts] 🔄 백그라운드 세그먼트 로딩 시작 (', totalToFetch, '개, 목록은 이미 표시됨)');
 
+  /* IndexedDB 에 저장된 세그먼트 먼저 일괄 반영 — 재방문 시 네트워크 조회 없이 즉시 그래프 표시 */
+  try {
+    const idbMap = await wkSegIdbLoadAll();
+    let applied = 0;
+    workoutsNeedingSegments.forEach(function (w) {
+      const cached = idbMap[String(w.id)];
+      if (cached) { w.segments = cached; applied++; }
+    });
+    if (applied > 0) {
+      console.log('[loadWorkouts] ⚡ IndexedDB 세그먼트 캐시 적용:', applied, '/', totalToFetch);
+      filteredWorkouts.forEach(function (w) {
+        if ((!w.total_seconds || w.total_seconds <= 0) && w.segments && w.segments.length > 0 && typeof getSegmentDurationSec === 'function') {
+          w.total_seconds = w.segments.reduce(function (sum, sg) { return sum + getSegmentDurationSec(sg); }, 0);
+          w.totalSeconds = w.total_seconds;
+          w.totalMinutes = Math.round(w.total_seconds / 60);
+        }
+      });
+      if (typeof renderIfActive === 'function') renderIfActive();
+    }
+  } catch (idbErr) { console.warn('[loadWorkouts] IndexedDB 세그먼트 캐시 읽기 실패(무시):', idbErr); }
+
   /* GAS Web App은 동시 실행 개수에 한계가 있어, 이전에는 배치당 20~100개를 한꺼번에
    * Promise.all로 쏘면 대부분 15초 타임아웃으로 실패해 세그먼트가 하나도 안 채워지는
    * 경우가 있었다(캐시가 비어있는 최초 진입 시 특히 심함 — 워크아웃 화면에 그래프가 전부
    * "세그먼트 없음"으로 보이는 원인). 동시 요청 수를 대폭 낮춰(4개) 실제로 성공하도록 하고,
    * 그래도 실패(빈 배열)한 항목은 배치가 다 끝난 뒤 순차적으로 한 번 더 재시도한다. */
-  const batchSize = 4;
-  const batchDelay = isAndroid ? 200 : 120;
+  const batchSize = 6;
+  const batchDelay = isAndroid ? 120 : 40;
 
   /* 배치가 많으면(수백 개) 전체가 끝날 때까지(수십 초~1분 이상) 화면이 전혀 갱신되지
    * 않아 "그래프 불러오는 중…"만 계속 보이는 것도 체감상 안 좋다 — 2초에 한 번씩
@@ -3466,17 +3543,19 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
   }
   var lastIncrementalRenderAt = Date.now();
 
-  for (let i = 0; i < workoutsNeedingSegments.length; i += batchSize) {
-    const batch = workoutsNeedingSegments.slice(i, i + batchSize);
+  /* IndexedDB 로 채워진 것 제외 + 화면 위쪽(먼저 보이는) 카드 순서 유지 */
+  const toFetch = workoutsNeedingSegments.filter(function (w) { return !Array.isArray(w.segments) || w.segments.length === 0; });
+  for (let i = 0; i < toFetch.length; i += batchSize) {
+    const batch = toFetch.slice(i, i + batchSize);
     await Promise.all(batch.map(async function (workout) {
-      const segments = await apiGetWorkoutSegments(workout.id);
+      const segments = await apiGetWorkoutSegments(workout.id, false, { bulk: true });
       workout.segments = segments;
     }));
-    if (Date.now() - lastIncrementalRenderAt > 2000) {
+    if (Date.now() - lastIncrementalRenderAt > 1200) {
       renderIfActive();
       lastIncrementalRenderAt = Date.now();
     }
-    if (i + batchSize < workoutsNeedingSegments.length) {
+    if (i + batchSize < toFetch.length) {
       await new Promise(function (r) { setTimeout(r, batchDelay); });
     }
   }
@@ -3487,7 +3566,7 @@ async function fetchMissingWorkoutSegmentsInBackground(filteredWorkouts, allWork
   if (stillMissing.length > 0) {
     console.log('[loadWorkouts] 🔁 1차 시도에서 비어있던', stillMissing.length, '개 순차 재시도');
     for (var ri = 0; ri < stillMissing.length; ri++) {
-      var retrySegs = await apiGetWorkoutSegments(stillMissing[ri].id, true);
+      var retrySegs = await apiGetWorkoutSegments(stillMissing[ri].id, true, { bulk: true });
       stillMissing[ri].segments = retrySegs;
       if (Date.now() - lastIncrementalRenderAt > 2000) {
         renderIfActive();
