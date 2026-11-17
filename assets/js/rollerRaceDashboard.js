@@ -7735,7 +7735,8 @@ function rrWpFromFile(file) {
       var c0 = document.createElement('canvas');
       c0.width = Math.max(1, Math.round(im0.naturalWidth * k0)); c0.height = Math.max(1, Math.round(im0.naturalHeight * k0));
       c0.getContext('2d').drawImage(im0, 0, 0, c0.width, c0.height);
-      var src = /png|webp|gif/.test(file.type) ? c0.toDataURL('image/png') : c0.toDataURL('image/jpeg', 0.9);
+      var src = /png|webp|gif/.test(file.type) ? c0.toDataURL('image/webp', 0.9) : c0.toDataURL('image/jpeg', 0.9);
+      if (src.indexOf('data:image/webp') !== 0 && /png|webp|gif/.test(file.type)) src = c0.toDataURL('image/png');
       rrWpProcess(src, function (out) {
         try { localStorage.setItem('rrWelcomePopupSrc', src); } catch (e) { try { localStorage.removeItem('rrWelcomePopupSrc'); } catch (e2) {} }
         if (rrWpStore(out)) {
@@ -7754,6 +7755,24 @@ function rrWpReprocess() {
   if (!src) return;
   rrWpProcess(src, function (out) { rrWpStore(out); rrWpRefreshMenu(); });
 }
+/* 과거에 PNG 로 저장된 대용량 원본(수 MB)을 webp 로 1회 재압축 — localStorage 점유 축소 */
+(function rrWpShrinkLegacySrc() {
+  try {
+    var v = localStorage.getItem('rrWelcomePopupSrc');
+    if (!v || v.length < 500000) return;
+    var im = new Image();
+    im.onload = function () {
+      try {
+        var c = document.createElement('canvas'); c.width = im.naturalWidth; c.height = im.naturalHeight;
+        c.getContext('2d').drawImage(im, 0, 0);
+        var out = c.toDataURL('image/webp', 0.88);
+        if (out.indexOf('data:image/webp') === 0 && out.length < v.length) localStorage.setItem('rrWelcomePopupSrc', out);
+      } catch (e) {}
+    };
+    im.onerror = function () {};
+    im.src = v;
+  } catch (e) {}
+})();
 (function rrWpInit() {
   function init() {
     var f = document.getElementById('rrWpFile');

@@ -25,7 +25,11 @@
   function persistCacheToLocalStorage() {
     try {
       if (!_cache.rows || !_cache.rows.length) return;
-      localStorage.setItem(RUN_LB_LS_KEY, JSON.stringify(_cache));
+      var json = JSON.stringify(_cache);
+      /* 1.8MB(UTF-16 약 3.6MB)까지 커져 localStorage(5MB)를 점유 → 워크아웃 캐시 등 다른 저장이 용량 초과.
+         400K자 초과면 영속 저장 생략(메모리 캐시만) + 기존 대용량 키 제거 */
+      if (json.length > 400000) { try { localStorage.removeItem(RUN_LB_LS_KEY); } catch (e0) {} return; }
+      localStorage.setItem(RUN_LB_LS_KEY, json);
     } catch (e) {
       /* 용량 부족 등 — 메모리 캐시만으로 계속 동작 */
     }
@@ -35,6 +39,7 @@
     try {
       var raw = localStorage.getItem(RUN_LB_LS_KEY);
       if (!raw) return;
+      if (raw.length > 400000) { localStorage.removeItem(RUN_LB_LS_KEY); return; } /* 과거에 저장된 대용량 캐시 정리 */
       var parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.rows) && parsed.rows.length) {
         _cache = {
