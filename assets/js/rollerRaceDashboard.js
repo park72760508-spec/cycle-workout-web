@@ -7377,7 +7377,7 @@ function rrFillSplitHeight() {
     const dial = document.querySelector('#speedometerGrid .speedometer-dial');
     const dh = dial ? dial.getBoundingClientRect().height : 0;
     if (dh > 0) {
-      scr.style.setProperty('--rr-dial-h', Math.max(110, Math.floor(dh + free - 2)) + 'px');
+      scr.style.setProperty('--rr-dial-h', Math.max(60, Math.floor(dh + free - 2)) + 'px');
       void scr.offsetHeight;
       try { rrPlaceRankBadges(); } catch (e) {}
       free = scr.getBoundingClientRect().bottom - needBottom();
