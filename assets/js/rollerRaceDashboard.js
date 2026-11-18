@@ -7964,81 +7964,69 @@ function rrGroupIsOn() {
 }
 /** 전광판 조별 합산 거리 + 속도계 조 배지 갱신 */
 function rrGroupRefresh() {
-  /* 전광판 누적거리 단위(km) 크기 = 소수점 이하와 동일(정수 글자의 30%) — 전체 화면 단체 모드는 아래에서 최종 글자 크기 기준으로 한 번에 지정(중간값으로 흔들림 방지) */
-  const __splitNow = !!document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
-  const __scaleMode = rrGroupIsOn() && !__splitNow;
-  const setUnit = function (px) {
+  const scrEl = document.getElementById('rollerRaceDashboardScreen');
+  const sbEl = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
+  const splitNow = !!(scrEl && scrEl.classList.contains('rr-split'));
+  const on = rrGroupIsOn();
+  const boxL = document.getElementById('scoreboardGroupDist');
+  const boxR = document.getElementById('scoreboardGroupDistR');
+  /* 전광판 누적거리 단위(km) 크기 = 소수점 이하와 동일(정수 글자의 30%) — 통합/개인 전용(단체는 누적거리를 숨김) */
+  if (!on) {
     try {
       const dEl0 = document.getElementById('scoreboardDistance');
       const uEl0 = dEl0 && dEl0.parentNode && dEl0.parentNode.querySelector('.scoreboard-unit');
-      if (uEl0) uEl0.style.setProperty('font-size', (px * 0.3).toFixed(1) + 'px', 'important');
-    } catch (e) {}
-  };
-  if (!__scaleMode) {
-    try {
-      if (!__splitNow) { const v1 = document.getElementById('scoreboardDistance')?.closest('.scoreboard-value'); if (v1) v1.style.fontSize = ''; }
-      setUnit(parseFloat(getComputedStyle(document.getElementById('scoreboardDistance')).fontSize) || 28);
+      if (!splitNow) { const v1 = dEl0 && dEl0.closest('.scoreboard-value'); if (v1) v1.style.fontSize = ''; }
+      if (dEl0 && uEl0) uEl0.style.setProperty('font-size', ((parseFloat(getComputedStyle(dEl0).fontSize) || 28) * 0.3).toFixed(1) + 'px', 'important');
     } catch (e) {}
   }
-  const box = document.getElementById('scoreboardGroupDist');
-  const on = rrGroupIsOn();
-  if (box) {
-    if (!on) {
-      /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
-      box.style.display = 'none'; box.innerHTML = '';
-      const r0 = box.parentNode; if (r0) { r0.style.flexDirection = ''; r0.style.alignItems = ''; }
-    }
-    else {
-      const gs = rrGroupStats();
-      const gf = window.rollerRaceState.groupFinish || {};
-      const tgt = Number(rrGroupSettings().targetDistance) || 0;
-      box.style.display = '';
-      /* 전체 화면: 누적거리 줄 아래에 조별 누적거리 줄(2줄 유지) / 분할 화면: 누적거리 오른쪽에 같은 글자 크기로 배치(≤2개조 한 줄, 3~4개조 2줄) */
-      const split = !!document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
-      const n = gs.length;
-      const baseEl = document.getElementById('scoreboardDistance');
-      if (!split) { const v0 = baseEl && baseEl.closest('.scoreboard-value'); if (v0) v0.style.fontSize = ''; } /* 전체 화면: 이전 축소값 초기화 후 자연 크기로 측정 */
-      const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
-      const row = box.parentNode;
-      if (row) { row.style.flexDirection = ''; row.style.alignItems = 'center'; } /* 전체/분할 모두 누적거리 오른쪽 한 줄 */
-      /* 항상 한 줄(조 수만큼 열) */
-      box.style.gridTemplateRows = '';
-      box.style.gridTemplateColumns = 'repeat(' + n + ', auto)';
-      box.style.fontSize = Math.max(9, basePx).toFixed(1) + 'px';
-      box.style.marginLeft = (basePx * 0.4).toFixed(0) + 'px';
-      box.style.marginTop = '';
-      box.style.gridAutoFlow = 'row';
-      box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
-      box.innerHTML = gs.map(g => {
+  if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
+  if (!on) {
+    /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
+    [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
+    const r0 = boxL && boxL.parentNode; if (r0) { r0.style.flexDirection = ''; r0.style.alignItems = ''; }
+  } else if (boxL && boxR) {
+    /* 단체: 통합 누적거리·개인 랭킹 숨김. 2개조 = 좌 1조 / 가운데 경과시간 / 우 2조, 3개조 이상 = 좌 1·2조 / 우 3·4조… (CSS .rr-sb-grp) */
+    const gs = rrGroupStats();
+    const gf = window.rollerRaceState.groupFinish || {};
+    const tgt = Number(rrGroupSettings().targetDistance) || 0;
+    const n = gs.length;
+    const nl = Math.ceil(n / 2);
+    const parts = [gs.slice(0, nl), gs.slice(nl)];
+    const timeEl = document.getElementById('scoreboardTime');
+    const basePx = timeEl ? parseFloat(getComputedStyle(timeEl).fontSize) || 28 : 28;
+    const rows = Math.max(parts[0].length, parts[1].length, 1);
+    const k = rows === 1 ? 0.8 : Math.min(0.8, 0.95 / rows);
+    [[boxL, parts[0], 'start'], [boxR, parts[1], 'end']].forEach(function (pr) {
+      const bx = pr[0], list = pr[1], side = pr[2];
+      if (!list.length) { bx.style.display = 'none'; bx.innerHTML = ''; return; }
+      bx.style.display = '';
+      bx.style.gridTemplateRows = 'repeat(' + list.length + ', auto)';
+      bx.style.gridTemplateColumns = '1fr';
+      bx.style.gridAutoFlow = 'row';
+      bx.style.marginLeft = '0'; bx.style.marginTop = '';
+      bx.style.rowGap = (basePx * 0.04).toFixed(1) + 'px';
+      bx.style.textAlign = side === 'end' ? 'right' : 'left';
+      bx.style.justifyItems = side === 'end' ? 'end' : 'start';
+      bx.style.fontSize = Math.max(9, basePx * k).toFixed(1) + 'px';
+      bx.innerHTML = list.map(g => {
         const f = gf[g.no];
         const d0 = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2), di = d0.indexOf('.');
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
-      /* 전체 화면: 누적거리(+km) + 조별(+km)이 한 줄로 전광판 항목 폭 안에 들어가도록 누적거리·조별 글자를 같은 비율로 축소(분할은 rrFillSplitHeight 가 전체 크기를 맞춤) */
-      if (!split) {
-        const itemEl = box.closest('.scoreboard-item'), valEl = row && row.querySelector('.scoreboard-value');
-        setUnit(basePx);
-        let q = 1;
-        if (itemEl && valEl) {
-          const avail = itemEl.clientWidth * 0.97;
-          const total = valEl.scrollWidth + parseFloat(box.style.marginLeft || 0) + box.scrollWidth;
-          if (avail > 40 && total > avail) q = Math.max(0.2, avail / total * 0.97);
-        }
-        /* 흔들림 방지: 5% 단위로만 변경, 줄였던 크기는 여유가 10% 이상 생길 때만 되돌림 */
-        q = Math.floor(q * 20) / 20;
-        const prev = box.__rrSc;
-        if (prev && q > prev && q < prev * 1.1) q = prev;
-        box.__rrSc = q;
-        if (q < 0.999) {
-          const px = basePx * q;
-          if (valEl) valEl.style.fontSize = px.toFixed(1) + 'px';
-          box.style.fontSize = px.toFixed(1) + 'px';
-          box.style.marginLeft = (basePx * 0.4 * q).toFixed(0) + 'px';
-          setUnit(px);
-        }
+      /* 폭 초과 시 줄임: 5% 단위 + 히스테리시스(흔들림 방지) */
+      const itemEl = bx.closest('.scoreboard-item');
+      let q = 1;
+      if (itemEl) {
+        const avail = itemEl.clientWidth * 0.96;
+        if (avail > 40 && bx.scrollWidth > avail) q = Math.max(0.3, avail / bx.scrollWidth * 0.97);
       }
-    }
+      q = Math.floor(q * 20) / 20;
+      const prev = bx.__rrSc;
+      if (prev && q > prev && q < prev * 1.1) q = prev;
+      bx.__rrSc = q;
+      if (q < 0.999) bx.style.fontSize = (basePx * k * q).toFixed(1) + 'px';
+    });
   }
   const map = on ? rrGroupOfTrackMap() : {};
   document.querySelectorAll('#speedometerGrid .speedometer-container').forEach(c => {

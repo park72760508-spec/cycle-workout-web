@@ -39345,3 +39345,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 단체 + 화이트 모드: 트랙 경기장 줄 맨 왼쪽 빨강 띠를 조 색상으로 */
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-list-item.rr-grouped { border-left: 4px solid var(--rr-gc); }
+
+/* 단체 전광판: 통합 누적거리·개인 랭킹 숨김 → 좌(조) / 가운데(경과시간) / 우(조) */
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:first-child > .scoreboard-label,
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:first-child .scoreboard-value,
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp .scoreboard-ranks-container { display:none !important; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:first-child { align-items:flex-start; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:last-child { align-items:flex-end; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item { min-width:0; }
+#scoreboardGroupDistR { display:grid; font-weight:800; line-height:1.12; font-family:'Barlow Semi Condensed', sans-serif; font-style:italic; font-variant-numeric:tabular-nums; white-space:nowrap; color:#e2e8f0; }
+#rollerRaceDashboardScreen.rr-theme-light #scoreboardGroupDistR { color:#1e293b; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp .rr-sb-distrow { justify-content:flex-start; }
