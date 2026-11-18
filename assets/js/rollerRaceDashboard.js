@@ -7955,7 +7955,7 @@ function rrGroupRefresh() {
       box.innerHTML = gs.map(g => {
         const f = gf[g.no];
         const d = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2);
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><b style="color:' + rrGroupColor(g.no) + '">' + g.no + '조</b> : ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
     }
   }
