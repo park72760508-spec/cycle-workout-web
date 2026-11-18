@@ -3162,8 +3162,7 @@ function updateAllStraightTrackMascots() {
         updateStraightTrackMascot(speedometer.id, 0, isFinished);
         return;
       }
-      const n = gsz[gmap[speedometer.id]] || 1;
-      updateStraightTrackMascot(speedometer.id, Math.min(speedometer.totalDistance / (settings.targetDistance / n), 1.0), isFinished);
+      updateStraightTrackMascot(speedometer.id, Math.min(speedometer.totalDistance / rrGroupTrackKm(speedometer.id), 1.0), isFinished);
     });
   } else if (settings.distanceMode === 'individual') {
     // 4. 개인 경기 방식 (기존 로직 유지)
@@ -7314,9 +7313,30 @@ window.toggleRaceSplitView = function () {
 /**
  * 대회 거리(목표 거리) 설정 시 도로 바닥에 원 안에 숫자(km)로 거리 표시(진행 방향 기준 가독)
  */
+/* 단체: 트랙 길이 = (목표거리 ÷ 조 인원)을 10km 단위로 올림 (예: 100km·3명 → 33.3 → 40km). 단체가 아니면 목표거리 그대로 */
+function rrGroupTrackKm(trackId) {
+  const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
+  const tgt = st && st.endByDistance ? Number(st.targetDistance) : 0;
+  if (!(tgt > 0)) return 0;
+  if (st.distanceMode !== 'group') return tgt;
+  const gmap = rrGroupOfTrackMap();
+  const g = gmap[trackId];
+  let n = 0;
+  Object.keys(gmap).forEach(k => { if (gmap[k] === g) n++; });
+  return Math.max(10, Math.ceil(tgt / Math.max(1, n) / 10 - 1e-9) * 10);
+}
+
 function updateTrackDistanceMarkers() {
   const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
-  const target = st && st.endByDistance ? Number(st.targetDistance) : 0;
+  const baseTarget = st && st.endByDistance ? Number(st.targetDistance) : 0;
+  document.querySelectorAll('.track-km-marks').forEach(g => {
+    const tid = String(g.id || '').replace('track-km-marks-', '');
+    const target = baseTarget > 0 && st.distanceMode === 'group' ? rrGroupTrackKm(Number(tid)) : baseTarget;
+    g.innerHTML = rrTrackMarksHtml(target);
+  });
+}
+
+function rrTrackMarksHtml(target) {
   let marks = '';
   if (target > 0) {
     const steps = [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
@@ -7328,7 +7348,7 @@ function updateTrackDistanceMarkers() {
         `<text x="${x}" y="20.5" text-anchor="middle" dominant-baseline="middle" fill="#fff" fill-opacity="0.45" font-size="${fmt(d).length > 3 ? 7 : 9}" font-weight="800">${fmt(d)}</text>`;
     }
   }
-  document.querySelectorAll('.track-km-marks').forEach(g => { g.innerHTML = marks; });
+  return marks;
 }
 
 
@@ -8092,6 +8112,7 @@ function rrGroupClose() {
   /* 단체 모드가 선택돼 있으면 '설정' 버튼을 따로 누르지 않아도 모드·거리 설정을 바로 적용 */
   try { const sel = document.getElementById('targetDistanceMode'); if (sel && sel.value === 'group') saveTargetSettings(); } catch (e) {}
   try { updateTargetSettingsDisplay(); } catch (e) {}
+  try { updateTrackDistanceMarkers(); } catch (e) {}
   rrGroupRefresh();
 }
 function rrGroupRenderRows() {
