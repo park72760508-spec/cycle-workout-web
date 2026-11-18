@@ -239,6 +239,26 @@
       } catch (e) { /* cache miss */ }
     }
 
+    /* 기록에 함께 저장된 구간 정의(AI 추천 워크아웃) 우선 */
+    try {
+      var rs = window.__rideWorkoutSegs && window.__rideWorkoutSegs[wid];
+      if (rs && Array.isArray(rs.segments) && rs.segments.length) return { segments: rs.segments, title: rs.title || '' };
+    } catch (eR) {}
+
+    /* AI 추천 워크아웃: 서버 '나의 훈련 목록'에 아직 있으면 거기서 */
+    if (/^claude-ai-/.test(wid)) {
+      try {
+        var rpcA = typeof window.stelvioSupabaseRpc === 'function'
+          ? window.stelvioSupabaseRpc
+          : (await import('/assets/js/supabaseDualWrite.js')).callSupabaseRpcAsUser;
+        var lres = await rpcA('fn_ai_workout_list', { p_limit: 90 });
+        var rawId = wid.replace(/^claude-ai-/, '');
+        var hitA = lres && lres.success ? (lres.items || []).find(function (it) { return String(it.id) === rawId; }) : null;
+        if (hitA && Array.isArray(hitA.segments) && hitA.segments.length) return { segments: hitA.segments, title: String(hitA.title || '').trim() };
+      } catch (eA) {}
+      return { segments: [], title: '' };
+    }
+
     var workoutTitle = '';
     if (typeof window.apiGetWorkout === 'function') {
       try {

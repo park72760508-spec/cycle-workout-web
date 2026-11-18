@@ -889,6 +889,7 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         ...(Number(trainingData.avg_speed_kmh) > 0 && { avg_speed_kmh: Number(trainingData.avg_speed_kmh) }),
         ...(Number(trainingData.max_speed_kmh) > 0 && { max_speed_kmh: Number(trainingData.max_speed_kmh) }),
         ...(trainingData.race_speed_series && Array.isArray(trainingData.race_speed_series.x) && { race_speed_series: trainingData.race_speed_series }),
+        ...(/^claude-ai-/.test(String(trainingData.workout_id || '')) && Array.isArray(trainingData.segments) && trainingData.segments.length && { workout_segments: trainingData.segments.map(function (s) { return { segment_type: s.segment_type, duration_sec: s.duration_sec != null ? s.duration_sec : s.duration, target_type: s.target_type, target_value: s.target_value, ramp: s.ramp, ramp_to_value: s.ramp_to_value }; }) }),
         elevation_gain: trainingData.elevation_gain || null,
         weight: userWeight,
         
