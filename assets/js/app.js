@@ -17037,7 +17037,7 @@ function fitTrainingReadyCard() {
     wrap.style.setProperty('--tr-card-scale', String(sc));
     /* 카드 높이(요약 줄 포함)에 맞춰 미리보기 박스 높이 지정 — 안 그러면 요약이 박스 밖으로 잘림 */
     var ch = wrap.offsetHeight;
-    if (ch > 0) box.style.height = Math.ceil(ch * sc) + 'px';
+    if (ch > 0) box.style.setProperty('height', Math.ceil(ch * sc) + 'px', 'important');
     if (!wrap.__trRO && typeof ResizeObserver === 'function') {
       wrap.__trRO = new ResizeObserver(function () { fitTrainingReadyCard(); });
       wrap.__trRO.observe(wrap);
