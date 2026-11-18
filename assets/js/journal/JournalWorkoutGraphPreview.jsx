@@ -24,6 +24,12 @@
     var actualSegmentAvgWatts = Array.isArray(p.actualSegmentAvgWatts) ? p.actualSegmentAvgWatts : null;
     var actualFtp = p.actualFtp != null ? Number(p.actualFtp) : null;
     var graphRef = useRef(null);
+    /* 워크아웃 요약(WU … | n X (…) | CD …) + 파워미터 아이콘(% ↔ W) — 워크아웃 화면 카드와 동일, 상태는 워크아웃 ID별로 유지 */
+    var _wst = useState(function () {
+      return !!(window.__workoutFlowW && window.__workoutFlowW[workoutId]);
+    });
+    var showW = _wst[0];
+    var setShowW = _wst[1];
 
     var utils = window.journalWorkoutGraphUtils || {};
     function cachedFor(wid) {
@@ -42,6 +48,49 @@
     });
     var state = _st[0];
     var setState = _st[1];
+
+    function userFtp() {
+      try {
+        var cu = window.currentUser || (typeof window.getCurrentUser === 'function' ? window.getCurrentUser() : null);
+        var f = cu ? Number(cu.ftp || 0) : 0;
+        if (f > 0) return f;
+      } catch (e) {}
+      return actualFtp > 0 ? actualFtp : 0;
+    }
+    function flowSummaryEl(segments) {
+      if (typeof window.buildWorkoutFlowSummary !== 'function' || !segments || !segments.length) return null;
+      var ftp = userFtp();
+      var useW = showW && ftp > 0;
+      var text = window.buildWorkoutFlowSummary({ segments: segments }, useW ? ftp : 0);
+      if (!text) return null;
+      return React.createElement(
+        'div',
+        { className: 'workout-card__flow journal-workout-flow' },
+        React.createElement('p', { className: 'workout-card__flow-text' }, text),
+        React.createElement(
+          'button',
+          {
+            type: 'button',
+            className: 'workout-card__flow-btn',
+            'data-w': useW ? '1' : '0',
+            disabled: ftp <= 0,
+            title: ftp > 0 ? (useW ? '% 로 보기' : '내 FTP 기준 W 로 보기') : 'FTP 정보 없음',
+            'aria-label': '파워 W 값으로 보기',
+            onClick: function (ev) {
+              ev.stopPropagation();
+              var nv = !showW;
+              window.__workoutFlowW = window.__workoutFlowW || {};
+              window.__workoutFlowW[workoutId] = nv;
+              setShowW(nv);
+            }
+          },
+          React.createElement('img', {
+            src: useW ? 'assets/img/power_b.png' : 'assets/img/power_i.png',
+            alt: '파워미터'
+          })
+        )
+      );
+    }
 
     useEffect(function () {
       if (!workoutId) {
@@ -141,7 +190,8 @@
       React.createElement('div', {
         className: 'journal-workout-graph-inner workout-card__graph',
         ref: graphRef
-      })
+      }),
+      flowSummaryEl(state.segments)
     );
   }
 

@@ -39249,3 +39249,19 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   margin-bottom: auto !important;
   width: 100%;
 }
+
+/* 훈련 준비 화면 워크아웃 요약(flow)이 고정 비율(326:205) 박스에 잘리던 문제:
+   카드 높이를 내용에 맞게 늘리고(min 205), 미리보기 박스 높이는 fitTrainingReadyCard 가 (카드 높이×축소비)로 지정 */
+#trainingReadyScreen #segmentPreview.segment-preview--card,
+#segmentPreview.segment-preview--card {
+  aspect-ratio: auto !important;
+  overflow: visible !important;
+}
+#segmentPreview .training-ready-card {
+  height: auto !important;
+  min-height: 205px;
+}
+#segmentPreview .training-ready-card .workout-card {
+  height: auto !important;
+  min-height: 205px;
+}
