@@ -7367,7 +7367,10 @@ function rrFillSplitHeight() {
   /* 6개 등 표시 개수가 많아 한 화면에 안 들어가면: 전광판을 최소 크기(글자 16px)로 두고 모자란 높이만큼 속도계 원 높이를 줄여 한 화면에 맞춤 */
   scr.style.removeProperty('--rr-dial-h');
   setFs(16);
-  let free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
+  /* 하단 메뉴 줄은 sticky 라 넘칠 때 화면 맨 아래에 붙어 있어 bottom 비교로는 넘침을 알 수 없음 → 트랙 목록 끝 + 메뉴 줄 높이를 '실제 필요한 하단'으로 계산 */
+  const lst = document.getElementById('speedometerList');
+  const needBottom = () => (lst ? lst.getBoundingClientRect().bottom : bar.getBoundingClientRect().top) + 4 + bar.getBoundingClientRect().height;
+  let free = scr.getBoundingClientRect().bottom - needBottom();
   let base = sb.getBoundingClientRect().height;
   if (free < 0) {
     const dial = document.querySelector('#speedometerGrid .speedometer-dial');
@@ -7376,7 +7379,7 @@ function rrFillSplitHeight() {
       scr.style.setProperty('--rr-dial-h', Math.max(110, Math.floor(dh + free - 2)) + 'px');
       void scr.offsetHeight;
       try { rrPlaceRankBadges(); } catch (e) {}
-      free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
+      free = scr.getBoundingClientRect().bottom - needBottom();
       base = sb.getBoundingClientRect().height;
     }
   }
