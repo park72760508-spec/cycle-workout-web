@@ -37038,7 +37038,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-split .speed-value { font-size: clamp(16px, 1.7vw, 28px); white-space: nowrap; }
 
 /* 창분할 보기 v2: 카드 높이 +10%, 원 5% 축소(상단·우측 잘림 방지), 하단 정보 3열 재배치 */
-#rollerRaceDashboardScreen.rr-split .speedometer-dial { height: calc(229px * 5 / var(--rr-split-n, 5)); display: flex; align-items: center; justify-content: center; }
+#rollerRaceDashboardScreen.rr-split .speedometer-dial { height: var(--rr-dial-h, calc(229px * 5 / var(--rr-split-n, 5))); display: flex; align-items: center; justify-content: center; }
 #rollerRaceDashboardScreen.rr-split .speedometer-svg { width: 100%; height: auto; max-height: 100%; }
 #rollerRaceDashboardScreen.rr-split .speed-stat-max { display: none !important; }
 #rollerRaceDashboardScreen.rr-split .speedometer-info { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; text-align: center; }

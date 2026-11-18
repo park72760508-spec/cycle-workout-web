@@ -7364,9 +7364,22 @@ function rrFillSplitHeight() {
   if (!scr.classList.contains('rr-split')) return;
   const bar = document.querySelector('#rollerRaceDashboardScreen .speedometer-list-section > .list-header');
   if (!bar || !bar.offsetParent) return;
-  setFs(28); // 측정용 기준 크기
-  const free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
-  const base = sb.getBoundingClientRect().height;
+  /* 6개 등 표시 개수가 많아 한 화면에 안 들어가면: 전광판을 최소 크기(글자 16px)로 두고 모자란 높이만큼 속도계 원 높이를 줄여 한 화면에 맞춤 */
+  scr.style.removeProperty('--rr-dial-h');
+  setFs(16);
+  let free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
+  let base = sb.getBoundingClientRect().height;
+  if (free < 0) {
+    const dial = document.querySelector('#speedometerGrid .speedometer-dial');
+    const dh = dial ? dial.getBoundingClientRect().height : 0;
+    if (dh > 0) {
+      scr.style.setProperty('--rr-dial-h', Math.max(110, Math.floor(dh + free - 2)) + 'px');
+      void scr.offsetHeight;
+      try { rrPlaceRankBadges(); } catch (e) {}
+      free = scr.getBoundingClientRect().bottom - bar.getBoundingClientRect().bottom;
+      base = sb.getBoundingClientRect().height;
+    }
+  }
   const T = free > 1 ? base + free : base;
   if (free > 1) sb.style.minHeight = T + 'px';
   // 높이 기준 최대 글자 크기: 블럭 높이 - (패딩 + 라벨 영역)
@@ -7379,16 +7392,16 @@ function rrFillSplitHeight() {
   let fsW = Infinity;
   if (timeEl) {
     const item = timeEl.closest('.scoreboard-item');
-    const w28 = timeEl.getBoundingClientRect().width / 28;
+    const w28 = timeEl.getBoundingClientRect().width / 16;
     if (item && w28 > 0) fsW = (item.getBoundingClientRect().width * 0.94) / w28;
   }
-  let fs = Math.max(28, Math.min(fsH, fsW, 260));
+  let fs = Math.max(14, Math.min(fsH, fsW, 260));
   setFs(Math.floor(fs));
   // 실제 내용 높이가 블럭을 넘으면 비율로 줄여 맞춤
   for (let i = 0; i < 6; i++) {
     const h = sb.scrollHeight, c = sb.clientHeight;
     if (h <= c + 0.5) break;
-    fs = Math.max(20, Math.floor(fs * (c / h) * 0.97));
+    fs = Math.max(12, Math.floor(fs * (c / h) * 0.97));
     setFs(fs);
   }
 }
@@ -7942,7 +7955,8 @@ function rrGroupRefresh() {
       box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
       box.innerHTML = gs.map(g => {
         const f = gf[g.no];
-        const d = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2);
+        const d0 = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2), di = d0.indexOf('.');
+        const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
     }
