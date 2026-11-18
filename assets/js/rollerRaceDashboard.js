@@ -7724,7 +7724,7 @@ function rrWelcomePopupShow() {
   el.className = 'rrwp';
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', '환영 이미지');
-  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><div class="rrwp__brand"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><div class="rrwp__spons rrwp__spons--l"><div class="rrwp__spons-row"><img src="assets/img/100man.jpg?v=1" alt="백만킬로 사이클 아카데미" draggable="false"></div><span class="rrwp__spons-url">백만킬로 사이클 아카데미</span></div><div class="rrwp__spons"><div class="rrwp__spons-row"><span>협찬 :</span><img src="assets/img/igpsport-logo-sm.png?v=1" alt="iGPSPORT" draggable="false"></div><span class="rrwp__spons-url">https://igpsport.co.kr/</span></div></div></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
+  el.innerHTML = '<div class="rrwp__box"><img class="rrwp__img" alt="환영 이미지"><div class="rrwp__brand"><img class="rrwp__logo" src="assets/img/stelvio-logo-cut.png?v=1" alt="STELVIO AI" draggable="false"><div class="rrwp__spons rrwp__spons--l"><div class="rrwp__spons-row"><img src="assets/img/100man.jpg?v=1" alt="백만킬로 사이클 아카데미" draggable="false"></div><span class="rrwp__spons-url">백만킬로 사이클 아카데미</span></div></div></div><button type="button" class="rrwp__x" aria-label="닫기">✕</button>';
   el.querySelector('.rrwp__img').src = src;
   el.querySelector('.rrwp__img').addEventListener('click', rrWelcomePopupHide);
   el.addEventListener('click', function (e) { if (e.target === el) rrWelcomePopupHide(); });
@@ -8213,7 +8213,8 @@ function rrSplitApplyN() {
     const bar = document.createElement('div');
     bar.id = 'rrSplitNBar'; bar.className = 'rr-splitn';
     bar.innerHTML = '<label for="rrSplitNInput">표시 개수</label><input type="number" id="rrSplitNInput" min="1" max="10" step="1" inputmode="numeric" value="' + rrSplitN() + '"><span>개</span>';
-    scr.appendChild(bar);
+    const acts = scr.querySelector('.list-header-actions');
+    if (acts) acts.insertBefore(bar, acts.firstChild); else scr.appendChild(bar);
     bar.querySelector('input').addEventListener('input', function () {
       const v = parseInt(this.value, 10);
       if (!(v >= 1)) return;
