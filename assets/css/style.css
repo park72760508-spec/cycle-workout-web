@@ -39373,7 +39373,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 속도계 정보 블럭: 소수점 이하는 얇은(300) 글자 + 정수 크기의 30% */
 #rollerRaceDashboardScreen .speedometer-info .rr-dec,
 #rollerRaceDashboardScreen.rr-split .speedometer-info .rr-dec {
-  font-weight: 300 !important; font-size: 0.3em !important; opacity: 1; margin-left: 1px;
+  font-weight: 800 !important; font-size: 0.3em !important; opacity: 1; margin-left: 1px;
 }
 /* 이동거리(가운데): 정수 첫째 자리가 칸의 가운데에 고정, 나머지는 오른쪽으로 늘어남 */
 #rollerRaceDashboardScreen .speed-display-center .speed-value-wrapper { display: flex; flex-direction: column; align-items: center; }
