@@ -7996,6 +7996,8 @@ function rrGroupClose() {
   const m = document.getElementById('rrGroupModal');
   if (m) m.classList.remove('show');
   rrGroupPersist();
+  /* 단체 모드가 선택돼 있으면 '설정' 버튼을 따로 누르지 않아도 모드·거리 설정을 바로 적용 */
+  try { const sel = document.getElementById('targetDistanceMode'); if (sel && sel.value === 'group') saveTargetSettings(); } catch (e) {}
   try { updateTargetSettingsDisplay(); } catch (e) {}
   rrGroupRefresh();
 }
