@@ -39356,3 +39356,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #scoreboardGroupDistR { display:grid; font-weight:800; line-height:1.12; font-family:'Barlow Semi Condensed', sans-serif; font-style:italic; font-variant-numeric:tabular-nums; white-space:nowrap; color:#e2e8f0; }
 #rollerRaceDashboardScreen.rr-theme-light #scoreboardGroupDistR { color:#1e293b; }
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp .rr-sb-distrow { justify-content:flex-start; }
+
+/* 전광판 조별 누적거리 선명도 상향: 투명도 제거, 숫자 흰색(화이트 모드는 진한 남색), 배지 대비 강화 */
+#scoreboardGroupDist, #scoreboardGroupDistR { color:#ffffff; opacity:1; text-shadow:0 0 1px rgba(255,255,255,.35); }
+#rollerRaceDashboardScreen.rr-theme-light #scoreboardGroupDist, #rollerRaceDashboardScreen.rr-theme-light #scoreboardGroupDistR { color:#0b1220; text-shadow:none; }
+.rr-group-dist__row, .rr-group-dist__row.rr-off, .rr-group-dist__row.rr-done { opacity:1 !important; }
+.rr-group-dist__row .rr-frac { color:inherit; font-weight:800; }
+.rr-group-pill { box-shadow:0 0 0 1px rgba(255,255,255,.55), 0 1px 4px rgba(0,0,0,.45); text-shadow:0 1px 2px rgba(0,0,0,.6); filter:saturate(1.15); }
+#rollerRaceDashboardScreen.rr-theme-light .rr-group-pill { box-shadow:0 0 0 1px rgba(15,23,42,.25), 0 1px 3px rgba(15,23,42,.3); }
+.rr-group-dist__row i { color:#fcd34d; font-weight:800; }
