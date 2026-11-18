@@ -256,7 +256,7 @@ function initRollerRaceDashboard() {
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
   const scoreboardRidersEl = document.getElementById('scoreboardRiders');
   if (scoreboardTimeEl) scoreboardTimeEl.textContent = '00:00:00';
-  if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = '0.0';
+  if (scoreboardDistanceEl) scoreboardDistanceEl.innerHTML = '0<span class="rr-frac">.00</span>';
   if (scoreboardRidersEl) scoreboardRidersEl.textContent = '0';
   
   // 순위 표시 초기화 및 타겟 설정 업데이트
@@ -1424,7 +1424,10 @@ function updateDashboardStats() {
   
   // 전광판 업데이트
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
-  if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = totalDistance.toFixed(2);
+  if (scoreboardDistanceEl) {
+    const __t = totalDistance.toFixed(2), __i = __t.indexOf('.');
+    scoreboardDistanceEl.innerHTML = __i < 0 ? __t : __t.slice(0, __i) + '<span class="rr-frac">' + __t.slice(__i) + '</span>';
+  }
   try { rrGroupRefresh(); } catch (e) {}
   
   // 경기 종료 조건 확인 (거리 체크)
@@ -3295,24 +3298,9 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
   }
   
   if (distanceTextEl) {
-    // 거리 경기(목표 거리 설정): 남은 거리 / 시간 경기: 이동거리 (숫자만, 단위는 별도 span, 소문자 km)
-    var __st = window.rollerRaceState && window.rollerRaceState.raceSettings;
-    var __shown = distance;
-    if (__st && __st.endByDistance && Number(__st.targetDistance) > 0) {
-      var __base = distance;
-      if (__st.distanceMode === 'total') {
-        __base = (window.rollerRaceState.speedometers || [])
-          .filter(function (s) { return s.deviceId && s.connected; })
-          .reduce(function (sum, s) { return sum + (Number(s.totalDistance) || 0); }, 0);
-      }
-      if (__st.distanceMode === 'group') {
-        var __gm = rrGroupOfTrackMap()[speedometerId];
-        var __g = __gm ? rrGroupStats().find(function (g) { return g.no === __gm; }) : null;
-        if (__g) __base = __g.dist;
-      }
-      __shown = Math.max(0, Number(__st.targetDistance) - __base);
-    }
-    distanceTextEl.textContent = __shown.toFixed(2);
+    // 트랙 우측 끝: 선수가 이동한 거리(누적거리) — 소수점 이하는 정수의 30% 크기
+    var __txt = (Number(distance) || 0).toFixed(2), __di = __txt.indexOf('.');
+    distanceTextEl.innerHTML = __di < 0 ? __txt : __txt.slice(0, __di) + '<span class="rr-frac">' + __txt.slice(__di) + '</span>';
     var __unit = distanceTextEl.parentNode && distanceTextEl.parentNode.querySelector('.track-stat-unit');
     if (__unit) __unit.textContent = 'km';
   }
