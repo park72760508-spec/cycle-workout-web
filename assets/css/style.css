@@ -39267,10 +39267,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 
 /* 훈련 준비 화면: 워크아웃 블럭 ↔ Select Dashboard 사이 여백 제거, 버튼 아래 여백 제거 */
-#trainingReadyScreen { --tr-gap: 0px; }
-#trainingReadyScreen .training-ready-workout-block { margin-bottom: 0 !important; padding-bottom: 0 !important; }
-#trainingReadyScreen .training-ready-select-dashboard { margin-top: 0 !important; padding-top: 0 !important; }
-#trainingReadyScreen .training-ready-select-dashboard .training-ready-h3 { margin-top: 0 !important; }
+#trainingReadyScreen { --tr-gap: 20px; }
+#trainingReadyScreen .training-ready-workout-block { margin-bottom: var(--tr-gap) !important; padding-bottom: 0 !important; }
 #trainingReadyScreen .training-ready-select-dashboard .training-ready-dashboard-grid { margin-bottom: 0 !important; padding-bottom: 0 !important; }
 #trainingReadyScreen .connection-form-card { padding-bottom: env(safe-area-inset-bottom, 0px) !important; margin-bottom: 0 !important; }
 #trainingReadyScreen .connection-form-container,
