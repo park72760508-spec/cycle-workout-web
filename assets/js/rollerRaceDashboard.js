@@ -7987,6 +7987,7 @@ function rrGroupRefresh() {
       const split = !!document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
       const n = gs.length;
       const baseEl = document.getElementById('scoreboardDistance');
+      if (!split) { const v0 = baseEl && baseEl.closest('.scoreboard-value'); if (v0) v0.style.fontSize = ''; } /* 전체 화면: 이전 축소값 초기화 후 자연 크기로 측정 */
       const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
       const row = box.parentNode;
       if (row) { row.style.flexDirection = ''; row.style.alignItems = 'center'; } /* 전체/분할 모두 누적거리 오른쪽 한 줄 */
@@ -8004,13 +8005,18 @@ function rrGroupRefresh() {
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
-      /* 전체 화면: 누적거리 + 조별 한 줄이 전광판 항목 폭을 벗어나면 조별 글자만 줄여 한 줄 유지(분할은 rrFillSplitHeight 가 전체 크기를 맞춤) */
+      /* 전체 화면: 누적거리(+km) + 조별(+km)이 한 줄로 전광판 항목 폭 안에 들어가도록 누적거리·조별 글자를 같은 비율로 축소(분할은 rrFillSplitHeight 가 전체 크기를 맞춤) */
       if (!split) {
         const itemEl = box.closest('.scoreboard-item'), valEl = row && row.querySelector('.scoreboard-value');
         if (itemEl && valEl) {
-          const avail = itemEl.clientWidth * 0.97 - valEl.getBoundingClientRect().width - parseFloat(box.style.marginLeft || 0);
-          const need = box.scrollWidth;
-          if (avail > 20 && need > avail) box.style.fontSize = Math.max(8, parseFloat(box.style.fontSize) * avail / need * 0.97).toFixed(1) + 'px';
+          const avail = itemEl.clientWidth * 0.97;
+          const total = valEl.scrollWidth + parseFloat(box.style.marginLeft || 0) + box.scrollWidth;
+          if (avail > 40 && total > avail) {
+            const f = Math.max(0.2, avail / total * 0.97);
+            valEl.style.fontSize = (basePx * f).toFixed(1) + 'px';
+            box.style.fontSize = (basePx * f).toFixed(1) + 'px';
+            box.style.marginLeft = (basePx * 0.4 * f).toFixed(0) + 'px';
+          }
         }
       }
     }

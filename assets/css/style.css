@@ -39332,3 +39332,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #scoreboardGroupDist { grid-auto-flow:row; white-space:nowrap; }
 .rr-group-dist__row { white-space:nowrap; }
 .rr-sb-distrow { flex-wrap:nowrap; max-width:100%; }
+
+/* 누적거리 숫자와 km 단위가 줄바꿈되지 않게 한 줄 고정 */
+#rollerRaceDashboardScreen .scoreboard-item:has(#scoreboardDistance) .scoreboard-value { white-space:nowrap; flex-wrap:nowrap; }
+#rollerRaceDashboardScreen .scoreboard-item:has(#scoreboardDistance) .scoreboard-unit { white-space:nowrap; }
