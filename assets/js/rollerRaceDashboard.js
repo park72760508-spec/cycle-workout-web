@@ -8046,6 +8046,15 @@ function rrGroupRefresh() {
     if (on && g) { c.classList.add('rr-grouped'); c.style.setProperty('--rr-gc', rrGroupColor(g)); }
     else { c.classList.remove('rr-grouped'); c.style.removeProperty('--rr-gc'); }
   });
+  /* 트랙 경기장 줄(맨 왼쪽 띠): 단체면 조 색상, 아니면 원래 색 */
+  document.querySelectorAll('#speedometerList .speedometer-list-item').forEach((it, idx) => {
+    const nm = it.querySelector('.list-item-track-number .list-item-name');
+    const mm = nm && /(\d+)/.exec(nm.textContent || '');
+    const tid = mm ? Number(mm[1]) : idx + 1;
+    const g = map[tid];
+    if (on && g) { it.classList.add('rr-grouped'); it.style.setProperty('--rr-gc', rrGroupColor(g)); }
+    else { it.classList.remove('rr-grouped'); it.style.removeProperty('--rr-gc'); }
+  });
   document.querySelectorAll('.rr-group-badge').forEach(el => {
     const id = Number(String(el.id).replace('rr-group-badge-', ''));
     const g = map[id];
