@@ -7941,6 +7941,12 @@ function rrGroupIsOn() {
 }
 /** 전광판 조별 합산 거리 + 속도계 조 배지 갱신 */
 function rrGroupRefresh() {
+  /* 전광판 누적거리 단위(km) 크기 = 소수점 이하와 동일(정수 글자의 30%) */
+  try {
+    const dEl = document.getElementById('scoreboardDistance');
+    const uEl = dEl && dEl.parentNode && dEl.parentNode.querySelector('.scoreboard-unit');
+    if (dEl && uEl) uEl.style.setProperty('font-size', ((parseFloat(getComputedStyle(dEl).fontSize) || 28) * 0.3).toFixed(1) + 'px', 'important');
+  } catch (e) {}
   const box = document.getElementById('scoreboardGroupDist');
   const on = rrGroupIsOn();
   if (box) {
@@ -7961,7 +7967,7 @@ function rrGroupRefresh() {
         const f = gf[g.no];
         const d0 = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2), di = d0.indexOf('.');
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
     }
   }
