@@ -7957,11 +7957,13 @@ function rrGroupRefresh() {
       const tgt = Number(rrGroupSettings().targetDistance) || 0;
       box.style.display = '';
       /* 크기: 누적거리 숫자 글자 크기 기준 — 조 수가 늘수록 줄여 누적거리 블럭 높이 안에 맞춤(≤2: 1열, 3~4: 2열×2행) */
-      const n = gs.length, cols = n <= 2 ? 1 : n <= 4 ? 2 : 3, rows = Math.ceil(n / cols);
+      const n = gs.length, rows = n <= 2 ? 1 : n <= 4 ? 2 : 3, cols = Math.ceil(n / rows); /* 1~2개조: 한 줄, 3~4개조: 2줄 */
       const baseEl = document.getElementById('scoreboardDistance');
       const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
-      box.style.fontSize = Math.max(9, basePx * Math.min(0.9, 0.9 / rows)).toFixed(1) + 'px';
+      box.style.fontSize = Math.max(9, basePx * (rows === 1 ? 0.6 : Math.min(0.9, 0.9 / rows))).toFixed(1) + 'px';
+      box.style.gridAutoFlow = 'row';
       box.style.gridTemplateRows = 'repeat(' + rows + ', auto)';
+      box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
       box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
       box.innerHTML = gs.map(g => {
         const f = gf[g.no];
