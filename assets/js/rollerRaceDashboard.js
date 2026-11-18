@@ -7404,7 +7404,9 @@ function rrFillSplitHeight() {
   // 실제 내용 높이가 목표 높이(T)를 넘으면 비율로 줄여 맞춤 — sb 는 min-height 라 scrollHeight 비교로는 넘침을 알 수 없어 실제 높이로 비교
   for (let i = 0; i < 10; i++) {
     const h = sb.getBoundingClientRect().height;
-    const wOver = sb.scrollWidth > sb.clientWidth + 1 ? sb.clientWidth / sb.scrollWidth : 1;
+    let wOver = sb.scrollWidth > sb.clientWidth + 1 ? sb.clientWidth / sb.scrollWidth : 1;
+    const dRow = document.querySelector('#rollerRaceDashboardScreen .rr-sb-distrow'), dItem = dRow && dRow.closest('.scoreboard-item');
+    if (dRow && dItem && dRow.scrollWidth > dItem.clientWidth + 1) wOver = Math.min(wOver, dItem.clientWidth / dRow.scrollWidth);
     if (h <= T + 0.5 && wOver === 1) break;
     fs = Math.max(12, Math.floor(fs * Math.min(T / h, wOver) * 0.97));
     setFs(fs);
@@ -7951,7 +7953,11 @@ function rrGroupRefresh() {
   const box = document.getElementById('scoreboardGroupDist');
   const on = rrGroupIsOn();
   if (box) {
-    if (!on) { box.style.display = 'none'; box.innerHTML = ''; }
+    if (!on) {
+      /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
+      box.style.display = 'none'; box.innerHTML = '';
+      const r0 = box.parentNode; if (r0) { r0.style.flexDirection = ''; r0.style.alignItems = ''; }
+    }
     else {
       const gs = rrGroupStats();
       const gf = window.rollerRaceState.groupFinish || {};
@@ -7964,20 +7970,17 @@ function rrGroupRefresh() {
       const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
       const row = box.parentNode;
       if (row) { row.style.flexDirection = split ? '' : 'column'; row.style.alignItems = 'center'; }
+      /* 항상 한 줄(조 수만큼 열) */
+      box.style.gridTemplateRows = '';
+      box.style.gridTemplateColumns = 'repeat(' + n + ', auto)';
       if (split) {
-        const rows = n <= 2 ? 1 : n <= 4 ? 2 : 3, cols = Math.ceil(n / rows);
         box.style.fontSize = Math.max(9, basePx).toFixed(1) + 'px';
         box.style.marginLeft = (basePx * 0.4).toFixed(0) + 'px';
         box.style.marginTop = '';
-        box.style.gridTemplateRows = 'repeat(' + rows + ', auto)';
-        box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
       } else {
-        const cols = Math.min(n, 5);
         box.style.fontSize = Math.max(9, basePx * 0.5).toFixed(1) + 'px';
         box.style.marginLeft = '0';
         box.style.marginTop = (basePx * 0.15).toFixed(0) + 'px';
-        box.style.gridTemplateRows = '';
-        box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
       }
       box.style.gridAutoFlow = 'row';
       box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
@@ -7987,6 +7990,13 @@ function rrGroupRefresh() {
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
+      /* 전체 화면: 한 줄이 전광판 항목 폭을 벗어나면 글자 크기를 줄여 한 줄 유지 */
+      if (!split) {
+        const itemEl = box.closest('.scoreboard-item');
+        const avail = itemEl ? itemEl.clientWidth * 0.96 : 0;
+        const need = box.scrollWidth;
+        if (avail > 0 && need > avail) box.style.fontSize = Math.max(8, parseFloat(box.style.fontSize) * avail / need * 0.97).toFixed(1) + 'px';
+      }
     }
   }
   const map = on ? rrGroupOfTrackMap() : {};

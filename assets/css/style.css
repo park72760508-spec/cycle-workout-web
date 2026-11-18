@@ -39327,3 +39327,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speedometer-container.rr-grouped::before { content:''; position:absolute; inset:0; border-radius:inherit; background:var(--rr-gc); opacity:.2; z-index:-1; pointer-events:none; }
 #rollerRaceDashboardScreen.rr-theme-light .speedometer-container.rr-grouped::before { opacity:.13; }
 #rollerRaceDashboardScreen .speedometer-container.rr-grouped { border-color:color-mix(in srgb, var(--rr-gc) 45%, transparent); }
+
+/* 조별 누적거리는 항상 한 줄(줄바꿈 금지) */
+#scoreboardGroupDist { grid-auto-flow:row; white-space:nowrap; }
+.rr-group-dist__row { white-space:nowrap; }
+.rr-sb-distrow { flex-wrap:nowrap; max-width:100%; }
