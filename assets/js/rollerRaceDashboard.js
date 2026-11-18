@@ -7964,12 +7964,22 @@ function rrGroupIsOn() {
 }
 /** 전광판 조별 합산 거리 + 속도계 조 배지 갱신 */
 function rrGroupRefresh() {
-  /* 전광판 누적거리 단위(km) 크기 = 소수점 이하와 동일(정수 글자의 30%) */
-  try {
-    const dEl = document.getElementById('scoreboardDistance');
-    const uEl = dEl && dEl.parentNode && dEl.parentNode.querySelector('.scoreboard-unit');
-    if (dEl && uEl) uEl.style.setProperty('font-size', ((parseFloat(getComputedStyle(dEl).fontSize) || 28) * 0.3).toFixed(1) + 'px', 'important');
-  } catch (e) {}
+  /* 전광판 누적거리 단위(km) 크기 = 소수점 이하와 동일(정수 글자의 30%) — 전체 화면 단체 모드는 아래에서 최종 글자 크기 기준으로 한 번에 지정(중간값으로 흔들림 방지) */
+  const __splitNow = !!document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
+  const __scaleMode = rrGroupIsOn() && !__splitNow;
+  const setUnit = function (px) {
+    try {
+      const dEl0 = document.getElementById('scoreboardDistance');
+      const uEl0 = dEl0 && dEl0.parentNode && dEl0.parentNode.querySelector('.scoreboard-unit');
+      if (uEl0) uEl0.style.setProperty('font-size', (px * 0.3).toFixed(1) + 'px', 'important');
+    } catch (e) {}
+  };
+  if (!__scaleMode) {
+    try {
+      if (!__splitNow) { const v1 = document.getElementById('scoreboardDistance')?.closest('.scoreboard-value'); if (v1) v1.style.fontSize = ''; }
+      setUnit(parseFloat(getComputedStyle(document.getElementById('scoreboardDistance')).fontSize) || 28);
+    } catch (e) {}
+  }
   const box = document.getElementById('scoreboardGroupDist');
   const on = rrGroupIsOn();
   if (box) {
@@ -8008,15 +8018,24 @@ function rrGroupRefresh() {
       /* 전체 화면: 누적거리(+km) + 조별(+km)이 한 줄로 전광판 항목 폭 안에 들어가도록 누적거리·조별 글자를 같은 비율로 축소(분할은 rrFillSplitHeight 가 전체 크기를 맞춤) */
       if (!split) {
         const itemEl = box.closest('.scoreboard-item'), valEl = row && row.querySelector('.scoreboard-value');
+        setUnit(basePx);
+        let q = 1;
         if (itemEl && valEl) {
           const avail = itemEl.clientWidth * 0.97;
           const total = valEl.scrollWidth + parseFloat(box.style.marginLeft || 0) + box.scrollWidth;
-          if (avail > 40 && total > avail) {
-            const f = Math.max(0.2, avail / total * 0.97);
-            valEl.style.fontSize = (basePx * f).toFixed(1) + 'px';
-            box.style.fontSize = (basePx * f).toFixed(1) + 'px';
-            box.style.marginLeft = (basePx * 0.4 * f).toFixed(0) + 'px';
-          }
+          if (avail > 40 && total > avail) q = Math.max(0.2, avail / total * 0.97);
+        }
+        /* 흔들림 방지: 5% 단위로만 변경, 줄였던 크기는 여유가 10% 이상 생길 때만 되돌림 */
+        q = Math.floor(q * 20) / 20;
+        const prev = box.__rrSc;
+        if (prev && q > prev && q < prev * 1.1) q = prev;
+        box.__rrSc = q;
+        if (q < 0.999) {
+          const px = basePx * q;
+          if (valEl) valEl.style.fontSize = px.toFixed(1) + 'px';
+          box.style.fontSize = px.toFixed(1) + 'px';
+          box.style.marginLeft = (basePx * 0.4 * q).toFixed(0) + 'px';
+          setUnit(px);
         }
       }
     }
