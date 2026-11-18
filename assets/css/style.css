@@ -39394,3 +39394,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speedometer-info .rr-head,
 #rollerRaceDashboardScreen .speedometer-info .rr-one,
 #rollerRaceDashboardScreen .speedometer-info .rr-dec { color: inherit; text-shadow: none !important; -webkit-text-stroke: 0; }
+
+/* 분할 보기 포함: 소수점은 정수와 같은 색·불투명도 강제 + 작은 글자가 옅어 보이지 않게 미세 외곽선으로 농도 보정 */
+#rollerRaceDashboardScreen .speedometer-info .rr-dec,
+#rollerRaceDashboardScreen.rr-split .speedometer-info .rr-dec {
+  color: inherit !important; opacity: 1 !important; -webkit-text-fill-color: currentColor;
+  -webkit-text-stroke: .5px currentColor; paint-order: stroke fill;
+}
+#rollerRaceDashboardScreen .speedometer-info:not(.connected) .rr-dec { opacity: .55 !important; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-info:not(.connected) .rr-dec { opacity: .85 !important; }
