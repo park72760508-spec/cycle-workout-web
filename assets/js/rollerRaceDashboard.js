@@ -7358,6 +7358,7 @@ function rrFillSplitHeight() {
   const setFs = fs => {
     vals.forEach(v => { v.style.fontSize = fs ? fs + 'px' : ''; v.style.lineHeight = fs ? '1' : ''; });
     units.forEach(u => { u.style.fontSize = fs ? (fs * 0.5) + 'px' : ''; });
+    try { rrGroupRefresh(); } catch (e) {} /* 조별 누적거리 박스 크기를 누적거리 글자 크기에 맞춰 즉시 재계산(이전 큰 크기가 높이 측정을 부풀리지 않게) */
   };
   sb.style.minHeight = '';
   setFs(0);
