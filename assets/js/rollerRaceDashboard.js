@@ -1686,7 +1686,7 @@ function checkRaceEndConditions() {
         .filter(s => s.deviceId && s.connected)
         .reduce((sum, s) => sum + s.totalDistance, 0);
       
-      if (totalDistance >= settings.targetDistance) {
+      if (totalDistance >= settings.targetDistance - 1e-6) {
         const elapsed = window.rollerRaceState.totalElapsedTime || 0;
         
         // 통합 거리 달성 시 1등 선수의 finishTime 저장 (1등이 결승선 통과)
@@ -1714,7 +1714,7 @@ function checkRaceEndConditions() {
         const elapsed = window.rollerRaceState.totalElapsedTime || 0;
         const gf = (window.rollerRaceState.groupFinish = window.rollerRaceState.groupFinish || {});
         active.forEach(g => {
-          if (g.dist >= settings.targetDistance && gf[g.no] == null) {
+          if (g.dist >= settings.targetDistance - 1e-6 && gf[g.no] == null) {
             gf[g.no] = { time: elapsed, order: Object.keys(gf).length + 1 };
             console.log(`[결승점 도달] ${g.no}조: ${elapsed}초 (${gf[g.no].order}위)`);
           }
@@ -1735,14 +1735,14 @@ function checkRaceEndConditions() {
         
         // 각 속도계가 목표 거리에 도달했을 때 finishTime 저장
         connectedSpeedometers.forEach(s => {
-          if (s.totalDistance >= settings.targetDistance && s.finishTime === null) {
+          if (s.totalDistance >= settings.targetDistance - 1e-6 && s.finishTime === null) {
             s.finishTime = elapsed;
             console.log(`[결승점 도달] 트랙${s.id} (${s.pairingName || s.name}): ${elapsed}초`);
           }
         });
         
         // 모든 연결된 속도계가 목표 거리에 도달했는지 확인
-        const allReached = connectedSpeedometers.every(s => s.totalDistance >= settings.targetDistance);
+        const allReached = connectedSpeedometers.every(s => s.totalDistance >= settings.targetDistance - 1e-6);
         
         if (allReached) {
           shouldEnd = true;
@@ -7048,17 +7048,37 @@ function processSpeedCadenceData(deviceId, data) {
       // 2026-11-16 개인 거리 모드: 목표 거리에 도달한 선수는 그 지점에서 거리 고정(마지막 주자를 기다리는 동안 계속 누적돼
       // 휴대폰 기록(목표 도달 즉시 종료)보다 PC 거리가 커지던 문제 수정)
       const rsCfg = window.rollerRaceState.raceSettings || {};
-      const indivCap = rsCfg.endByDistance && rsCfg.distanceMode === 'individual' && rsCfg.targetDistance > 0 ? rsCfg.targetDistance : 0;
-      if (!(indivCap && speedometer.distFrozen)) {
-        speedometer.totalDistance += (distM / 1000);
-        if (indivCap && speedometer.totalDistance >= indivCap) {
-          speedometer.totalDistance = indivCap;
-          speedometer.distFrozen = true;
+      const tgt = rsCfg.endByDistance && rsCfg.targetDistance > 0 ? Number(rsCfg.targetDistance) : 0;
+      const addKm = distM / 1000;
+      if (!tgt) {
+        speedometer.totalDistance += addKm;
+      } else if (rsCfg.distanceMode === 'individual') {
+        // 개인: 본인이 목표 거리에 도달하면 그 지점에서 고정
+        if (!speedometer.distFrozen) {
+          speedometer.totalDistance += addKm;
+          if (speedometer.totalDistance >= tgt - 1e-9) { speedometer.totalDistance = tgt; speedometer.distFrozen = true; }
         }
+      } else if (rsCfg.distanceMode === 'group') {
+        // 단체: 조 합산이 목표 거리에 도달하면 그 조의 모든 트랙 거리 고정(합산이 목표를 넘지 않게 마지막 구간은 남은 거리만 반영)
+        const gno = rrGroupOfTrackMap()[speedometer.id];
+        const gst = gno ? rrGroupStats().find(g => g.no === gno) : null;
+        if (!gst) { speedometer.totalDistance += addKm; }
+        else if (!speedometer.distFrozen) {
+          const remain = tgt - gst.dist;
+          if (remain <= 1e-9) { speedometer.distFrozen = true; }
+          else if (addKm >= remain - 1e-9) {
+            speedometer.totalDistance += remain;
+            window.rollerRaceState.speedometers.forEach(o => { if (gst.tracks.indexOf(Number(o.id)) >= 0) o.distFrozen = true; });
+          } else { speedometer.totalDistance += addKm; }
+        }
+      } else {
+        // 통합: 전체 합산이 목표 거리에 도달하면 더 이상 누적하지 않음
+        const sumAll = window.rollerRaceState.speedometers.filter(o => o.deviceId && o.connected).reduce((a, o) => a + (Number(o.totalDistance) || 0), 0);
+        const remain = tgt - sumAll;
+        if (remain > 1e-9) speedometer.totalDistance += Math.min(addKm, remain);
       }
     }
 
-    // 6. UI 업데이트 (가민 스타일: 최종 필터링된 속도 사용)
     updateSpeedometerData(speedometer.id, finalSpeed, speedometer.totalDistance);
     
     // 기준점 업데이트
