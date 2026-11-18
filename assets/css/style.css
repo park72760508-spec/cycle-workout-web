@@ -39385,3 +39385,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speed-display-center .speed-value .rr-one { display: inline-flex; width: 0; justify-content: center; }
 #rollerRaceDashboardScreen .speed-display-center .speed-value .rr-head { display: inline-block; width: 0; direction: rtl; white-space: nowrap; transform: translateX(-.5ch); }
 #rollerRaceDashboardScreen .speed-display-center .speed-value .rr-decw { display: inline-block; transform: translateX(.5ch); }
+
+/* 속도계 정보 블럭: 정수·소수점 모두 같은 색(글로우 제거로 큰 글자/작은 글자 톤 차이 방지) */
+#rollerRaceDashboardScreen .speedometer-info .speed-stat-value,
+#rollerRaceDashboardScreen .speedometer-info .speed-value,
+#rollerRaceDashboardScreen .speedometer-info .distance-value { text-shadow: none !important; }
+#rollerRaceDashboardScreen .speedometer-info .rr-int,
+#rollerRaceDashboardScreen .speedometer-info .rr-head,
+#rollerRaceDashboardScreen .speedometer-info .rr-one,
+#rollerRaceDashboardScreen .speedometer-info .rr-dec { color: inherit; text-shadow: none !important; -webkit-text-stroke: 0; }
