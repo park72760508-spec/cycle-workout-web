@@ -8096,7 +8096,15 @@ window.rrGroupOnModeChange = function () {
   const btn = document.getElementById('rrGroupSettingsBtn');
   const on = !!sel && sel.value === 'group';
   if (btn) btn.style.display = on ? '' : 'none';
-  if (on) rrGroupOpen();
+  if (on) { rrGroupOpen(); return; }
+  /* 통합/개인: '설정' 버튼을 누르기 전이라도 즉시 단체 해제(조별 표시·색상 배지 모두 제거) */
+  if (sel && (sel.value === 'total' || sel.value === 'individual')) {
+    const st = window.rollerRaceState.raceSettings;
+    st.distanceMode = sel.value;
+    rrGroupPersist();
+    try { updateTargetSettingsDisplay(); } catch (e) {}
+    rrGroupRefresh();
+  }
 };
 (function rrGroupInitUi() {
   function init() {
