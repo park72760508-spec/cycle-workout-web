@@ -36961,8 +36961,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* Indoor Race(STELVIO Race): 창분할 보기 토글 — 속도계 1줄 + 트랙1~5만 표시 */
 #rollerRaceDashboardScreen .enhanced-control-btn.split svg { display:block; pointer-events:none; }
 #rollerRaceDashboardScreen .enhanced-control-btn.split.active { border-color:#38bdf8; color:#38bdf8; }
-#rollerRaceDashboardScreen.rr-split #speedometerGrid > :nth-child(n+6),
-#rollerRaceDashboardScreen.rr-split #speedometerList > .speedometer-list-item:nth-child(n+6) { display:none !important; }
+/* 창분할 표시 개수(기본 5)는 rollerRaceDashboard.js 의 rrSplitApplyN 이 동적 스타일(#rrSplitNStyle)로 지정 */
 
 /* Indoor Race: 속도계 목록 설정 메뉴를 트랙10 아래로 이동 */
 #rollerRaceDashboardScreen .speedometer-list-section { display:flex; flex-direction:column; }
@@ -37017,9 +37016,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (min-height: 1000px) {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: 1; }
 }
-@media (min-width: 900px) {
-  #rollerRaceDashboardScreen.rr-split .speedometer-grid { grid-template-columns: repeat(5, 1fr) !important; }
-}
+
 @media (max-height: 799px) {
   #rollerRaceDashboardScreen.rr-split .scoreboard-display { zoom: .5; }
   #rollerRaceDashboardScreen.rr-split .dashboard-header { min-height: 44px; }
@@ -37041,7 +37038,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-split .speed-value { font-size: clamp(16px, 1.7vw, 28px); white-space: nowrap; }
 
 /* 창분할 보기 v2: 카드 높이 +10%, 원 5% 축소(상단·우측 잘림 방지), 하단 정보 3열 재배치 */
-#rollerRaceDashboardScreen.rr-split .speedometer-dial { height: 229px; display: flex; align-items: center; justify-content: center; }
+#rollerRaceDashboardScreen.rr-split .speedometer-dial { height: calc(229px * 5 / var(--rr-split-n, 5)); display: flex; align-items: center; justify-content: center; }
 #rollerRaceDashboardScreen.rr-split .speedometer-svg { width: 100%; height: auto; max-height: 100%; }
 #rollerRaceDashboardScreen.rr-split .speed-stat-max { display: none !important; }
 #rollerRaceDashboardScreen.rr-split .speedometer-info { display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; text-align: center; }
@@ -39274,3 +39271,36 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #trainingReadyScreen .connection-form-container,
 #trainingReadyScreen .connection-main-container { padding-bottom: 0 !important; margin-bottom: 0 !important; }
 #trainingReadyScreen.active > .connection-main-container { margin-bottom: auto !important; }
+
+/* ===== 단체(조별) 모드 ===== */
+.rr-group-badge { position:absolute; right:10px; top:34px; z-index:12; padding:1px 9px; border-radius:999px; background:#2563eb; color:#fff; font-size:12px; font-weight:800; line-height:1.5; letter-spacing:.02em; pointer-events:none; }
+#rollerRaceDashboardScreen.rr-split .rr-group-badge { right:6px; top:30px; font-size:11px; padding:0 7px; }
+#rollerRaceDashboardScreen .scoreboard-item:has(#scoreboardDistance) { position:relative; }
+#scoreboardGroupDist { display:grid; grid-auto-flow:column; grid-template-rows:repeat(5, auto); column-gap:14px; row-gap:1px; text-align:left; font-size:13px; font-weight:700; color:#e2e8f0; line-height:1.35; white-space:nowrap; align-self:center; margin-left:14px; zoom:1; }
+.rr-group-dist__row b { color:#7dd3fc; }
+.rr-group-dist__row i { font-style:normal; color:#fbbf24; margin-left:4px; }
+.rr-group-dist__row.rr-off { opacity:.45; }
+.rr-sb-distrow { display:flex; align-items:center; justify-content:center; }
+#rollerRaceDashboardScreen.rr-theme-light #scoreboardGroupDist { color:#1e293b; }
+#rollerRaceDashboardScreen.rr-theme-light .rr-group-dist__row b { color:#2563eb; }
+/* 단체 설정 모달 */
+.rrgm { position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,.55); display:none; align-items:center; justify-content:center; padding:16px; }
+.rrgm.show { display:flex; }
+.rrgm__card { width:min(760px,100%); max-height:90vh; overflow:auto; background:#0f172a; color:#e2e8f0; border:1px solid rgba(255,255,255,.15); border-radius:16px; padding:16px 18px; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+.rrgm__head { display:flex; justify-content:space-between; align-items:center; font-size:18px; margin-bottom:12px; }
+.rrgm__x { background:none; border:0; color:#94a3b8; font-size:18px; cursor:pointer; }
+.rrgm__cnt { display:flex; align-items:center; gap:10px; margin-bottom:12px; font-weight:700; }
+.rrgm__cnt input { width:70px; padding:6px 8px; border-radius:8px; border:1px solid #475569; background:#fff; color:#000; font-size:16px; font-weight:700; text-align:center; }
+.rrgm__cnt span { color:#94a3b8; font-size:12px; }
+.rrgm__row { display:flex; align-items:flex-start; gap:10px; padding:8px 0; border-top:1px solid rgba(255,255,255,.08); }
+.rrgm__gl { min-width:44px; font-weight:800; color:#7dd3fc; padding-top:6px; }
+.rrgm__tracks { display:flex; flex-wrap:wrap; gap:6px; }
+.rrgm__t { padding:6px 10px; border-radius:8px; border:1px solid #475569; background:#1e293b; color:#e2e8f0; font-size:13px; cursor:pointer; }
+.rrgm__t.on { background:#2563eb; border-color:#60a5fa; color:#fff; font-weight:800; }
+.rrgm__t:disabled { opacity:.3; cursor:not-allowed; }
+.rrgm__foot { text-align:right; margin-top:12px; }
+.rrgm__ok { padding:8px 22px; border:0; border-radius:10px; background:#22c55e; color:#052e16; font-weight:800; cursor:pointer; }
+/* 창분할 표시 개수 입력(하단) */
+.rr-splitn { display:none; position:fixed; right:14px; bottom:8px; z-index:50; align-items:center; gap:6px; padding:4px 10px; border-radius:10px; background:rgba(15,23,42,.85); color:#e2e8f0; font-size:12px; font-weight:700; }
+#rollerRaceDashboardScreen.rr-split .rr-splitn { display:flex; }
+.rr-splitn input { width:46px; padding:2px 4px; border-radius:6px; border:1px solid #475569; background:#fff; color:#000; font-size:14px; font-weight:800; text-align:center; }

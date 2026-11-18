@@ -4089,7 +4089,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261118scr6" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261118grp1" />
   <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm18" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
@@ -35412,9 +35412,12 @@
     <div class="scoreboard-display">
       <div class="scoreboard-item">
         <div class="scoreboard-label">누적거리</div>
+        <div class="rr-sb-distrow">
         <div class="scoreboard-value">
           <span id="scoreboardDistance" class="digital-number">0.0</span>
           <span class="scoreboard-unit">km</span>
+        </div>
+        <div id="scoreboardGroupDist" style="display:none;"></div>
         </div>
       </div>
       <div class="scoreboard-item">
@@ -35459,6 +35462,7 @@
               <select id="targetDistanceMode" class="target-select-small">
                 <option value="total">통합</option>
                 <option value="individual">개인</option>
+                <option value="group">단체</option>
               </select>
             </div>
           </div>
@@ -36913,7 +36917,7 @@
   <!-- 워크아웃 선택 모달은 Indoor Training과 동일한 모달 재사용 (openWorkoutSelectionModalForBluetoothCoach에서 처리) -->
 
   <!-- 평로라 대회 대시보드 스크립트 -->
-  <script src="assets/js/rollerRaceDashboard.js?v=20261117wp1"></script>
+  <script src="assets/js/rollerRaceDashboard.js?v=20261118grp1"></script>
   <!-- Indoor Training 대시보드 스크립트 -->
   <script src="assets/js/indoorTrainingDashboard.js?v=20261104dur1"></script>
   <!-- Bluetooth Training Coach 대시보드 스크립트 -->

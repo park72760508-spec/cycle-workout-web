@@ -42,7 +42,9 @@ window.rollerRaceState = {
   raceSettings: {
     endByDistance: true,
     targetDistance: 10, // km
-    distanceMode: 'total', // 'individual' or 'total' (개인 거리 or 통합 거리)
+    distanceMode: 'total', // 'individual' | 'total' | 'group' (개인 거리 / 통합 거리 / 단체=조별 합산)
+    groupCount: 2, // 단체 모드: 조 수(1~10)
+    groups: [], // 단체 모드: 조별 트랙 번호 [[1,2],[3,4],…]
     endByTime: false,
     targetTime: 0, // seconds (HH:MM:SS 형식으로 저장)
     wheelSize: '25-622' // 기본값: 700 x 25C
@@ -366,6 +368,7 @@ function createSpeedometerElement(speedometer) {
         <span class="status-text">미연결</span>
       </div>
     </div>
+    <span class="rr-group-badge" id="rr-group-badge-${speedometer.id}" style="display:none;"></span>
     <div class="speedometer-dial">
       <svg class="speedometer-svg" viewBox="0 0 200 200">
         <!-- 아래쪽 반원 배경 (원지름의 1/4만큼 아래로 이동) -->
@@ -1422,6 +1425,7 @@ function updateDashboardStats() {
   // 전광판 업데이트
   const scoreboardDistanceEl = document.getElementById('scoreboardDistance');
   if (scoreboardDistanceEl) scoreboardDistanceEl.textContent = totalDistance.toFixed(2);
+  try { rrGroupRefresh(); } catch (e) {}
   
   // 경기 종료 조건 확인 (거리 체크)
   if (window.rollerRaceState.raceState === 'running') {
@@ -1577,7 +1581,7 @@ function updateTargetSettingsDisplay() {
   let displayText = '';
   
   if (settings.endByDistance && settings.targetDistance > 0) {
-    const modeText = settings.distanceMode === 'total' ? '통합' : '개인';
+    const modeText = settings.distanceMode === 'total' ? '통합' : settings.distanceMode === 'group' ? '단체' : '개인';
     displayText += `${modeText} 거리: ${settings.targetDistance}km`;
   }
   
@@ -1698,6 +1702,25 @@ function checkRaceEndConditions() {
         shouldEnd = true;
         endReason = `통합 거리 달성: ${totalDistance.toFixed(2)}km >= ${settings.targetDistance}km`;
         console.log(`[경기 종료] ${endReason}`);
+      }
+    } else if (settings.distanceMode === 'group') {
+      // 단체: 조별 합산 거리가 목표에 도달한 순서대로 순위 — 모든 조(참가 트랙이 있는 조)가 도착하면 종료
+      const gs = rrGroupStats();
+      const active = gs.filter(g => g.active);
+      if (active.length > 0) {
+        const elapsed = window.rollerRaceState.totalElapsedTime || 0;
+        const gf = (window.rollerRaceState.groupFinish = window.rollerRaceState.groupFinish || {});
+        active.forEach(g => {
+          if (g.dist >= settings.targetDistance && gf[g.no] == null) {
+            gf[g.no] = { time: elapsed, order: Object.keys(gf).length + 1 };
+            console.log(`[결승점 도달] ${g.no}조: ${elapsed}초 (${gf[g.no].order}위)`);
+          }
+        });
+        if (active.every(g => gf[g.no] != null)) {
+          shouldEnd = true;
+          endReason = '모든 조 목표 거리 도달';
+          console.log(`[경기 종료] ${endReason}`);
+        }
       }
     } else if (settings.distanceMode === 'individual') {
       // 개인 거리: 모든 선수가 목표 거리에 도달했는지 확인
@@ -1903,6 +1926,7 @@ function startRace() {
       s.finishTime = null;
       s.distFrozen = false;
     });
+    window.rollerRaceState.groupFinish = {};
     
     window.rollerRaceState.needleAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
@@ -3125,6 +3149,19 @@ function updateAllStraightTrackMascots() {
       updateStraightTrackMascot(speedometer.id, Math.min(progress, 1.0), isFinished);
     });
 
+  } else if (settings.distanceMode === 'group' && settings.endByDistance && settings.targetDistance > 0) {
+    // 단체: 각 트랙의 기여 기준 = 목표거리 ÷ 조 인원 — 조원이 모두 같은 거리를 타면 조 합산이 목표에 닿을 때 결승선
+    const gmap = rrGroupOfTrackMap();
+    const gsz = {};
+    Object.keys(gmap).forEach(k => { gsz[gmap[k]] = (gsz[gmap[k]] || 0) + 1; });
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      if (!speedometer.connected || speedometer.totalDistance === 0) {
+        updateStraightTrackMascot(speedometer.id, 0, isFinished);
+        return;
+      }
+      const n = gsz[gmap[speedometer.id]] || 1;
+      updateStraightTrackMascot(speedometer.id, Math.min(speedometer.totalDistance / (settings.targetDistance / n), 1.0), isFinished);
+    });
   } else if (settings.distanceMode === 'individual') {
     // 4. 개인 경기 방식 (기존 로직 유지)
     if (settings.endByDistance && settings.targetDistance > 0) {
@@ -3267,6 +3304,11 @@ function updateStraightTrackStats(speedometerId, speed, distance) {
         __base = (window.rollerRaceState.speedometers || [])
           .filter(function (s) { return s.deviceId && s.connected; })
           .reduce(function (sum, s) { return sum + (Number(s.totalDistance) || 0); }, 0);
+      }
+      if (__st.distanceMode === 'group') {
+        var __gm = rrGroupOfTrackMap()[speedometerId];
+        var __g = __gm ? rrGroupStats().find(function (g) { return g.no === __gm; }) : null;
+        if (__g) __base = __g.dist;
       }
       __shown = Math.max(0, Number(__st.targetDistance) - __base);
     }
@@ -7845,4 +7887,217 @@ window.rrThemeToggle = function () { rrThemeSet(rrThemeGet() === 'light' ? 'dark
 (function () {
   function init() { rrThemeApply(rrThemeGet()); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
+
+
+/* =====================================================================
+ * 2026-11-18 단체(조별) 모드 + 창분할 표시 개수 지정
+ *  - 거리 모드 '단체': 조 수(1~10) 지정 → 조별 트랙 선택(앞 조가 고른 트랙은 비활성)
+ *  - 조별 합산 누적거리를 누적거리 우측에 표시, 목표 거리 도달 순서가 순위, 모든 조 도착 시 종료
+ *  - 속도계 카드 우측 상단(헤더 아래)에 조 표시
+ *  - 창분할(축소) 보기 하단의 숫자로 한 줄 속도계·트랙 표시 개수 지정(기본 5)
+ * ===================================================================== */
+function rrGroupSettings() {
+  const st = window.rollerRaceState.raceSettings;
+  if (!Array.isArray(st.groups)) st.groups = [];
+  return st;
+}
+/** [{no, tracks, dist, active}] — 합산 거리(km)는 조에 속한 모든 트랙의 누적거리 합 */
+function rrGroupStats() {
+  const st = rrGroupSettings();
+  const n = Math.max(1, Math.min(10, Number(st.groupCount) || 1));
+  const sps = window.rollerRaceState.speedometers || [];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const tracks = (st.groups[i] || []).map(Number);
+    let dist = 0, active = false;
+    tracks.forEach(id => {
+      const sp = sps.find(s => Number(s.id) === id);
+      if (!sp) return;
+      dist += Number(sp.totalDistance) || 0;
+      if (sp.deviceId && sp.connected) active = true;
+    });
+    out.push({ no: i + 1, tracks: tracks, dist: dist, active: active });
+  }
+  return out;
+}
+/** {트랙번호: 조번호} */
+function rrGroupOfTrackMap() {
+  const m = {};
+  rrGroupStats().forEach(g => g.tracks.forEach(t => { m[t] = g.no; }));
+  return m;
+}
+function rrGroupIsOn() {
+  const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
+  return !!st && st.distanceMode === 'group';
+}
+/** 전광판 조별 합산 거리 + 속도계 조 배지 갱신 */
+function rrGroupRefresh() {
+  const box = document.getElementById('scoreboardGroupDist');
+  const on = rrGroupIsOn();
+  if (box) {
+    if (!on) { box.style.display = 'none'; box.innerHTML = ''; }
+    else {
+      const gs = rrGroupStats();
+      const gf = window.rollerRaceState.groupFinish || {};
+      const tgt = Number(rrGroupSettings().targetDistance) || 0;
+      box.style.display = '';
+      box.innerHTML = gs.map(g => {
+        const f = gf[g.no];
+        const d = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2);
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><b>' + g.no + '조</b> : ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
+      }).join('');
+    }
+  }
+  const map = on ? rrGroupOfTrackMap() : {};
+  document.querySelectorAll('.rr-group-badge').forEach(el => {
+    const id = Number(String(el.id).replace('rr-group-badge-', ''));
+    const g = map[id];
+    if (on && g) { el.textContent = g + '조'; el.style.display = ''; } else { el.style.display = 'none'; }
+  });
+}
+setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
+
+function rrGroupPersist() {
+  try { localStorage.setItem('rollerRaceSettings', JSON.stringify(window.rollerRaceState.raceSettings)); } catch (e) {}
+}
+/** 단체 설정 모달 열기 */
+function rrGroupOpen() {
+  const st = rrGroupSettings();
+  let m = document.getElementById('rrGroupModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'rrGroupModal';
+    m.className = 'rrgm';
+    m.innerHTML = '<div class="rrgm__card" role="dialog" aria-modal="true" aria-label="단체 설정">' +
+      '<div class="rrgm__head"><b>단체 설정</b><button type="button" class="rrgm__x" aria-label="닫기">✕</button></div>' +
+      '<div class="rrgm__cnt"><label for="rrGroupCount">조 구분</label><input type="number" id="rrGroupCount" min="1" max="10" step="1" inputmode="numeric"><span>(1~10)</span></div>' +
+      '<div class="rrgm__rows" id="rrGroupRows"></div>' +
+      '<div class="rrgm__foot"><button type="button" class="rrgm__ok">확인</button></div></div>';
+    document.body.appendChild(m);
+    m.addEventListener('click', function (e) { if (e.target === m) rrGroupClose(); });
+    m.querySelector('.rrgm__x').onclick = rrGroupClose;
+    m.querySelector('.rrgm__ok').onclick = rrGroupClose;
+    m.querySelector('#rrGroupCount').addEventListener('input', function () {
+      let v = parseInt(this.value, 10);
+      if (!(v >= 1)) return;
+      v = Math.min(10, v);
+      const s2 = rrGroupSettings();
+      s2.groupCount = v;
+      s2.groups = (s2.groups || []).slice(0, v);
+      rrGroupPersist(); rrGroupRenderRows(); rrGroupRefresh();
+    });
+  }
+  m.querySelector('#rrGroupCount').value = Math.max(1, Math.min(10, Number(st.groupCount) || 2));
+  rrGroupRenderRows();
+  m.classList.add('show');
+}
+function rrGroupClose() {
+  const m = document.getElementById('rrGroupModal');
+  if (m) m.classList.remove('show');
+  rrGroupPersist();
+  try { updateTargetSettingsDisplay(); } catch (e) {}
+  rrGroupRefresh();
+}
+function rrGroupRenderRows() {
+  const st = rrGroupSettings();
+  const n = Math.max(1, Math.min(10, Number(st.groupCount) || 1));
+  const total = Math.max(10, (window.rollerRaceState.speedometers || []).length);
+  const host = document.getElementById('rrGroupRows');
+  if (!host) return;
+  const owner = {}; // 트랙 → 조(index)
+  for (let i = 0; i < n; i++) (st.groups[i] || []).forEach(t => { owner[t] = i; });
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    html += '<div class="rrgm__row"><div class="rrgm__gl">' + (i + 1) + '조 :</div><div class="rrgm__tracks">';
+    for (let t = 1; t <= total; t++) {
+      const mine = owner[t] === i;
+      const taken = owner[t] !== undefined && !mine;
+      html += '<button type="button" class="rrgm__t' + (mine ? ' on' : '') + '" data-g="' + i + '" data-t="' + t + '"' + (taken ? ' disabled' : '') + '>트랙' + t + '</button>';
+    }
+    html += '</div></div>';
+  }
+  host.innerHTML = html;
+  host.querySelectorAll('.rrgm__t').forEach(b => {
+    b.onclick = function () {
+      const g = Number(b.dataset.g), t = Number(b.dataset.t);
+      const s2 = rrGroupSettings();
+      while (s2.groups.length <= g) s2.groups.push([]);
+      const arr = (s2.groups[g] = s2.groups[g] || []);
+      const at = arr.indexOf(t);
+      if (at >= 0) arr.splice(at, 1); else arr.push(t);
+      arr.sort(function (a, c) { return a - c; });
+      rrGroupPersist(); rrGroupRenderRows(); rrGroupRefresh();
+    };
+  });
+}
+window.rrGroupOpen = rrGroupOpen;
+window.rrGroupClose = rrGroupClose;
+/** 거리 모드 select 변경: 단체면 설정 화면 표시 */
+window.rrGroupOnModeChange = function () {
+  const sel = document.getElementById('targetDistanceMode');
+  const btn = document.getElementById('rrGroupSettingsBtn');
+  const on = !!sel && sel.value === 'group';
+  if (btn) btn.style.display = on ? '' : 'none';
+  if (on) rrGroupOpen();
+};
+(function rrGroupInitUi() {
+  function init() {
+    const sel = document.getElementById('targetDistanceMode');
+    if (!sel || document.getElementById('rrGroupSettingsBtn')) return;
+    if (!sel.querySelector('option[value="group"]')) {
+      const o = document.createElement('option'); o.value = 'group'; o.textContent = '단체'; sel.appendChild(o);
+    }
+    sel.addEventListener('change', window.rrGroupOnModeChange);
+    const b = document.createElement('button');
+    b.type = 'button'; b.id = 'rrGroupSettingsBtn'; b.className = 'btn btn-secondary btn-xs';
+    b.textContent = '조 설정'; b.style.cssText = 'padding:4px 10px;font-size:12px;margin-left:4px;display:none;';
+    b.onclick = rrGroupOpen;
+    sel.parentNode.insertBefore(b, sel.nextSibling);
+    const sync = function () { b.style.display = sel.value === 'group' ? '' : 'none'; };
+    sync(); setInterval(sync, 1500);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  setTimeout(init, 1500);
+})();
+
+/* ---- 창분할 보기 표시 개수(기본 5) ---- */
+function rrSplitN() {
+  let n = 5;
+  try { n = parseInt(localStorage.getItem('rrSplitN'), 10) || 5; } catch (e) {}
+  return Math.max(1, Math.min(10, n));
+}
+function rrSplitApplyN() {
+  const n = rrSplitN();
+  let st = document.getElementById('rrSplitNStyle');
+  if (!st) { st = document.createElement('style'); st.id = 'rrSplitNStyle'; document.head.appendChild(st); }
+  const S = '#rollerRaceDashboardScreen.rr-split';
+  st.textContent =
+    S + ' #speedometerGrid > :nth-child(n+' + (n + 1) + '),' + S + ' #speedometerList > .speedometer-list-item:nth-child(n+' + (n + 1) + '){display:none !important;}' +
+    S + ' .speedometer-grid{grid-template-columns:repeat(' + n + ',minmax(0,1fr)) !important;}' +
+    S + '{--rr-split-n:' + n + ';}';
+  const inp = document.getElementById('rrSplitNInput');
+  if (inp && Number(inp.value) !== n) inp.value = n;
+  try { rrApplySplitViewBox(); rrPlaceRankBadges(); normalizeTrackWidths(); rrAlignGridToTrack(); } catch (e) {}
+  setTimeout(function () { try { rrFillSplitHeight(); rrPlaceRankBadges(); normalizeTrackWidths(); } catch (e) {} }, 80);
+  try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+}
+(function rrSplitNInitUi() {
+  function init() {
+    const scr = document.getElementById('rollerRaceDashboardScreen');
+    if (!scr || document.getElementById('rrSplitNBar')) return;
+    const bar = document.createElement('div');
+    bar.id = 'rrSplitNBar'; bar.className = 'rr-splitn';
+    bar.innerHTML = '<label for="rrSplitNInput">표시 개수</label><input type="number" id="rrSplitNInput" min="1" max="10" step="1" inputmode="numeric" value="' + rrSplitN() + '"><span>개</span>';
+    scr.appendChild(bar);
+    bar.querySelector('input').addEventListener('input', function () {
+      const v = parseInt(this.value, 10);
+      if (!(v >= 1)) return;
+      try { localStorage.setItem('rrSplitN', String(Math.min(10, v))); } catch (e) {}
+      rrSplitApplyN();
+    });
+    rrSplitApplyN();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  setTimeout(init, 1500);
 })();
