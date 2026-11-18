@@ -39315,3 +39315,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 거리 표시 소수점 이하(.xx)는 정수 크기의 30% */
 .rr-frac { font-size:.3em; font-weight:inherit; letter-spacing:0; }
+
+/* 조 배지: 상태 표시 문구와 겹치지 않게 아래로 */
+#rollerRaceDashboardScreen .rr-group-badge { top: 50px; }
+#rollerRaceDashboardScreen.rr-split .rr-group-badge { top: 38px; }
