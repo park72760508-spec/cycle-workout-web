@@ -39380,3 +39380,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speed-display-center .speed-value {
   display: inline-block; width: 0; overflow: visible; white-space: nowrap; text-align: left; margin: 0;
 }
+
+/* 이동거리 일의 자리 숫자를 칸 정중앙에 고정 (윗자리는 왼쪽, 소수는 오른쪽으로) */
+#rollerRaceDashboardScreen .speed-display-center .speed-value .rr-one { display: inline-flex; width: 0; justify-content: center; }
+#rollerRaceDashboardScreen .speed-display-center .speed-value .rr-head { display: inline-block; width: 0; direction: rtl; white-space: nowrap; transform: translateX(-.5ch); }
+#rollerRaceDashboardScreen .speed-display-center .speed-value .rr-decw { display: inline-block; transform: translateX(.5ch); }

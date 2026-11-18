@@ -333,6 +333,13 @@ function createSpeedometerGrid() {
 // 디지털 숫자 표시: 정수는 크게, 소수점 이하는 작게
 function rrSetDigital(el, str) {
   const i = String(str).indexOf('.');
+  if (el.classList.contains('speed-value')) {
+    /* 이동거리(가운데): 일의 자리 숫자가 칸 정중앙, 윗자리는 왼쪽·소수점은 오른쪽 */
+    const ip = i < 0 ? String(str) : str.slice(0, i);
+    el.innerHTML = '<span class="rr-int"><span class="rr-head">' + ip.slice(0, -1) + '</span><span class="rr-one">' + ip.slice(-1) + '</span></span>' +
+      (i < 0 ? '' : '<span class="rr-decw"><small class="rr-dec">' + str.slice(i) + '</small></span>');
+    return;
+  }
   el.innerHTML = i < 0 ? `<span class="rr-int">${str}</span>`
     : `<span class="rr-int">${str.slice(0, i)}</span><small class="rr-dec">${str.slice(i)}</small>`;
 }
@@ -439,7 +446,7 @@ function createSpeedometerElement(speedometer) {
       <!-- 중앙: 거리 (단위는 하단에 표시) -->
       <div class="speed-display-center">
         <div class="speed-value-wrapper">
-          <span class="speed-value" id="distance-value-${speedometer.id}"><span class="rr-int">0</span><small class="rr-dec">.0</small></span>
+          <span class="speed-value" id="distance-value-${speedometer.id}"><span class="rr-int"><span class="rr-head"></span><span class="rr-one">0</span></span><span class="rr-decw"><small class="rr-dec">.0</small></span></span>
           <div class="speed-unit-bottom">km</div>
         </div>
       </div>
