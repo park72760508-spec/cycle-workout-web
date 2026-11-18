@@ -7927,6 +7927,9 @@ function rrGroupOfTrackMap() {
   rrGroupStats().forEach(g => g.tracks.forEach(t => { m[t] = g.no; }));
   return m;
 }
+/** 조별 구분 색상(1조~10조) */
+var RR_GROUP_COLORS = ['#ef4444', '#2563eb', '#16a34a', '#f59e0b', '#9333ea', '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#64748b'];
+function rrGroupColor(no) { return RR_GROUP_COLORS[(Number(no) - 1) % RR_GROUP_COLORS.length]; }
 function rrGroupIsOn() {
   const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
   return !!st && st.distanceMode === 'group';
@@ -7942,10 +7945,17 @@ function rrGroupRefresh() {
       const gf = window.rollerRaceState.groupFinish || {};
       const tgt = Number(rrGroupSettings().targetDistance) || 0;
       box.style.display = '';
+      /* 크기: 누적거리 숫자 글자 크기 기준 — 조 수가 늘수록 줄여 누적거리 블럭 높이 안에 맞춤(≤2: 1열, 3~4: 2열×2행) */
+      const n = gs.length, cols = n <= 2 ? 1 : n <= 4 ? 2 : 3, rows = Math.ceil(n / cols);
+      const baseEl = document.getElementById('scoreboardDistance');
+      const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
+      box.style.fontSize = Math.max(9, basePx * Math.min(0.9, 0.9 / rows)).toFixed(1) + 'px';
+      box.style.gridTemplateRows = 'repeat(' + rows + ', auto)';
+      box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
       box.innerHTML = gs.map(g => {
         const f = gf[g.no];
         const d = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2);
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><b>' + g.no + '조</b> : ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><b style="color:' + rrGroupColor(g.no) + '">' + g.no + '조</b> : ' + d + ' km' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
       }).join('');
     }
   }
@@ -7953,7 +7963,7 @@ function rrGroupRefresh() {
   document.querySelectorAll('.rr-group-badge').forEach(el => {
     const id = Number(String(el.id).replace('rr-group-badge-', ''));
     const g = map[id];
-    if (on && g) { el.textContent = g + '조'; el.style.display = ''; } else { el.style.display = 'none'; }
+    if (on && g) { el.textContent = g + '조'; el.style.background = rrGroupColor(g); el.style.display = ''; } else { el.style.display = 'none'; }
   });
 }
 setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
