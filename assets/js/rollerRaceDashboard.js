@@ -7401,11 +7401,11 @@ function rrFillSplitHeight() {
   }
   let fs = Math.max(14, Math.min(fsH, fsW, 260));
   setFs(Math.floor(fs));
-  // 실제 내용 높이가 블럭을 넘으면 비율로 줄여 맞춤
-  for (let i = 0; i < 6; i++) {
-    const h = sb.scrollHeight, c = sb.clientHeight;
-    if (h <= c + 0.5) break;
-    fs = Math.max(12, Math.floor(fs * (c / h) * 0.97));
+  // 실제 내용 높이가 목표 높이(T)를 넘으면 비율로 줄여 맞춤 — sb 는 min-height 라 scrollHeight 비교로는 넘침을 알 수 없어 실제 높이로 비교
+  for (let i = 0; i < 10; i++) {
+    const h = sb.getBoundingClientRect().height;
+    if (h <= T + 0.5) break;
+    fs = Math.max(12, Math.floor(fs * (T / h) * 0.97));
     setFs(fs);
   }
 }
