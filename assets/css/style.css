@@ -39319,3 +39319,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 조 배지: 상태 표시 문구와 겹치지 않게 아래로 */
 #rollerRaceDashboardScreen .rr-group-badge { top: 50px; }
 #rollerRaceDashboardScreen.rr-split .rr-group-badge { top: 38px; }
+
+/* 조 배지: 누적거리 숫자보다 크지 않게(숫자의 60%) */
+.rr-group-pill { font-size:.6em; padding:0 .5em; line-height:1.5; }
+/* 속도계 블럭: 기본 바탕은 유지하고 조 색상을 투명하게 투영(검정/화이트 모드 공통, 모드별 농도) */
+#rollerRaceDashboardScreen .speedometer-container.rr-grouped { position:relative; isolation:isolate; }
+#rollerRaceDashboardScreen .speedometer-container.rr-grouped::before { content:''; position:absolute; inset:0; border-radius:inherit; background:var(--rr-gc); opacity:.2; z-index:-1; pointer-events:none; }
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-container.rr-grouped::before { opacity:.13; }
+#rollerRaceDashboardScreen .speedometer-container.rr-grouped { border-color:color-mix(in srgb, var(--rr-gc) 45%, transparent); }

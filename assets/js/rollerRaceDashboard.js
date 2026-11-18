@@ -7404,8 +7404,9 @@ function rrFillSplitHeight() {
   // 실제 내용 높이가 목표 높이(T)를 넘으면 비율로 줄여 맞춤 — sb 는 min-height 라 scrollHeight 비교로는 넘침을 알 수 없어 실제 높이로 비교
   for (let i = 0; i < 10; i++) {
     const h = sb.getBoundingClientRect().height;
-    if (h <= T + 0.5) break;
-    fs = Math.max(12, Math.floor(fs * (T / h) * 0.97));
+    const wOver = sb.scrollWidth > sb.clientWidth + 1 ? sb.clientWidth / sb.scrollWidth : 1;
+    if (h <= T + 0.5 && wOver === 1) break;
+    fs = Math.max(12, Math.floor(fs * Math.min(T / h, wOver) * 0.97));
     setFs(fs);
   }
 }
@@ -7956,14 +7957,29 @@ function rrGroupRefresh() {
       const gf = window.rollerRaceState.groupFinish || {};
       const tgt = Number(rrGroupSettings().targetDistance) || 0;
       box.style.display = '';
-      /* 크기: 누적거리 숫자 글자 크기 기준 — 조 수가 늘수록 줄여 누적거리 블럭 높이 안에 맞춤(≤2: 1열, 3~4: 2열×2행) */
-      const n = gs.length, rows = n <= 2 ? 1 : n <= 4 ? 2 : 3, cols = Math.ceil(n / rows); /* 1~2개조: 한 줄, 3~4개조: 2줄 */
+      /* 전체 화면: 누적거리 줄 아래에 조별 누적거리 줄(2줄 유지) / 분할 화면: 누적거리 오른쪽에 같은 글자 크기로 배치(≤2개조 한 줄, 3~4개조 2줄) */
+      const split = !!document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
+      const n = gs.length;
       const baseEl = document.getElementById('scoreboardDistance');
       const basePx = baseEl ? parseFloat(getComputedStyle(baseEl).fontSize) || 28 : 28;
-      box.style.fontSize = Math.max(9, basePx * (rows === 1 ? 0.6 : Math.min(0.9, 0.9 / rows))).toFixed(1) + 'px';
+      const row = box.parentNode;
+      if (row) { row.style.flexDirection = split ? '' : 'column'; row.style.alignItems = 'center'; }
+      if (split) {
+        const rows = n <= 2 ? 1 : n <= 4 ? 2 : 3, cols = Math.ceil(n / rows);
+        box.style.fontSize = Math.max(9, basePx).toFixed(1) + 'px';
+        box.style.marginLeft = (basePx * 0.4).toFixed(0) + 'px';
+        box.style.marginTop = '';
+        box.style.gridTemplateRows = 'repeat(' + rows + ', auto)';
+        box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
+      } else {
+        const cols = Math.min(n, 5);
+        box.style.fontSize = Math.max(9, basePx * 0.5).toFixed(1) + 'px';
+        box.style.marginLeft = '0';
+        box.style.marginTop = (basePx * 0.15).toFixed(0) + 'px';
+        box.style.gridTemplateRows = '';
+        box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
+      }
       box.style.gridAutoFlow = 'row';
-      box.style.gridTemplateRows = 'repeat(' + rows + ', auto)';
-      box.style.gridTemplateColumns = 'repeat(' + cols + ', auto)';
       box.style.columnGap = (basePx * 0.4).toFixed(0) + 'px';
       box.innerHTML = gs.map(g => {
         const f = gf[g.no];
@@ -7974,6 +7990,11 @@ function rrGroupRefresh() {
     }
   }
   const map = on ? rrGroupOfTrackMap() : {};
+  document.querySelectorAll('#speedometerGrid .speedometer-container').forEach(c => {
+    const g = map[Number(c.dataset.speedometerId)];
+    if (on && g) { c.classList.add('rr-grouped'); c.style.setProperty('--rr-gc', rrGroupColor(g)); }
+    else { c.classList.remove('rr-grouped'); c.style.removeProperty('--rr-gc'); }
+  });
   document.querySelectorAll('.rr-group-badge').forEach(el => {
     const id = Number(String(el.id).replace('rr-group-badge-', ''));
     const g = map[id];
