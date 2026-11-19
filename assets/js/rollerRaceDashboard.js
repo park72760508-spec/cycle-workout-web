@@ -345,8 +345,25 @@ function rrSetDigital(el, str) {
 }
 
 // 창분할 보기: 속도계 원이 카드 좌우를 꽉 채우도록 viewBox 크롭
+/* 2026-11-20 속도계 표시 방식: 설정 메뉴 버튼으로만 바뀜. ON(기본)=전체 화면 표시 유지, OFF=분할 화면 표시(rr-gs 클래스) */
+function rrGaugeFullOn() { try { return localStorage.getItem('rrGaugeFull') !== '0'; } catch (e) { return true; } }
+function rrApplyGaugeStyle() {
+  const scr = document.getElementById('rollerRaceDashboardScreen');
+  const on = rrGaugeFullOn();
+  if (scr) scr.classList.toggle('rr-gs', !on);
+  const b = document.getElementById('btnRaceGaugeStyle');
+  if (b) { b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  try { rrApplySplitViewBox(); } catch (e) {}
+}
+window.rrToggleGaugeStyle = function () {
+  try { localStorage.setItem('rrGaugeFull', rrGaugeFullOn() ? '0' : '1'); } catch (e) {}
+  rrApplyGaugeStyle();
+  try { normalizeTrackWidths(); rrAlignGridToTrack(); } catch (e) {}
+  setTimeout(() => { try { rrFillSplitHeight(); rrPlaceRankBadges(); } catch (e) {} }, 60);
+  try { window.dispatchEvent(new Event('resize')); } catch (e) {}
+};
 function rrApplySplitViewBox() {
-  const split = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-split');
+  const split = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-gs'); /* 속도계 표시 방식(분할 화면 표시 = OFF) */
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
     // 창분할 보기: 눈금 숫자는 호 바깥(기존 위치), 창분할 아님: 눈금 호가 검은 바탕 좌우 끝까지 닿도록 확대 + 숫자는 호 안쪽
     svg.setAttribute('viewBox', split ? '-12 33 224 130' : '14 52 172 116');
@@ -8232,4 +8249,11 @@ function rrSplitApplyN() {
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   setTimeout(init, 1500);
+})();
+
+/* 속도계 표시 방식 초기 적용(저장값) */
+(function () {
+  const go = () => { try { rrApplyGaugeStyle(); } catch (e) {} };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+  setTimeout(go, 500);
 })();
