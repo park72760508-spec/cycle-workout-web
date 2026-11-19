@@ -15973,6 +15973,93 @@ function getDateStrDaysAgo(daysAgo) {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * 2026-11-19: STELVIO 라이딩 기록에 구간별 실제 평균 파워(segment_avg_watts)가 없을 때, 같은 날 Strava 활동의
+ * 파워 스트림으로 구간별 평균을 계산해 돌려준다(읽기 전용 — DB 수정 없음).
+ * 요청 body: { stravaActivityId, segments: [{ sec, targetW }] }
+ *  - 시작 시각이 STELVIO 와 Strava 에서 다를 수 있어 0~900초 범위에서 목표 파워 프로파일과 상관이 가장 높은 오프셋을 고른다.
+ */
+const stravaSegmentAvgConfig = { cors: true, timeoutSeconds: 120, invoker: "public" };
+if (STRAVA_CLIENT_SECRET) stravaSegmentAvgConfig.secrets = [STRAVA_CLIENT_SECRET];
+exports.getStravaSegmentAvgWatts = onRequest(stravaSegmentAvgConfig, async (req, res) => {
+  const origin = req.headers.origin;
+  if (origin && CORS_ORIGINS.some((o) => (typeof o === "string" ? origin === o : o.test(origin)))) {
+    res.set("Access-Control-Allow-Origin", origin);
+  }
+  res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") { res.status(204).send(""); return; }
+  const uid = await getUidFromRequest(req, res);
+  if (!uid) return;
+  try {
+    const body = req.body || {};
+    const activityId = String(body.stravaActivityId || "").trim();
+    const segs = Array.isArray(body.segments) ? body.segments : [];
+    const durs = segs.map((x) => Math.max(0, Math.round(Number(x && x.sec) || 0)));
+    const tgts = segs.map((x) => Math.max(0, Number(x && x.targetW) || 0));
+    const totalSec = durs.reduce((a, b) => a + b, 0);
+    if (!/^\d+$/.test(activityId) || !segs.length || totalSec <= 0 || segs.length > 200) {
+      res.status(400).json({ error: { code: "invalid-argument", message: "stravaActivityId·segments 가 필요합니다." } });
+      return;
+    }
+    const db = admin.firestore();
+    const userSnap = await db.collection("users").doc(uid).get();
+    if (!userSnap.exists) { res.status(404).json({ error: { code: "not-found", message: "사용자를 찾을 수 없습니다." } }); return; }
+    const ud = userSnap.data() || {};
+    let accessToken = ud.strava_access_token || "";
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!accessToken || Number(ud.strava_expires_at || 0) < nowSec + 300) {
+      accessToken = (await refreshStravaTokenForUser(db, uid)).accessToken;
+    }
+    let sr = await fetchStravaStreams(accessToken, activityId);
+    if (sr && sr.status === 401) {
+      accessToken = (await refreshStravaTokenForUser(db, uid)).accessToken;
+      sr = await fetchStravaStreams(accessToken, activityId);
+    }
+    if (!sr || !sr.success || !Array.isArray(sr.watts) || !sr.watts.length) {
+      res.json({ success: false, reason: "no_power_stream" });
+      return;
+    }
+    // 1Hz 파워 배열(스트림 time 기준, 빈 초는 0W)
+    const tArr = Array.isArray(sr.time) && sr.time.length === sr.watts.length ? sr.time : sr.watts.map((_, i) => i);
+    const n = Math.max(0, Math.floor(Number(tArr[tArr.length - 1]) || 0)) + 1;
+    const w = new Array(n).fill(0);
+    for (let i = 0; i < tArr.length; i++) { const k = Math.floor(Number(tArr[i]) || 0); if (k >= 0 && k < n) w[k] = Math.max(0, Number(sr.watts[i]) || 0); }
+    // 목표 프로파일(초 단위)
+    const prof = new Array(totalSec);
+    let c = 0;
+    durs.forEach((d, i) => { for (let k = 0; k < d; k++) prof[c++] = tgts[i]; });
+    const hasTarget = tgts.some((x) => x > 0);
+    let bestOff = 0;
+    if (hasTarget) {
+      const maxOff = Math.max(0, Math.min(900, n - totalSec));
+      let pm = 0; for (let k = 0; k < totalSec; k++) pm += prof[k]; pm /= totalSec;
+      let pv = 0; for (let k = 0; k < totalSec; k++) pv += (prof[k] - pm) * (prof[k] - pm);
+      let bestCorr = -2;
+      for (let off = 0; off <= maxOff; off++) {
+        let wm = 0; for (let k = 0; k < totalSec; k++) wm += w[off + k]; wm /= totalSec;
+        let cov = 0, wv = 0;
+        for (let k = 0; k < totalSec; k++) { const a = w[off + k] - wm; cov += a * (prof[k] - pm); wv += a * a; }
+        const corr = wv > 0 && pv > 0 ? cov / Math.sqrt(wv * pv) : -1;
+        if (corr > bestCorr) { bestCorr = corr; bestOff = off; }
+      }
+    }
+    const out = [];
+    let cur = bestOff;
+    durs.forEach((d) => {
+      if (d <= 0) { out.push(null); return; }
+      let sum = 0, cnt = 0;
+      for (let k = cur; k < cur + d && k < n; k++) { sum += w[k]; cnt++; }
+      out.push(cnt > 0 ? Math.round(sum / d) : null);
+      cur += d;
+    });
+    res.json({ success: true, segmentAvgWatts: out, offsetSec: bestOff });
+  } catch (e) {
+    console.warn("[getStravaSegmentAvgWatts]", e && e.message ? e.message : e);
+    res.status(500).json({ error: { code: "internal", message: "구간별 평균 계산 실패" } });
+  }
+});
+
 /** FTP 제안 계산: 로그·CTL 기반. DB 수정 없음. */
 exports.getFtpSuggestion = onRequest(
   { cors: true, timeoutSeconds: 60 },

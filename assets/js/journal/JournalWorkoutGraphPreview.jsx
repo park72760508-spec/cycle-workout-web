@@ -23,6 +23,7 @@
     var className = p.className || 'journal-workout-graph-wrap';
     var actualSegmentAvgWatts = Array.isArray(p.actualSegmentAvgWatts) ? p.actualSegmentAvgWatts : null;
     var actualFtp = p.actualFtp != null ? Number(p.actualFtp) : null;
+    var stravaFallbackId = p.stravaFallbackId != null ? String(p.stravaFallbackId).trim() : '';
     var graphRef = useRef(null);
     /* 워크아웃 요약(WU … | n X (…) | CD …) + 파워미터 아이콘(% ↔ W) — 워크아웃 화면 카드와 동일, 상태는 워크아웃 ID별로 유지 */
     var _wst = useState(function () {
@@ -141,6 +142,53 @@
       };
     }, [workoutId]);
 
+    /* 저장된 구간별 결과가 없으면(저장 실패·지연 등) 같은 날 Strava 활동의 파워 스트림으로 구간별 평균 계산(서버 함수) */
+    var _fb = useState(null);
+    var fbAvg = _fb[0];
+    var setFbAvg = _fb[1];
+    useEffect(function () {
+      if (actualSegmentAvgWatts || !stravaFallbackId || state.loading || !state.segments || !state.segments.length) return;
+      var segs = state.segments;
+      var ftp = userFtp();
+      function pctOf(v) {
+        if (typeof v === 'string') v = v.split(/[~/]/).map(Number).filter(function (x) { return isFinite(x) && x > 0; });
+        else v = [Number(v)];
+        if (!v.length) return 0;
+        return v.reduce(function (a, b) { return a + b; }, 0) / v.length;
+      }
+      var payload = segs.map(function (sg) {
+        var sec = Number(sg.duration_sec != null ? sg.duration_sec : sg.duration) || 0;
+        var t = sg.target_type || 'ftp_pct';
+        var pct = t === 'cadence_rpm' ? 0 : pctOf(sg.target_value);
+        if (pct && sg.ramp && sg.ramp !== 'none' && sg.ramp_to_value != null) pct = (pct + (pctOf(sg.ramp_to_value) || pct)) / 2;
+        return { sec: Math.round(sec), targetW: ftp > 0 ? Math.round(pct * ftp / 100) : 0 };
+      });
+      var cacheKey = 'segAvgStrava:' + stravaFallbackId + ':' + payload.map(function (x) { return x.sec; }).join(',');
+      try {
+        var c = JSON.parse(localStorage.getItem(cacheKey) || 'null');
+        if (Array.isArray(c) && c.length) { setFbAvg(c); return; }
+      } catch (e) {}
+      var cancelled = false;
+      (async function () {
+        try {
+          var au = window.authV9 && window.authV9.currentUser;
+          if (!au || typeof au.getIdToken !== 'function') return;
+          var tok = await au.getIdToken();
+          var pid = (window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+          var r = await fetch('https://us-central1-' + pid + '.cloudfunctions.net/getStravaSegmentAvgWatts', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ stravaActivityId: stravaFallbackId, segments: payload })
+          });
+          var j = await r.json().catch(function () { return null; });
+          if (cancelled || !j || !j.success || !Array.isArray(j.segmentAvgWatts)) return;
+          try { localStorage.setItem(cacheKey, JSON.stringify(j.segmentAvgWatts)); } catch (e) {}
+          setFbAvg(j.segmentAvgWatts);
+        } catch (e) { console.warn('[WorkoutGraph] Strava 구간 평균 보완 실패:', e && e.message); }
+      })();
+      return function () { cancelled = true; };
+    }, [actualSegmentAvgWatts, stravaFallbackId, state.loading, state.segments]);
+
     useEffect(function () {
       var el = graphRef.current;
       if (!el || state.loading || state.error || !state.segments || !state.segments.length) return;
@@ -151,10 +199,10 @@
       }
       render(el, state.segments, {
         maxHeight: maxHeight,
-        actualSegmentAvgWatts: actualSegmentAvgWatts,
-        actualFtp: actualFtp
+        actualSegmentAvgWatts: actualSegmentAvgWatts || fbAvg,
+        actualFtp: actualFtp > 0 ? actualFtp : userFtp()
       });
-    }, [state.loading, state.error, state.segments, maxHeight, actualSegmentAvgWatts, actualFtp]);
+    }, [state.loading, state.error, state.segments, maxHeight, actualSegmentAvgWatts, actualFtp, fbAvg]);
 
     if (!workoutId) return null;
 

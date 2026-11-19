@@ -397,7 +397,8 @@
               maxHeight: 200,
               className: 'journal-daily-summary-workout-graph',
               actualSegmentAvgWatts: actualPowerLog ? actualPowerLog.segment_avg_watts : null,
-              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null
+              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null,
+              stravaFallbackId: !actualPowerLog && graphUtils && typeof graphUtils.resolveStravaFallbackActivityId === 'function' ? graphUtils.resolveStravaFallbackActivityId(null, logsExpanded) : ''
             })
           : React.createElement('p', { className: 'journal-course-preview-empty' },
               '코스 지도 없음 — Strava 「MMP 포함」 동기화 후 달력을 새로고침하세요.'

@@ -63,6 +63,33 @@
     return null;
   }
 
+  /**
+   * 구간별 결과(segment_avg_watts)가 없는 STELVIO 세션의 보완용 — 같은 날 Strava 사이클링 활동 ID.
+   * STELVIO 로그 시간(duration_sec)과 가장 비슷한 파워 보유 Strava 활동을 고른다.
+   */
+  function resolveStravaFallbackActivityId(log, logs) {
+    var base = logs || (log && log._logsForShare) || (log ? [log] : []);
+    var arr = expandLogsWithStelvioCompanions(base);
+    var st = null;
+    for (var i = 0; i < arr.length; i++) { if (isStelvioActivityLog(arr[i])) { st = arr[i]; break; } }
+    if (log && isStelvioActivityLog(log)) st = log;
+    var dur = st && Number(st.duration_sec) > 0 ? Number(st.duration_sec) : 0;
+    var best = null, bestDiff = Infinity;
+    for (var j = 0; j < arr.length; j++) {
+      var l = arr[j];
+      if (!l || isStelvioActivityLog(l)) continue;
+      if (String(l.source || '').trim().toLowerCase() !== 'strava') continue;
+      var t = String(l.activity_type || '').toLowerCase();
+      if (t && t !== 'ride' && t !== 'virtualride' && t !== 'ebikeride') continue;
+      var id = l.activity_id != null ? String(l.activity_id).trim() : '';
+      if (!/^\d+$/.test(id)) continue;
+      if (!(Number(l.avg_watts) > 0 || Number(l.weighted_watts) > 0 || Number(l.avg_power) > 0)) continue;
+      var d = Math.abs((Number(l.duration_sec) || 0) - dur);
+      if (d < bestDiff) { bestDiff = d; best = id; }
+    }
+    return best || '';
+  }
+
   function shouldShowWorkoutGraphInsteadOfMap(routeInfo, log, logs) {
     if (routeInfo && routeInfo.hasRoute) return false;
     return !!resolveWorkoutIdFromLogs(log, logs);
@@ -323,6 +350,7 @@
       expandLogsWithStelvioCompanions: expandLogsWithStelvioCompanions,
       resolveWorkoutIdFromLogs: resolveWorkoutIdFromLogs,
       resolveStelvioLogWithActualPower: resolveStelvioLogWithActualPower,
+      resolveStravaFallbackActivityId: resolveStravaFallbackActivityId,
       shouldShowWorkoutGraphInsteadOfMap: shouldShowWorkoutGraphInsteadOfMap,
       enrichLogsWithStelvioWorkoutFromFirestore: enrichLogsWithStelvioWorkoutFromFirestore,
       loadWorkoutSegmentsForJournal: loadWorkoutSegmentsForJournal,

@@ -1199,7 +1199,8 @@
               maxHeight: 200,
               className: 'journal-summary-sheet-workout-graph',
               actualSegmentAvgWatts: actualPowerLog ? actualPowerLog.segment_avg_watts : null,
-              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null
+              actualFtp: actualPowerLog ? actualPowerLog.ftp_at_time : null,
+              stravaFallbackId: !actualPowerLog && graphUtils && typeof graphUtils.resolveStravaFallbackActivityId === 'function' ? graphUtils.resolveStravaFallbackActivityId(log, logsForRoute) : ''
             })
           : null,
       React.createElement('div', { className: 'journal-tab-content-inner' }, rows)
