@@ -2647,6 +2647,23 @@ function updateTrainingStatus(status) {
 /**
  * 전광판 업데이트
  */
+/** 경과시간 옆에 전체 워크아웃 시간 중 남은 시간 표시 — "00:20:00 / 01:00:00" 형식(경과 / 남은), 워크아웃이 없으면 숨김 */
+function updateCoachRemainTime() {
+  const el = document.getElementById('bluetoothCoachRemainTime');
+  if (!el) return;
+  const w = window.bluetoothCoachState && window.bluetoothCoachState.currentWorkout;
+  let total = w ? Number(w.total_seconds || w.totalSeconds) || 0 : 0;
+  if (w && Array.isArray(w.segments)) {
+    const sum = w.segments.reduce((a, g) => a + (Number(g && (g.duration_sec != null ? g.duration_sec : g.duration)) || 0), 0);
+    if (sum > 0) total = sum;
+  }
+  if (!(total > 0)) { el.textContent = ''; return; }
+  const elapsed = Math.max(0, window.bluetoothCoachState.totalElapsedTime || 0);
+  const rem = Math.max(0, Math.round(total - elapsed));
+  const f = (n) => String(Math.floor(n / 3600)).padStart(2, '0') + ':' + String(Math.floor((n % 3600) / 60)).padStart(2, '0') + ':' + String(Math.floor(n % 60)).padStart(2, '0');
+  el.textContent = '/ ' + f(rem);
+}
+
 function updateScoreboard() {
   const elapsedEl = document.getElementById('bluetoothCoachElapsedTime');
   if (elapsedEl) {
@@ -2657,6 +2674,7 @@ function updateScoreboard() {
     elapsedEl.textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   }
   
+  try { updateCoachRemainTime(); } catch (e) {}
   // 현재 세그먼트 정보 업데이트
   updateCurrentSegmentInfo();
   updateBluetoothCoachSegmentInfoBar();
@@ -2666,6 +2684,7 @@ function updateScoreboard() {
  * 현재 세그먼트 정보 업데이트 (제목 라인 중앙에 표시)
  */
 function updateCurrentSegmentInfo() {
+  try { updateCoachRemainTime(); } catch (e) {}
   const segmentInfoEl = document.getElementById('bluetoothCoachCurrentSegmentInfo');
   if (!segmentInfoEl) return;
   
