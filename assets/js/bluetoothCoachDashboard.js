@@ -2548,6 +2548,8 @@ function updateTrainingStatus(status) {
   // 세그먼트 인덱스가 변경되었거나 경과시간이 업데이트되면 세그먼트 정보도 업데이트
   const segmentIndexChanged = prevSegmentIndex !== window.bluetoothCoachState.currentSegmentIndex;
   
+  // 2026-11-19: 관찰자(휴대폰 Coach 등) 보간 시계 — 수신 지터와 무관하게 1초씩 진행
+  try { if (window.StelvioLiveClock && !window.bluetoothCoachState.startTime) { (window.__coachObsClock = window.__coachObsClock || new window.StelvioLiveClock()).feed({ state: firebaseState, elapsedTime: status.elapsedTime, segmentIndex: status.segmentIndex, segmentElapsedSec: status.segmentElapsedSec }); } } catch (eC) {}
   // 경과시간 업데이트 (워크아웃이 있을 때만)
   if (status.elapsedTime !== undefined && hasWorkout) {
     window.bluetoothCoachState.totalElapsedTime = status.elapsedTime || 0;
@@ -4364,7 +4366,18 @@ function startBluetoothCoachTrainingTimer() {
   }
   
   if (window.bluetoothCoachState.trainingState === 'running') {
-    setTimeout(startBluetoothCoachTrainingTimer, 1000);
+    // 2026-11-19: 고정 1000ms 체인은 틱 처리 시간만큼 매번 밀려(누적 드리프트) 초가 건너뛰거나(2초 점프) 겹쳐 보였다.
+    // 훈련 시작 기준 "다음 정각(초 경계) + 8ms" 로 다음 틱을 맞춰 매 초 정확히 한 번 실행한다.
+    let delay = 1000;
+    try {
+      const st0 = window.bluetoothCoachState;
+      if (st0.startTime) {
+        const el = Date.now() - st0.startTime - (st0.pausedTime || 0);
+        delay = 1000 - (((el % 1000) + 1000) % 1000) + 8;
+        if (!(delay >= 20 && delay <= 1100)) delay = 1000;
+      }
+    } catch (eD) { delay = 1000; }
+    setTimeout(startBluetoothCoachTrainingTimer, delay);
   }
 }
 
@@ -4786,3 +4799,22 @@ function confirmCoachPcClearSlots() {
   }
 }
 if (typeof window !== 'undefined') window.confirmCoachPcClearSlots = confirmCoachPcClearSlots;
+
+
+/* 2026-11-19: 관찰자 Coach(휴대폰) — 100ms 주기로 보간 시계를 읽어 경과·랩 시간을 1초 단위로 매끄럽게 갱신(값이 바뀔 때만) */
+(function bluetoothCoachObserverClockRenderer() {
+  var lastE = -1, lastS = -1;
+  setInterval(function () {
+    try {
+      var c = window.__coachObsClock, st = window.bluetoothCoachState;
+      if (!c || !st || st.startTime || st.trainingState !== 'running' || !c.ready()) { lastE = -1; lastS = -1; return; }
+      var e = c.elapsed(), se = c.segElapsed();
+      if (e == null || (e === lastE && se === lastS)) return;
+      lastE = e; lastS = se;
+      st.totalElapsedTime = e;
+      if (se != null) st.segmentElapsedTime = se;
+      updateScoreboard();
+      if (se != null && typeof updateBluetoothCoachLapTime === 'function') updateBluetoothCoachLapTime();
+    } catch (e) {}
+  }, 100);
+})();

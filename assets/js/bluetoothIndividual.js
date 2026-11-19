@@ -1800,6 +1800,7 @@ __indivWatch(`sessions/${sessionId}/status`, (snapshot) => {
         
         previousTrainingState = currentState;
         
+        try { if (window.StelvioLiveClock) { (window.__indivClock = window.__indivClock || new window.StelvioLiveClock()).feed(status); } } catch (eClk) {}
         updateTimer(status);
         
         // 세그먼트 정보 표시
@@ -2146,7 +2147,9 @@ function updateTimer(status) {
     
     if (status.state === 'running') {
         // 방장이 계산해서 보내준 elapsedTime 사용 (가장 정확) — 항상 mm:ss 형식 (hh:mm:ss 금지)
-        const totalSeconds = Number(status.elapsedTime) || 0;
+        // 2026-11-19: 메시지 도착 간격(네트워크 지터)에 흔들리지 않도록 보간 시계 사용(없으면 수신값)
+        const __clkSec = window.__indivClock && window.__indivClock.ready() ? window.__indivClock.elapsed() : null;
+        const totalSeconds = __clkSec != null ? __clkSec : (Number(status.elapsedTime) || 0);
         timerEl.innerText = formatTimerDisplay(totalSeconds);
         timerEl.style.color = '#00d4aa'; // 실행중 색상
         
@@ -2194,6 +2197,35 @@ function formatIndivMMSS(seconds) {
     const s = (sec % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
 }
+
+// 2026-11-19: 100ms 주기로 보간 시계를 읽어 경과·랩 시간 텍스트만 갱신(값이 바뀔 때만 DOM 쓰기) — 수신 지터와 무관하게 1초씩 부드럽게
+(function indivClockRenderer() {
+    var lastMain = '', lastLap = '';
+    setInterval(function () {
+        try {
+            var c = window.__indivClock, st = window.firebaseStatus;
+            if (!c || !c.ready() || !st || st.state !== 'running') { lastMain = ''; lastLap = ''; return; }
+            var el = __indivEl('main-timer');
+            if (el) {
+                var tx = formatTimerDisplay(c.elapsed());
+                if (tx !== lastMain) { lastMain = tx; if (el.innerText !== tx) el.innerText = tx; }
+            }
+            var lapEl = __indivEl('ui-lap-time');
+            var segs = window.currentWorkout && window.currentWorkout.segments;
+            var se = c.segElapsed();
+            var idx = st.segmentIndex !== undefined ? st.segmentIndex : currentSegmentIndex;
+            var sg = segs && idx >= 0 ? segs[idx] : null;
+            if (lapEl && se != null && sg) {
+                var dur = Number(sg.duration_sec || sg.duration) || 0;
+                if (dur > 0) {
+                    var rem = Math.max(1, dur - se);
+                    var lt = formatIndivMMSS(rem);
+                    if (lt !== lastLap) { lastLap = lt; lapEl.textContent = lt; lapEl.setAttribute('fill', rem <= 10 ? '#ff4444' : '#00d4aa'); }
+                }
+            }
+        } catch (e) {}
+    }, 100);
+})();
 
 // 시간 포맷: 초 → "hh:mm:ss" (다른 모듈용, bluetoothIndividual 내부에서는 사용 안 함)
 function formatHMS(totalSeconds) {
@@ -2396,6 +2428,15 @@ function updateLapTime(status = null) {
         countdownValue = Math.max(0, Math.floor(Number(status.countdownRemainingSec)));
     }
     
+    // 2026-11-19: 훈련 중 랩 남은 시간은 보간 시계로 매끄럽게(수신 지터 제거). 호스트 값이 0 이하·없음이면 그대로 둔다.
+    if (status.state === 'running' && countdownValue !== null && countdownValue > 0 && window.__indivClock && window.currentWorkout && window.currentWorkout.segments) {
+        const __se = window.__indivClock.segElapsed();
+        const __sg = window.currentWorkout.segments[status.segmentIndex !== undefined ? status.segmentIndex : currentSegmentIndex];
+        if (__se != null && __sg) {
+            const __dur = Number(__sg.duration_sec || __sg.duration) || 0;
+            if (__dur > 0) countdownValue = Math.max(1, __dur - __se);
+        }
+    }
     // 카운트다운 값 표시 — 항상 mm:ss 형식 (hh:mm:ss 금지)
     if (countdownValue !== null && countdownValue >= 0) {
         const sec = Number(countdownValue);
