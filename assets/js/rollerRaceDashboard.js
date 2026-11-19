@@ -2187,6 +2187,8 @@ async function pairSpeedometer(speedometerId) {
     if (wheelInput) wheelInput.value = WHEEL_SPECS[speedometer.wheelSize] ? speedometer.wheelSize : '25-622';
     // 기존 showAddSpeedometerModal 함수 호출 (자동 활성화 비활성화)
     showAddSpeedometerModal(false); 
+    const delBtn = document.getElementById('rrPairDeleteBtn');
+    if (delBtn) delBtn.style.display = '';
   }
 }
 
@@ -2800,9 +2802,6 @@ function updateSpeedometerListUI() {
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
         <span class="list-item-wheel" id="track-wheel-${speedometer.id}">${rrWheelSpecFor(speedometer).size.replace(/ /g, '')}</span>
       </div>
-      <!-- 2026-11-20 앞 순위와의 격차 배찌 — 블럭 테두리 바깥 우측 하단(절대 위치라 트랙 간격 불변) -->
-      <span class="rr-gap-badge" id="rr-gap-badge-${speedometer.id}" aria-hidden="true"></span>
-      <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
         <!-- 아바타 (트랙 왼쪽 끝) -->
         <span class="rr-av rr-av--track" id="track-avatar-${speedometer.id}" role="button" tabindex="0" title="선수 프로필 보기" data-name="${String(pairingName).replace(/"/g, '&quot;')}" onclick="rrOpenProfile(${speedometer.id}, event)" onkeydown="if(event.key==='Enter'||event.key===' ')rrOpenProfile(${speedometer.id}, event)"></span>
@@ -2863,15 +2862,6 @@ function updateSpeedometerListUI() {
           <rect x="890" y="4" width="8" height="32" fill="url(#trk-check-${speedometer.id})"/>
           <line x1="900" y1="0" x2="900" y2="40" stroke="#ff0000" stroke-width="2" opacity="0.9"/>
           
-          <!-- 거리 격차 표시 (결승선 우측) -->
-          <g id="straight-gap-group-${speedometer.id}" opacity="0">
-            <text x="910" y="22" text-anchor="start" fill="#ffffff" font-size="9" font-weight="400" id="straight-gap-text-${speedometer.id}" dominant-baseline="middle">
-              <tspan id="straight-gap-rank-${speedometer.id}">1</tspan>
-              <tspan>위와의 격차 : </tspan>
-              <tspan id="straight-gap-value-${speedometer.id}" font-weight="500">0</tspan>
-              <tspan id="straight-gap-unit-${speedometer.id}" font-weight="300">m</tspan>
-            </text>
-          </g>
           
           <!-- 마스코트 위치 (자전거 타는 모습) -->
           <g class="straight-race-mascot" id="straight-mascot-${speedometer.id}" transform="translate(35, 20)" style="--rr-c:${getMascotColor(speedometer.id)}">
@@ -2906,11 +2896,10 @@ function updateSpeedometerListUI() {
       </div>
       <!-- 페어링 버튼 -->
       <div class="list-item-actions">
+        <!-- 2026-11-20 앞 순위와의 격차 배찌(예전 페어링 버튼 자리) · 페어링 버튼은 예전 삭제 버튼 자리 · 삭제는 페어링 창으로 이동 -->
+        <span class="rr-gap-badge" id="rr-gap-badge-${speedometer.id}" aria-hidden="true"></span>
         <button class="btn btn-sm btn-primary" onclick="pairSpeedometer(${speedometer.id})">
           페어링
-        </button>
-        <button class="btn btn-sm btn-danger" onclick="removeSpeedometer(${speedometer.id})">
-          삭제
         </button>
       </div>
     `;
@@ -5189,7 +5178,19 @@ function handleAcknowledgedData(data) {
 /**
  * 속도계 추가 모달 닫기
  */
+/* 페어링 창의 '트랙 삭제' — 목록의 삭제 버튼 기능을 이쪽으로 이동(2026-11-20) */
+function rrPairDeleteTrack() {
+  const id = window.currentTargetSpeedometerId;
+  if (!id) return;
+  const sp = window.rollerRaceState.speedometers.find(x => x.id === id);
+  if (!sp) return;
+  if (!confirm(`${sp.name || ('트랙' + id)} 속도계를 삭제하시겠습니까?`)) return;
+  closeAddSpeedometerModal();
+  rrRemoveSpeedometerNoConfirm(id);
+}
+window.rrPairDeleteTrack = rrPairDeleteTrack;
 function closeAddSpeedometerModal() {
+  { const d = document.getElementById('rrPairDeleteBtn'); if (d) d.style.display = 'none'; }
   const modal = document.getElementById('addSpeedometerModal');
   if (modal) {
     modal.classList.add('hidden');
@@ -5273,11 +5274,12 @@ function addSpeedometer() {
 /**
  * 속도계 삭제
  */
-function removeSpeedometer(speedometerId) {
+function rrRemoveSpeedometerNoConfirm(id) { removeSpeedometer(id, true); }
+function removeSpeedometer(speedometerId, skipConfirm) {
   const speedometer = window.rollerRaceState.speedometers.find(s => s.id === speedometerId);
   if (!speedometer) return;
   
-  if (confirm(`${speedometer.name} 속도계를 삭제하시겠습니까?`)) {
+  if (skipConfirm === true || confirm(`${speedometer.name} 속도계를 삭제하시겠습니까?`)) {
     // 연결 해제
     if (speedometer.connected) {
       speedometer.connected = false;
