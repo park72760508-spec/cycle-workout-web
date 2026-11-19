@@ -2800,6 +2800,8 @@ function updateSpeedometerListUI() {
         <span class="list-item-id">ID: ${speedometer.deviceId || '미설정'}</span>
         <span class="list-item-wheel" id="track-wheel-${speedometer.id}">${rrWheelSpecFor(speedometer).size.replace(/ /g, '')}</span>
       </div>
+      <!-- 2026-11-20 앞 순위와의 격차 배찌 — 블럭 테두리 바깥 우측 하단(절대 위치라 트랙 간격 불변) -->
+      <span class="rr-gap-badge" id="rr-gap-badge-${speedometer.id}" aria-hidden="true"></span>
       <!-- 직선 경기장 트랙 -->
       <div class="straight-track-container" id="straight-track-${speedometer.id}" style="--rr-c:${getMascotColor(speedometer.id)}">
         <!-- 아바타 (트랙 왼쪽 끝) -->
@@ -3388,6 +3390,16 @@ function updateStraightTrackGap(speedometerId, aheadRank, gapMeters) {
   const gapRankEl = document.getElementById(`straight-gap-rank-${speedometerId}`);
   const gapValueEl = document.getElementById(`straight-gap-value-${speedometerId}`);
   
+  const badge = document.getElementById(`rr-gap-badge-${speedometerId}`);
+  if (badge) {
+    if (aheadRank !== null && aheadRank !== undefined && gapMeters !== null && gapMeters !== undefined && gapMeters > 0) {
+      const m = Math.round(gapMeters);
+      badge.textContent = aheadRank + '위와 ' + (m >= 1000 ? (m / 1000).toFixed(2) + 'km' : m + 'm');
+      badge.classList.add('on');
+    } else {
+      badge.classList.remove('on');
+    }
+  }
   if (!gapGroupEl || !gapRankEl || !gapValueEl) return;
   
   if (aheadRank !== null && aheadRank !== undefined && gapMeters !== null && gapMeters !== undefined && gapMeters > 0) {

@@ -39460,3 +39460,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .rr-gauge-style-btn.is-on img { filter: brightness(0) invert(1); opacity: 1; }
 #rollerRaceDashboardScreen.rr-theme-light .rr-gauge-style-btn { background: #cfe6fa; border-color: #9cc7ea; }
 #rollerRaceDashboardScreen.rr-theme-light .rr-gauge-style-btn.is-on img { filter: brightness(0) invert(1) drop-shadow(0 0 1px #0c4a6e) drop-shadow(0 0 1px #0c4a6e); }
+
+/* 2026-11-20 앞 순위와의 격차 배찌: 트랙 블럭 테두리 바깥 우측 하단에 걸쳐 표시(절대 위치 — 트랙 간격·크기 불변) */
+#rollerRaceDashboardScreen .speedometer-list-item { position: relative; }
+#rollerRaceDashboardScreen .rr-gap-badge {
+  display: none; position: absolute; right: 12px; bottom: -9px; z-index: 30; pointer-events: none;
+  padding: 1px 8px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 700; white-space: nowrap;
+  color: #e2e8f0; background: rgba(15,23,42,.92); border: 1px solid rgba(34,211,238,.7); box-shadow: 0 1px 4px rgba(0,0,0,.45);
+}
+#rollerRaceDashboardScreen .rr-gap-badge.on { display: inline-block; }
+#rollerRaceDashboardScreen.rr-theme-light .rr-gap-badge { color: #0c4a6e; background: #ffffff; border-color: #0891b2; }
