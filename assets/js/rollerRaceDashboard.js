@@ -3580,6 +3580,16 @@ async function activateUSBReceiverFromModal() {
   closeUSBReceiverActivationModal();
 }
 
+/* 2026-11-20 'USB 수신기 연결' 버튼: 미연결=회색(누르면 연결), 연결됨=연두색(표시 전용) — 연결 전에 연두색이라 이미 연결된 것처럼 보이던 오해 방지 */
+function rrUsbConnectBtnState(btn, connected) {
+  if (!btn) return;
+  btn.style.display = 'inline-block';
+  btn.style.background = connected ? '#28a745' : '#6c757d';
+  btn.textContent = connected ? 'USB 수신기 연결됨' : 'USB 수신기 연결';
+  btn.disabled = !!connected;
+  btn.style.cursor = connected ? 'default' : 'pointer';
+}
+
 /**
  * USB 수신기 활성화 모달용 USB 상태 확인
  */
@@ -3608,7 +3618,7 @@ async function checkUSBActivationStatus() {
           statusIcon.style.background = '#28a745';
           statusText.textContent = 'USB 수신기 연결됨';
           if (activateButton) activateButton.disabled = false;
-          if (connectButton) connectButton.style.display = 'none';
+          rrUsbConnectBtnState(connectButton, true);
           // 강제 비활성화 버튼 표시
           if (deactivateButton) {
             deactivateButton.style.display = 'inline-block';
@@ -3653,7 +3663,7 @@ async function checkUSBActivationStatus() {
           statusIcon.style.background = '#28a745';
           statusText.textContent = `${device.productName || 'ANT+ USB 수신기'} 연결됨`;
           if (activateButton) activateButton.disabled = false;
-          if (connectButton) connectButton.style.display = 'none';
+          rrUsbConnectBtnState(connectButton, true);
           // 강제 비활성화 버튼 표시
           if (deactivateButton) {
             deactivateButton.style.display = 'inline-block';
@@ -3665,7 +3675,7 @@ async function checkUSBActivationStatus() {
     
     statusIcon.style.background = '#ffc107';
     statusText.textContent = 'Ant USBStick2 수신기를 연결해주세요';
-    if (connectButton) connectButton.style.display = 'inline-block';
+    rrUsbConnectBtnState(connectButton, false);
     if (activateButton) activateButton.disabled = false;
   } catch (error) {
     console.error('[ANT+ USB 상태 확인 오류]', error);
