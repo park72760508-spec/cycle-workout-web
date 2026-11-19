@@ -2004,7 +2004,7 @@
    * 열차 위치 p(역 순번, 소수 = 역 사이)를 타원 둘레 위의 좌표로 바꿈. 이음 구간(끝 역→첫 역)도 자연스럽게 이어짐. */
   function subOvalGeo(n, width) {
     /* 폭은 팝업 안쪽 폭에 맞춤(좌우 스크롤 없음), 역 간격은 직선 목록의 한 줄 높이(43px)와 같게 → 가운데가 좁은 긴 타원 */
-    var lane = 0, padY = 56, gap = 43, R = 28, labelW = 116;
+    var lane = 0, padY = 56, gap = 43, R = 28, labelW = 140;
     var W = Math.max(width || 324, 2 * R + 2 * labelW); // 좁으면 좌우 스크롤(2026-11-20)
     var L = Math.max(110, (n * gap - 2 * Math.PI * R) / 2);
     return { W: W, R: R, L: L, lane: lane, P: 2 * Math.PI * R + 2 * L, cx: W / 2, cyT: padY + R, H: padY * 2 + 2 * R + L };

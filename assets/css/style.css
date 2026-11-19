@@ -39523,3 +39523,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.up { right: calc(100% + 3px); left: auto; }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.dn { left: calc(100% + 3px); right: auto; }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.ex { color: #dc2626; font-size: 16px; }
+/* 2026-11-20 역명을 열차 방향 화살표(원 양옆 약 28px)보다 바깥으로 */
+#outdoorRideScreen .outd-oval .outd-ov-lb { left: 34px; }
+#outdoorRideScreen .outd-oval .outd-ov-st.is-l .outd-ov-lb { left: auto; right: 34px; }
