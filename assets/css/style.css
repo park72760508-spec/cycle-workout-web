@@ -38150,7 +38150,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-07: Race 경기장 트랙 우측 누적거리 — Race 테마 폰트 (Barlow Semi Condensed 이탤릭) */
 #rollerRaceDashboardScreen .track-stats-inside .track-stat-value {
   font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums;
-  font-size: 26px; line-height: 1; letter-spacing: .01em; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.45), 0 0 10px rgba(255,255,255,.25);
+  font-size: 33.8px; line-height: 1; letter-spacing: .01em; color: #fff; text-shadow: 0 1px 0 rgba(0,0,0,.45), 0 0 10px rgba(255,255,255,.25);
 }
 #rollerRaceDashboardScreen .track-stats-inside .track-stat-unit {
   font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: rgba(255,255,255,.85);
