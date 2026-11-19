@@ -2000,9 +2000,50 @@
     var sec = Math.max(0, Math.round((now - t.at) / 1000));
     return head + ' ' + (sec >= 60 ? Math.floor(sec / 60) + '분 ' + (sec % 60) + '초 전' : sec + '초 전');
   }
+  /* 2026-11-20 순환선(2호선) 타원 노선도: 위·아래가 반원인 긴 타원 위에 역을 시계 방향(= 목록 순서 = 외선)으로 배치.
+   * 열차 위치 p(역 순번, 소수 = 역 사이)를 타원 둘레 위의 좌표로 바꿈. 이음 구간(끝 역→첫 역)도 자연스럽게 이어짐. */
+  function subOvalGeo(n, width) {
+    var W = Math.max(300, Math.min(440, width || 340));
+    var labelW = 88, padY = 70, gap = 30;
+    var R = Math.max(62, (W - labelW * 2) / 2);
+    var L = Math.max(110, (n * gap - 2 * Math.PI * R) / 2);
+    return { W: W, R: R, L: L, P: 2 * Math.PI * R + 2 * L, cx: W / 2, cyT: padY + R, H: padY * 2 + 2 * R + L };
+  }
+  function subOvalPt(G, p, n) {
+    var f = (((p % n) + n) % n) / n, u = f * G.P, R = G.R, L = G.L, q = Math.PI * R / 2, x, y, nx, ny, t;
+    if (u < q) { t = u / R; nx = Math.sin(t); ny = -Math.cos(t); x = G.cx + R * nx; y = G.cyT + R * ny; }
+    else if (u < q + L) { nx = 1; ny = 0; x = G.cx + R; y = G.cyT + (u - q); }
+    else if (u < q + L + Math.PI * R) { t = (u - q - L) / R; nx = Math.cos(t); ny = Math.sin(t); x = G.cx + R * nx; y = G.cyT + L + R * ny; }
+    else if (u < q + 2 * L + Math.PI * R) { nx = -1; ny = 0; x = G.cx - R; y = G.cyT + L - (u - q - L - Math.PI * R); }
+    else { t = (u - q - 2 * L - Math.PI * R) / R; nx = -Math.cos(t); ny = -Math.sin(t); x = G.cx + R * nx; y = G.cyT + R * ny; }
+    return { x: x, y: y, nx: nx, ny: ny };
+  }
+  /** 타원 노선도 HTML — 역 점 + 바깥쪽으로 뻗는 역 이름(왼쪽 반은 뒤집어 글자가 눕지 않게) + 환승 배지, 안쪽에 호선 안내 */
+  function subOvalHtml(el, seq, ln, st) {
+    var n = seq.length, G = subOvalGeo(n, (el.clientWidth || window.innerWidth) - 40), H = Math.round(G.H);
+    el.__ovGeo = G;
+    var out = '<div class="outd-oval" style="width:' + G.W + 'px;height:' + H + 'px;--ln:' + escHtml(ln.c) + '">' +
+      '<svg class="outd-ov-ring" width="' + G.W + '" height="' + H + '" viewBox="0 0 ' + G.W + ' ' + H + '" aria-hidden="true">' +
+      '<rect x="' + (G.cx - G.R).toFixed(1) + '" y="' + (G.cyT - G.R).toFixed(1) + '" width="' + (2 * G.R).toFixed(1) + '" height="' + (2 * G.R + G.L).toFixed(1) + '" rx="' + G.R.toFixed(1) + '" ry="' + G.R.toFixed(1) + '" fill="none" stroke="' + escHtml(ln.c) + '" stroke-width="8" opacity=".9"/></svg>' +
+      '<div class="outd-ov-mid" style="left:' + G.cx + 'px;top:' + (G.cyT + G.L / 2).toFixed(1) + 'px"><b style="background:' + escHtml(ln.c) + '">' + escHtml(ln.n) + '</b><span>순환선</span><small>↻ 외선 · ↺ 내선</small></div>';
+    seq.forEach(function (si, i) {
+      var s2 = st[si]; if (!s2) return;
+      var pt = subOvalPt(G, i, n), th = Math.atan2(pt.ny, pt.nx) * 180 / Math.PI, left = pt.nx < -0.001;
+      var rot = left ? th - 180 : th;
+      var xfer = (s2.l || []).filter(function (x) { return x !== el.__li; }).map(function (x) {
+        var o = sub.data.lines[x];
+        return o ? '<u class="is-tap" data-xln="' + x + '" data-xst="' + si + '" style="background:' + escHtml(o.c) + '" title="' + escHtml(o.n) + ' 노선도 보기">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
+      }).join('');
+      var cur = si === el.__cur;
+      out += '<div class="outd-ov-st' + (cur ? ' is-cur' : '') + (left ? ' is-l' : '') + '" style="left:' + pt.x.toFixed(1) + 'px;top:' + pt.y.toFixed(1) + 'px;--rot:' + rot.toFixed(1) + 'deg"><i></i>' +
+        '<div class="outd-ov-lb"><span>' + escHtml(s2.n) + '</span>' + (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</div></div>';
+    });
+    return out + '<div class="outd-ov-tr"></div></div>';
+  }
   function placeSubTrains(el, force) {
     var lst = el.querySelector('.outd-busrt__list.is-rail');
-    var layer = lst && lst.querySelector('.outd-subtr');
+    var ovBox = lst && lst.querySelector('.outd-oval'); // 2026-11-20 순환선 타원 노선도
+    var layer = lst && (ovBox ? ovBox.querySelector('.outd-ov-tr') : lst.querySelector('.outd-subtr'));
     if (!layer || el.style.display === 'none' || !document.body.contains(el)) {
       if (el.__trTimer) { clearInterval(el.__trTimer); el.__trTimer = null; }
       return;
@@ -2031,14 +2072,14 @@
     if (!force && sig === el.__trSig) return; // 바뀐 것이 없으면 DOM·레이아웃 접근 없음
     el.__trSig = sig;
     // 행 위치는 다시 그릴 때만 읽음(캐시)
-    var rows = lst.querySelectorAll('li:not(.outd-subtr)');
+    var rows = ovBox ? ovBox.querySelectorAll('.outd-ov-st') : lst.querySelectorAll('li:not(.outd-subtr)');
     if (!rows.length) return;
     // 열차가 역 안에 들어와 있는(화면에 역 위치로 그려진) 행만 볼드
     var atRows = {};
     keys.forEach(function (k) { if (groups[k].atSt) atRows[Math.round(groups[k].p)] = true; });
     // 2026-11-11 발열: 레이아웃 읽기(offsetTop)를 클래스 쓰기보다 먼저 — 쓰기 뒤에 읽으면 매번 강제 재계산. 바뀐 행만 클래스 갱신.
     var cy = [];
-    for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
+    if (!ovBox) for (var i = 0; i < rows.length; i++) cy.push(rows[i].offsetTop + rows[i].offsetHeight / 2);
     for (var ri = 0; ri < rows.length; ri++) { var wantV = !!atRows[ri]; if (rows[ri].classList.contains('has-veh') !== wantV) rows[ri].classList.toggle('has-veh', wantV); }
     var yAt = function (p) {
       var L = cy.length - 1;
@@ -2046,17 +2087,19 @@
       if (p > L) return cy[L] + (cy[L] - cy[Math.max(0, L - 1)]) * (p - L);
       var a = Math.floor(p), b = Math.min(L, a + 1); return cy[a] + (cy[b] - cy[a]) * (p - a);
     };
+    var ovG = ovBox && el.__ovGeo;
+    var ovXY = function (p) { var q = subOvalPt(ovG, p, el.__trainN || rows.length); return q.x.toFixed(1) + 'px,' + q.y.toFixed(1) + 'px'; };
     var prevY = el.__trPrevY || {}, nextY = {};
     var have = {};
     Array.prototype.forEach.call(layer.children, function (c) { have[c.getAttribute('data-k')] = c; });
     var made = [];
     keys.forEach(function (k) {
       var g = groups[k];
-      var y = yAt(g.p);
+      var y = ovG ? ovXY(g.p) : yAt(g.p);
       var up = g.ts.filter(function (t) { return !t.down; }), dn = g.ts.filter(function (t) { return t.down; });
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
-      var html = (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
+      var html = ovG ? ((up.length ? '<s class="up">↺</s>' : '') + '🚇' + (dn.length ? '<s class="dn">↻</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
@@ -2065,14 +2108,14 @@
         if (node.className !== cls) node.className = cls;
         if (node.__h !== html) { node.innerHTML = html; node.__h = html; }
         node.title = tip;
-        node.style.transform = 'translateY(' + y.toFixed(1) + 'px)'; // 위치가 같으면 브라우저가 무시
+        node.style.transform = ovG ? 'translate(' + y + ')' : 'translateY(' + y.toFixed(1) + 'px)'; // 위치가 같으면 브라우저가 무시
       } else {
         node = document.createElement('b');
         node.setAttribute('data-k', ek);
         node.className = cls; node.innerHTML = html; node.__h = html; node.title = tip;
         var y0 = null;
         g.ts.forEach(function (t) { if (y0 == null && prevY[t.id] != null) y0 = prevY[t.id]; });
-        node.style.transform = 'translateY(' + (y0 != null ? y0 : y).toFixed(1) + 'px)';
+        node.style.transform = ovG ? 'translate(' + (y0 != null ? y0 : y) + ')' : 'translateY(' + (y0 != null ? y0 : y).toFixed(1) + 'px)';
         layer.appendChild(node);
         if (y0 != null && y0 !== y) made.push([node, y]);
       }
@@ -2080,7 +2123,7 @@
     });
     Object.keys(have).forEach(function (k) { if (have[k].parentNode) have[k].parentNode.removeChild(have[k]); });
     el.__trPrevY = nextY;
-    if (made.length) { void layer.offsetHeight; made.forEach(function (m) { m[0].style.transform = 'translateY(' + m[1].toFixed(1) + 'px)'; }); }
+    if (made.length) { void layer.offsetHeight; made.forEach(function (m) { m[0].style.transform = ovG ? 'translate(' + m[1] + ')' : 'translateY(' + m[1].toFixed(1) + 'px)'; }); }
   }
   /** 2026-11-04 노선도 화면 상·하단에 종점역을 항상 떠 있게(스크롤해도 고정, 호선 색 · 흐린 큰 글자) */
   function placeSubTerminals(el, seq, ln, st) {
@@ -2117,6 +2160,7 @@
       var names = seq.map(function (si) { return st[si] ? subLiveName(st[si].n) : ''; });
       // 2026-11-04 열차 상태(진입·도착·출발·전역출발)별 위치 + 기록 시각부터 지난 시간만큼 다음 역 쪽으로 추정 이동(placeSubTrains)
       var isLoop = seq.length > 10 && subStDistKm(seq[0], seq[seq.length - 1]) < 2.5;
+      if (!isLoop) el.__ovGeo = null;
       var trains = [], trainN = 0, ldS = el.__live && el.__live.data;
       // 2026-11-09 순환선(2호선) 지선: API 는 지선 열차를 '성수지선'·'신도림지선'(역·종착)으로 내려줌 → 접미사 '지선' 제거 후 매칭.
       // 본선/지선이 같은 역 이름(성수·신도림)을 공유하므로 열차를 본선·지선으로 나눠 해당 노선에만 표시. 지선의 상·하행 코드는 본선과 반대 아님: 0 = 목록 아래쪽(성수·까치산) 방향.
@@ -2254,10 +2298,11 @@
             (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</li>';
         }).join('') + '<li class="outd-subtr" aria-hidden="true"></li></ol>';
       card = card.replace('<ol class="outd-busrt__list">', liveStatusHtml(el, '편성', trainN) + '<ol class="outd-busrt__list is-rail">');
+      if (isLoop) card = card.replace(/<ol class="outd-busrt__list is-rail">[\s\S]*<\/ol>/, function () { return '<div class="outd-busrt__list is-rail is-oval">' + subOvalHtml(el, seq, ln, st) + '</div>'; }); // 순환선: 직선 목록 대신 타원 노선도
     }
     el.innerHTML = '<div class="outd-favpop__card outd-busrt__card" role="dialog" aria-modal="true">' + card + '</div>';
     el.__trSig = null; // 목록을 새로 그렸으니 열차 레이어도 새로
-    if (seqs.length) placeSubTerminals(el, seqs[Math.min(el.__dir, seqs.length - 1)], ln, st);
+    if (seqs.length && !el.__ovGeo) placeSubTerminals(el, seqs[Math.min(el.__dir, seqs.length - 1)], ln, st);
     placeSubTrains(el, true);
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
