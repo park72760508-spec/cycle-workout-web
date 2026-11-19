@@ -39434,3 +39434,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-20 우측 '속도계 보이기/숨기기' 토글 버튼 제거(쓸기 손잡이로 대체) + 확장 지도의 아래 손잡이는 나의 위치 버튼과 같은 검정 반투명 바탕 */
 #outdoorRideScreen .outd-expand { display: none !important; }
 #outdoorRideScreen .outd-gh.outd-gh--show { width: 88px; height: 24px; background: rgba(17, 24, 39, 0.85); border-radius: 12px 12px 0 0; }
+/* 2026-11-20 확장 지도 아래 손잡이 탭(높이 24px)과 겹치지 않게 시작·종료 버튼을 위로 이동(세로 화면) */
+@media screen and (orientation: portrait) {
+  #outdoorRideScreen .outd-float-ctrl { bottom: 40px; }
+}
