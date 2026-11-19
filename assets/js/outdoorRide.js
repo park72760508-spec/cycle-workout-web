@@ -985,37 +985,72 @@
   };
 
   /* 2026-11-20 속도계 손잡이 쓸어내리기/올리기 — 우측 '속도계 숨기기/보이기' 버튼과 같은 toggleOutdoorExpand(같은 애니메이션) 호출.
-     위 손잡이: 아래로 쓸어내리면 숨김 · 아래 손잡이(숨긴 상태): 위로 쓸어올리면 표시. 짧게 탭해도 동작 */
-  (function bindGaugeHandles() {
-    function bind(id, wantExpanded, dirSign) {
-      var el = $(id);
-      if (!el || el.__gh) return;
-      el.__gh = true;
-      var y0 = null, t0 = 0;
-      function fire() {
-        var scr = $(SCREEN_ID);
-        if (!scr || scr.classList.contains('outd-anim')) return; // 애니메이션 중에는 무시
-        if (!!st.expanded === wantExpanded) return;
-        window.toggleOutdoorExpand();
-      }
-      el.addEventListener('pointerdown', function (e) {
-        y0 = e.clientY; t0 = Date.now();
-        try { el.setPointerCapture(e.pointerId); } catch (x) {}
-        e.stopPropagation();
-      });
-      el.addEventListener('pointerup', function (e) {
-        if (y0 == null) return;
-        var dy = (e.clientY - y0) * dirSign;
-        var tap = Math.abs(e.clientY - y0) < 8 && Date.now() - t0 < 400;
-        y0 = null;
-        if (dy > 24 || tap) fire();
-        e.stopPropagation();
-      });
-      el.addEventListener('pointercancel', function () { y0 = null; });
-      el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); } });
+     (v2) 손잡이 요소에 직접 이벤트를 달면 위에 겹친 지도·버튼 층이 터치를 가로채거나 WebView 에서 포인터 이벤트가 끊겨 동작하지 않았다
+     → 문서 전체에서 터치/마우스를 capture 단계로 먼저 받고, 시작 지점이 '손잡이 영역'(바 주변 넉넉한 범위)인지 좌표로 판단한다.
+     위 손잡이(속도계 보임): 아래로 쓸어내리면 숨김 · 아래 손잡이(속도계 숨김): 위로 쓸어올리면 표시 · 바를 짧게 탭해도 동작 */
+  (function bindGaugeSwipe() {
+    if (window.__outdGaugeSwipeBound) return;
+    window.__outdGaugeSwipeBound = true;
+    var g = null; // { zone:'hide'|'show', x, y, t, moved }
+    function visible(el) { return !!el && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden'; }
+    function rectOf(id) { var el = $(id); return visible(el) ? el.getBoundingClientRect() : null; }
+    function inRect(x, y, r, padX, padTop, padBottom) {
+      return r && x >= r.left - padX && x <= r.right + padX && y >= r.top - padTop && y <= r.bottom + padBottom;
     }
-    function init() { bind('outdGaugeHandle', false, 1); bind('outdGaugeShowHandle', true, -1); }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+    /** 시작 지점이 어느 손잡이 영역인지: 'hide'(속도계 위 손잡이) · 'show'(하단 손잡이) · '' */
+    function zoneAt(x, y, exact) {
+      var scr = $(SCREEN_ID);
+      if (!scr || scr.getClientRects().length === 0) return ''; // 화면이 보이지 않으면 무시
+      if (window.innerWidth > window.innerHeight) return ''; // 가로 화면은 손잡이 없음
+      var padX = exact ? 8 : 70, padV = exact ? 6 : 26;
+      if (!st.expanded) {
+        var rh = rectOf('outdGaugeHandle');
+        if (inRect(x, y, rh, padX, padV, padV + (exact ? 0 : 16))) return 'hide';
+      } else {
+        var rs = rectOf('outdGaugeShowHandle');
+        if (inRect(x, y, rs, padX, padV + (exact ? 0 : 20), padV)) return 'show';
+      }
+      return '';
+    }
+    function fire(zone) {
+      var scr = $(SCREEN_ID);
+      if (!scr || scr.classList.contains('outd-anim')) return; // 애니메이션 중에는 무시
+      if (zone === 'hide' && !st.expanded) window.toggleOutdoorExpand();
+      else if (zone === 'show' && st.expanded) window.toggleOutdoorExpand();
+    }
+    function start(x, y) {
+      var z = zoneAt(x, y, false);
+      g = z ? { zone: z, x: x, y: y, t: Date.now(), exact: !!zoneAt(x, y, true) } : null;
+    }
+    function move(x, y, ev) {
+      if (!g) return;
+      var dx = x - g.x, dy = y - g.y;
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) { g.moved = true; if (ev && ev.cancelable) ev.preventDefault(); } // 스크롤·새로고침 제스처 방지
+    }
+    function end(x, y) {
+      if (!g) return;
+      var zone = g.zone, dy = y - g.y, dx = x - g.x, tap = Math.abs(dy) < 10 && Math.abs(dx) < 10 && Date.now() - g.t < 450 && g.exact;
+      g = null;
+      var wantDown = zone === 'hide';
+      var swiped = wantDown ? dy > 28 : dy < -28;
+      if (swiped || tap) fire(zone);
+    }
+    // 터치(휴대폰) — capture 로 먼저 받아 위에 겹친 요소가 막아도 동작
+    document.addEventListener('touchstart', function (e) { if (e.touches.length === 1) start(e.touches[0].clientX, e.touches[0].clientY); else g = null; }, { capture: true, passive: true });
+    document.addEventListener('touchmove', function (e) { if (g && e.touches.length === 1) move(e.touches[0].clientX, e.touches[0].clientY, e); }, { capture: true, passive: false });
+    document.addEventListener('touchend', function (e) { var t = e.changedTouches && e.changedTouches[0]; if (t) end(t.clientX, t.clientY); else g = null; }, { capture: true, passive: true });
+    document.addEventListener('touchcancel', function () { g = null; }, { capture: true, passive: true });
+    // 마우스(PC 확인용) — 터치 기기에서는 touch* 만 발생
+    var mouseDown = false;
+    document.addEventListener('mousedown', function (e) { if (e.button === 0) { mouseDown = true; start(e.clientX, e.clientY); } }, true);
+    document.addEventListener('mousemove', function (e) { if (mouseDown) move(e.clientX, e.clientY, e); }, true);
+    document.addEventListener('mouseup', function (e) { if (mouseDown) { mouseDown = false; end(e.clientX, e.clientY); } }, true);
+    // 키보드 접근성
+    document.addEventListener('keydown', function (e) {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target && (e.target.id === 'outdGaugeHandle' || e.target.id === 'outdGaugeShowHandle')) {
+        e.preventDefault(); fire(e.target.id === 'outdGaugeHandle' ? 'hide' : 'show');
+      }
+    }, true);
   })();
 
   function renderGps(acc) {
