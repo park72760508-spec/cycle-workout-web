@@ -1,7 +1,7 @@
 /** 워크아웃 요약 문자열 공용(워크아웃 화면 카드·그룹세션 상세 공용) — 예: WU 10m(55→70%) | 12m@68% | 3 X (6m@80% + 3m@60%) | CD 6m(60→40%)
  * ftp > 0 이면 % 값을 W 로 환산, 1분 미만은 초(s) 표기. */
 (function () {
-window.buildWorkoutFlowSummary = function(workout, ftp) {
+window.buildWorkoutFlowSummary = function(workout, ftp, rangesOut) {
   var segs = (workout && workout.segments) || [];
   var useW = Number(ftp) > 0;
   function dur(sg) {
@@ -81,8 +81,10 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
     }
     return { text: parts.join(' + '), repeated: rep };
   }
-  var ns = segs.map(norm).filter(function (n) { return n.sec > 0; });
+  var ns = segs.map(function (sg, oi) { var n = norm(sg); n.oi = oi; return n; }).filter(function (n) { return n.sec > 0; });
   var out = [], i = 0;
+  /* 요약 행 → 원본 세그먼트 인덱스 범위(현재 구간 표시용) */
+  function pushR(a, b) { if (rangesOut) rangesOut.push([ns[a].oi, ns[Math.min(b, ns.length - 1)].oi]); }
   while (i < ns.length) {
     var n = ns[i];
     if (n.type === 'warmup') {
@@ -98,7 +100,7 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
         if (cx.repeated && /\)$/.test(cx.text)) { cr = cx; usedLen = ext.length; }
       }
       if (cr.repeated) {
-        out.push('WU ' + cr.text);
+        out.push('WU ' + cr.text); pushR(i, i + usedLen - 1);
         i += usedLen;
         continue;
       }
@@ -115,9 +117,9 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
         for (var q = i; q < j; q++) {
           [ns[q].f, ns[q].to].forEach(function (v) { if (v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); } });
         }
-        out.push(lab + (hi > 0 ? (lo === hi ? '@' + fmtV(lo) + unit : '(' + fmtV(lo) + '~' + fmtV(hi) + unit + ')') : ''));
+        out.push(lab + (hi > 0 ? (lo === hi ? '@' + fmtV(lo) + unit : '(' + fmtV(lo) + '~' + fmtV(hi) + unit + ')') : '')); pushR(i, j - 1);
       } else {
-        out.push(lab + (f && to && f !== to ? '(' + fmtV(f) + '→' + fmtV(to) + unit + ')' : f ? '@' + fmtV(f) + unit : ''));
+        out.push(lab + (f && to && f !== to ? '(' + fmtV(f) + '→' + fmtV(to) + unit + ')' : f ? '@' + fmtV(f) + unit : '')); pushR(i, j - 1);
       }
       i = j;
       continue;
@@ -126,11 +128,11 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
     if (rb.L > 0) {
       var parts = [];
       for (var w = 0; w < rb.L; w++) parts.push(desc(ns[i + w]));
-      out.push(rb.k + ' X (' + parts.join(' + ') + ')');
+      out.push(rb.k + ' X (' + parts.join(' + ') + ')'); pushR(i, i + rb.cover - 1);
       i += rb.cover;
       continue;
     }
-    out.push(desc(n));
+    out.push(desc(n)); pushR(i, i);
     i++;
   }
   return out.join(' | ');
@@ -140,7 +142,8 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
 /** 구간별 요약 행: [{kind:'WU'|'INT'|'CD', content:'…%', detail:'…W'}] — content 는 % 표기, detail 은 내 FTP 기준 W 표기(FTP 없으면 '') */
 (function () {
   window.buildWorkoutFlowRows = function (workout, ftp) {
-    var pct = window.buildWorkoutFlowSummary(workout, 0);
+    var ranges = [];
+    var pct = window.buildWorkoutFlowSummary(workout, 0, ranges);
     if (!pct) return [];
     var w = Number(ftp) > 0 ? window.buildWorkoutFlowSummary(workout, Number(ftp)) : '';
     var A = pct.split(' | '), B = w ? w.split(' | ') : [];
@@ -148,7 +151,7 @@ window.buildWorkoutFlowSummary = function(workout, ftp) {
       var kind = 'INT', c = txt, d = B.length === A.length ? B[i] : '';
       if (/^WU /.test(txt)) { kind = 'WU'; c = txt.slice(3); d = d.replace(/^WU /, ''); }
       else if (/^CD /.test(txt)) { kind = 'CD'; c = txt.slice(3); d = d.replace(/^CD /, ''); }
-      return { kind: kind, content: c, detail: d };
+      return { kind: kind, content: c, detail: d, segFrom: ranges[i] ? ranges[i][0] : -1, segTo: ranges[i] ? ranges[i][1] : -1 };
     });
   };
 })();

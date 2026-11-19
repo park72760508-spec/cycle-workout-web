@@ -20,6 +20,8 @@
     '.wso-table td:last-child{border-radius:0 10px 10px 0;}' +
     '.wso-kind{display:inline-block;min-width:36px;text-align:center;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:800;color:#0a0f1f;background:var(--wso-c,#22d3ee);}' +
     '.wso-detail{color:#a3e635;}' +
+    '@keyframes wsoBlink{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--wso-c,#22d3ee);}50%{opacity:.25;box-shadow:0 0 10px 2px var(--wso-c,#22d3ee);}}' +
+    '.wso-kind.wso-now{animation:wsoBlink 1s ease-in-out infinite;}' +
     '.wso-empty{padding:24px 8px;text-align:center;color:#9fb0cc;font-size:13px;}' +
     '.wso-note{margin-top:6px;font-size:10.5px;color:#8fa0c0;text-align:right;}';
   var COLORS = { WU: '#22d3ee', INT: '#ff8c00', CD: '#a3e635' };
@@ -28,9 +30,42 @@
     if (document.getElementById('wsoStyle')) return;
     var st = document.createElement('style'); st.id = 'wsoStyle'; st.textContent = CSS; document.head.appendChild(st);
   }
-  function close() { var el = document.getElementById('workoutStepsOverlay'); if (el) el.remove(); }
-  function show(workout, ftpOverride) {
+  var timer = null, mode = '';
+  /* 현재 수행 중인 세그먼트 인덱스 — 시작 전·종료 상태는 -1(깜빡임 없음) */
+  function currentSegIndex() {
+    try {
+      if (mode === 'coach') {
+        var cs = window.bluetoothCoachState || {};
+        return (cs.trainingState === 'running' || cs.trainingState === 'paused') ? Number(cs.currentSegmentIndex) : -1;
+      }
+      if (mode === 'mobile') {
+        var m = window.mobileTrainingState;
+        return m && m.timerId && !(Number(m.totalSec) > 0 && Number(m.elapsedSec) >= Number(m.totalSec)) ? Number(m.segIndex) : -1;
+      }
+      if (mode === 'indiv') {
+        var ci = typeof window.currentSegmentIndex === 'number' ? window.currentSegmentIndex : -1; // 진행 중일 때만 0 이상
+        return ci;
+      }
+    } catch (e) {}
+    return -1;
+  }
+  function refreshNow() {
+    var el = document.getElementById('workoutStepsOverlay');
+    if (!el) { stopTimer(); return; }
+    var idx = currentSegIndex();
+    var rows = el.querySelectorAll('tr[data-from]');
+    for (var i = 0; i < rows.length; i++) {
+      var tr = rows[i], f = Number(tr.getAttribute('data-from')), t = Number(tr.getAttribute('data-to'));
+      var on = isFinite(idx) && idx >= 0 && idx >= f && idx <= t;
+      var k = tr.querySelector('.wso-kind');
+      if (k) k.classList.toggle('wso-now', on);
+    }
+  }
+  function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+  function close() { stopTimer(); var el = document.getElementById('workoutStepsOverlay'); if (el) el.remove(); }
+  function show(workout, ftpOverride, trackMode) {
     ensureCss(); close();
+    mode = trackMode || '';
     var ftp = Number(ftpOverride) > 0 ? Number(ftpOverride) : (Number(window.currentUser && window.currentUser.ftp) || 0);
     var rows = (workout && typeof window.buildWorkoutFlowRows === 'function') ? window.buildWorkoutFlowRows(workout, ftp) : [];
     var totSec = workout ? (Number(workout.total_seconds || workout.totalSeconds) || 0) : 0;
@@ -43,7 +78,7 @@
       ? '<table class="wso-table"><colgroup><col style="width:17%"><col style="width:43%"><col style="width:40%"></colgroup>' +
         '<thead><tr><th>구분</th><th>훈련 내용</th><th>상세 내용</th></tr></thead><tbody>' +
         rows.map(function (r) {
-          return '<tr style="--wso-c:' + COLORS[r.kind] + '"><td><span class="wso-kind">' + r.kind + '</span></td><td>' + esc(r.content) + '</td><td class="wso-detail">' + (r.detail ? esc(r.detail) : '-') + '</td></tr>';
+          return '<tr data-from="' + r.segFrom + '" data-to="' + r.segTo + '" style="--wso-c:' + COLORS[r.kind] + '"><td><span class="wso-kind">' + r.kind + '</span></td><td>' + esc(r.content) + '</td><td class="wso-detail">' + (r.detail ? esc(r.detail) : '-') + '</td></tr>';
         }).join('') + '</tbody></table>' +
         (ftp ? '' : '<div class="wso-note">FTP 정보가 없어 상세(W) 값을 표시할 수 없습니다</div>')
       : '<div class="wso-empty">표시할 워크아웃 구간 정보가 없습니다</div>';
@@ -52,6 +87,7 @@
     el.innerHTML = '<div class="wso-card" role="dialog" aria-modal="true"><div class="wso-head"><div class="wso-title"><b>' + esc((workout && workout.title) || '워크아웃') + '</b><span>' + esc(meta || '구간별 요약') + '</span></div><button type="button" class="wso-close" aria-label="닫기">✕</button></div><div class="wso-body">' + body + '</div></div>';
     el.addEventListener('click', function (e) { if (e.target === el || (e.target.classList && e.target.classList.contains('wso-close'))) close(); });
     document.body.appendChild(el);
+    if (mode) { refreshNow(); timer = setInterval(refreshNow, 500); }
   }
   window.showWorkoutStepsOverlay = show;
   window.closeWorkoutStepsOverlay = close;
@@ -66,12 +102,12 @@
       if (t.closest('#coachmGraphPlaceholder')) return; // 워크아웃 미설정 안내 영역은 기존 선택 메뉴
       var cw = (window.bluetoothCoachState && window.bluetoothCoachState.currentWorkout) || window.currentWorkout;
       if (!cw || !Array.isArray(cw.segments) || !cw.segments.length) return;
-      show(cw, Number(window.__coachmGraphFtp) || 0);
+      show(cw, Number(window.__coachmGraphFtp) || 0, 'coach');
       return;
     }
     if (!(sec.querySelector('#mobileIndividualSegmentGraph') || sec.querySelector('#indiv-individualSegmentGraph'))) return;
     var w = window.currentWorkout;
     if (!w) return;
-    show(w);
+    show(w, 0, sec.querySelector('#mobileIndividualSegmentGraph') ? 'mobile' : 'indiv');
   }, false);
 })();
