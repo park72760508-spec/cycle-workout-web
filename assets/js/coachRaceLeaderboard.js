@@ -484,7 +484,14 @@
         '<div class="crb__cols"><span>순위</span><span>선수</span><span>현재 구간</span><span>점수</span></div>' +
         '<div class="crb__top" id="coachRaceBoardTop"></div>' +
         '<div class="crb__list" id="coachRaceBoardList"></div>' +
-        '<footer class="crb__foot">구간 1분당 1점 × 수행도(목표 근접 50% + 목표 ±5% 유지 50%) · W/kg 가산 · RPM 구간은 RPM 달성도(FTP+RPM 구간은 FTP 70% : RPM 30%) · 워밍업·휴식·쿨다운 제외</footer>' +
+        '<footer class="crb__foot">' +
+          '<div class="crb__formula">구간 점수 = 구간 <b>1분당 1점</b> × <b>달성율</b>(0.8 ~ 1.2) × <b>W/kg 가산</b>(1.0 ~ 1.2)</div>' +
+          '<table class="crb__rule"><tbody>' +
+            '<tr><th>달성율 (랩 평균 ÷ 목표, 매초 평균)</th><td>80% 이하<b>0.8</b></td><td>90%<b>0.9</b></td><td>100%<b>1.0</b></td><td>110%<b>1.1</b></td><td>120% 이상<b>1.2</b></td></tr>' +
+            '<tr><th>W/kg 가산 (FTP ÷ 체중)</th><td>2.0 이하<b>1.0</b></td><td>2.5<b>1.05</b></td><td>3.0<b>1.1</b></td><td>3.5<b>1.15</b></td><td>4.0 이상<b>1.2</b></td></tr>' +
+          '</tbody></table>' +
+          '<div class="crb__note">RPM 전용 구간은 RPM 달성도로 계산(W/kg 가산 없음) · FTP+RPM 구간은 FTP 70% : RPM 30% · 워밍업·휴식·쿨다운 제외 · 예) 1분 구간, 달성 105%, 4.5W/kg → 1 × 1.05 × 1.2 = 1.26점</div>' +
+        '</footer>' +
       '</section>';
     scr.appendChild(root);
     root.querySelector('.crb__handle').addEventListener('click', function () { setOpen(!root.classList.contains('crb--open')); });
