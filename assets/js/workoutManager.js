@@ -1037,7 +1037,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   ctx.shadowColor = 'transparent';
   
   // FTP 가이드 라인 오른쪽 끝에 "90" 빨강색 바탕 표시 (개인훈련 대시보드 및 Indoor Training, 훈련 준비 화면)
-  if (isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas' || canvasId === 'segmentPreviewGraph') {
+  // 2026-11-19: 그룹훈련·개인훈련(훈련 화면) 그래프는 FTP 라인의 '90' 배지·FTP 라벨 배지 제거 — 훈련 준비 화면(segmentPreviewGraph)만 유지
+  const hideFtpBadges = isIndividualDashboardCanvas || canvasId === 'trainingSegmentGraph' || canvasId === 'selectedWorkoutSegmentGraphCanvas';
+  if (!hideFtpBadges && canvasId === 'segmentPreviewGraph') {
     const rpm90Text = '90';
     ctx.font = `bold 10px ${textFontFamily}`;
     const textMetrics = ctx.measureText(rpm90Text);
@@ -1106,6 +1108,7 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
       labelText = `FTP ${ftp}W RPM${avgRpm}`;
     }
   }
+  if (!hideFtpBadges) {
   const metrics = ctx.measureText(labelText);
   const labelWidth = metrics.width + 8;
   const labelHeight = 18;
@@ -1139,6 +1142,8 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
   // 개인훈련 대시보드 및 모바일 대시보드, 훈련 준비 화면에서는 FTP 라벨 텍스트 표시하지 않음
   if (!isIndividualDashboardCanvas && canvasId !== 'segmentPreviewGraph') {
     ctx.fillText(labelText, padding.left - 10, ftpY + 4);
+  }
+  
   }
   
   // 세로축 눈금 (파워)
