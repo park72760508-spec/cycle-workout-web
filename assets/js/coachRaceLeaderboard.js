@@ -19,6 +19,11 @@
  *      · RPM 전용 구간(cadence_rpm): RPM 달성도(평균 RPM ÷ 목표 RPM·목표 ±5% 유지)로만 점수, W/kg 가중치 없음
  *      · RPM + FTP 이중 구간(dual): 수행도 = FTP 달성도 70% + RPM 달성도 30%, 일반 인터벌과 같은 W/kg 가중치 적용
  *      · RPM 달성도는 목표 초과 가산 없음(100% 상한) — 무작정 빠르게 돌리는 것 방지
+ *  - 2026-11-19 가중치 개정(최종):
+ *      · 세그먼트 점수 = 구간 길이(분) × 수행도 × 달성 가중치 × FTP W/kg 가중치
+ *      · 달성 가중치(랩 평균 ÷ 목표): 100% = 1.0, 120% 이상 = 1.2(100~120% 선형), 미달은 80%까지 0.8로 선형 감소, 80% 이하 0.8 고정
+ *      · FTP W/kg 가중치: 2.0 이하 1.0 ~ 4.0 이상 1.2, 사이는 선형
+ *      · 수행도 = 근접도(100% 상한) 50% + 목표 유지 50% — 목표 유지는 목표의 95% 이상이면 1(초과해도 감점 없음), 90~95% 0.5, 그 미만 0
  * 화면
  *  - 오른쪽 가장자리 손잡이로 펼치기/접기(상태 기억)
  *  - 순위·등락·아바타·이름·현재 세그먼트 달성률·누적 점수, 순위가 바뀌면 행이 미끄러지며 이동
@@ -121,21 +126,25 @@
     if (!(t > 0)) t = num(reported);
     return t > 0 ? t : 0;
   }
+  /** FTP W/kg 가중치(2026-11-19): 2.0 이하 1.00 ~ 4.0 이상 1.20, 사이는 선형 */
   function wkgWeight(ftp, weight) {
     if (!(ftp > 0) || !(weight > 0)) return 1;
     var w = ftp / weight;
-    if (w >= 4.0) return 1.05;
-    if (w >= 3.5) return 1.04;
-    if (w >= 3.0) return 1.03;
-    if (w >= 2.5) return 1.02;
-    if (w >= 2.0) return 1.01;
-    return 1;
+    if (w <= 2.0) return 1;
+    if (w >= 4.0) return 1.2;
+    return 1 + (w - 2.0) / 2.0 * 0.2;
   }
-  /** 목표 근접도 0~1.075 */
+  /** 달성 가중치(2026-11-19): 목표 대비 달성도 100%→1.0, 120% 이상→1.2(선형), 80%→0.8, 80% 이하→0.8 고정 */
+  function achWeight(ach) {
+    if (!(ach >= 0)) return 0.8;
+    if (ach >= 1.2) return 1.2;
+    if (ach >= 0.8) return ach; // 0.8~1.2 구간은 달성도 값 그대로(1.0 기준 ±20% ↔ 0.8~1.2)
+    return 0.8;
+  }
+  /** 목표 근접도 0~1 — 초과 달성 보상은 달성 가중치(achWeight)가 담당하므로 여기서는 100% 상한(2026-11-19) */
   function proximity(ach) {
     if (!(ach > PROX_FLOOR)) return 0;
-    if (ach < 1) return ach;
-    return 1 + (Math.min(ach, PROX_CAP) - 1) * 0.5;
+    return Math.min(1, ach);
   }
   /**
    * 세그먼트 점수 (제외 구간이면 null)
@@ -203,7 +212,7 @@
       // RPM 표본이 아직 없으면 파워 수행도와 같다고 보고(구간 초반 급락 방지), 있으면 FTP 70% + RPM 30%
       quality = 0.7 * quality + 0.3 * (rd ? rd.quality : quality);
     }
-    return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * wkgWeight(u.ftp, u.weight) };
+    return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * achWeight(ach) * wkgWeight(u.ftp, u.weight) };
   }
   function segDur(seg) { return num(seg && (seg.duration_sec || seg.duration)); }
   /** 구간 시작 후 측정 제외 시간: 기본 5초, 짧은 구간은 길이의 20%(15초 → 3초, 최소 2초) */
@@ -350,9 +359,10 @@
           if (!tz || tz.seg !== idx) tz = S.tiz[uid] = { seg: idx, n: 0, z: 0, at: 0 };
           if (now - tz.at >= 900) {
             tz.at = now;
-            var dev = Math.abs((fresh ? num(pm.currentPower) : 0) / tgt - 1);
+            // 2026-11-19: 목표 이상으로 유지하면 감점 없이 인정 — 목표의 95% 이상 1, 90~95% 0.5, 그 미만 0 (초과 보상은 달성 가중치)
+            var rr = (fresh ? num(pm.currentPower) : 0) / tgt;
             tz.n += 1;
-            tz.z += dev <= ZONE_FULL + 1e-9 ? 1 : dev <= ZONE_HALF + 1e-9 ? 0.5 : 0; // 소수 오차(1.05/1−1=0.0500…04) 보정
+            tz.z += rr >= 1 - ZONE_FULL - 1e-9 ? 1 : rr >= 1 - ZONE_HALF - 1e-9 ? 0.5 : 0;
           }
         }
       }
