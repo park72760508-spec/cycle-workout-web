@@ -39506,3 +39506,20 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-oval .outd-ov-dir b { font-size: 17px; font-weight: 900; }
 #outdoorRideScreen .outd-oval .outd-ov-dir small { font-size: 8.5px; font-weight: 800; margin-top: 1px; }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s { display: inline-block; transform-origin: 50% 50%; }
+
+/* 2026-11-20 타원 노선도: 선 두께·톤·역 원·열차 배지·방향 화살표를 다른 호선(직선 목록)과 동일하게, 좌우 스크롤 허용 */
+#outdoorRideScreen .outd-busrt__list.is-oval { overflow-x: auto; }
+#outdoorRideScreen .outd-oval .outd-ov-dir { display: none; }
+#outdoorRideScreen .outd-oval .outd-ov-st > i { left: -6.5px; top: -6.5px; width: 13px; height: 13px; border: 3px solid var(--ln, #2db400); background: #fff; }
+#outdoorRideScreen .outd-oval .outd-ov-st.is-cur > i { left: -8.5px; top: -8.5px; width: 17px; height: 17px; background: var(--ln, #2db400); border-color: #fff; box-shadow: 0 0 0 2px var(--ln, #2db400); }
+#outdoorRideScreen .outd-oval .outd-ov-lb { font-size: 13.5px; gap: 6px; }
+#outdoorRideScreen .outd-oval .outd-ov-lb em { font-size: 11px; padding: 1px 7px; background: var(--ln, #2563eb); }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh {
+  position: absolute; left: 0; top: 0; margin: -12px 0 0 -12px; width: 24px; height: 24px; padding: 0; border-radius: 50%; overflow: visible;
+  background: #fff7ed; border: 2px solid #f59e0b; font-size: 12px; color: #0f172a; gap: 0; transition: transform .8s ease-out; will-change: transform; pointer-events: auto;
+}
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh.is-run { width: 24px; height: 20px; margin-top: -10px; background: transparent; border: 0; box-shadow: none; filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1px #fff); }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s { position: absolute; top: 50%; transform: translateY(-50%); display: inline; font-size: 13px; font-weight: 900; color: var(--ln, #10b981); text-shadow: 0 0 2px #fff, 0 0 2px #fff; }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.up { right: calc(100% + 3px); left: auto; }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.dn { left: calc(100% + 3px); right: auto; }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.ex { color: #dc2626; font-size: 16px; }

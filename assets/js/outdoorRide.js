@@ -2004,8 +2004,8 @@
    * 열차 위치 p(역 순번, 소수 = 역 사이)를 타원 둘레 위의 좌표로 바꿈. 이음 구간(끝 역→첫 역)도 자연스럽게 이어짐. */
   function subOvalGeo(n, width) {
     /* 폭은 팝업 안쪽 폭에 맞춤(좌우 스크롤 없음), 역 간격은 직선 목록의 한 줄 높이(43px)와 같게 → 가운데가 좁은 긴 타원 */
-    var W = Math.max(250, Math.min(324, width || 324));
-    var lane = 36, padY = 56, gap = 43, R = 28;
+    var lane = 0, padY = 56, gap = 43, R = 28, labelW = 116;
+    var W = Math.max(width || 324, 2 * R + 2 * labelW); // 좁으면 좌우 스크롤(2026-11-20)
     var L = Math.max(110, (n * gap - 2 * Math.PI * R) / 2);
     return { W: W, R: R, L: L, lane: lane, P: 2 * Math.PI * R + 2 * L, cx: W / 2, cyT: padY + R, H: padY * 2 + 2 * R + L };
   }
@@ -2036,7 +2036,7 @@
     el.__ovGeo = G;
     var out = '<div class="outd-oval" style="width:' + G.W + 'px;height:' + H + 'px;--ln:' + escHtml(ln.c) + '">' +
       '<svg class="outd-ov-ring" width="' + G.W + '" height="' + H + '" viewBox="0 0 ' + G.W + ' ' + H + '" aria-hidden="true">' +
-      '<rect x="' + (G.cx - G.R).toFixed(1) + '" y="' + (G.cyT - G.R).toFixed(1) + '" width="' + (2 * G.R).toFixed(1) + '" height="' + (2 * G.R + G.L).toFixed(1) + '" rx="' + G.R.toFixed(1) + '" ry="' + G.R.toFixed(1) + '" fill="none" stroke="' + escHtml(ln.c) + '" stroke-width="6" opacity=".9"/></svg>' + subOvalLanes(G, ln) +
+      '<rect x="' + (G.cx - G.R).toFixed(1) + '" y="' + (G.cyT - G.R).toFixed(1) + '" width="' + (2 * G.R).toFixed(1) + '" height="' + (2 * G.R + G.L).toFixed(1) + '" rx="' + G.R.toFixed(1) + '" ry="' + G.R.toFixed(1) + '" fill="none" stroke="' + escHtml(ln.c) + '" stroke-width="3" opacity=".35"/></svg>' +
       '';
     seq.forEach(function (si, i) {
       var s2 = st[si]; if (!s2) return;
@@ -2112,7 +2112,8 @@
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var ovQ = ovG ? subOvalPt(ovG, g.p, el.__trainN || rows.length) : null, ovTh = ovQ ? Math.atan2(ovQ.ny, ovQ.nx) * 180 / Math.PI : 0;
-      var html = ovG ? ((up.length ? '<s class="up" style="transform:rotate(' + (ovTh - 90).toFixed(0) + 'deg)">→</s>' : '') + '🚇' + (dn.length ? '<s class="dn" style="transform:rotate(' + (ovTh + 90).toFixed(0) + 'deg)">→</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
+      var arr = function (sgn) { var tx = -ovQ.ny * sgn, ty = ovQ.nx * sgn; return Math.abs(ty) >= Math.abs(tx) ? (ty > 0 ? '↓' : '↑') : (tx > 0 ? '→' : '←'); }; // 화면상 실제 진행 방향 글자
+      var html = ovG ? ((up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
@@ -2320,6 +2321,7 @@
     if (fromLive) return;
     var curEl = el.querySelector('.outd-busrt__list .is-cur');
     var lst = el.querySelector('.outd-busrt__list');
+    if (lst && lst.classList.contains('is-oval')) lst.scrollLeft = Math.max(0, (lst.scrollWidth - lst.clientWidth) / 2);
     if (curEl && lst) lst.scrollTop = Math.max(0, lst.scrollTop + curEl.getBoundingClientRect().top - lst.getBoundingClientRect().top - lst.clientHeight / 2 + curEl.offsetHeight / 2);
   }
   /* ---------- 지하철 경로 찾기 (2026-11-03) ----------
