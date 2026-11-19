@@ -39438,3 +39438,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media screen and (orientation: portrait) {
   #outdoorRideScreen .outd-float-ctrl { bottom: 40px; }
 }
+/* 2026-11-20 확장 지도(세로): 시작·종료 버튼과 겹쳐 보이는 안내 문구를 10px 위로(86→96) */
+@media screen and (orientation: portrait) {
+  #outdoorRideScreen.outd-expanded .outd-map-empty { bottom: 96px; }
+}
+/* 경로 보기 버튼은 경로 삭제 버튼 바로 위(삭제 버튼이 재탐색 자리로 내려온 'is-solo' 일 때 사이가 벌어지던 것 보정) */
+#outdoorRideScreen:has(#outdRouteResetBtn.is-solo) .outd-overview-btn,
+#outdoorRideScreen:has(#outdRouteResetBtn.is-solo):has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 158px; }
