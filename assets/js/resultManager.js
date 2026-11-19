@@ -230,7 +230,8 @@ async function saveTrainingResult(extra = {}) {
           (그 결과 다른 설정값(API 키 등) 저장이 'The quota has been exceeded' 로 실패). 읽는 곳이 없는 백업이므로 이전 백업을 지우고 최신 1건만 유지. */
        try { Object.keys(localStorage).forEach(function (k) { if (k.indexOf('training_result_') === 0) localStorage.removeItem(k); }); } catch (_cl) {}
        const localKey = `training_result_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-       let backupJson = JSON.stringify(trainingResult);
+       /* 2026-11-19: 초 단위 스트림(수백 KB)은 localStorage 가 아니라 미전송 큐(IndexedDB)가 보관 → 백업은 요약본만 */
+       let backupJson = JSON.stringify(Object.assign({}, trainingResult, { powerData: [], hrData: [], cadenceData: [] }));
        try {
          localStorage.setItem(localKey, backupJson);
          localStorage.setItem('latest_training_result', backupJson);
@@ -561,6 +562,16 @@ async function saveTrainingResult(extra = {}) {
             // 케이던스
             avg_cadence: avgCadence,
             
+            // 구간별 평균 파워를 종료 시점에 미리 계산해 함께 보관(저장 지연·큐 보관 중 스트림이 잘려도 결과 유지)
+            segment_avg_watts_pre: (function () {
+              try {
+                var pd = (session && session.powerData) || trainingResult.powerData;
+                if (typeof window.__stelvioComputeSegmentAvgWatts === 'function' && Array.isArray(resolvedSegments) && resolvedSegments.length && pd && pd.length) {
+                  return window.__stelvioComputeSegmentAvgWatts(pd, resolvedSegments, (state.currentTrainingSession && state.currentTrainingSession.startTime) || null, (state.currentTrainingSession && state.currentTrainingSession.segmentMarks) || null);
+                }
+              } catch (ePre) {}
+              return null;
+            })(),
             // 존 분포 계산용 (powerData, hrData 전달)
             powerData: session?.powerData || trainingResult.powerData || null,
             hrData: session?.hrData || trainingResult.hrData || null,

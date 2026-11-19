@@ -460,6 +460,8 @@ function computeSegmentAvgWattsFromSamples(samples, segments, sessionStart, mark
   return hasAny ? result : null;
 }
 
+try { if (typeof window !== 'undefined') window.__stelvioComputeSegmentAvgWatts = computeSegmentAvgWattsFromSamples; } catch (e) {}
+
 /**
  * 훈련 세션 저장 및 보상 처리
  * Firestore Transaction을 사용하여 데이터 무결성 보장
@@ -852,11 +854,14 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
 
       // 세그먼트별 실제 평균 파워 (라이딩 기록 워크아웃 그래프 오버레이용) — 인도어 구조화 워크아웃에서만 존재
       // 2026-11-17: 타임스탬프 샘플 + 훈련 시작/실제 구간 전환 시각 기준(빈 초는 0W). 계산 불가 시 기존 방식으로 폴백.
+      // 2026-11-19: 훈련 종료 시점에 미리 계산해 둔 값(segment_avg_watts_pre)이 있으면 스트림이 없어도(저장 지연·큐 보관 중
+      // 기기 용량 부족으로 초 단위 스트림이 잘린 경우 등) 구간별 결과를 잃지 않도록 폴백으로 사용한다.
       const segmentAvgWatts =
-        Array.isArray(trainingData.segments) && trainingData.segments.length
+        (Array.isArray(trainingData.segments) && trainingData.segments.length
           ? (computeSegmentAvgWattsFromSamples(trainingData.powerData, trainingData.segments, trainingData.session_start, trainingData.segment_marks)
               || computeSegmentAvgWatts(smoothedForFtp, trainingData.segments))
-          : null;
+          : null)
+        || (Array.isArray(trainingData.segment_avg_watts_pre) && trainingData.segment_avg_watts_pre.length ? trainingData.segment_avg_watts_pre : null);
 
       let maxWattsResolved =
         trainingData.max_watts != null && Number(trainingData.max_watts) > 0
