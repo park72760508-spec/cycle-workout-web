@@ -23,7 +23,8 @@
  *      · 세그먼트 점수 = 구간 길이(분) × 수행도 × 달성 가중치 × FTP W/kg 가중치
  *      · 달성 가중치(랩 평균 ÷ 목표): 100% = 1.0, 120% 이상 = 1.2(100~120% 선형), 미달은 80%까지 0.8로 선형 감소, 80% 이하 0.8 고정
  *      · FTP W/kg 가중치: 2.0 이하 1.0 ~ 4.0 이상 1.2, 사이는 선형
- *      · 수행도 = 근접도(100% 상한) 50% + 목표 유지 50% — 목표 유지는 목표의 95% 이상이면 1(초과해도 감점 없음), 90~95% 0.5, 그 미만 0
+ *      · 달성 가중치 = 구간 중 매초(현재 파워 ÷ 목표)의 가중치 평균 — 80% 이하 0.8, 100% 1.0, 120% 이상 1.2(선형). 별도의 ±5%·±10% 유지 판정은 폐지
+ *      · 수행도 = 구간 랩 평균의 목표 근접도(100% 상한, 50% 이하 0)
  * 화면
  *  - 오른쪽 가장자리 손잡이로 펼치기/접기(상태 기억)
  *  - 순위·등락·아바타·이름·현재 세그먼트 달성률·누적 점수, 순위가 바뀌면 행이 미끄러지며 이동
@@ -205,14 +206,15 @@
     if (lapW == null) return null;
     var ach = Math.max(0, lapW / m.pT);
     var prox = proximity(ach);
-    var keep = tiz && tiz.n > 0 ? Math.max(0, Math.min(1, tiz.z / tiz.n)) : Math.min(1, prox);
-    var quality = blendQuality(seg, prox, keep);
+    // 달성 가중치 = 구간 중 매초 가중치의 평균(표본 없으면 랩 평균 달성도로 계산), 수행도 = 랩 근접도(100% 상한)
+    var wA = tiz && tiz.n > 0 ? tiz.z / tiz.n : achWeight(ach);
+    var quality = prox;
     if (m.mode === 'dual') {
       var rd = rpmQuality(seg, m.rT, rs);
       // RPM 표본이 아직 없으면 파워 수행도와 같다고 보고(구간 초반 급락 방지), 있으면 FTP 70% + RPM 30%
       quality = 0.7 * quality + 0.3 * (rd ? rd.quality : quality);
     }
-    return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * achWeight(ach) * wkgWeight(u.ftp, u.weight) };
+    return { ach: ach, quality: quality, pts: Math.max(0, minutes) * quality * wA * wkgWeight(u.ftp, u.weight) };
   }
   function segDur(seg) { return num(seg && (seg.duration_sec || seg.duration)); }
   /** 구간 시작 후 측정 제외 시간: 기본 5초, 짧은 구간은 길이의 20%(15초 → 3초, 최소 2초) */
@@ -359,10 +361,10 @@
           if (!tz || tz.seg !== idx) tz = S.tiz[uid] = { seg: idx, n: 0, z: 0, at: 0 };
           if (now - tz.at >= 900) {
             tz.at = now;
-            // 2026-11-19: 목표 이상으로 유지하면 감점 없이 인정 — 목표의 95% 이상 1, 90~95% 0.5, 그 미만 0 (초과 보상은 달성 가중치)
+            // 2026-11-19: 매초 달성 가중치 누적(80%=0.8 ~ 100%=1.0 ~ 120%=1.2, 80% 이하 0.8·120% 이상 1.2 고정) → 구간 평균을 달성 가중치로 사용
             var rr = (fresh ? num(pm.currentPower) : 0) / tgt;
             tz.n += 1;
-            tz.z += rr >= 1 - ZONE_FULL - 1e-9 ? 1 : rr >= 1 - ZONE_HALF - 1e-9 ? 0.5 : 0;
+            tz.z += achWeight(rr);
           }
         }
       }
