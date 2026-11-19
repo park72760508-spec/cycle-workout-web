@@ -2028,7 +2028,8 @@
     else if (u < q + L + Math.PI * R) { t = (u - q - L) / R; nx = Math.cos(t); ny = Math.sin(t); x = G.cx + R * nx; y = G.cyT + L + R * ny; }
     else if (u < q + 2 * L + Math.PI * R) { nx = -1; ny = 0; x = G.cx - R; y = G.cyT + L - (u - q - L - Math.PI * R); }
     else { t = (u - q - 2 * L - Math.PI * R) / R; nx = -Math.cos(t); ny = -Math.sin(t); x = G.cx + R * nx; y = G.cyT + R * ny; }
-    return { x: x, y: y, nx: nx, ny: ny };
+    /* 좌우 반전: 목록 순서(외선 방향)가 반시계가 되도록 — 서울 2호선은 내선 = 시계, 외선 = 반시계(우측통행) */
+    return { x: 2 * G.cx - x, y: y, nx: -nx, ny: ny };
   }
   /** 타원 노선도 HTML — 역 점 + 바깥쪽으로 뻗는 역 이름(왼쪽 반은 뒤집어 글자가 눕지 않게) + 환승 배지, 안쪽에 호선 안내 */
   function subOvalHtml(el, seq, ln, st) {
@@ -2112,8 +2113,8 @@
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var ovQ = ovG ? subOvalPt(ovG, g.p, el.__trainN || rows.length) : null, ovTh = ovQ ? Math.atan2(ovQ.ny, ovQ.nx) * 180 / Math.PI : 0;
-      var arr = function (sgn) { var tx = -ovQ.ny * sgn, ty = ovQ.nx * sgn; return Math.abs(ty) >= Math.abs(tx) ? (ty > 0 ? '↓' : '↑') : (tx > 0 ? '→' : '←'); }; // 화면상 실제 진행 방향 글자
-      var html = ovG ? ((up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
+      var arr = function (sgn) { var tx = ovQ.ny * sgn, ty = -ovQ.nx * sgn; return Math.abs(ty) >= Math.abs(tx) ? (ty > 0 ? '↓' : '↑') : (tx > 0 ? '→' : '←'); }; // 화면상 실제 진행 방향 글자
+      var html = ovG ? ((up.length ? '<s class="up ' + (ovQ.nx >= 0 ? 'sl' : 'sr') + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '🚇' + (dn.length ? '<s class="dn ' + (ovQ.nx >= 0 ? 'sr' : 'sl') + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];

@@ -39526,3 +39526,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-20 역명을 열차 방향 화살표(원 양옆 약 28px)보다 바깥으로 */
 #outdoorRideScreen .outd-oval .outd-ov-lb { left: 34px; }
 #outdoorRideScreen .outd-oval .outd-ov-st.is-l .outd-ov-lb { left: auto; right: 34px; }
+/* 2026-11-20 2호선 타원: 내선(시계) 열차 화살표는 타원 안쪽, 외선(반시계) 열차 화살표는 타원 바깥쪽 */
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.sr { left: calc(100% + 3px); right: auto; }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.sl { right: calc(100% + 3px); left: auto; }
