@@ -29,9 +29,9 @@
     var st = document.createElement('style'); st.id = 'wsoStyle'; st.textContent = CSS; document.head.appendChild(st);
   }
   function close() { var el = document.getElementById('workoutStepsOverlay'); if (el) el.remove(); }
-  function show(workout) {
+  function show(workout, ftpOverride) {
     ensureCss(); close();
-    var ftp = Number(window.currentUser && window.currentUser.ftp) || 0;
+    var ftp = Number(ftpOverride) > 0 ? Number(ftpOverride) : (Number(window.currentUser && window.currentUser.ftp) || 0);
     var rows = (workout && typeof window.buildWorkoutFlowRows === 'function') ? window.buildWorkoutFlowRows(workout, ftp) : [];
     var totSec = workout ? (Number(workout.total_seconds || workout.totalSeconds) || 0) : 0;
     if (!totSec && workout && Array.isArray(workout.segments)) {
@@ -60,7 +60,16 @@
     if (!t || !t.closest) return;
     /* 모바일 개인/그룹 훈련 화면 + 블루투스 개인훈련 통합 화면(그룹훈련 Live Training Room 참가자) 그래프 */
     var sec = t.closest('.mobile-segment-graph-section') || t.closest('.indiv-segment-graph-section');
-    if (!sec || !(sec.querySelector('#mobileIndividualSegmentGraph') || sec.querySelector('#indiv-individualSegmentGraph'))) return;
+    if (!sec) return;
+    /* 그룹훈련 휴대폰 Coach 모니터 화면 그래프: 코치 화면에 적용된 워크아웃 + 선택한 선수 슬롯의 FTP(없으면 내 FTP) */
+    if (sec.querySelector('#coachmSegmentGraph')) {
+      if (t.closest('#coachmGraphPlaceholder')) return; // 워크아웃 미설정 안내 영역은 기존 선택 메뉴
+      var cw = (window.bluetoothCoachState && window.bluetoothCoachState.currentWorkout) || window.currentWorkout;
+      if (!cw || !Array.isArray(cw.segments) || !cw.segments.length) return;
+      show(cw, Number(window.__coachmGraphFtp) || 0);
+      return;
+    }
+    if (!(sec.querySelector('#mobileIndividualSegmentGraph') || sec.querySelector('#indiv-individualSegmentGraph'))) return;
     var w = window.currentWorkout;
     if (!w) return;
     show(w);
