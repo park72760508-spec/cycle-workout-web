@@ -39499,3 +39499,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s { position: static; text-decoration: none; font-size: 11px; font-weight: 900; color: var(--ln, #10b981); }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh small { font-size: 9px; font-weight: 800; }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh.is-stale { opacity: .5; }
+
+/* 2026-11-20 타원 노선도 개정: 가운데가 좁은 긴 타원(역 간격 = 직선 목록과 동일 43px), 좌우 스크롤 없음, 순환 방향은 바깥쪽 직선 화살표 */
+#outdoorRideScreen .outd-busrt__list.is-oval { overflow-x: hidden; }
+#outdoorRideScreen .outd-oval .outd-ov-dir { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; line-height: 1; pointer-events: none; opacity: .9; }
+#outdoorRideScreen .outd-oval .outd-ov-dir b { font-size: 17px; font-weight: 900; }
+#outdoorRideScreen .outd-oval .outd-ov-dir small { font-size: 8.5px; font-weight: 800; margin-top: 1px; }
+#outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s { display: inline-block; transform-origin: 50% 50%; }
