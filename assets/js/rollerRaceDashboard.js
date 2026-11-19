@@ -365,6 +365,9 @@ window.rrToggleGaugeStyle = function () {
 function rrApplySplitViewBox() {
   const split = document.getElementById('rollerRaceDashboardScreen')?.classList.contains('rr-gs'); /* 속도계 표시 방식(분할 화면 표시 = OFF) */
   document.querySelectorAll('#speedometerGrid .speedometer-svg').forEach(svg => {
+    /* 눈금 숫자는 궤적선 위에 그림(이미 그려진 카드도 순서 보정) */
+    const lb = svg.querySelector('.speedometer-labels'), np = svg.querySelector('.speedometer-needle-path');
+    if (lb && np && (np.compareDocumentPosition(lb) & Node.DOCUMENT_POSITION_PRECEDING)) np.parentNode.insertBefore(lb, np.nextSibling);
     // 창분할 보기: 눈금 숫자는 호 바깥(기존 위치), 창분할 아님: 눈금 호가 검은 바탕 좌우 끝까지 닿도록 확대 + 숫자는 호 안쪽
     svg.setAttribute('viewBox', split ? '-12 33 224 130' : '14 52 172 116');
     const r = split ? 98 : 55;
@@ -404,13 +407,13 @@ function createSpeedometerElement(speedometer) {
           ${generateSpeedometerTicks()}
         </g>
         
-        <!-- 속도 숫자 (반원 바깥쪽, 20단위만) -->
-        <g class="speedometer-labels">
-          ${generateSpeedometerLabels()}
-        </g>
-        
         <!-- 바늘 행적선 (바늘 밑에 위치) -->
         <g id="needle-path-${speedometer.id}" class="speedometer-needle-path" transform="translate(100, 140)">
+        </g>
+
+        <!-- 속도 숫자 (반원 바깥쪽, 20단위만) — 2026-11-20 궤적선 위에 그려 숫자가 가려지지 않게 -->
+        <g class="speedometer-labels">
+          ${generateSpeedometerLabels()}
         </g>
         
         <!-- 바늘 (원의 중심에 위치, 원지름의 1/4만큼 아래로 이동, 초기 위치: 270도) -->
