@@ -984,6 +984,40 @@
     });
   };
 
+  /* 2026-11-20 속도계 손잡이 쓸어내리기/올리기 — 우측 '속도계 숨기기/보이기' 버튼과 같은 toggleOutdoorExpand(같은 애니메이션) 호출.
+     위 손잡이: 아래로 쓸어내리면 숨김 · 아래 손잡이(숨긴 상태): 위로 쓸어올리면 표시. 짧게 탭해도 동작 */
+  (function bindGaugeHandles() {
+    function bind(id, wantExpanded, dirSign) {
+      var el = $(id);
+      if (!el || el.__gh) return;
+      el.__gh = true;
+      var y0 = null, t0 = 0;
+      function fire() {
+        var scr = $(SCREEN_ID);
+        if (!scr || scr.classList.contains('outd-anim')) return; // 애니메이션 중에는 무시
+        if (!!st.expanded === wantExpanded) return;
+        window.toggleOutdoorExpand();
+      }
+      el.addEventListener('pointerdown', function (e) {
+        y0 = e.clientY; t0 = Date.now();
+        try { el.setPointerCapture(e.pointerId); } catch (x) {}
+        e.stopPropagation();
+      });
+      el.addEventListener('pointerup', function (e) {
+        if (y0 == null) return;
+        var dy = (e.clientY - y0) * dirSign;
+        var tap = Math.abs(e.clientY - y0) < 8 && Date.now() - t0 < 400;
+        y0 = null;
+        if (dy > 24 || tap) fire();
+        e.stopPropagation();
+      });
+      el.addEventListener('pointercancel', function () { y0 = null; });
+      el.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); } });
+    }
+    function init() { bind('outdGaugeHandle', false, 1); bind('outdGaugeShowHandle', true, -1); }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+  })();
+
   function renderGps(acc) {
     var q = 0;
     if (acc != null && isFinite(acc)) q = acc <= 10 ? 4 : acc <= 20 ? 3 : acc <= 35 ? 2 : 1;

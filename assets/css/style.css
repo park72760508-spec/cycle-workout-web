@@ -39420,3 +39420,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #coachRaceBoard .crb__foot-toggle i { font-style: normal; font-size: 11px; color: #22d3ee; }
 #coachRaceBoard .crb__foot-body { display: none; padding-top: 4px; }
 #coachRaceBoard.crb--foot-open .crb__foot-body { display: block; }
+
+/* 2026-11-20 속도계 쓸어내리기/올리기 손잡이(세로 화면) — 흰색 바 */
+#outdoorRideScreen .outd-gh { display: none; position: absolute; left: 50%; transform: translateX(-50%); width: 150px; height: 26px; z-index: 700; align-items: center; justify-content: center; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; }
+#outdoorRideScreen .outd-gh i { display: block; width: 52px; height: 5px; border-radius: 3px; background: #ffffff; box-shadow: 0 0 6px rgba(0,0,0,.55); opacity: .92; }
+#outdoorRideScreen .outd-gh:active i { opacity: 1; width: 64px; }
+@media screen and (orientation: portrait) {
+  #outdoorRideScreen .mobile-main-content > .outd-gh { display: flex; top: 0; }
+  #outdoorRideScreen.outd-expanded .mobile-main-content > .outd-gh { display: none; }
+  #outdoorRideScreen.outd-expanded .outd-gh--show { display: flex; bottom: 0; }
+}

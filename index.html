@@ -4089,7 +4089,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261120fold" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261120swipe" />
   <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm18" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
@@ -30208,7 +30208,7 @@
   <script src="assets/js/outdoorStepDetector.js?v=20261029ios4s"></script>
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
-  <script src="assets/js/outdoorRide.js?v=20261116transit"></script>
+  <script src="assets/js/outdoorRide.js?v=20261120swipe"></script>
   <script src="assets/js/claudeWorkoutRecommend.js?v=20261117wu"></script>
   <script src="assets/js/rollerRaceMobile.js?v=20261117rs1"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
@@ -36675,6 +36675,8 @@
           <span class="outd-expand__in" aria-hidden="true"><img src="assets/img/s(01).png" width="24" height="24" alt="" draggable="false"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true"><path d="M5 4.5L19.5 19" stroke="#ff0000" stroke-width="3" stroke-linecap="round"/></svg></span>
           <img class="outd-expand__out" src="assets/img/s(01).png" width="24" height="24" alt="" aria-hidden="true" draggable="false">
         </button>
+        <!-- 2026-11-20: 속도계가 숨겨진 상태의 아래쪽 흰색 손잡이 — 위로 쓸어올리면 속도계가 올라옴 -->
+        <div id="outdGaugeShowHandle" class="outd-gh outd-gh--show" role="button" tabindex="0" aria-label="속도계 보이기 (위로 쓸어올리기)"><i></i></div>
         <!-- 확대 모드에서만: 지도 위에 떠 있는 시작·정지 버튼(시작 전 녹색 펄스) -->
         <div id="outdFloatCtrl" class="outd-float-ctrl">
           <button type="button" class="outd-float-btn outd-float-btn--start" onclick="toggleOutdoorRide()" aria-label="시작/일시정지">
@@ -36689,6 +36691,8 @@
     </div>
 
     <div class="mobile-main-content">
+      <!-- 2026-11-20: 속도계 상단 흰색 손잡이 — 아래로 쓸어내리면 속도계가 내려가 숨겨짐(우측 속도계 숨기기 버튼과 같은 동작·애니메이션) -->
+      <div id="outdGaugeHandle" class="outd-gh" role="button" tabindex="0" aria-label="속도계 숨기기 (아래로 쓸어내리기)"><i></i></div>
       <!-- 2026-10-27: 세로 화면 속도계 오른쪽 위 — 지도 '크게 보기' 버튼과 같은 동작(속도계를 접고 지도를 크게) -->
       <!-- 2026-10-28: 배터리 절약 모드(속도계 왼쪽 위) — 화면만 검정, GPS·기록은 계속 -->
             <div class="mobile-gauge-segment-wrap">
