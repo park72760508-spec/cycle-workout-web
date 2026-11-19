@@ -999,6 +999,24 @@
     return picker;
   }
 
+  /** 2026-11-20 PC Coach: 선택 창을 화면 하단 시트 대신 '워크아웃 선택' 버튼 아래(순위 전광판 부근)에 드롭다운으로 표시 */
+  function placePickerForPc(picker) {
+    if (!picker) return;
+    var pc = $(PC_SCREEN_ID);
+    var isPc = !!(pc && pc.classList.contains('active') && picker.parentNode === pc);
+    picker.classList.toggle('coachm-picker--pc', isPc);
+    var sheet = picker.querySelector('.coachm-picker__sheet');
+    if (!sheet) return;
+    if (!isPc) { sheet.style.top = sheet.style.right = sheet.style.maxHeight = ''; return; }
+    var btn = $('btnSelectWorkoutBluetoothCoach');
+    var r = btn && btn.getBoundingClientRect();
+    var top = r && r.height ? Math.round(r.bottom + 8) : 84;
+    var right = r && r.height ? Math.max(8, Math.round(window.innerWidth - r.right)) : 12;
+    sheet.style.top = top + 'px';
+    sheet.style.right = right + 'px';
+    sheet.style.maxHeight = Math.max(200, window.innerHeight - top - 16) + 'px';
+  }
+
   /**
    * PC Coach 화면 "워크아웃 선택" — 그룹 전용 / 일반 워크아웃 중 선택(2026-10-03).
    * 그룹 전용은 휴대폰 화면과 같은 목록(이 Training Room 에 연결된 클럽의 그룹 전용 워크아웃), 일반은 기존 PC 선택 창.
@@ -1015,6 +1033,7 @@
       '<button type="button" class="coachm-picker__item" data-kind="group"><span class="coachm-picker__item-title">그룹 전용 워크아웃</span><span class="coachm-picker__item-min">클럽</span></button>' +
       '<button type="button" class="coachm-picker__item" data-kind="general"><span class="coachm-picker__item-title">일반 워크아웃</span><span class="coachm-picker__item-min">STELVIO</span></button>';
     picker.style.display = 'flex';
+    placePickerForPc(picker);
     Array.prototype.forEach.call(list.querySelectorAll('[data-kind]'), function (btn) {
       btn.addEventListener('click', function () {
         if (btn.getAttribute('data-kind') === 'group') {
@@ -1036,6 +1055,7 @@
     setText('coachmWorkoutPickerTitle', grouped ? '워크아웃 선택 (그룹 전용)' : '워크아웃 선택 (일반 워크아웃)');
     list.innerHTML = '<div class="coachm-picker__empty">불러오는 중...</div>';
     picker.style.display = 'flex';
+    placePickerForPc(picker);
     try {
       var items = grouped ? await loadGroupWorkouts() : await loadGeneralWorkouts();
       if (picker.style.display === 'none') return;

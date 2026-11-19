@@ -39445,3 +39445,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 경로 보기 버튼은 경로 삭제 버튼 바로 위(삭제 버튼이 재탐색 자리로 내려온 'is-solo' 일 때 사이가 벌어지던 것 보정) */
 #outdoorRideScreen:has(#outdRouteResetBtn.is-solo) .outd-overview-btn,
 #outdoorRideScreen:has(#outdRouteResetBtn.is-solo):has(#outdBusBtn[style*="none"]) .outd-overview-btn { bottom: 158px; }
+
+/* 2026-11-20 PC Coach 워크아웃 선택: 하단 시트 → '워크아웃 선택' 버튼 아래 드롭다운(위치는 JS 가 top/right 지정) */
+#bluetoothTrainingCoachScreen .coachm-picker.coachm-picker--pc { background: transparent; align-items: flex-start; justify-content: flex-end; }
+#bluetoothTrainingCoachScreen .coachm-picker--pc .coachm-picker__sheet {
+  position: fixed; width: 380px; max-width: calc(100vw - 16px);
+  border-radius: 14px; border: 1px solid rgba(255,255,255,.14); box-shadow: 0 12px 32px rgba(0,0,0,.55);
+  padding-bottom: 0;
+}
