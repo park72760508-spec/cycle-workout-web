@@ -39560,7 +39560,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-20 내선 열차: 터널(검정) 배경을 회색톤으로 — 열차 색은 유지 */
 #outdoorRideScreen .outd-oval .outd-ov-tr .outd-busrt__veh .ov-ic.is-in { filter: contrast(.5) brightness(1.4); }
 /* 2026-11-20 다른 호선(직선 노선도) 양방향 표시: 하행 열차 = 회색톤 터널, 상행·단방향 = 기본 검정 터널 */
-#outdoorRideScreen .outd-busrt__veh .tn-ic { display: block; line-height: 1; }
+/* li span 공통 규칙(flex:1·overflow:hidden·margin-left)이 아이콘 래퍼에 적용돼 이모지가 한쪽으로 치우치던 문제 → 래퍼는 내용 크기 그대로, 여백·축소 없음 */
+#outdoorRideScreen .outd-busrt__list li .outd-busrt__veh .tn-ic { display: block; flex: 0 0 auto; min-width: 0; max-width: none; margin: 0; overflow: visible; text-overflow: clip; line-height: 1; }
 #outdoorRideScreen .outd-busrt__veh .tn-ic.is-gray { filter: contrast(.5) brightness(1.4); }
 /* 2026-11-20 아이폰·Safari: 다른 호선(.is-sub)과 같은 WebKit 이모지 보정(padding-bottom 3px) — 타원 규칙의 padding:0 이 덮어써서 🚇가 원 아래로 치우쳤음 */
 @supports (font: -apple-system-body) {
