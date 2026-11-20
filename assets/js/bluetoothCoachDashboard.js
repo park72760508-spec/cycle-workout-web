@@ -2766,6 +2766,16 @@ function updateCurrentSegmentInfo() {
   // 폰트 사이즈 설정 (제목 폰트 사이즈의 70% = 36px * 0.7 = 25.2px)
   segmentInfoEl.style.fontSize = '25.2px';
   segmentInfoText = segmentInfoText.trim();
+  // 현재 >> 다음 세그먼트 (예: "WU FTP 60% (5분) >> 인터벌 FTP 110% (2분)") — 마지막 세그먼트면 현재만 표시
+  const nextSegment = currentWorkout.segments[currentSegmentIndex + 1];
+  if (nextSegment && typeof window.stelvioSegmentLineText === 'function') {
+    const nextText = window.stelvioSegmentLineText(nextSegment);
+    if (nextText) segmentInfoText += ' >> ' + nextText;
+  }
+  // 두 세그먼트가 한 줄에 들어가도록 좌측 방 이름·우측 버튼과 겹치지 않는 폭으로 제한
+  segmentInfoEl.style.maxWidth = '58vw';
+  segmentInfoEl.style.overflow = 'hidden';
+  segmentInfoEl.style.textOverflow = 'ellipsis';
   segmentInfoEl.textContent = segmentInfoText;
   segmentInfoEl.style.display = 'block';
   
