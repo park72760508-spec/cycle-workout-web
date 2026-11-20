@@ -323,6 +323,28 @@
           _fsRecovering.then(function () { setTimeout(function () { _fsRecovering = null; }, 3000); }, function () { _fsRecovering = null; });
           return _fsRecovering;
         };
+        /* 2026-11-21 전역 자동 복구 — 이 오류는 SDK 내부 타이머에서 잡히지 않은 예외로 터져 호출부 catch 가 못 받는다.
+           window error / unhandledrejection 에서 감지해 새 인스턴스로 교체한다(60초 내 최대 3회, 실패하면 안내만). */
+        (function stelvioFirestoreAutoRecover() {
+          var times = [];
+          function handle(e) {
+            try {
+              var err = e && (e.error || e.reason) ? (e.error || e.reason) : e;
+              var msg = (err && (err.message || err.code)) || (e && e.message) || '';
+              if (!window.stelvioIsFirestoreBrokenError(msg ? { message: msg } : err)) return;
+              var now = Date.now();
+              times = times.filter(function (t) { return now - t < 60000; });
+              if (times.length >= 3) return;
+              times.push(now);
+              window.stelvioRecoverFirestoreV9().catch(function (er) {
+                console.warn('[Firebase v9] Firestore 자동 복구 실패:', er && er.message);
+                try { if (typeof window.showToast === 'function') window.showToast('연결이 불안정합니다. 새로고침 해주세요.'); } catch (_t) {}
+              });
+            } catch (_h) {}
+          }
+          window.addEventListener('error', handle);
+          window.addEventListener('unhandledrejection', handle);
+        })();
         try { window.dispatchEvent(new CustomEvent('stelvio-v9-firebase-user-api-ready')); } catch (eApiReady) {}
 
         /* Storage·Functions는 로그인 경로와 분리 — 백그라운드 로드 */
