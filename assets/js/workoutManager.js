@@ -7763,7 +7763,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const ftpPct = (w / actualFtp) * 100;
       const heightPct = ftpPercentToBarHeight(ftpPct);
       const y = Math.max(0, Math.min(100, 100 - heightPct));
-      points.push({ xStart, xEnd, y, watts: w });
+      points.push({ xStart, xEnd, y, watts: w, showLabel: isSegmentDurationLabelTarget(segments[i]) });
     }
     if (points.length) {
       let d = '';
@@ -7782,12 +7782,14 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       // 점선과 라벨이 겹치지 않게 사용자 FTP 설정(zoneFtp100)에 따라 동적으로 계산한다.
       const ftpLineTopPercent = 100 - ftpLineBottomPercent;
       const labelRowY = Math.min(Math.max(ftpLineTopPercent / 2, 4), 45);
-      const xMids = points.map((pt) => (pt.xStart + pt.xEnd) / 2);
+      // 파워값 배지는 인터벌 세그먼트만 — 워밍업/휴식/쿨다운 구간은 라인만 그리고 배지·가이드선은 제외
+      const lpts = points.filter((pt) => pt.showLabel);
+      const xMids = lpts.map((pt) => (pt.xStart + pt.xEnd) / 2);
 
       // 라벨 폭을 %가 아닌 실측 컨테이너 폭(px) 기준으로 계산 — 좁은 모바일 화면에서도 좌우
       // 가장자리에 잘리지 않고, 라벨 사이 최소 여백을 확보한 채 가능한 만큼 촘촘히 배치한다.
       // (세그먼트가 너무 많아 폭이 부족한 경우에만 어쩔 수 없이 라벨이 맞닿는다.)
-      const labelTexts = points.map((pt) => Math.round(pt.watts) + 'W');
+      const labelTexts = lpts.map((pt) => Math.round(pt.watts) + 'W');
       const pxBase = containerWidthPx > 0 ? containerWidthPx : 320;
       const halfWidthPct = labelTexts.map((text) => {
         const wPx = containerWidthPx > 0 ? measureSegmentedGraphLabelWidthPx(text) : 26;
@@ -7796,8 +7798,8 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       const labelGapPct = (4 / pxBase) * 100;
       const edgeMarginPct = (3 / pxBase) * 100;
 
-      const labelLeft = new Array(points.length);
-      const labelRight = new Array(points.length);
+      const labelLeft = new Array(lpts.length);
+      const labelRight = new Array(lpts.length);
       let prevRight = -Infinity;
       xMids.forEach((xm, i) => {
         const w = halfWidthPct[i] * 2;
@@ -7807,7 +7809,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
         prevRight = labelRight[i];
       });
       let nextLeftBound = 100 - edgeMarginPct;
-      for (let i = points.length - 1; i >= 0; i--) {
+      for (let i = lpts.length - 1; i >= 0; i--) {
         const w = halfWidthPct[i] * 2;
         if (labelRight[i] > nextLeftBound) {
           labelRight[i] = nextLeftBound;
@@ -7817,11 +7819,11 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
       }
       const labelX = labelLeft.map((l, i) => (l + labelRight[i]) / 2);
 
-      const guides = points
+      const guides = lpts
         .map((pt, i) => `<line class="segmented-workout-graph__actual-guide" x1="${labelX[i].toFixed(2)}" y1="${(labelRowY + 3).toFixed(2)}" x2="${xMids[i].toFixed(2)}" y2="${pt.y.toFixed(2)}" vector-effect="non-scaling-stroke" />`)
         .join('');
       // SVG viewBox 스케일에서는 글자가 찌그러지므로 같은 %좌표계의 일반 HTML 오버레이로 그린다.
-      const labels = points
+      const labels = lpts
         .map((pt, i) => `<span class="segmented-workout-graph__actual-label" style="left:${labelX[i].toFixed(2)}%; top:${labelRowY.toFixed(2)}%;">${labelTexts[i]}</span>`)
         .join('');
       actualOverlayMarkup = `
