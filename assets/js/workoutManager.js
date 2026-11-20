@@ -6399,6 +6399,35 @@ function updateSegmentSummary() {
 // 세그먼트 관리 함수들
 // ==========================================================
 
+
+// ==========================================================
+// 워크아웃 요약 표현 → 세그먼트 자동 생성 (workoutSummaryParser.js)
+// ==========================================================
+function applyWorkoutSummaryText() {
+  const input = safeGetElement('wbSummaryInput');
+  const errEl = safeGetElement('wbSummaryError');
+  const showErr = (msg) => {
+    if (errEl) { errEl.textContent = msg || ''; errEl.style.display = msg ? 'block' : 'none'; }
+  };
+  if (!input) return;
+  const P = window.WorkoutSummaryParser;
+  if (!P) { showErr('요약 파서를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+  const res = P.parse(input.value);
+  if (!res.ok) { showErr(res.error); return; }
+  showErr('');
+  const built = P.toBuilderSegments(res.segments);
+  if (workoutSegments.length > 0) {
+    const replace = confirm('기존 세그먼트가 ' + workoutSegments.length + '개 있습니다.\n확인: 모두 교체 / 취소: 뒤에 추가');
+    if (replace) workoutSegments = built; else workoutSegments.push.apply(workoutSegments, built);
+  } else {
+    workoutSegments = built;
+  }
+  renderSegments();
+  updateSegmentSummary();
+  window.showToast(built.length + '개의 세그먼트가 생성되었습니다.');
+}
+window.applyWorkoutSummaryText = applyWorkoutSummaryText;
+
 function addQuickSegment(type) {
   const templates = {
     warmup: { label: '워밍업', type: 'warmup', duration: 600, intensity: 50 },

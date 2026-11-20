@@ -7557,6 +7557,19 @@
         </div>
     </div>
 
+<!-- 워크아웃 요약 표현 → 세그먼트 자동 생성 -->
+<div class="card wb-summary-card">
+  <div class="form-group" style="margin-bottom:0;">
+    <label for="wbSummaryInput">워크아웃 요약 표현</label>
+    <textarea id="wbSummaryInput" rows="3" placeholder="예: WD 10m@50% | 3 X (3m@88-95%/85-95rpm + 2m@50%) | CD 5m@50%" style="width:100%;resize:vertical;font-size:14px;"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+      <button type="button" class="btn btn-secondary btn-default-style" id="btnWbSummaryApply" onclick="applyWorkoutSummaryText()">세그먼트 생성</button>
+      <small class="form-help" style="margin:0;">" | "로 워밍업·메인·쿨다운 구분, " + "로 연결, 반복은 N X ( … )</small>
+    </div>
+    <div id="wbSummaryError" role="alert" style="display:none;margin-top:8px;color:#d33;font-size:13px;"></div>
+  </div>
+</div>
+
 <!-- 워크아웃 작성 화면의 세그먼트 섹션 -->
 <div class="card">
   <div class="segment-header">
@@ -9610,7 +9623,8 @@
 <script src="assets/js/data.js"></script>
 <script src="assets/js/workoutFlowSummary.js?v=7"></script>
 <script src="assets/js/workoutStepsOverlay.js?v=5"></script>
-<script src="assets/js/workoutManager.js?v=20261120seg2"></script>
+<script src="assets/js/workoutSummaryParser.js?v=20261121sum1"></script>
+<script src="assets/js/workoutManager.js?v=20261121sum1"></script>
 <!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
 <script type="module" src="assets/js/referral/stelvioReferral.js?v=20261101goal"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
