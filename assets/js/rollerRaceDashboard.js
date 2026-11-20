@@ -8083,7 +8083,7 @@ function rrGroupRefresh() {
         const f = gf[g.no];
         const d0 = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2), di = d0.indexOf('.');
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? ' <i>' + f.order + '위</i>' : '') + '</div>';
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + '"><span class="rr-group-pill" style="background:' + rrGroupColor(g.no) + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>';
       }).join('');
       /* 폭 초과 시 줄임: 5% 단위 + 히스테리시스(흔들림 방지) */
       const itemEl = bx.closest('.scoreboard-item');

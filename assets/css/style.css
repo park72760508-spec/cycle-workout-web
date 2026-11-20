@@ -39538,3 +39538,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #outdoorRideScreen .outd-oval .outd-ov-st.is-vb .outd-ov-lb { left: 0; right: auto; top: 34px; transform: translate(-50%, 0); }
 #outdoorRideScreen .outd-busrt__list.is-rail .outd-oval .outd-ov-tr .outd-busrt__veh.is-sub s.st { left: 50%; right: auto; top: auto; bottom: calc(100% + 3px); transform: translateX(-50%); }
 #outdoorRideScreen .outd-busrt__list.is-rail .outd-oval .outd-ov-tr .outd-busrt__veh.is-sub s.sb { left: 50%; right: auto; bottom: auto; top: calc(100% + 3px); transform: translateX(-50%); }
+/* 2026-11-20 단체 레이스 종료 시 1위 → Winner 트로피 */
+.rr-group-dist__row i.rr-winner { display: inline-flex; align-items: center; gap: .15em; color: #fbbf24; font-weight: 900; letter-spacing: .02em; }
+.rr-group-dist__row i.rr-winner svg { filter: drop-shadow(0 0 3px rgba(251,191,36,.6)); }
