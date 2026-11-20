@@ -45,6 +45,9 @@
             persistSession: false,
             autoRefreshToken: false,
             detectSessionInUrl: false,
+            /* 세션을 쓰지 않는 읽기 전용 클라이언트 — 다른 클라이언트와 저장 키를 분리해
+               "Multiple GoTrueClient instances detected" 경고를 없앤다(공유 세션 저장소는 건드리지 않음) */
+            storageKey: 'stelvio-ranking-live-anon',
           },
         });
       })();
