@@ -1322,6 +1322,9 @@ function installStelvioNonAdminConsoleFilter() {
     /Applying bloom filter failed/i
   ];
   function shouldSuppress(args) {
+    /* 2026-11-21 Supabase 로그인 세션을 의도적으로 공유하는 클라이언트가 여러 개(supabaseDualWrite·market·위치추적)라
+       supabase-js 가 항상 띄우는 안내 경고 — 관리자 콘솔에서도 숨긴다(동작 문제 아님). */
+    if (typeof args[0] === 'string' && args[0].indexOf('Multiple GoTrueClient instances detected') === 0) return true;
     if (typeof window.isStelvioSysConsoleAdmin === 'function' && window.isStelvioSysConsoleAdmin()) return false;
     var s = '';
     var i;
