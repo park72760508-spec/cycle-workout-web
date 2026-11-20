@@ -11254,6 +11254,18 @@ body:has(#openRidingRoomScreen.active) .global-back-to-top-btn.global-back-to-to
   flex-shrink: 0;
 }
 
+/* 실제 평균 파워 오버레이가 있을 때: 오버레이(0~100% 좌표계)와 막대가 정확히 일치하도록
+   gap/padding/최소 너비·높이 보정을 제거하고, 막대 구분은 레이아웃에 영향 없는 inset 그림자로 처리 */
+.segmented-workout-graph__bars--exact {
+  gap: 0;
+  padding: 0;
+}
+.segmented-workout-graph__bars--exact > .segmented-workout-graph__bar {
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 1;
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.3);
+}
 .segmented-workout-graph__bar:hover {
   opacity: 0.9;
 }

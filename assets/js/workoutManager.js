@@ -7837,7 +7837,7 @@ function renderSegmentedWorkoutGraph(container, segments, options) {
   el.innerHTML = `
     <div class="segmented-workout-graph" role="img" aria-label="워크아웃 세그먼트 그래프" style="--ftp-line-bottom: ${ftpLineBottomPercent}%;">
       <div class="segmented-workout-graph__ftp-line" aria-hidden="true"></div>
-      <div class="segmented-workout-graph__bars">
+      <div class="segmented-workout-graph__bars${actualOverlayMarkup ? ' segmented-workout-graph__bars--exact' : ''}">
         ${bars.map(b => {
           if (b.isCadence) {
             return `
