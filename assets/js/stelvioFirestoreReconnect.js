@@ -56,9 +56,20 @@
   w.stelvioRecoverFirestoreTransport = recoverFirestoreTransport;
 
   if (typeof document !== 'undefined') {
+    /* 2026-11-21 짧은 탭 전환·알림창 등에서는 SDK 가 스스로 연결을 유지한다. 구독이 많은 상태에서
+       enableNetwork 로 감시 스트림을 재시작하면 SDK 10.14.1 이 "INTERNAL ASSERTION FAILED: Unexpected state"
+       를 내는 경우가 확인돼(라이딩 모임 화면), 실제로 오래 백그라운드였던 경우(30초 이상)에만 재협상한다. */
+    var hiddenAt = 0;
+    var MIN_HIDDEN_MS = 30000;
     document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
       if (document.visibilityState === 'visible') {
-        recoverFirestoreTransport('visibility');
+        var away = hiddenAt ? Date.now() - hiddenAt : 0;
+        hiddenAt = 0;
+        if (away >= MIN_HIDDEN_MS) recoverFirestoreTransport('visibility');
       }
     });
   }
