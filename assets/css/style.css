@@ -39529,3 +39529,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-20 2호선 타원: 내선(시계) 열차 화살표는 타원 안쪽, 외선(반시계) 열차 화살표는 타원 바깥쪽 */
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.sr { left: calc(100% + 3px); right: auto; }
 #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh s.sl { right: calc(100% + 3px); left: auto; }
+/* 2026-11-20 원인 수정: 역에 서 있는 열차는 기존 규칙(.is-rail … :not(.is-run) s.up/s.dn — 상=왼쪽·하=오른쪽 고정)이 더 우선해
+   타원 안/바깥 배치(sr/sl)가 무시되어 일부 열차의 화살표가 반대편에 표시되던 문제 → 우선순위를 높여 항상 sr/sl 이 적용되게 */
+#outdoorRideScreen .outd-busrt__list.is-rail .outd-oval .outd-ov-tr .outd-busrt__veh.is-sub s.sr { left: calc(100% + 3px); right: auto; }
+#outdoorRideScreen .outd-busrt__list.is-rail .outd-oval .outd-ov-tr .outd-busrt__veh.is-sub s.sl { right: calc(100% + 3px); left: auto; }
