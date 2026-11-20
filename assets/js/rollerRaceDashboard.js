@@ -6638,6 +6638,93 @@ function saveRaceDataSnapshot() {
 }
 
 /**
+ * 2026-11-20 단체(조별) 경기 결과 리포트 HTML — 조 순위(목표 거리 도착 순서, 미도착 조는 합산거리 순) 순으로
+ * 조별 참가자 경기결과 리스트 + 조별 소합계. 조 안에서는 이동거리 큰 순.
+ */
+function rrBuildGroupReportHTML(settings) {
+  const state = window.rollerRaceState;
+  const total = state.totalElapsedTime || 0;
+  const gf = state.groupFinish || {};
+  const sps = state.speedometers || [];
+  const fmt = (n, d) => (Number(n) > 0 ? Number(n).toFixed(d) : (0).toFixed(d));
+  const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const groups = rrGroupStats().map((g) => {
+    const members = g.tracks.map((id) => sps.find((s) => Number(s.id) === Number(id)))
+      .filter((sp) => sp && (sp.deviceId || sp.pairingName || Number(sp.totalDistance) > 0))
+      .sort((a, b) => (Number(b.totalDistance) || 0) - (Number(a.totalDistance) || 0));
+    const f = gf[g.no];
+    return { no: g.no, dist: g.dist, members: members, finish: f || null };
+  }).filter((g) => g.members.length > 0);
+  // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
+  groups.sort((a, b) => {
+    if (a.finish && b.finish) return a.finish.order - b.finish.order;
+    if (a.finish) return -1;
+    if (b.finish) return 1;
+    return b.dist - a.dist;
+  });
+  const th = 'padding: 8px; text-align: center; border: 1px solid #ddd;';
+  const tdc = 'padding: 7px; text-align: center; border: 1px solid #ddd;';
+  const tdr = 'padding: 7px; text-align: right; border: 1px solid #ddd;';
+  const sections = groups.map((g, gi) => {
+    const color = rrGroupColor(g.no);
+    const gTime = g.finish ? formatTime(g.finish.time) : formatTime(total);
+    const rows = g.members.map((sp, i) => `
+        <tr style="background: ${i % 2 === 0 ? '#f9f9f9' : 'white'};">
+          <td style="${tdc}">${i + 1}</td>
+          <td style="${tdc}">트랙${sp.id}</td>
+          <td style="${tdc}">${esc(sp.pairingName || '-')}</td>
+          <td style="${tdr}">${fmt(sp.totalDistance, 2)}</td>
+          <td style="${tdr}">${fmt(sp.averageSpeed, 1)}</td>
+          <td style="${tdr}">${fmt(sp.maxSpeed, 1)}</td>
+          <td style="${tdc}">${rrWheelSpecFor(sp).circumference}</td>
+          <td style="${tdc}">${gTime}</td>
+        </tr>`).join('');
+    const withAvg = g.members.filter((sp) => Number(sp.averageSpeed) > 0);
+    const avgSpd = withAvg.length ? withAvg.reduce((a, sp) => a + Number(sp.averageSpeed), 0) / withAvg.length : 0;
+    const maxSpd = g.members.reduce((m, sp) => Math.max(m, Number(sp.maxSpeed) || 0), 0);
+    const sumDist = g.members.reduce((a, sp) => a + (Number(sp.totalDistance) || 0), 0);
+    return `
+      <div style="margin-bottom: 22px; page-break-inside: avoid;">
+        <div style="background: ${color}; color: white; padding: 8px 12px; font-size: 15px; font-weight: 800; border-radius: 6px 6px 0 0;">
+          ${gi + 1}위 · ${g.no}조 <span style="font-weight: 600; font-size: 12px; opacity: .9;">(${g.finish ? '목표 거리 도착 ' + gTime : '목표 거리 미도착'})</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead>
+            <tr style="background: #f1f5f9; color: #334155;">
+              <th style="${th}">조내 순위</th><th style="${th}">트랙</th><th style="${th}">이름</th>
+              <th style="${th}">이동거리(km)</th><th style="${th}">평균속도(km/h)</th><th style="${th}">최고속도(km/h)</th>
+              <th style="${th}">바퀴(mm)</th><th style="${th}">Total Time</th>
+            </tr>
+          </thead>
+          <tbody>${rows}
+            <tr style="background: #e2e8f0; font-weight: 800;">
+              <td style="${tdc}" colspan="3">${g.no}조 소합계 (${g.members.length}명)</td>
+              <td style="${tdr}">${fmt(sumDist, 2)}</td>
+              <td style="${tdr}">${fmt(avgSpd, 1)}</td>
+              <td style="${tdr}">${fmt(maxSpd, 1)}</td>
+              <td style="${tdc}">-</td>
+              <td style="${tdc}">${gTime}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>`;
+  }).join('');
+  return `
+      <div style="font-family: 'Pretendard', 'Noto Sans KR', sans-serif; padding: 20px; background: white; color: #333;">
+        <h1 style="text-align: center; font-size: 24px; margin-bottom: 20px; color: #2563eb;">
+          Stelvio AI Indoor Race - 경기 결과 리포트
+        </h1>
+        <div style="margin-bottom: 20px; font-size: 14px;">
+          <p><strong>경기 일시:</strong> ${new Date().toLocaleString('ko-KR')}</p>
+          <p><strong>경기 시간:</strong> ${formatTime(total)}</p>
+          <p><strong>경기 방식:</strong> 단체(조별) · 목표 ${Number(settings.targetDistance) > 0 ? Number(settings.targetDistance) + 'km' : '-'}</p>
+        </div>
+        ${sections || '<p style="text-align:center;color:#64748b;">참가한 조가 없습니다.</p>'}
+      </div>
+    `;
+}
+
+/**
  * 경기 종료 리포트 PDF 생성
  */
 function generateRaceReportPDF() {
@@ -6699,7 +6786,7 @@ function generateRaceReportPDF() {
     }
     
     // HTML 테이블 생성 (한글 폰트 문제 해결을 위해 HTML로 생성 후 이미지 변환)
-    const reportHTML = `
+    const reportHTML = (settings.distanceMode === 'group' && typeof rrGroupStats === 'function') ? rrBuildGroupReportHTML(settings) : `
       <div style="font-family: 'Pretendard', 'Noto Sans KR', sans-serif; padding: 20px; background: white; color: #333;">
         <h1 style="text-align: center; font-size: 24px; margin-bottom: 20px; color: #2563eb;">
           Stelvio AI Indoor Race - 경기 결과 리포트
