@@ -2107,6 +2107,10 @@
     var have = {};
     Array.prototype.forEach.call(layer.children, function (c) { have[c.getAttribute('data-k')] = c; });
     var made = [];
+    // 양방향(상행·하행 열차가 함께 있는 노선)일 때만 하행 열차를 회색톤 터널로, 단방향은 기본 검정 터널
+    var hasUpAny = false, hasDnAny = false;
+    keys.forEach(function (k) { groups[k].ts.forEach(function (t) { if (t.down) hasDnAny = true; else hasUpAny = true; }); });
+    var biDir = hasUpAny && hasDnAny;
     keys.forEach(function (k) {
       var g = groups[k];
       var y = ovG ? ovXY(g.p) : yAt(g.p);
@@ -2120,7 +2124,7 @@
         return (outer === (ovQ.nx >= 0)) ? 'sr' : 'sl';
       };
       var arr = function (sgn) { var tx = ovQ.ny * sgn, ty = -ovQ.nx * sgn; return Math.abs(ty) >= Math.abs(tx) ? (ty > 0 ? '↓' : '↑') : (tx > 0 ? '→' : '←'); }; // 화면상 실제 진행 방향 글자
-      var html = ovG ? ((up.length ? '<s class="up ' + ovSide(false) + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '<span class="ov-ic' + (up.length && !dn.length ? ' is-in' : '') + '">🚇</span>' + (dn.length ? '<s class="dn ' + ovSide(true) + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
+      var html = ovG ? ((up.length ? '<s class="up ' + ovSide(false) + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '<span class="ov-ic' + (up.length && !dn.length ? ' is-in' : '') + '">🚇</span>' + (dn.length ? '<s class="dn ' + ovSide(true) + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '<span class="tn-ic' + (biDir && dn.length && !up.length ? ' is-gray' : '') + '">🚇</span>' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
