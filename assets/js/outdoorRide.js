@@ -2042,13 +2042,14 @@
     seq.forEach(function (si, i) {
       var s2 = st[si]; if (!s2) return;
       var pt = subOvalPt(G, i, n), th = Math.atan2(pt.ny, pt.nx) * 180 / Math.PI, left = pt.nx < -0.001;
-      var rot = left ? th - 180 : th;
+      var vert = Math.abs(pt.nx) < 0.35; // 위·아래 끝 역(시청 등): 이름을 가로로, 원 위/아래에 표시
+      var rot = vert ? 0 : left ? th - 180 : th;
       var xfer = (s2.l || []).filter(function (x) { return x !== el.__li; }).map(function (x) {
         var o = sub.data.lines[x];
         return o ? '<u class="is-tap" data-xln="' + x + '" data-xst="' + si + '" style="background:' + escHtml(o.c) + '" title="' + escHtml(o.n) + ' 노선도 보기">' + escHtml(o.n.replace(/호선$/, '')) + '</u>' : '';
       }).join('');
       var cur = si === el.__cur;
-      out += '<div class="outd-ov-st' + (cur ? ' is-cur' : '') + (left ? ' is-l' : '') + '" style="left:' + pt.x.toFixed(1) + 'px;top:' + pt.y.toFixed(1) + 'px;--rot:' + rot.toFixed(1) + 'deg"><i></i>' +
+      out += '<div class="outd-ov-st' + (cur ? ' is-cur' : '') + (vert ? (pt.ny < 0 ? ' is-vt' : ' is-vb') : (left ? ' is-l' : '')) + '" style="left:' + pt.x.toFixed(1) + 'px;top:' + pt.y.toFixed(1) + 'px;--rot:' + rot.toFixed(1) + 'deg"><i></i>' +
         '<div class="outd-ov-lb"><span>' + escHtml(s2.n) + '</span>' + (xfer ? '<span class="outd-subln__xfer">' + xfer + '</span>' : '') + (cur ? '<em>현재 역</em>' : '') + '</div></div>';
     });
     return out + '<div class="outd-ov-tr"></div></div>';
@@ -2113,8 +2114,13 @@
       var tip = g.ts.map(function (t) { return t.to + '행' + (t.ex ? '(급행)' : '') + ' · ' + subAgeText(t, now); }).join(', ') + (g.stale ? ' · 기록 지연' : '') + (g.ts.some(function (t) { return t.forced; }) ? ' · 후속 열차 기준 추정 위치' : '');
       var ek = g.ts.map(function (t) { return t.id; }).sort().join(',');
       var ovQ = ovG ? subOvalPt(ovG, g.p, el.__trainN || rows.length) : null, ovTh = ovQ ? Math.atan2(ovQ.ny, ovQ.nx) * 180 / Math.PI : 0;
+      /* 화살표 위치: 내선=타원 안쪽 · 외선=타원 바깥쪽. 위·아래 끝(법선이 거의 수직, 예: 시청)은 원의 위/아래(외선: 역명 쪽) */
+      var ovSide = function (outer) {
+        if (Math.abs(ovQ.nx) < 0.35) { var top = ovQ.ny < 0; return (outer === top) ? 'st' : 'sb'; }
+        return (outer === (ovQ.nx >= 0)) ? 'sr' : 'sl';
+      };
       var arr = function (sgn) { var tx = ovQ.ny * sgn, ty = -ovQ.nx * sgn; return Math.abs(ty) >= Math.abs(tx) ? (ty > 0 ? '↓' : '↑') : (tx > 0 ? '→' : '←'); }; // 화면상 실제 진행 방향 글자
-      var html = ovG ? ((up.length ? '<s class="up ' + (ovQ.nx >= 0 ? 'sl' : 'sr') + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '🚇' + (dn.length ? '<s class="dn ' + (ovQ.nx >= 0 ? 'sr' : 'sl') + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
+      var html = ovG ? ((up.length ? '<s class="up ' + ovSide(false) + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(-1) + '</s>' : '') + '🚇' + (dn.length ? '<s class="dn ' + ovSide(true) + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">' + arr(1) + '</s>' : '') + (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '')) : (up.length ? '<s class="up' + (up.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↑</s>' : '') + '🚇' + (dn.length ? '<s class="dn' + (dn.some(function (t) { return t.ex; }) ? ' ex' : '') + '">↓</s>' : '') +
         (up.length > 1 || dn.length > 1 ? '<small>' + Math.max(up.length, dn.length) + '</small>' : '');
       var cls = 'outd-busrt__veh is-sub' + (g.atSt ? '' : ' is-run') + (g.stale ? ' is-stale' : '');
       var node = have[ek];
