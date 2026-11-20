@@ -39553,3 +39553,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-20 단체 레이스 종료 시 1위 → Winner 트로피 */
 .rr-group-dist__row i.rr-winner { display: inline-flex; align-items: center; gap: .15em; color: #fbbf24; font-weight: 900; letter-spacing: .02em; }
 .rr-group-dist__row i.rr-winner svg { filter: drop-shadow(0 0 3px rgba(251,191,36,.6)); }
+
+/* 2026-11-20 타원 노선도 열차 아이콘: 이모지를 line-height:1 블록으로 감싸 원 중심에 정확히 배치(기존엔 글꼴 기준선 때문에 중심 아래로 치우침).
+   내선 열차는 이모지의 검정 터널 배경을 회색톤으로(열차 색은 유지) */
+#outdoorRideScreen .outd-oval .outd-ov-tr .outd-busrt__veh .ov-ic { display: block; line-height: 1; font-size: 12px; text-align: center; }
+#outdoorRideScreen .outd-oval .outd-ov-tr .outd-busrt__veh .ov-ic.is-in { filter: contrast(.5) brightness(1.4); }
