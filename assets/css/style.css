@@ -40120,3 +40120,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 전광판 누적거리: 소수점 이하와 목표거리·단위 글자 = 정수 글자의 40% (2026-11-21) */
 .rr-group-dist__row .rr-gd-d .rr-frac, .rr-group-dist__row .rr-gd-d .rr-frac.rr-gd-tg { font-size: .4em; }
+
+/* ==========================================================================
+   트랙 경기장 이동 거리(완주 궤적) 리디자인 (2026-11-21, frontend-design)
+   페어링 버튼 색(시안) → 선수/조 색의 '빛 궤적': 출발선에서는 옅고 선수(머리)로 갈수록 밝아지는 장노출 라이트 트레일.
+   · 단체는 조 색(--rr-gc), 아니면 선수 색(--rr-c) — 마스코트·조 램프와 같은 색 언어
+   · 레인 위아래 가장자리가 빛나고, 머리 쪽 끝이 가장 밝음 (다크·화이트 공통)
+   ========================================================================== */
+#rollerRaceDashboardScreen .straight-track-container linearGradient[id^="trk-done-"] stop:nth-child(1) { stop-color: color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 6%, transparent); }
+#rollerRaceDashboardScreen .straight-track-container linearGradient[id^="trk-done-"] stop:nth-child(2) { stop-color: color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 78%, #ffffff); }
+#rollerRaceDashboardScreen .straight-track-container .straight-track-svg .track-done-fill {
+  opacity: .92;
+  stroke: color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 70%, #ffffff); stroke-opacity: .85; stroke-width: 1px; vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 85%, transparent));
+}
