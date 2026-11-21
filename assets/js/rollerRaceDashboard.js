@@ -8241,10 +8241,11 @@ function rrGroupRefresh() {
 }
 setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
 
-/* 사용자(기기) 미연결 속도계·트랙 경기장 줄은 비활성(어두운) 상태로 — Coach PC 모니터의 빈 슬롯(.coach-slot--idle)과 같은 디자인 */
+/* 기기 미등록(미연결) 속도계·트랙 경기장 줄은 비활성(어두운) 상태로 — '준비됨'은 활성 — Coach PC 모니터의 빈 슬롯(.coach-slot--idle)과 같은 디자인 */
 function rrConnIdleRefresh() {
   const sps = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
-  const connOf = id => { const sp = sps.find(x => Number(x.id) === Number(id)); return !!(sp && sp.connected); };
+  /* 활성 = 기기가 등록된 상태(준비됨·연결됨). 기기 미등록(미연결)만 비활성 */
+  const connOf = id => { const sp = sps.find(x => Number(x.id) === Number(id)); return !!(sp && sp.deviceId); };
   document.querySelectorAll('#speedometerGrid .speedometer-container').forEach(c => {
     c.classList.toggle('rr-idle', !connOf(c.dataset.speedometerId));
   });
