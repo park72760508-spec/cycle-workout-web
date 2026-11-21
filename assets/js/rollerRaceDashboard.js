@@ -8138,6 +8138,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
+  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
@@ -8150,6 +8151,16 @@ function rrGroupRefresh() {
     const n = gs.length;
     const nl = Math.ceil(n / 2);
     const parts = [gs.slice(0, nl), gs.slice(nl)];
+    /* 전광판 테두리 띠: 좌 절반 = 좌측 조 색(여러 조면 그라데이션), 우 절반 = 우측 조 색 (CSS .rr-sb-grp) */
+    if (sbEl) {
+      const stops = function (arr) {
+        const cs = arr.map(g => rrGroupColor(g.no));
+        if (!cs.length) return 'transparent, transparent';
+        return cs.length === 1 ? cs[0] + ', ' + cs[0] : cs.join(', ');
+      };
+      sbEl.style.setProperty('--rr-sbl', stops(parts[0]));
+      sbEl.style.setProperty('--rr-sbr', stops(parts[1]));
+    }
     const timeEl = document.getElementById('scoreboardTime');
     const basePx = timeEl ? parseFloat(getComputedStyle(timeEl).fontSize) || 28 : 28;
     const rows = Math.max(parts[0].length, parts[1].length, 1);

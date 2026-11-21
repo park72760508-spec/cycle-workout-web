@@ -39576,3 +39576,23 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   border: 1.5px solid #ffffff; border-radius: 8px 0 0 8px;
   pointer-events: none;
 }
+
+/* 단체 + 다크 모드 전광판: 좌 절반은 좌측 조 색(빨강 등), 우 절반은 우측 조 색(파랑 등)으로 양끝 띠와 하단 라인을 표시.
+   한쪽에 조가 여러 개면 그 조들의 색을 그라데이션으로 이어 붙인다. (--rr-sbl / --rr-sbr 는 rrGroupRefresh 가 설정) (2026-11-21) */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp {
+  border-left: 4px solid transparent; border-right: 4px solid transparent;
+  box-shadow: 0 8px 28px rgba(0,0,0,.5);
+}
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::before {
+  content: ""; position: absolute; left: -4px; right: -4px; top: 0; bottom: 0; pointer-events: none;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, var(--rr-sbl, #ff3b3b)) left / 4px 100% no-repeat,
+    linear-gradient(180deg, var(--rr-sbr, #2563eb)) right / 4px 100% no-repeat;
+}
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after {
+  height: 3px; left: -4px; right: -4px;
+  background:
+    linear-gradient(90deg, var(--rr-sbl, #ff3b3b)) left / 50% 100% no-repeat,
+    linear-gradient(90deg, var(--rr-sbr, #2563eb)) right / 50% 100% no-repeat;
+}
