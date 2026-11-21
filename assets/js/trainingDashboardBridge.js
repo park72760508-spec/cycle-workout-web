@@ -596,6 +596,44 @@
   var AUTO_CONNECT_TYPE_KEY = { hr: 'heartRate', power: 'powerMeter', trainer: 'trainer', speed: 'speed' };
   var AUTO_CONNECT_INTERMITTENT = { trainer: true, speed: true };
   var _acSession = null;
+  /*
+   * 2026-11-21 저장 기기 상시 대기 연결(앱): 훈련 화면에 있는 동안 저장된 기기(미연결 종류)를 앱이 OS에 '대기 연결'로 걸어둔다.
+   * 폰 설정의 페어링 기기처럼 기기 전원이 켜지는 순간 자동 연결 — 위의 번갈아 시도(30초씩)를 기다리지 않는다.
+   * 웹은 30초마다 목록을 갱신(앱은 90초 갱신이 없으면 스스로 해제), 훈련 화면을 떠나면 즉시 해제 요청.
+   */
+  var WATCH_KEEPALIVE_MS = 30000;
+  var _watchTimer = null;
+  function sendWatchSavedDevices() {
+    if (!isAppEnvironmentNow()) return;
+    var sess = _acSession;
+    if (sess && Date.now() < (sess.pauseUntil || 0)) return; // 수동 연결 중에는 갱신 보류
+    var S = global.StelvioDeviceBridgeStorage;
+    if (!S || typeof S.loadSavedDevices !== 'function') return;
+    var saved = S.loadSavedDevices();
+    if (!saved || typeof saved !== 'object') return;
+    var names = typeof S.loadSavedDeviceNames === 'function' ? S.loadSavedDeviceNames() : {};
+    var c = global.connectedDevices || {};
+    var list = [];
+    AUTO_CONNECT_ORDER.forEach(function (k) {
+      if (!saved[k] || c[AUTO_CONNECT_TYPE_KEY[k]]) return;
+      list.push({ deviceType: k, deviceId: saved[k], deviceName: (names && names[k]) ? names[k] : '' });
+    });
+    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list });
+  }
+  function stopWatchSavedDevices() {
+    if (_watchTimer) { clearInterval(_watchTimer); _watchTimer = null; }
+    try { safePostToNative({ type: 'STOP_WATCH_SAVED_DEVICES' }); } catch (e) {}
+  }
+  function startWatchSavedDevices() {
+    if (!isAppEnvironmentNow()) return;
+    if (_watchTimer) clearInterval(_watchTimer);
+    sendWatchSavedDevices();
+    _watchTimer = setInterval(function () {
+      var active = getActiveScreenId();
+      if (!active || !isTargetScreen(active)) { stopWatchSavedDevices(); return; }
+      sendWatchSavedDevices();
+    }, WATCH_KEEPALIVE_MS);
+  }
   function savedTrainingDevices() {
     try {
       var S = global.StelvioDeviceBridgeStorage;
@@ -642,7 +680,7 @@
     if (!sess) return;
     var now = Date.now();
     var active = getActiveScreenId();
-    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(true); return; }
+    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(true); stopWatchSavedDevices(); return; }
     var c = global.connectedDevices || {};
     AUTO_CONNECT_ORDER.forEach(function (t) { if (c[AUTO_CONNECT_TYPE_KEY[t]]) sess.seen[t] = true; });
     var left = AUTO_CONNECT_WINDOW_MS - (now - sess.start);
@@ -807,6 +845,7 @@
       return;
     }
     installReconnectResumeHooks();
+    startWatchSavedDevices(); // 2026-11-21 저장 기기 상시 대기 연결(전원 켜짐 즉시 연결)
     _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {}, drop: {}, lastDropType: null };
     // 훈련 화면 밖에서 끊긴 기기: 10분 연결 대기 이후에도 계속 재연결(우선순위 높음)
     (function seedDropMemo() {
