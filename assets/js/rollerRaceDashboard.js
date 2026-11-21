@@ -8138,7 +8138,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
-  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); }
+  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
@@ -8158,8 +8158,22 @@ function rrGroupRefresh() {
         if (!cs.length) return 'transparent, transparent';
         return cs.length === 1 ? cs[0] + ', ' + cs[0] : cs.join(', ');
       };
-      sbEl.style.setProperty('--rr-sbl', stops(parts[0]));
-      sbEl.style.setProperty('--rr-sbr', stops(parts[1]));
+      /* 연결 현황: 좌/우 쪽 조들의 선수(트랙) 중 데이터가 들어오는(연결된) 비율만큼 램프를 아래에서부터 점등 */
+      const spsAll = window.rollerRaceState.speedometers || [];
+      const litFrac = function (arr) {
+        let tot = 0, con = 0;
+        arr.forEach(g => g.tracks.forEach(t => { tot++; const sp = spsAll.find(x => Number(x.id) === Number(t)); if (sp && sp.connected) con++; }));
+        return tot ? con / tot : 0;
+      };
+      const fL = litFrac(parts[0]), fR = litFrac(parts[1]);
+      [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {
+        const f = a[1], k = '--rr-sb' + a[0];
+        sbEl.style.setProperty(k, f > 0 ? stops(a[2]) : 'transparent, transparent');
+        sbEl.style.setProperty(k + '-f', String(f));
+        sbEl.style.setProperty(k + '-g', (f * 55).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-b', (f * 30).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-h', (f * 26).toFixed(1) + '%');
+      });
       /* 램프 글로우용 단색: 좌 = 좌측 첫 조, 우 = 우측 마지막 조 */
       const lastC = function (arr, i) { return arr.length ? rrGroupColor(arr[i < 0 ? arr.length - 1 : i].no) : 'transparent'; };
       sbEl.style.setProperty('--rr-sbl1', lastC(parts[0], 0));
@@ -8215,6 +8229,9 @@ function rrGroupRefresh() {
     const g = map[tid];
     if (on && g) { it.classList.add('rr-grouped'); it.style.setProperty('--rr-gc', rrGroupColor(g)); }
     else { it.classList.remove('rr-grouped'); it.style.removeProperty('--rr-gc'); }
+    /* 선수 기기 연결 시 트랙 줄 왼쪽 램프 점등(연결 전에는 소등) */
+    const spT = (window.rollerRaceState.speedometers || []).find(x => Number(x.id) === tid);
+    it.classList.toggle('rr-lit', !!(on && g && spT && spT.connected));
   });
   document.querySelectorAll('.rr-group-badge').forEach(el => {
     const id = Number(String(el.id).replace('rr-group-badge-', ''));
