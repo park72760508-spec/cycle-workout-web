@@ -623,6 +623,11 @@
       el.textContent = (d.state || '') + '\n' + (d.lines || []).join('\n');
     } catch (e) {}
   });
+  /**
+   * 앱(상시 대기)에 내려보내는 원격 설정 — 검색 주기·시간을 앱 재배포 없이 웹에서 조정한다(앱 새 빌드부터 적용, 이전 빌드는 무시).
+   * tiers: [훈련 진입 후 N초 미만, 검색 간격(초), 검색 시간(초)] / tail: 마지막 구간 이후 단계별 간격(초)
+   */
+  var WATCH_CFG = { tiers: [[180, 5, 4], [300, 20, 6], [600, 30, 8]], tail: [20, 60, 120], manualGuardMs: 16000, iosPhase1Ms: 300000, ttlMs: 90000 };
   var _watchTimer = null;
   function sendWatchSavedDevices() {
     if (!isAppEnvironmentNow()) return;
@@ -644,7 +649,7 @@
       list.push({ deviceType: k, deviceId: saved[k], deviceName: (names && names[k]) ? names[k] : '' });
     });
     // webKnowsSaved: 웹이 저장 기기를 알고 있으면 앱은 자기 저장소로 목록을 보충하지 않는다(제외한 기기가 되살아나지 않게)
-    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0, sessAgeMs: Date.now() - sess.start });
+    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0, sessAgeMs: Date.now() - sess.start, cfg: WATCH_CFG });
   }
   function stopWatchSavedDevices() {
     if (_watchTimer) { clearInterval(_watchTimer); _watchTimer = null; }

@@ -214,6 +214,17 @@
   }
 
   /**
+   * 2026-11-22 수동 검색 직전 정리(웹에서 처리 — 앱 재배포 불필요): 훈련 화면의 '상시 대기 연결'과 재연결 루프를 멈춘다.
+   * 안 그러면 저장된 센서의 광고가 보이는 순간 앱이 검색을 중단하고 그 센서에 연결해 버려 검색 목록이 끊기거나,
+   * 연결 중이던 센서를 다시 검색하려고 끊었을 때 재연결이 곧바로 되잡아 광고가 멈춘다.
+   */
+  function prepareManualScan() {
+    try { if (typeof global.abortAutoConnect === 'function') global.abortAutoConnect(); } catch (e) {}
+    try { safePostToNative({ type: 'STOP_WATCH_SAVED_DEVICES' }); } catch (e) {}
+    try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+  }
+
+  /**
    * 재검색 실행: 목록 초기화 후 START_SCAN·REQUEST_KNOWN_DEVICES 재전송, "기기 검색 중..." 표시
    */
   function triggerDeviceRescan() {
@@ -236,6 +247,7 @@
     if (modal) modal.classList.remove('device-scan-state-complete');
     resetScanLists();
     try {
+      prepareManualScan();
       safePostToNative({ type: 'START_SCAN', deviceType: savedTargetType, allowReplace: true });
       safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: savedTargetType });
     } catch (e) {
@@ -275,6 +287,7 @@
     }
     if (rescanWrap) rescanWrap.style.display = 'none';
     try {
+      prepareManualScan();
       safePostToNative({ type: 'START_SCAN', deviceType: deviceType, allowReplace: true });
       safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: deviceType });
     } catch (e) {
