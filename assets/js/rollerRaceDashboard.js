@@ -8241,6 +8241,21 @@ function rrGroupRefresh() {
 }
 setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
 
+/* 사용자(기기) 미연결 속도계·트랙 경기장 줄은 비활성(어두운) 상태로 — Coach PC 모니터의 빈 슬롯(.coach-slot--idle)과 같은 디자인 */
+function rrConnIdleRefresh() {
+  const sps = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
+  const connOf = id => { const sp = sps.find(x => Number(x.id) === Number(id)); return !!(sp && sp.connected); };
+  document.querySelectorAll('#speedometerGrid .speedometer-container').forEach(c => {
+    c.classList.toggle('rr-idle', !connOf(c.dataset.speedometerId));
+  });
+  document.querySelectorAll('#speedometerList .speedometer-list-item').forEach((it, idx) => {
+    const w = it.querySelector('[id^="track-wheel-"]');
+    const tid = w ? Number(String(w.id).replace('track-wheel-', '')) : idx + 1;
+    it.classList.toggle('rr-idle', !connOf(tid));
+  });
+}
+setInterval(function () { try { rrConnIdleRefresh(); } catch (e) {} }, 1000);
+
 function rrGroupPersist() {
   try { localStorage.setItem('rollerRaceSettings', JSON.stringify(window.rollerRaceState.raceSettings)); } catch (e) {}
 }

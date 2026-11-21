@@ -39851,3 +39851,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #rollerRaceDashboardScreen .speedometer-list-item.rr-grouped::before { transition: box-shadow .45s ease, background .45s ease; }
 #rollerRaceDashboardScreen .speedometer-list-item.rr-grouped { transition: background-image .45s ease; }
+
+/* STELVIO Race: 기기 미연결 속도계·트랙 줄 = 비활성 (Coach PC 모니터 빈 슬롯 .coach-slot--idle 과 같은 opacity .32, 다크·화이트·개인·통합·단체 공통) (2026-11-21)
+   트랙 줄은 페어링·삭제 등 버튼 영역(.list-item-actions)만 제외 — 미연결 상태에서 페어링해야 하므로 */
+#rollerRaceDashboardScreen .speedometer-container.rr-idle { opacity: 0.32; transition: opacity 0.25s ease; }
+#rollerRaceDashboardScreen .speedometer-list-item > :not(.list-item-actions) { transition: opacity 0.25s ease; }
+#rollerRaceDashboardScreen .speedometer-list-item.rr-idle > :not(.list-item-actions) { opacity: 0.32; }
