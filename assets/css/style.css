@@ -40117,3 +40117,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 전광판 조 라벨·누적거리·목표거리 30% 확대 (줄1 전체 1.3배 — 달성 바 줄은 그대로) (2026-11-21) */
 .rr-group-dist__row .rr-gd-l1 { font-size: 1.3em; }
+
+/* 전광판 누적거리: 소수점 이하와 목표거리·단위 글자 = 정수 글자의 40% (2026-11-21) */
+.rr-group-dist__row .rr-gd-d .rr-frac, .rr-group-dist__row .rr-gd-d .rr-frac.rr-gd-tg { font-size: .4em; }
