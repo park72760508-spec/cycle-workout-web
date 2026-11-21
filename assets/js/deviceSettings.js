@@ -91,13 +91,13 @@
 
   /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사). UUID 매칭 실패 시에도 이름에 키워드 있으면 표시 */
   var NAME_KEYWORDS_BY_TYPE = {
-    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
-    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare', 'tickr', 'polar', 'h10', 'h9', 'scosche', 'rhythm', 'viiiiva', 'wahoo hr'],
+    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare', 'tickr', 'polar', 'h10', 'h9', 'scosche', 'rhythm', 'viiiiva', 'wahoo hr'],
     // 2026-10-19: 시마노(FC-R9200-P 등 'FC-' 이름) 등 주요 파워미터 브랜드 보강 — 광고에 0x1818 이 안 실려도 이름으로 찾음
     power: POWER_NAME_KEYWORDS,
     powerMeter: POWER_NAME_KEYWORDS,
     trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart', '스마트로라', 'smartrola', 'rola'],
-    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
+    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport', 'rpm', 'rsc']
   };
 
   /** 모달에 이미 추가된 기기 ID 집합 (중복 제거용). 스캔 모달 열릴 때마다 초기화 */
