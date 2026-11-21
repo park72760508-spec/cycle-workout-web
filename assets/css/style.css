@@ -40052,12 +40052,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp { --rr-sb-base: #181d24; }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp {
-  --rr-bulb: clamp(12px, 1.85vh, 20px);
-  box-sizing: border-box; min-height: 0; height: calc(10 * var(--rr-bulb) + 18px); padding-top: 9px; padding-bottom: 9px;
+  --rr-bulb: clamp(13px, 2vh, 22px);
+  box-sizing: border-box; min-height: 0; height: calc(8 * var(--rr-bulb)); padding-top: 0; padding-bottom: 0; border-top: 0; border-bottom: 0;
   background:
-    linear-gradient(90deg, transparent 0%, transparent 24%, var(--rr-sb-base) 50%, transparent 76%, transparent 100%),
-    var(--rr-sbl-bg, linear-gradient(transparent, transparent)) left / 50% 100% no-repeat,
-    var(--rr-sbr-bg, linear-gradient(transparent, transparent)) right / 50% 100% no-repeat,
+    var(--rr-sbl-bg, linear-gradient(transparent, transparent)),
+    var(--rr-sbr-bg, linear-gradient(transparent, transparent)),
     repeating-linear-gradient(0deg, rgba(255,255,255,.04) 0 1px, transparent 1px 3px),
     linear-gradient(180deg, var(--rr-sb-base), var(--rr-sb-base));
 }
@@ -40066,7 +40065,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::before,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::after {
-  top: 9px; bottom: auto; height: calc(10 * var(--rr-bulb)); width: 18px;
+  top: 0; bottom: auto; height: calc(8 * var(--rr-bulb)); width: 18px;
 }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::before,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::before {
@@ -40075,7 +40074,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(90deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #151a21 calc((1 - var(--rr-sbl-f, 0)) * 100%), transparent 0),
     radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% var(--rr-bulb) repeat-y,
-    linear-gradient(180deg, #fff1b8, #ffd24d);
+    linear-gradient(180deg, var(--rr-sbl, #ff3b3b, #ff3b3b));
 }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::after {
@@ -40084,7 +40083,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(270deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #151a21 calc((1 - var(--rr-sbr-f, 0)) * 100%), transparent 0),
     radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% var(--rr-bulb) repeat-y,
-    linear-gradient(180deg, #fff1b8, #ffd24d);
+    linear-gradient(180deg, var(--rr-sbr, #2563eb, #2563eb));
 }
 /* 조 줄: 별도 바탕·좌측 띠 없이 전광판 바탕(조 색) 위에 바로 */
 #scoreboardGroupDist .rr-group-dist__row, #scoreboardGroupDistR .rr-group-dist__row,
@@ -40104,3 +40103,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #scoreboardGroupDist.rr-one .rr-gd-l2, #scoreboardGroupDistR.rr-one .rr-gd-l2 { font-size: .48em; }
 #scoreboardGroupDist.rr-one .rr-gd-km, #scoreboardGroupDistR.rr-one .rr-gd-km { font-size: .48em; }
 #scoreboardGroupDist.rr-one .rr-group-dist__row, #scoreboardGroupDistR.rr-one .rr-group-dist__row { gap: .16em; }
+
+
+/* v3.1: 어두운 바탕 + 좌우 전등(조 색) 조명 — 조 줄 요소는 다시 조 색 기반 */
+.rr-group-dist__row .rr-group-pill { background: var(--gc) !important; box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 .6em color-mix(in srgb, var(--gc) 70%, transparent) !important; }
+.rr-group-dist__row.rr-lead .rr-group-pill { background: #fff !important; color: var(--gc); box-shadow: 0 0 .7em color-mix(in srgb, var(--gc) 80%, transparent) !important; }
+.rr-group-dist__row .rr-gd-bar { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
+.rr-group-dist__row .rr-gd-bar > i { background: linear-gradient(90deg, color-mix(in srgb, var(--gc) 55%, #000), color-mix(in srgb, var(--gc) 80%, #fff)); box-shadow: 0 0 .5em color-mix(in srgb, var(--gc) 75%, transparent); }
+.rr-group-dist__row .rr-gd-bar > i::after { box-shadow: 0 0 .35em .08em var(--gc), 0 0 .9em .2em color-mix(in srgb, var(--gc) 60%, transparent); }

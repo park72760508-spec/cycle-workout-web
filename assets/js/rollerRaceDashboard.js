@@ -8203,8 +8203,8 @@ function rrGroupRefresh() {
         arr.forEach(g => g.tracks.forEach(t => { tot++; const sp = spsAll.find(x => Number(x.id) === Number(t)); if (sp && sp.connected) con++; }));
         return tot ? con / tot : 0;
       };
-      /* 램프는 전구 10개 — 연결 비율을 10단계로 올림(1명이라도 연결되면 최소 1개, 전원 연결 시 10개) */
-      const q10 = function (f) { return f >= 1 ? 1 : f > 0 ? Math.max(1, Math.round(f * 10)) / 10 : 0; };
+      /* 램프는 전구 8개 — 연결 비율을 8단계로 올림(1명이라도 연결되면 최소 1개, 전원 연결 시 8개) */
+      const q10 = function (f) { return f >= 1 ? 1 : f > 0 ? Math.max(1, Math.round(f * 8)) / 8 : 0; };
       const fL = q10(litFrac(parts[0])), fR = q10(litFrac(parts[1]));
       const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
       sbEl.__rrLit = { l: fL, r: fR };
@@ -8226,19 +8226,23 @@ function rrGroupRefresh() {
       });
       /* 램프 글로우용 단색: 좌 = 좌측 첫 조, 우 = 우측 마지막 조 */
       const lastC = function (arr, i) { return arr.length ? rrGroupColor(arr[i < 0 ? arr.length - 1 : i].no) : 'transparent'; };
-      sbEl.style.setProperty('--rr-sbl1', '#ffd54a');
-      sbEl.style.setProperty('--rr-sbr1', '#ffd54a');
-      /* 전광판 바탕: 좌/우 절반에 해당 조 색을 줄(조) 높이만큼 칸으로 깔아 조 표시와 바탕이 하나로 이어지게 */
-      const bandBg = function (arr) {
+      sbEl.style.setProperty('--rr-sbl1', lastC(parts[0], 0));
+      sbEl.style.setProperty('--rr-sbr1', lastC(parts[1], -1));
+      /* 전광판 바탕: 어두운 바탕에 좌/우 전등(조 색)이 비추는 빛 — 조(줄) 높이만큼 칸마다 가장자리에서 안쪽으로 번지며 사라짐.
+         빛 세기는 램프가 켜진 정도(연결 비율)를 따르고, 아무도 연결되지 않아도 조 색이 은은히 보이도록 바닥 18% 유지 */
+      const bandBg = function (arr, edge, f) {
         const n = arr.length;
         if (!n) return 'linear-gradient(transparent, transparent)';
-        return 'linear-gradient(180deg, ' + arr.map(function (g, i) {
-          const c = 'color-mix(in srgb, ' + rrGroupColor(g.no) + ' 80%, #05080d)';
-          return c + ' ' + (i * 100 / n).toFixed(2) + '% ' + ((i + 1) * 100 / n).toFixed(2) + '%';
-        }).join(', ') + ')';
+        const k = 0.18 + 0.82 * f;
+        const a1 = (74 * k).toFixed(1), a2 = (32 * k).toFixed(1), a3 = (10 * k).toFixed(1);
+        const dir = edge === 'l' ? 90 : 270, x = edge === 'l' ? '0' : '100%', h = (100 / n).toFixed(2);
+        return arr.map(function (g, i) {
+          const c = rrGroupColor(g.no), y = n > 1 ? (i * 100 / (n - 1)).toFixed(2) : '0';
+          return 'linear-gradient(' + dir + 'deg, color-mix(in srgb, ' + c + ' ' + a1 + '%, transparent) 0%, color-mix(in srgb, ' + c + ' ' + a2 + '%, transparent) 38%, color-mix(in srgb, ' + c + ' ' + a3 + '%, transparent) 72%, transparent 100%) ' + x + ' ' + y + '% / 50% ' + h + '% no-repeat';
+        }).join(', ');
       };
-      sbEl.style.setProperty('--rr-sbl-bg', bandBg(parts[0]));
-      sbEl.style.setProperty('--rr-sbr-bg', bandBg(parts[1]));
+      sbEl.style.setProperty('--rr-sbl-bg', bandBg(parts[0], 'l', fL));
+      sbEl.style.setProperty('--rr-sbr-bg', bandBg(parts[1], 'r', fR));
     }
     /* 선두 조(아직 도착 전 중 누적거리 최대, 0 초과) */
     let leadNo = 0, leadD = 0;
