@@ -58,6 +58,8 @@
   }
 
   /* 약식 분초: 270초 → 4'30" */
+  /* INT 시간: mm:ss (예 04:30) */
+  function fmtClock(sec) { sec = Math.max(0, Math.round(sec)); var m = Math.floor(sec / 60), r = sec % 60; return (m < 10 ? '0' : '') + m + ':' + (r < 10 ? '0' : '') + r; }
   function fmtMS(sec) { sec = Math.max(0, Math.round(sec)); var m = Math.floor(sec / 60), r = sec % 60; return m + "'" + (r < 10 ? '0' : '') + r + '"'; }
   function rowSec(workout, r) {
     var segs = (workout && workout.segments) || [], t = 0;
@@ -140,7 +142,7 @@
       ? '<table class="wso-table"><colgroup><col style="width:17%"><col style="width:43%"><col style="width:40%"></colgroup>' +
         '<thead><tr><th>구분</th><th>훈련 내용</th><th>상세 내용</th></tr></thead><tbody>' +
         rows.map(function (r) {
-          return '<tr data-from="' + r.segFrom + '" data-to="' + r.segTo + '" style="--wso-c:' + COLORS[r.kind] + '"><td><span class="wso-kind">' + r.kind + '</span>' + (r.kind === 'INT' && rowSec(workout, r) > 0 ? '<div class="wso-dur">' + fmtMS(rowSec(workout, r)) + '</div>' : '') + '</td><td>' + esc(r.content) + '</td><td class="wso-detail">' + (r.detail ? esc(r.detail) : '-') + '</td></tr>';
+          return '<tr data-from="' + r.segFrom + '" data-to="' + r.segTo + '" style="--wso-c:' + COLORS[r.kind] + '"><td><span class="wso-kind">' + r.kind + '</span>' + (r.kind === 'INT' && rowSec(workout, r) > 0 ? '<div class="wso-dur">' + fmtClock(rowSec(workout, r)) + '</div>' : '') + '</td><td>' + esc(r.content) + '</td><td class="wso-detail">' + (r.detail ? esc(r.detail) : '-') + '</td></tr>';
         }).join('') + '</tbody></table>' +
         (ftp ? '' : '<div class="wso-note">FTP 정보가 없어 상세(W) 값을 표시할 수 없습니다</div>')
       : '<div class="wso-empty">표시할 워크아웃 구간 정보가 없습니다</div>';
