@@ -8176,6 +8176,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
+  if (sbEl && !on) sbEl.classList.remove('rr-act-l', 'rr-act-r');
   if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); sbEl.style.removeProperty('--rr-sbl-bg'); sbEl.style.removeProperty('--rr-sbr-bg'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-b2','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
@@ -8206,6 +8207,12 @@ function rrGroupRefresh() {
       /* 램프는 전구 8개 — 연결 비율을 8단계로 올림(1명이라도 연결되면 최소 1개, 전원 연결 시 8개) */
       const q10 = function (f) { return f >= 1 ? 1 : f > 0 ? Math.max(1, Math.round(f * 8)) / 8 : 0; };
       const fL = q10(litFrac(parts[0])), fR = q10(litFrac(parts[1]));
+      /* 좌/우 쪽 조 선수 중 속도계가 동작(연결 + 현재 속도 > 0)하는 선수가 있으면 해당 쪽 램프 느린 점멸 (.rr-act-l / .rr-act-r) */
+      const actOf = function (arr) {
+        return arr.some(g => g.tracks.some(t => { const sp = spsAll.find(x => Number(x.id) === Number(t)); return !!(sp && sp.connected && (Number(sp.currentSpeed) || 0) > 0); }));
+      };
+      sbEl.classList.toggle('rr-act-l', actOf(parts[0]));
+      sbEl.classList.toggle('rr-act-r', actOf(parts[1]));
       const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
       sbEl.__rrLit = { l: fL, r: fR };
       [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {

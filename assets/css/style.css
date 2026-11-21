@@ -40134,3 +40134,34 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   stroke: color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 70%, #ffffff); stroke-opacity: .85; stroke-width: 1px; vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--rr-gc, var(--rr-c, #22d3ee)) 85%, transparent));
 }
+
+
+/* ==========================================================================
+   STELVIO Race 램프 개선 (2026-11-22)
+   1) 트랙 줄 왼쪽 램프: 칸막이(분할) 제거 → 끊김 없는 한 줄 바(튜브 라이트). 켜짐/꺼짐·다크/화이트 공통
+   2) 전광판 좌우 램프: 해당 쪽 선수의 속도계가 동작(.rr-act-l / .rr-act-r)할 때만 느리게 점멸, 멈추면 고정 점등
+   ========================================================================== */
+/* 1) 바 형태 램프 — 분할선(repeating-linear-gradient) 없이 가로 방향 원통 하이라이트만 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .speedometer-list-item.rr-grouped::before,
+#rollerRaceDashboardScreen.rr-theme-light .speedometer-list-item.rr-grouped::before {
+  left: -2px; top: 4px; bottom: 4px; width: 7px; border-radius: 4px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--rr-gc) 62%, #000) 0%, var(--rr-gc) 34%, color-mix(in srgb, var(--rr-gc) 40%, #fff) 62%, color-mix(in srgb, var(--rr-gc) 78%, #000) 100%);
+}
+#rollerRaceDashboardScreen .speedometer-list-item.rr-grouped:not(.rr-lit)::before {
+  background: linear-gradient(90deg, rgba(0,0,0,.35), transparent 40%, rgba(255,255,255,.08) 70%, rgba(0,0,0,.3)), color-mix(in srgb, var(--rr-gc) 14%, #1a1f26);
+}
+
+/* 2) 전광판 램프 점멸 — 기본(속도계 정지)은 애니메이션 없이 고정, 동작 중인 쪽만 느리게 깜박임 */
+@keyframes rrLampBlink { 0%, 100% { opacity: 1; filter: brightness(1.18) saturate(1.1); } 50% { opacity: .38; filter: brightness(.7); } }
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::before,
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after,
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::before,
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::after { animation: none; }
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp.rr-act-l::before,
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp.rr-act-l::before,
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp.rr-act-r::after,
+#rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp.rr-act-r::after { animation: rrLampBlink 2.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp.rr-act-l::before,
+  #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp.rr-act-r::after { animation: none !important; }
+}
