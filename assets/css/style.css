@@ -39605,8 +39605,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(0deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-h, 0%), transparent), transparent) left bottom / 38% 16px no-repeat,
     linear-gradient(0deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-h, 0%), transparent), transparent) right bottom / 38% 16px no-repeat,
     /* 램프에서 안쪽으로 번지는 빔 */
-    linear-gradient(90deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b, 0%), transparent), transparent 34%),
-    linear-gradient(270deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b, 0%), transparent), transparent 34%),
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b, 0%), transparent), color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b2, 0%), transparent) 16%, transparent 40%),
+    linear-gradient(270deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b, 0%), transparent), color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b2, 0%), transparent) 16%, transparent 40%),
     repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px),
     linear-gradient(135deg, #0a0f1f 0%, #0d1530 60%, #131c3a 100%);
 }
@@ -39622,11 +39622,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
     linear-gradient(90deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #1a1f26 calc((1 - var(--rr-sbl-f, 0)) * 100%), transparent 0),
+    radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% 8px repeat-y,
     linear-gradient(180deg, var(--rr-sbl, #ff3b3b, #ff3b3b));
-  box-shadow: inset 0 0 2px rgba(255,255,255,.18),
-    0 0 6px 1px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
-    0 0 18px 3px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
-    8px 0 22px 2px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent);
+  box-shadow: inset 0 0 3px rgba(255,255,255,calc(.14 + var(--rr-sbl-f, 0) * .5)),
+    0 0 5px 1px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    0 0 16px 4px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    0 0 40px 10px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    8px 0 30px 4px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent);
+  animation: rrLampBreath 3.4s ease-in-out infinite;
 }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after {
   right: -5px; left: auto;
@@ -39634,11 +39637,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
     linear-gradient(270deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #1a1f26 calc((1 - var(--rr-sbr-f, 0)) * 100%), transparent 0),
+    radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% 8px repeat-y,
     linear-gradient(180deg, var(--rr-sbr, #2563eb, #2563eb));
-  box-shadow: inset 0 0 2px rgba(255,255,255,.18),
-    0 0 6px 1px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
-    0 0 18px 3px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
-    -8px 0 22px 2px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent);
+  box-shadow: inset 0 0 3px rgba(255,255,255,calc(.14 + var(--rr-sbr-f, 0) * .5)),
+    0 0 5px 1px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    0 0 16px 4px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    0 0 40px 10px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    -8px 0 30px 4px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent);
+  animation: rrLampBreath 3.4s ease-in-out infinite;
 }
 
 /* ==========================================================================
@@ -39795,8 +39801,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(0deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-h, 0%), transparent), transparent) left bottom / 38% 16px no-repeat,
     linear-gradient(0deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-h, 0%), transparent), transparent) right bottom / 38% 16px no-repeat,
     /* 램프에서 안쪽으로 번지는 빔 */
-    linear-gradient(90deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b, 0%), transparent), transparent 34%),
-    linear-gradient(270deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b, 0%), transparent), transparent 34%),
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b, 0%), transparent), color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-b2, 0%), transparent) 16%, transparent 40%),
+    linear-gradient(270deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b, 0%), transparent), color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-b2, 0%), transparent) 16%, transparent 40%),
     repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px),
     linear-gradient(180deg, #252c35, #181d24);
 }
@@ -39812,11 +39818,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
     linear-gradient(90deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #1a1f26 calc((1 - var(--rr-sbl-f, 0)) * 100%), transparent 0),
+    radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% 8px repeat-y,
     linear-gradient(180deg, var(--rr-sbl, #ff3b3b, #ff3b3b));
-  box-shadow: inset 0 0 2px rgba(255,255,255,.18),
-    0 0 6px 1px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
-    0 0 18px 3px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
-    8px 0 22px 2px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent);
+  box-shadow: inset 0 0 3px rgba(255,255,255,calc(.14 + var(--rr-sbl-f, 0) * .5)),
+    0 0 5px 1px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    0 0 16px 4px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    0 0 40px 10px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent),
+    8px 0 30px 4px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) var(--rr-sbl-g, 0%), transparent);
+  animation: rrLampBreath 3.4s ease-in-out infinite;
 }
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-grp::after {
   right: -5px; left: auto;
@@ -39824,11 +39833,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
     linear-gradient(270deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
     linear-gradient(180deg, #1a1f26 calc((1 - var(--rr-sbr-f, 0)) * 100%), transparent 0),
+    radial-gradient(ellipse 72% 42% at 50% 46%, rgba(255,255,255,.95) 0%, rgba(255,255,255,.4) 55%, rgba(255,255,255,0) 100%) 0 0 / 100% 8px repeat-y,
     linear-gradient(180deg, var(--rr-sbr, #2563eb, #2563eb));
-  box-shadow: inset 0 0 2px rgba(255,255,255,.18),
-    0 0 6px 1px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
-    0 0 18px 3px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
-    -8px 0 22px 2px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent);
+  box-shadow: inset 0 0 3px rgba(255,255,255,calc(.14 + var(--rr-sbr-f, 0) * .5)),
+    0 0 5px 1px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    0 0 16px 4px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    0 0 40px 10px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent),
+    -8px 0 30px 4px color-mix(in srgb, var(--rr-sbr1, #2563eb) var(--rr-sbr-g, 0%), transparent);
+  animation: rrLampBreath 3.4s ease-in-out infinite;
 }
 
 
@@ -39857,3 +39869,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speedometer-container.rr-idle { opacity: 0.32; transition: opacity 0.25s ease; }
 #rollerRaceDashboardScreen .speedometer-list-item > :not(.list-item-actions) { transition: opacity 0.25s ease; }
 #rollerRaceDashboardScreen .speedometer-list-item.rr-idle > :not(.list-item-actions) { opacity: 0.32; }
+
+/* 전광판 램프가 켜진 느낌: 아주 느린 밝기 호흡(점등된 램프만 눈에 띔) — 움직임 최소화 설정이면 정지 */
+@keyframes rrLampBreath { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22) saturate(1.1); } }
+@media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::before, #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::after { animation: none !important; } }

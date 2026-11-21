@@ -8138,7 +8138,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
-  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
+  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-b2','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
@@ -8170,9 +8170,10 @@ function rrGroupRefresh() {
         const f = a[1], k = '--rr-sb' + a[0];
         sbEl.style.setProperty(k, f > 0 ? stops(a[2]) : 'transparent, transparent');
         sbEl.style.setProperty(k + '-f', String(f));
-        sbEl.style.setProperty(k + '-g', (f * 55).toFixed(1) + '%');
-        sbEl.style.setProperty(k + '-b', (f * 30).toFixed(1) + '%');
-        sbEl.style.setProperty(k + '-h', (f * 26).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-g', (f * 85).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-b', (f * 46).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-b2', (f * 14).toFixed(1) + '%');
+        sbEl.style.setProperty(k + '-h', (f * 34).toFixed(1) + '%');
       });
       /* 램프 글로우용 단색: 좌 = 좌측 첫 조, 우 = 우측 마지막 조 */
       const lastC = function (arr, i) { return arr.length ? rrGroupColor(arr[i < 0 ? arr.length - 1 : i].no) : 'transparent'; };
