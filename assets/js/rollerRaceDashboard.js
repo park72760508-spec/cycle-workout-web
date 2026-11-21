@@ -8196,16 +8196,21 @@ function rrGroupRefresh() {
         if (!cs.length) return 'transparent, transparent';
         return cs.length === 1 ? cs[0] + ', ' + cs[0] : cs.join(', ');
       };
-      /* 연결 현황: 좌/우 쪽 조들의 선수(트랙) 중 데이터가 들어오는(연결된) 비율만큼 램프를 아래에서부터 점등 */
-      const spsAll = window.rollerRaceState.speedometers || [];
-      const litFrac = function (arr) {
-        let tot = 0, con = 0;
-        arr.forEach(g => g.tracks.forEach(t => { tot++; const sp = spsAll.find(x => Number(x.id) === Number(t)); if (sp && sp.connected) con++; }));
-        return tot ? con / tot : 0;
-      };
+      /* 목표 달성율: 좌/우 쪽 각 조의 (누적거리 ÷ 목표거리, 최대 100%) 평균만큼 램프를 아래에서부터 점등 — 조가 목표에 도달할 때마다 채워짐 */
+      const gProg = function (g) { return tgt > 0 ? Math.min(1, Math.max(0, (gf[g.no] ? tgt : g.dist) / tgt)) : 0; };
+      const litFrac = function (arr) { return arr.length ? arr.reduce(function (a, g) { return a + gProg(g); }, 0) / arr.length : 0; };
       const fL = litFrac(parts[0]), fR = litFrac(parts[1]);
+      const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
+      sbEl.__rrLit = { l: fL, r: fR };
       [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {
         const f = a[1], k = '--rr-sb' + a[0];
+        /* 새로 점등(달성율 증가)될 때 한 번 번쩍이는 점화 효과 */
+        if (f > (prevLit[a[0]] || 0) + 0.004) {
+          const cn = 'rr-ign-' + a[0];
+          sbEl.classList.remove(cn); void sbEl.offsetWidth; sbEl.classList.add(cn);
+          clearTimeout(sbEl['__ign' + a[0]]);
+          sbEl['__ign' + a[0]] = setTimeout(function () { sbEl.classList.remove(cn); }, 1200);
+        }
         sbEl.style.setProperty(k, f > 0 ? stops(a[2]) : 'transparent, transparent');
         sbEl.style.setProperty(k + '-f', String(f));
         sbEl.style.setProperty(k + '-g', (f * 85).toFixed(1) + '%');
