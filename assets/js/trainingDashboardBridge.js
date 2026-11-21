@@ -614,7 +614,8 @@
     var names = typeof S.loadSavedDeviceNames === 'function' ? S.loadSavedDeviceNames() : {};
     var c = global.connectedDevices || {};
     var list = [];
-    var inWin = !sess || (Date.now() - sess.start) < AUTO_CONNECT_WINDOW_MS;
+    if (!sess) return; // 세션이 없으면(종료됨) 목록을 보내지 않음
+    var inWin = (Date.now() - sess.start) < AUTO_CONNECT_WINDOW_MS;
     AUTO_CONNECT_ORDER.forEach(function (k) {
       if (!saved[k] || c[AUTO_CONNECT_TYPE_KEY[k]]) return;
       // 10분 이후에는 이번 훈련에서 연결됐다가 끊긴 기기만 대기(발열 절감)
@@ -703,7 +704,7 @@
         setAutoConnectWaitingLabel(dropAny.length
           ? '재연결 대기 · ' + dropAny.map(function (t) { return RECONNECT_LABEL[t]; }).join('·')
           : '연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
-        if (now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) { sess.lastSent = now; sendRequestAutoConnect(); }
+        if (now - sess.lastSent >= (inWindow ? AUTO_CONNECT_RESEND_MS : 60000)) { sess.lastSent = now; sendRequestAutoConnect(); }
       }
       return;
     }
@@ -807,6 +808,7 @@
     }
     sess.nextAt = Math.min(sess.nextAt || 0, Date.now() + 500);
     setTimeout(tickAutoConnectSession, 600);
+    sendWatchSavedDevices(); // 끊긴 기기를 앱 상시 대기 목록에 즉시 반영
   }
   var _lastReconnectKickAt = 0;
   /** 휴식 후 복귀 신호 → 끊긴 기기 즉시 재시도 */
@@ -814,7 +816,7 @@
     var sess = _acSession;
     if (!sess || !Object.keys(sess.drop).length) return;
     var now = Date.now();
-    if (now - _lastReconnectKickAt < 8000) return;
+    if (now - _lastReconnectKickAt < (reason === 'touch' ? 60000 : 8000)) return; // 터치는 60초에 한 번만(재시도 간격 점증이 매번 초기화되지 않게)
     _lastReconnectKickAt = now;
     Object.keys(sess.drop).forEach(function (t) { sess.drop[t].nextAt = now; sess.drop[t].tries = 0; });
     sess.pauseUntil = 0;
@@ -851,19 +853,20 @@
       return;
     }
     installReconnectResumeHooks();
-    startWatchSavedDevices(); // 2026-11-21 저장 기기 상시 대기 연결(전원 켜짐 즉시 연결)
     _acSession = { start: Date.now(), lastSent: 0, timer: null, cur: null, curAt: 0, lastType: null, nextAt: 0, pauseUntil: 0, seen: {}, drop: {}, lastDropType: null };
     // 훈련 화면 밖에서 끊긴 기기: 10분 연결 대기 이후에도 계속 재연결(우선순위 높음)
     (function seedDropMemo() {
       var cc = global.connectedDevices || {};
       Object.keys(_dropMemo).forEach(function (t) {
-        if (!cc[AUTO_CONNECT_TYPE_KEY[t]]) {
+        // 30분 넘게 지난 끊김 기록은 무시(지난 라이딩 후 꺼진 기기가 영구 재시도 대상이 되지 않게)
+        if (!cc[AUTO_CONNECT_TYPE_KEY[t]] && Date.now() - _dropMemo[t] < 30 * 60 * 1000) {
           _acSession.seen[t] = true;
           _acSession.drop[t] = { at: _dropMemo[t], tries: 0, nextAt: Date.now() };
         }
       });
       _dropMemo = {};
     })();
+    startWatchSavedDevices(); // 2026-11-21 저장 기기 상시 대기 연결(전원 켜짐 즉시 연결) — 세션 생성 후 시작
     tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
     if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
