@@ -623,7 +623,7 @@
       list.push({ deviceType: k, deviceId: saved[k], deviceName: (names && names[k]) ? names[k] : '' });
     });
     // webKnowsSaved: 웹이 저장 기기를 알고 있으면 앱은 자기 저장소로 목록을 보충하지 않는다(제외한 기기가 되살아나지 않게)
-    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0 });
+    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0, sessAgeMs: Date.now() - sess.start });
   }
   function stopWatchSavedDevices() {
     if (_watchTimer) { clearInterval(_watchTimer); _watchTimer = null; }
