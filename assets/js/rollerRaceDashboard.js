@@ -7779,8 +7779,10 @@ function rrProfileRender() {
       var dc = srcDial.cloneNode(true);
       dc.querySelectorAll('.rank-display-bottom, .rr-sp-badge').forEach(function (n) { n.remove(); });
       wrap.appendChild(dc);
-      gz.replaceChildren(wrap);
-    } else { gz.textContent = ''; }
+      /* 속도계 카드만 교체 — 아래 STELVIO 로고(.rrp__logo)는 유지해 깜박임 방지 */
+      var oldCard = gz.querySelector('.rrp__gauge-card');
+      if (oldCard) oldCard.replaceWith(wrap); else gz.insertBefore(wrap, gz.firstChild);
+    } else { var oc = gz.querySelector('.rrp__gauge-card'); if (oc) oc.remove(); }
   }
   // 사진(크게)
   var av = q('.rrp__photo');
@@ -7839,7 +7841,7 @@ window.rrOpenProfile = function (tid, ev) {
             '<button type="button" class="rrp__change rrp__adjust" hidden>위치 조정</button></div>' +
           '<div class="rrp__id"><div class="rrp__name"></div>' +
             '<div class="rrp__rank"><span class="rrp__rank-num">-</span><span class="rrp__rank-suf"></span><span class="rrp__rank-of"></span></div></div>' +
-          '<div class="rrp__gauge" aria-label="속도계"></div>' +
+          '<div class="rrp__gauge" aria-label="속도계"><img class="rrp__logo" src="assets/img/stelvio_w.png" alt="STELVIO" draggable="false"></div>' +
         '</div>' +
         '<div class="rrp__stats">' +
           '<div class="rrp__stat rrp__stat--speed"><label>SPEED</label><b data-f="speed">-</b><small>km/h</small></div>' +

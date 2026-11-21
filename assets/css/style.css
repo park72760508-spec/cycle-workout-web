@@ -40165,3 +40165,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp.rr-act-l::before,
   #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp.rr-act-r::after { animation: none !important; }
 }
+
+/* STELVIO Race 선수 프로필: 속도계 바로 아래 STELVIO 로고 (2026-11-22) — 속도계와 같은 중심선, 속도계보다 한 단계 낮게 */
+#rollerRaceDashboardScreen .rrp__gauge { display: flex; flex-direction: column; align-items: center; }
+#rollerRaceDashboardScreen .rrp__gauge .rrp__gauge-card { width: 100%; }
+#rollerRaceDashboardScreen .rrp__logo {
+  position: relative; z-index: 1; display: block; width: clamp(58px, 6.4vw, 78px); height: auto; margin: -2px auto 0;
+  opacity: .92; pointer-events: none; user-select: none;
+  filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rr-c) 45%, transparent));
+}
