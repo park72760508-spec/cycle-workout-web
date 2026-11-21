@@ -39903,3 +39903,47 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #rollerRaceDashboardScreen .rrp__gauge .speedometer-dial::before,
 #rollerRaceDashboardScreen .rrp__gauge .speedometer-dial::after { display: none !important; }
+
+/* ==========================================================================
+   STELVIO Race 선수 프로필 리디자인 (2026-11-21, frontend-design)
+   구성: [사진] — [이름·순위] — [속도계]를 한 덩어리로 붙여 배치(칸 사이 빈 공간 제거), 그 아래 기록 5칸.
+   · 세 요소가 콘텐츠 폭만큼만 차지하고 가운데 정렬 — 늘어나는 칸이 없어 간격이 벌어지지 않음
+   · 속도계 뒤에 선수 색 후광, 이름·순위와 속도계 사이는 선수 색 가는 구분선 하나
+   · 가장 크게 말하는 것은 순위 숫자 하나, 나머지는 한 단계 낮춤
+   ========================================================================== */
+#rollerRaceDashboardScreen .rrp__card { width: min(980px, 96vw); padding: 20px 34px 26px; }
+#rollerRaceDashboardScreen .rrp__hero {
+  display: grid; grid-template-columns: auto minmax(0, 300px) clamp(230px, 31%, 290px);
+  justify-content: center; align-items: center; column-gap: 26px; padding: 4px 0 0; flex-wrap: nowrap;
+}
+#rollerRaceDashboardScreen .rrp__photo { width: 210px; height: 210px; font-size: 96px; border-width: 5px; }
+#rollerRaceDashboardScreen .rrp__id { min-width: 0; }
+#rollerRaceDashboardScreen .rrp__name { font-size: 46px; line-height: 1.04; }
+#rollerRaceDashboardScreen .rrp__rank { margin-top: 6px; }
+#rollerRaceDashboardScreen .rrp__rank-num { font-size: 104px; }
+#rollerRaceDashboardScreen .rrp__rank-suf { font-size: 34px; }
+#rollerRaceDashboardScreen .rrp__rank-of { font-size: 19px; margin-left: 8px; }
+/* 속도계: 선수 색 후광 + 왼쪽 가는 구분선 */
+#rollerRaceDashboardScreen .rrp__gauge {
+  position: relative; flex: none; min-width: 0; padding-left: 22px;
+}
+#rollerRaceDashboardScreen .rrp__gauge::before {
+  content: ""; position: absolute; left: 0; top: 8%; bottom: 8%; width: 1px; pointer-events: none;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--rr-c) 70%, transparent), transparent);
+}
+#rollerRaceDashboardScreen .rrp__gauge::after {
+  content: ""; position: absolute; inset: 6% 0 0 22px; z-index: 0; pointer-events: none;
+  background: radial-gradient(ellipse 70% 60% at 50% 62%, color-mix(in srgb, var(--rr-c) 24%, transparent), transparent 72%);
+}
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-container { position: relative; z-index: 1; }
+#rollerRaceDashboardScreen .rrp__stats { margin: 22px 0 0; }
+@media (max-width: 860px) {
+  #rollerRaceDashboardScreen .rrp__hero { grid-template-columns: auto minmax(0, 1fr); row-gap: 14px; }
+  #rollerRaceDashboardScreen .rrp__gauge { grid-column: 1 / -1; padding-left: 0; max-width: 300px; margin: 0 auto; width: 100%; }
+  #rollerRaceDashboardScreen .rrp__gauge::before { display: none; }
+  #rollerRaceDashboardScreen .rrp__gauge::after { inset: 0; }
+}
+@media (max-width: 560px) {
+  #rollerRaceDashboardScreen .rrp__hero { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  #rollerRaceDashboardScreen .rrp__rank { justify-content: center; }
+}
