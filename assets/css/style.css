@@ -40111,3 +40111,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-group-dist__row .rr-gd-bar { background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); }
 .rr-group-dist__row .rr-gd-bar > i { background: linear-gradient(90deg, color-mix(in srgb, var(--gc) 55%, #000), color-mix(in srgb, var(--gc) 80%, #fff)); box-shadow: 0 0 .5em color-mix(in srgb, var(--gc) 75%, transparent); }
 .rr-group-dist__row .rr-gd-bar > i::after { box-shadow: 0 0 .35em .08em var(--gc), 0 0 .9em .2em color-mix(in srgb, var(--gc) 60%, transparent); }
+
+/* 전광판 누적거리: '누적 / 목표 km' — 목표거리와 단위는 소수점 이하와 같은 작은 글자·같은 기준선, 흐린 흰색 (2026-11-21) */
+.rr-group-dist__row .rr-gd-d .rr-frac.rr-gd-tg { font-size: .62em; font-weight: 700; color: rgba(255,255,255,.55) !important; text-shadow: none; white-space: nowrap; letter-spacing: .01em; }
