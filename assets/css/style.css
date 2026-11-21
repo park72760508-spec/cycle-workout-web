@@ -40012,3 +40012,31 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 비활성(미연결) 조 */
 .rr-group-dist__row.rr-off .rr-gd-bar > i { filter: saturate(.4); }
 @media (prefers-reduced-motion: reduce) { .rr-group-dist__row.rr-lead .rr-gd-bar > i::after { animation: none; } }
+
+
+/* ==========================================================================
+   STELVIO Race 전광판 조 표시 v2 — 전광판 높이를 가득 쓰는 2줄 구성 (2026-11-21, frontend-design)
+   줄1: [조 태그] 누적거리(가장 크게) km · 결과  /  줄2: 달성 바(길게) · 목표 · 달성율
+   · 글자 크기는 JS 가 전광판 높이 ÷ 조 줄 수로 계산(전광판이 낮으면 줄어들고 높으면 최대로)
+   · 단체 전광판은 최소 높이를 확보해 멀리서도 읽히는 크기를 보장
+   ========================================================================== */
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp { min-height: clamp(128px, 19vh, 230px); padding-top: 7px; padding-bottom: 7px; align-items: stretch; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item { justify-content: center; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:first-child,
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp > .scoreboard-item:last-child { align-self: stretch; }
+#scoreboardGroupDist, #scoreboardGroupDistR { width: 100%; align-content: stretch; row-gap: 0 !important; }
+#scoreboardGroupDist .rr-group-dist__row, #scoreboardGroupDistR .rr-group-dist__row {
+  flex-direction: column; align-items: stretch; justify-content: center; gap: .1em; min-width: 9.5em; max-width: 100%; box-sizing: border-box;
+  padding: .06em .5em .08em .32em; font-style: italic;
+}
+.rr-group-dist__row .rr-gd-l1 { display: flex; align-items: center; gap: .28em; line-height: 1; white-space: nowrap; }
+#scoreboardGroupDistR .rr-group-dist__row .rr-gd-l1 { justify-content: flex-start; }
+.rr-group-dist__row .rr-group-pill { font-size: .46em; padding: .14em .6em; border-radius: 3px; }
+.rr-group-dist__row .rr-gd-d { font-size: 1em; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.rr-group-dist__row .rr-gd-d .rr-frac { font-size: .62em; font-weight: 800; }
+.rr-group-dist__row .rr-gd-km { font-size: .4em; font-weight: 800; color: #9aa4b2; letter-spacing: .04em; }
+.rr-group-dist__row .rr-gd-l1 .rr-winner, .rr-group-dist__row .rr-gd-l1 i { font-size: .42em; }
+.rr-group-dist__row .rr-gd-l2 { display: flex; align-items: center; gap: .4em; font-size: .4em; line-height: 1; white-space: nowrap; }
+.rr-group-dist__row .rr-gd-l2 .rr-gd-bar { flex: 1 1 auto; width: auto; min-width: 3em; height: .55em; margin: 0; }
+.rr-group-dist__row .rr-gd-l2 .rr-gd-t { font-size: 1em; color: #9aa4b2; }
+.rr-group-dist__row .rr-gd-l2 .rr-gd-pct { font-size: 1.1em; min-width: 2.4em; color: #e5e9f0; }

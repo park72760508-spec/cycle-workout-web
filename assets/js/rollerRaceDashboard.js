@@ -8196,15 +8196,19 @@ function rrGroupRefresh() {
         if (!cs.length) return 'transparent, transparent';
         return cs.length === 1 ? cs[0] + ', ' + cs[0] : cs.join(', ');
       };
-      /* 목표 달성율: 좌/우 쪽 각 조의 (누적거리 ÷ 목표거리, 최대 100%) 평균만큼 램프를 아래에서부터 점등 — 조가 목표에 도달할 때마다 채워짐 */
-      const gProg = function (g) { return tgt > 0 ? Math.min(1, Math.max(0, (gf[g.no] ? tgt : g.dist) / tgt)) : 0; };
-      const litFrac = function (arr) { return arr.length ? arr.reduce(function (a, g) { return a + gProg(g); }, 0) / arr.length : 0; };
+      /* 선수 연결 현황: 좌/우 쪽 조들의 선수(트랙) 중 연결된(센서 데이터 수신) 비율만큼 램프를 아래에서부터 점등 — 전원 연결 시 전체 점등 */
+      const spsAll = window.rollerRaceState.speedometers || [];
+      const litFrac = function (arr) {
+        let tot = 0, con = 0;
+        arr.forEach(g => g.tracks.forEach(t => { tot++; const sp = spsAll.find(x => Number(x.id) === Number(t)); if (sp && sp.connected) con++; }));
+        return tot ? con / tot : 0;
+      };
       const fL = litFrac(parts[0]), fR = litFrac(parts[1]);
       const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
       sbEl.__rrLit = { l: fL, r: fR };
       [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {
         const f = a[1], k = '--rr-sb' + a[0];
-        /* 새로 점등(달성율 증가)될 때 한 번 번쩍이는 점화 효과 */
+        /* 새로 점등(연결 증가)될 때 한 번 번쩍이는 점화 효과 */
         if (f > (prevLit[a[0]] || 0) + 0.004) {
           const cn = 'rr-ign-' + a[0];
           sbEl.classList.remove(cn); void sbEl.offsetWidth; sbEl.classList.add(cn);
@@ -8229,19 +8233,22 @@ function rrGroupRefresh() {
     const timeEl = document.getElementById('scoreboardTime');
     const basePx = timeEl ? parseFloat(getComputedStyle(timeEl).fontSize) || 28 : 28;
     const rows = Math.max(parts[0].length, parts[1].length, 1);
-    const k = rows === 1 ? 0.8 : Math.min(0.8, 0.95 / rows);
+    /* 전광판 높이를 최대로 활용: 한 줄(조)당 높이 ÷ 1.9 = 누적거리 글자 크기 (2줄 구성: 거리 / 달성 바) */
+    const sbH = sbEl ? sbEl.clientHeight : 0;
+    const perRowH = (sbH > 60 ? sbH - 14 : basePx * 1.7) / rows;
+    const Fpx = Math.max(11, Math.min(basePx * 1.6, perRowH / 1.9));
     [[boxL, parts[0], 'start'], [boxR, parts[1], 'end']].forEach(function (pr) {
       const bx = pr[0], list = pr[1], side = pr[2];
       if (!list.length) { bx.style.display = 'none'; bx.innerHTML = ''; return; }
       bx.style.display = '';
-      bx.style.gridTemplateRows = 'repeat(' + list.length + ', auto)';
       bx.style.gridTemplateColumns = '1fr';
       bx.style.gridAutoFlow = 'row';
       bx.style.marginLeft = '0'; bx.style.marginTop = '';
       bx.style.rowGap = (basePx * 0.04).toFixed(1) + 'px';
       bx.style.textAlign = side === 'end' ? 'right' : 'left';
       bx.style.justifyItems = side === 'end' ? 'end' : 'start';
-      bx.style.fontSize = Math.max(9, basePx * k).toFixed(1) + 'px';
+      bx.style.fontSize = Fpx.toFixed(1) + 'px';
+      bx.style.alignSelf = 'stretch'; bx.style.gridTemplateRows = 'repeat(' + list.length + ', minmax(0, 1fr))';
       bx.innerHTML = list.map(g => {
         const f = gf[g.no];
         const d0 = (tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist).toFixed(2), di = d0.indexOf('.');
@@ -8251,9 +8258,10 @@ function rrGroupRefresh() {
         const pct = tgt > 0 ? Math.max(0, Math.min(100, dv / tgt * 100)) : 0;
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + '"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span> ' + d + '<span class="rr-frac">&nbsp;km</span>' +
-          (tgt > 0 ? '<span class="rr-gd-t">/ ' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '</span><span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') +
-          (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>';
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + '">' +
+          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + d + '</span><span class="rr-gd-km">km</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
+          (tgt > 0 ? '<div class="rr-gd-l2"><span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-t">목표 ' + (tgt % 1 ? tgt.toFixed(1) : tgt) + 'km</span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span></div>' : '') +
+          '</div>';
       }).join('');
       /* 폭 초과 시 줄임: 5% 단위 + 히스테리시스(흔들림 방지) */
       const itemEl = bx.closest('.scoreboard-item');
@@ -8266,7 +8274,7 @@ function rrGroupRefresh() {
       const prev = bx.__rrSc;
       if (prev && q > prev && q < prev * 1.1) q = prev;
       bx.__rrSc = q;
-      if (q < 0.999) bx.style.fontSize = (basePx * k * q).toFixed(1) + 'px';
+      if (q < 0.999) bx.style.fontSize = (Fpx * q).toFixed(1) + 'px';
     });
   }
   const map = on ? rrGroupOfTrackMap() : {};
