@@ -4785,6 +4785,7 @@ async function openDashboardFromTrainingReady(kind) {
     overlay.classList.remove('hidden');
     overlay.style.setProperty('display', 'flex', 'important');
   }
+  if (typeof window.stelvioShowSpinner === 'function') window.stelvioShowSpinner('대시보드 준비 중.....', 15000);
   // 스피너가 먼저 그려지도록 두 프레임 양보
   await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
   try {
@@ -4803,6 +4804,7 @@ async function openDashboardFromTrainingReady(kind) {
     // 깜빡임 방지: 최소 400ms 표시
     var remain = 400 - (Date.now() - shownAt);
     if (remain > 0) await new Promise(function (r) { setTimeout(r, remain); });
+    if (typeof window.stelvioHideSpinner === 'function') window.stelvioHideSpinner();
     if (overlay) {
       overlay.classList.add('hidden');
       overlay.style.removeProperty('display');

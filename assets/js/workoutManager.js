@@ -5093,6 +5093,8 @@ async function selectWorkout(workoutId) {
   if (workoutLoadingOverlay) { workoutLoadingOverlay.style.display = 'flex'; }
   if (workoutLoadingProgress) { workoutLoadingProgress.textContent = 'Workout Loading ....'; }
   if (typeof window.stelvioShowSpinner === 'function') window.stelvioShowSpinner('워크아웃을 훈련 준비 화면에 올리는 중...', 15000);
+  // 스피너가 먼저 화면에 그려지도록 두 프레임 양보(이후 무거운 동기 작업에 막히지 않게)
+  await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
   
   try {
     console.log('Selecting workout with ID:', workoutId);
