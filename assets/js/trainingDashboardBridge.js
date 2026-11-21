@@ -602,6 +602,27 @@
    * 웹은 30초마다 목록을 갱신(앱은 90초 갱신이 없으면 스스로 해제), 훈련 화면을 떠나면 즉시 해제 요청.
    */
   var WATCH_KEEPALIVE_MS = 30000;
+  /*
+   * 테스트 빌드 전용 진단 표시(앱이 window.StelvioBleDiagOn=true 로 켬): 앱의 BLE 자동 연결 상태·최근 로그를
+   * 화면 왼쪽 아래에 작게 표시 — 스크린샷만으로 어디서 막히는지 확인. 배포 빌드에서는 표시되지 않음.
+   */
+  global.addEventListener('stelvioBleDiag', function (ev) {
+    try {
+      if (!global.StelvioBleDiagOn) return;
+      var el = document.getElementById('stelvioBleDiag');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'stelvioBleDiag';
+        el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:2147483001;max-width:92vw;padding:4px 6px;border-radius:6px;' +
+          'background:rgba(0,0,0,.72);color:#7CFC9A;font:10px/1.35 ui-monospace,Menlo,monospace;pointer-events:none;white-space:pre-wrap;';
+        document.body.appendChild(el);
+      }
+      var d = ev && ev.detail ? ev.detail : {};
+      var active = getActiveScreenId();
+      el.style.display = (active && isTargetScreen(active)) ? 'block' : 'none';
+      el.textContent = (d.state || '') + '\n' + (d.lines || []).join('\n');
+    } catch (e) {}
+  });
   var _watchTimer = null;
   function sendWatchSavedDevices() {
     if (!isAppEnvironmentNow()) return;
