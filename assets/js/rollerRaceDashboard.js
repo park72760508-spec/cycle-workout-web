@@ -7767,6 +7767,17 @@ function rrProfileRender() {
   if (rank > 1) { var g = rrFormatGap(Math.max(0, sorted[0].totalDistance - sp.totalDistance)); gap = g; }
   else if (rank === 1) gap = 'LEADER';
   q('[data-f="gap"]').textContent = gap;
+  // 우측: 화면에 보이는 해당 트랙의 속도계 카드를 그대로 복제(0.5초마다 갱신)
+  var gz = q('.rrp__gauge');
+  if (gz) {
+    var srcCard = document.getElementById('speedometer-' + tid);
+    if (srcCard) {
+      var cl = srcCard.cloneNode(true);
+      cl.removeAttribute('id');
+      cl.classList.add('rrp__gauge-card');
+      gz.replaceChildren(cl);
+    } else { gz.textContent = ''; }
+  }
   // 사진(크게)
   var av = q('.rrp__photo');
   var url = rrAvatarUrl(name, tid);
@@ -7778,13 +7789,34 @@ function rrProfileRender() {
     else { var sp2 = document.createElement('span'); sp2.textContent = (name || String(tid)).charAt(0).toUpperCase(); av.appendChild(sp2); }
   }
 }
+/** 이전/다음 트랙으로 채널 변경 — 기기·선수명이 등록된 트랙 우선(2개 미만이면 전체 트랙) */
+function rrProfileStep(dir) {
+  var root = document.getElementById('rrProfile');
+  if (!root) return;
+  var all = (window.rollerRaceState.speedometers || []).slice().sort(function (a, b) { return a.id - b.id; });
+  var reg = all.filter(function (x) { return x.deviceId || (x.pairingName || '').trim(); });
+  var list = reg.length >= 2 ? reg : all;
+  if (list.length < 2) return;
+  var cur = Number(root.dataset.tid);
+  var i = list.findIndex(function (x) { return x.id === cur; });
+  if (i < 0) { i = dir > 0 ? -1 : 0; }
+  var nx = list[(i + (dir > 0 ? 1 : -1) + list.length) % list.length];
+  root.dataset.tid = String(nx.id);
+  root.querySelector('.rrp__photo').dataset.k = '';
+  rrProfileRender();
+}
+window.rrProfileStep = rrProfileStep;
 function rrCloseProfile() {
   var root = document.getElementById('rrProfile');
   if (root) { root.classList.remove('rrp--open'); setTimeout(function () { if (!root.classList.contains('rrp--open')) root.hidden = true; }, 260); }
   if (rrProfileTimer) { clearInterval(rrProfileTimer); rrProfileTimer = null; }
   document.removeEventListener('keydown', rrProfileKey, true);
 }
-function rrProfileKey(e) { if (e.key === 'Escape') { e.stopPropagation(); rrCloseProfile(); } }
+function rrProfileKey(e) {
+  if (e.key === 'Escape') { e.stopPropagation(); rrCloseProfile(); }
+  else if (e.key === 'ArrowLeft') { e.stopPropagation(); rrProfileStep(-1); }
+  else if (e.key === 'ArrowRight') { e.stopPropagation(); rrProfileStep(1); }
+}
 window.rrCloseProfile = rrCloseProfile;
 window.rrOpenProfile = function (tid, ev) {
   if (ev) { ev.stopPropagation(); ev.preventDefault(); }
@@ -7796,7 +7828,8 @@ window.rrOpenProfile = function (tid, ev) {
     root.innerHTML =
       '<div class="rrp__card" role="dialog" aria-modal="true" aria-label="선수 프로필">' +
         '<button type="button" class="rrp__close" aria-label="닫기">✕</button>' +
-        '<div class="rrp__top"><span class="rrp__track"></span><span class="rrp__live">LIVE</span></div>' +
+        '<div class="rrp__top"><button type="button" class="rrp__nav" data-nav="-1" aria-label="이전 트랙">‹ 이전</button><span class="rrp__track"></span><button type="button" class="rrp__nav" data-nav="1" aria-label="다음 트랙">다음 ›</button><span class="rrp__live">LIVE</span></div>' +
+        '<div class="rrp__body"><div class="rrp__main">' +
         '<div class="rrp__hero">' +
           '<div class="rrp__photo-wrap"><div class="rrp__photo"></div>' +
             '<button type="button" class="rrp__change">사진 변경</button>' +
@@ -7811,10 +7844,12 @@ window.rrOpenProfile = function (tid, ev) {
           '<div class="rrp__stat"><label>MAX</label><b data-f="max">0.0</b><small>km/h</small></div>' +
           '<div class="rrp__stat rrp__stat--gap"><label>GAP</label><b data-f="gap">-</b><small>to leader</small></div>' +
         '</div>' +
+        '</div><div class="rrp__gauge" aria-label="속도계"></div></div>' +
       '</div>';
     host.appendChild(root);
     root.addEventListener('click', function (e) { if (e.target === root) rrCloseProfile(); });
     root.querySelector('.rrp__close').addEventListener('click', rrCloseProfile);
+    root.querySelectorAll('.rrp__nav').forEach(function (b) { b.addEventListener('click', function () { rrProfileStep(Number(b.dataset.nav)); }); });
     root.querySelector('.rrp__change:not(.rrp__adjust)').addEventListener('click', function () { window.rrAvatarPickForTrack(Number(root.dataset.tid)); });
     root.querySelector('.rrp__adjust').addEventListener('click', function () { window.rrAvatarReadjust(Number(root.dataset.tid)); });
   }

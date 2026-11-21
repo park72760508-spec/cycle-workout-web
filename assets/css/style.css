@@ -39873,3 +39873,25 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 전광판 램프가 켜진 느낌: 아주 느린 밝기 호흡(점등된 램프만 눈에 띔) — 움직임 최소화 설정이면 정지 */
 @keyframes rrLampBreath { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.22) saturate(1.1); } }
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::before, #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::after { animation: none !important; } }
+
+/* STELVIO Race 선수 프로필: 상단 이전/다음 트랙 이동 + 우측 속도계(화면 속도계 복제) (2026-11-21) */
+#rollerRaceDashboardScreen .rrp__card { width: min(1180px, 96vw); }
+#rollerRaceDashboardScreen .rrp__top { margin-right: 60px; }
+#rollerRaceDashboardScreen .rrp__nav {
+  height: 30px; padding: 0 14px; border: 1px solid color-mix(in srgb, var(--rr-c) 55%, transparent); cursor: pointer;
+  font: italic 800 13px/1 'Barlow Semi Condensed', 'Noto Sans KR', sans-serif; letter-spacing: .06em; color: #e8f1ff;
+  background: rgba(255,255,255,.07); clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+#rollerRaceDashboardScreen .rrp__nav:hover { background: var(--rr-c); color: #06101a; }
+#rollerRaceDashboardScreen .rrp__nav:active { transform: translateY(1px); }
+#rollerRaceDashboardScreen .rrp__body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(260px, 31%, 380px); gap: 22px; align-items: center; }
+#rollerRaceDashboardScreen .rrp__main { min-width: 0; }
+#rollerRaceDashboardScreen .rrp__main .rrp__hero { gap: 24px; padding: 0 8px; }
+#rollerRaceDashboardScreen .rrp__main .rrp__stats { grid-template-columns: repeat(3, 1fr); margin: 22px 8px 0; }
+#rollerRaceDashboardScreen .rrp__main .rrp__stat b { font-size: 34px; }
+#rollerRaceDashboardScreen .rrp__gauge { min-width: 0; }
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-container { width: 100%; max-width: none; margin: 0; }
+@media (max-width: 900px) {
+  #rollerRaceDashboardScreen .rrp__body { grid-template-columns: 1fr; }
+  #rollerRaceDashboardScreen .rrp__gauge { max-width: 380px; margin: 0 auto; width: 100%; }
+}
