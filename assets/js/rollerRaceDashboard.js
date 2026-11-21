@@ -8176,7 +8176,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
-  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-b2','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
+  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); sbEl.style.removeProperty('--rr-sbl-bg'); sbEl.style.removeProperty('--rr-sbr-bg'); ['l','r'].forEach(function (k) { ['-f','-g','-b','-b2','-h'].forEach(function (x) { sbEl.style.removeProperty('--rr-sb' + k + x); }); }); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
@@ -8203,7 +8203,9 @@ function rrGroupRefresh() {
         arr.forEach(g => g.tracks.forEach(t => { tot++; const sp = spsAll.find(x => Number(x.id) === Number(t)); if (sp && sp.connected) con++; }));
         return tot ? con / tot : 0;
       };
-      const fL = litFrac(parts[0]), fR = litFrac(parts[1]);
+      /* 램프는 전구 10개 — 연결 비율을 10단계로 올림(1명이라도 연결되면 최소 1개, 전원 연결 시 10개) */
+      const q10 = function (f) { return f >= 1 ? 1 : f > 0 ? Math.max(1, Math.round(f * 10)) / 10 : 0; };
+      const fL = q10(litFrac(parts[0])), fR = q10(litFrac(parts[1]));
       const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
       sbEl.__rrLit = { l: fL, r: fR };
       [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {
@@ -8224,8 +8226,19 @@ function rrGroupRefresh() {
       });
       /* 램프 글로우용 단색: 좌 = 좌측 첫 조, 우 = 우측 마지막 조 */
       const lastC = function (arr, i) { return arr.length ? rrGroupColor(arr[i < 0 ? arr.length - 1 : i].no) : 'transparent'; };
-      sbEl.style.setProperty('--rr-sbl1', lastC(parts[0], 0));
-      sbEl.style.setProperty('--rr-sbr1', lastC(parts[1], -1));
+      sbEl.style.setProperty('--rr-sbl1', '#ffd54a');
+      sbEl.style.setProperty('--rr-sbr1', '#ffd54a');
+      /* 전광판 바탕: 좌/우 절반에 해당 조 색을 줄(조) 높이만큼 칸으로 깔아 조 표시와 바탕이 하나로 이어지게 */
+      const bandBg = function (arr) {
+        const n = arr.length;
+        if (!n) return 'linear-gradient(transparent, transparent)';
+        return 'linear-gradient(180deg, ' + arr.map(function (g, i) {
+          const c = 'color-mix(in srgb, ' + rrGroupColor(g.no) + ' 80%, #05080d)';
+          return c + ' ' + (i * 100 / n).toFixed(2) + '% ' + ((i + 1) * 100 / n).toFixed(2) + '%';
+        }).join(', ') + ')';
+      };
+      sbEl.style.setProperty('--rr-sbl-bg', bandBg(parts[0]));
+      sbEl.style.setProperty('--rr-sbr-bg', bandBg(parts[1]));
     }
     /* 선두 조(아직 도착 전 중 누적거리 최대, 0 초과) */
     let leadNo = 0, leadD = 0;
@@ -8235,12 +8248,14 @@ function rrGroupRefresh() {
     const rows = Math.max(parts[0].length, parts[1].length, 1);
     /* 전광판 높이를 최대로 활용: 한 줄(조)당 높이 ÷ 1.9 = 누적거리 글자 크기 (2줄 구성: 거리 / 달성 바) */
     const sbH = sbEl ? sbEl.clientHeight : 0;
-    const perRowH = (sbH > 60 ? sbH - 14 : basePx * 1.7) / rows;
-    const Fpx = Math.max(11, Math.min(basePx * 1.6, perRowH / 1.9));
+    const fillRatio = rows === 1 ? 0.67 : 0.88; /* 한쪽에 조가 1개면 전광판 높이의 약 2/3를 채워 크게 */
+    const perRowH = (sbH > 60 ? sbH : basePx * 1.9) * fillRatio / rows;
+    const Fpx = Math.max(11, Math.min(basePx * 2.6, perRowH / 1.9));
     [[boxL, parts[0], 'start'], [boxR, parts[1], 'end']].forEach(function (pr) {
       const bx = pr[0], list = pr[1], side = pr[2];
       if (!list.length) { bx.style.display = 'none'; bx.innerHTML = ''; return; }
       bx.style.display = '';
+      bx.classList.toggle('rr-one', list.length === 1);
       bx.style.gridTemplateColumns = '1fr';
       bx.style.gridAutoFlow = 'row';
       bx.style.marginLeft = '0'; bx.style.marginTop = '';
