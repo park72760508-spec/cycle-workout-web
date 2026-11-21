@@ -12,6 +12,8 @@
     '.wso-lap small{display:block;font-size:10px;font-weight:700;letter-spacing:.5px;color:#8fa0c0;}' +
     '.wso-lap b{display:block;margin-top:2px;font:italic 800 22px/1 "Barlow Semi Condensed","Noto Sans KR",sans-serif;font-variant-numeric:tabular-nums;color:#22d3ee;text-shadow:0 0 10px rgba(34,211,238,.35);}' +
     '.wso-lap.wso-lap--off b{color:#64748b;text-shadow:none;}' +
+    '.wso-seg{display:block;margin-top:4px;max-width:210px;font-size:11px;font-weight:700;color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
+    '.wso-lap.wso-lap--off .wso-seg{color:#64748b;}' +
     '.wso-dur{margin-top:5px;font-size:11.5px;font-weight:700;color:#cbd5e1;text-align:center;font-variant-numeric:tabular-nums;}' +
     '.wso-title{flex:1;min-width:0;}' +
     '.wso-title b{display:block;font-size:15px;font-weight:800;letter-spacing:.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}' +
@@ -73,6 +75,34 @@
     }
     return '';
   }
+
+  var curWorkout = null, curFtp = 0;
+  /* 현재 세그먼트 한 줄 설명: 이름 · 시간 · 목표(% 또는 W) · RPM */
+  function segInfo(idx) {
+    var sg = curWorkout && curWorkout.segments && curWorkout.segments[idx];
+    if (!sg) return '';
+    var name = String(sg.label || sg.name || '').trim();
+    var dur = Number(sg.duration_sec != null ? sg.duration_sec : sg.duration) || 0;
+    var tt = String(sg.target_type || 'ftp_pct'), tv = sg.target_value, pct = '', rpm = '';
+    function w(p) { return curFtp > 0 ? Math.round(curFtp * p / 100) + 'W' : ''; }
+    if (tt === 'ftp_pctz') {
+      var a = String(tv).split(/[\/~]/).map(Number);
+      if (a.length >= 2 && a[0] > 0) pct = a[0] + '~' + a[1] + '%' + (curFtp > 0 ? ' (' + w(a[0]) + '~' + w(a[1]) + ')' : '');
+    } else if (tt === 'dual') {
+      var d = String(tv).split(/[\/~]/).map(Number);
+      if (d[0] > 0) pct = d[0] + '%' + (curFtp > 0 ? ' (' + w(d[0]) + ')' : '');
+      if (d[1] > 0) rpm = d[1] + 'rpm';
+    } else if (tt === 'cadence_rpm') {
+      if (Number(tv) > 0) rpm = Number(tv) + 'rpm';
+    } else {
+      var v = Number(tv);
+      if (v > 0) {
+        var to = sg.ramp && sg.ramp !== 'none' && Number(sg.ramp_to_value) > 0 ? Number(sg.ramp_to_value) : 0;
+        pct = (to && to !== v ? v + '→' + to : String(v)) + '%' + (curFtp > 0 && !to ? ' (' + w(v) + ')' : '');
+      }
+    }
+    return [name, dur > 0 ? fmtMS(dur) : '', pct, rpm].filter(Boolean).join(' · ');
+  }
   function refreshNow() {
     var el = document.getElementById('workoutStepsOverlay');
     if (!el) { stopTimer(); return; }
@@ -82,6 +112,7 @@
       var lt = idx >= 0 ? readLap() : '';
       lapEl.classList.toggle('wso-lap--off', !lt);
       var lb = lapEl.querySelector('b'); if (lb) lb.textContent = lt || '--:--';
+      var sgEl = lapEl.querySelector('.wso-seg'); if (sgEl) { var si = idx >= 0 ? segInfo(idx) : ''; sgEl.textContent = si || '진행 중인 세그먼트 없음'; sgEl.title = si; }
     }
     var rows = el.querySelectorAll('tr[data-from]');
     for (var i = 0; i < rows.length; i++) {
@@ -96,6 +127,7 @@
   function show(workout, ftpOverride, trackMode) {
     ensureCss(); close();
     mode = trackMode || '';
+    curWorkout = workout; curFtp = Number(ftpOverride) > 0 ? Number(ftpOverride) : (Number(window.currentUser && window.currentUser.ftp) || 0);
     var ftp = Number(ftpOverride) > 0 ? Number(ftpOverride) : (Number(window.currentUser && window.currentUser.ftp) || 0);
     var rows = (workout && typeof window.buildWorkoutFlowRows === 'function') ? window.buildWorkoutFlowRows(workout, ftp) : [];
     var totSec = workout ? (Number(workout.total_seconds || workout.totalSeconds) || 0) : 0;
@@ -114,7 +146,7 @@
       : '<div class="wso-empty">표시할 워크아웃 구간 정보가 없습니다</div>';
     var el = document.createElement('div');
     el.id = 'workoutStepsOverlay'; el.className = 'wso-back';
-    el.innerHTML = '<div class="wso-card" role="dialog" aria-modal="true"><div class="wso-head"><div class="wso-title"><b>' + esc((workout && workout.title) || '워크아웃') + '</b><span>' + esc(meta || '구간별 요약') + '</span></div>' + (mode ? '<div class="wso-lap wso-lap--off"><small>LAP 남은시간</small><b>--:--</b></div>' : '<div></div>') + '<button type="button" class="wso-close" aria-label="닫기">✕</button></div><div class="wso-body">' + body + '</div></div>';
+    el.innerHTML = '<div class="wso-card" role="dialog" aria-modal="true"><div class="wso-head"><div class="wso-title"><b>' + esc((workout && workout.title) || '워크아웃') + '</b><span>' + esc(meta || '구간별 요약') + '</span></div>' + (mode ? '<div class="wso-lap wso-lap--off"><small>LAP 남은시간</small><b>--:--</b><span class="wso-seg">진행 중인 세그먼트 없음</span></div>' : '<div></div>') + '<button type="button" class="wso-close" aria-label="닫기">✕</button></div><div class="wso-body">' + body + '</div></div>';
     el.addEventListener('click', function (e) { if (e.target === el || (e.target.classList && e.target.classList.contains('wso-close'))) close(); });
     document.body.appendChild(el);
     if (mode) { refreshNow(); timer = setInterval(refreshNow, 500); }
