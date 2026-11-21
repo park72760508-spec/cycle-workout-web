@@ -8241,7 +8241,7 @@ function rrGroupRefresh() {
 }
 setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
 
-/* 기기 미등록(미연결) 속도계·트랙 경기장 줄은 비활성(어두운) 상태로 — '준비됨'은 활성 — Coach PC 모니터의 빈 슬롯(.coach-slot--idle)과 같은 디자인 */
+/* 속도계: 기기 미등록(미연결)만 비활성('준비됨'은 활성) / 트랙 경기장 줄: 연결됨 전까지 비활성 — Coach PC 모니터의 빈 슬롯(.coach-slot--idle)과 같은 디자인 */
 function rrConnIdleRefresh() {
   const sps = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
   /* 활성 = 기기가 등록된 상태(준비됨·연결됨). 기기 미등록(미연결)만 비활성 */
@@ -8252,7 +8252,9 @@ function rrConnIdleRefresh() {
   document.querySelectorAll('#speedometerList .speedometer-list-item').forEach((it, idx) => {
     const w = it.querySelector('[id^="track-wheel-"]');
     const tid = w ? Number(String(w.id).replace('track-wheel-', '')) : idx + 1;
-    it.classList.toggle('rr-idle', !connOf(tid));
+    /* 트랙 경기장은 '연결됨'(센서 데이터 수신)이 될 때까지 비활성 — 준비됨도 비활성 */
+    const spT2 = sps.find(x => Number(x.id) === Number(tid));
+    it.classList.toggle('rr-idle', !(spT2 && spT2.connected));
   });
 }
 setInterval(function () { try { rrConnIdleRefresh(); } catch (e) {} }, 1000);
