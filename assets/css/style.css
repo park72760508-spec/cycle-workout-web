@@ -39893,3 +39893,13 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #rollerRaceDashboardScreen .rrp__hero { flex-wrap: wrap; }
   #rollerRaceDashboardScreen .rrp__gauge { flex: 1 1 100%; max-width: 330px; margin: 0 auto; }
 }
+
+/* 선수 프로필 창의 속도계: 다이얼 블럭 배경을 투명하게 — 프로필 창 배경이 그대로 비치도록 (다크·화이트·단체 공통) */
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-dial,
+#rollerRaceDashboardScreen.rr-theme-light .rrp__gauge .speedometer-dial,
+#rollerRaceDashboardScreen.rr-theme-light .rrp__gauge .speedometer-container.rr-grouped .speedometer-dial {
+  background: transparent !important; background-image: none !important;
+  border: 0 !important; box-shadow: none !important; backdrop-filter: none !important;
+}
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-dial::before,
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-dial::after { display: none !important; }
