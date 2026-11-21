@@ -4776,40 +4776,28 @@ var _readyDashboardOpening = false;
 async function openDashboardFromTrainingReady(kind) {
   if (_readyDashboardOpening) return;
   _readyDashboardOpening = true;
-  var overlay = document.getElementById('scheduleStartTrainingOverlay');
-  var textEl = overlay ? overlay.querySelector('.schedule-start-training-overlay-text') : null;
-  var prevText = textEl ? textEl.textContent : '';
   var shownAt = Date.now();
-  if (overlay) {
-    if (textEl) textEl.textContent = '대시보드 준비 중.....';
-    overlay.classList.remove('hidden');
-    overlay.style.setProperty('display', 'flex', 'important');
-  }
-  if (typeof window.stelvioShowSpinner === 'function') window.stelvioShowSpinner('대시보드 준비 중.....', 15000);
-  // 스피너가 먼저 그려지도록 두 프레임 양보
-  await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+  // 클릭 즉시 전역 원 스피너(블러 없는 가벼운 오버레이) 표시 — 무거운 화면 전환 전에 먼저 그려지도록 한다
+  if (typeof window.stelvioShowSpinner === 'function') window.stelvioShowSpinner('대시보드 준비 중.....', 20000);
+  // 스피너가 실제로 화면에 그려진 뒤(rAF → 다음 태스크) 무거운 작업 시작
+  await new Promise(function (r) { requestAnimationFrame(function () { setTimeout(r, 30); }); });
   try {
     if (kind === 'mobile') {
       showScreen('mobileDashboardScreen');
-      await new Promise(function (r) { setTimeout(r, 200); });
+      await new Promise(function (r) { setTimeout(r, 50); });
       if (typeof startMobileDashboard === 'function') await startMobileDashboard();
     } else {
       showScreen('trainingScreen');
-      await new Promise(function (r) { setTimeout(r, 200); });
+      await new Promise(function (r) { setTimeout(r, 50); });
       if (typeof initTrainingScreenForReady === 'function') initTrainingScreenForReady();
     }
   } catch (e) {
     console.error('[openDashboardFromTrainingReady] error:', e);
   } finally {
-    // 깜빡임 방지: 최소 400ms 표시
-    var remain = 400 - (Date.now() - shownAt);
+    // 깜빡임 방지: 최소 500ms 표시
+    var remain = 500 - (Date.now() - shownAt);
     if (remain > 0) await new Promise(function (r) { setTimeout(r, remain); });
     if (typeof window.stelvioHideSpinner === 'function') window.stelvioHideSpinner();
-    if (overlay) {
-      overlay.classList.add('hidden');
-      overlay.style.removeProperty('display');
-      if (textEl) textEl.textContent = prevText;
-    }
     _readyDashboardOpening = false;
   }
 }
