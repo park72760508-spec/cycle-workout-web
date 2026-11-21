@@ -8138,7 +8138,7 @@ function rrGroupRefresh() {
     } catch (e) {}
   }
   if (sbEl) sbEl.classList.toggle('rr-sb-grp', on);
-  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); }
+  if (sbEl && !on) { sbEl.style.removeProperty('--rr-sbl'); sbEl.style.removeProperty('--rr-sbr'); sbEl.style.removeProperty('--rr-sbl1'); sbEl.style.removeProperty('--rr-sbr1'); }
   if (!on) {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
@@ -8160,6 +8160,10 @@ function rrGroupRefresh() {
       };
       sbEl.style.setProperty('--rr-sbl', stops(parts[0]));
       sbEl.style.setProperty('--rr-sbr', stops(parts[1]));
+      /* 램프 글로우용 단색: 좌 = 좌측 첫 조, 우 = 우측 마지막 조 */
+      const lastC = function (arr, i) { return arr.length ? rrGroupColor(arr[i < 0 ? arr.length - 1 : i].no) : 'transparent'; };
+      sbEl.style.setProperty('--rr-sbl1', lastC(parts[0], 0));
+      sbEl.style.setProperty('--rr-sbr1', lastC(parts[1], -1));
     }
     const timeEl = document.getElementById('scoreboardTime');
     const basePx = timeEl ? parseFloat(getComputedStyle(timeEl).fontSize) || 28 : 28;

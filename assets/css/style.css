@@ -39589,24 +39589,52 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   pointer-events: none;
 }
 
-/* 단체 + 다크 모드 전광판: 좌 절반은 좌측 조 색(빨강 등), 우 절반은 우측 조 색(파랑 등)으로 양끝 띠와 하단 라인을 표시.
-   한쪽에 조가 여러 개면 그 조들의 색을 그라데이션으로 이어 붙인다. (--rr-sbl / --rr-sbr 는 rrGroupRefresh 가 설정) (2026-11-21) */
+/* ==========================================================================
+   단체 + 다크 모드 전광판 — 경기장 투광기 (2026-11-21, frontend-design)
+   트랙 줄의 조 램프와 같은 언어: 전광판 양끝에 투광기 램프 타워, 빛이 안쪽으로 번지고
+   바닥(하단선)에 조 색 빛무리가 깔린다. 가운데(경과시간)는 빛이 닿지 않아 가장 조용하게 — 시선은 숫자로.
+   좌 = 좌측 조 색(여러 조면 그라데이션), 우 = 우측 조 색. 변수는 rrGroupRefresh 가 설정.
+   ========================================================================== */
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp {
   border-left: 4px solid transparent; border-right: 4px solid transparent;
   box-shadow: 0 8px 28px rgba(0,0,0,.5);
+  background:
+    /* 바닥 빛무리 + 하단선(중앙 1/4 투명) */
+    linear-gradient(90deg, var(--rr-sbl, #ff3b3b), transparent 75%) left bottom / 50% 3px no-repeat,
+    linear-gradient(90deg, transparent 25%, var(--rr-sbr, #2563eb)) right bottom / 50% 3px no-repeat,
+    linear-gradient(0deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) 26%, transparent), transparent) left bottom / 38% 16px no-repeat,
+    linear-gradient(0deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) 26%, transparent), transparent) right bottom / 38% 16px no-repeat,
+    /* 램프에서 안쪽으로 번지는 빔 */
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-sbl1, #ff3b3b) 30%, transparent), transparent 34%),
+    linear-gradient(270deg, color-mix(in srgb, var(--rr-sbr1, #2563eb) 30%, transparent), transparent 34%),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0 1px, transparent 1px 3px),
+    linear-gradient(135deg, #0a0f1f 0%, #0d1530 60%, #131c3a 100%);
+}
+/* 램프 렌즈: 조 색 + 칸막이(루버) + 핫코어, 둘레 글로우 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::before,
+#rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after {
+  content: ""; position: absolute; top: 8px; bottom: 10px; width: 9px; height: auto;
+  box-sizing: border-box; border-radius: 3px; pointer-events: none;
 }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::before {
-  content: ""; position: absolute; left: -4px; right: -4px; top: 0; bottom: 0; pointer-events: none;
-  border-radius: 6px;
+  left: -5px; right: auto;
   background:
-    linear-gradient(180deg, var(--rr-sbl, #ff3b3b)) left / 4px 100% no-repeat,
-    linear-gradient(180deg, var(--rr-sbr, #2563eb)) right / 4px 100% no-repeat;
+    repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
+    linear-gradient(90deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
+    linear-gradient(180deg, var(--rr-sbl, #ff3b3b, #ff3b3b));
+  box-shadow: inset 0 0 2px rgba(255,255,255,.5), 0 0 6px 1px var(--rr-sbl1, #ff3b3b),
+    0 0 18px 3px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) 55%, transparent),
+    8px 0 22px 2px color-mix(in srgb, var(--rr-sbl1, #ff3b3b) 40%, transparent);
 }
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after {
-  height: 3px; left: -4px; right: -4px;
+  right: -5px; left: auto;
   background:
-    linear-gradient(90deg, var(--rr-sbl, #ff3b3b), transparent 75%) left / 50% 100% no-repeat,
-    linear-gradient(90deg, transparent 25%, var(--rr-sbr, #2563eb)) right / 50% 100% no-repeat;
+    repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 7px, rgba(0,0,0,.45) 7px 8px),
+    linear-gradient(270deg, rgba(0,0,0,.4), transparent 38%, rgba(255,255,255,.28) 68%, rgba(0,0,0,.35)),
+    linear-gradient(180deg, var(--rr-sbr, #2563eb, #2563eb));
+  box-shadow: inset 0 0 2px rgba(255,255,255,.5), 0 0 6px 1px var(--rr-sbr1, #2563eb),
+    0 0 18px 3px color-mix(in srgb, var(--rr-sbr1, #2563eb) 55%, transparent),
+    -8px 0 22px 2px color-mix(in srgb, var(--rr-sbr1, #2563eb) 40%, transparent);
 }
 
 /* ==========================================================================
