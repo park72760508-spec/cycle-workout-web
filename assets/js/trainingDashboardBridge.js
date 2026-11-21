@@ -865,7 +865,12 @@
     }, true);
   }
   /** 훈련 화면 진입 시 호출 — 첫 요청 + 연결 대기 시작 */
+  var _lastSessionStartScreen = null;
   function startAutoConnectSession() {
+    // 진입 직후 중복 호출(showScreen 래퍼 + 화면 감지 폴백)이 방금 보낸 연결 요청을 ABORT 로 취소하지 않게: 같은 화면에서 8초 안의 재시작은 무시
+    var curScreen = getActiveScreenId();
+    if (_acSession && curScreen && curScreen === _lastSessionStartScreen && Date.now() - _acSession.start < 8000) return;
+    _lastSessionStartScreen = curScreen;
     stopAutoConnectSession(true);
     if (!isAppEnvironmentNow()) {
       // 웹: 슬립으로 끊겨 재연결을 포기했던 기기를 훈련 화면 진입 시 다시 시도
