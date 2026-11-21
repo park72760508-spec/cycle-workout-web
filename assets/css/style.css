@@ -39593,6 +39593,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen:not(.rr-theme-light) .scoreboard-display.rr-sb-grp::after {
   height: 3px; left: -4px; right: -4px;
   background:
-    linear-gradient(90deg, var(--rr-sbl, #ff3b3b), transparent) left / 50% 100% no-repeat,
-    linear-gradient(90deg, transparent, var(--rr-sbr, #2563eb)) right / 50% 100% no-repeat;
+    linear-gradient(90deg, var(--rr-sbl, #ff3b3b), transparent 75%) left / 50% 100% no-repeat,
+    linear-gradient(90deg, transparent 25%, var(--rr-sbr, #2563eb)) right / 50% 100% no-repeat;
 }
