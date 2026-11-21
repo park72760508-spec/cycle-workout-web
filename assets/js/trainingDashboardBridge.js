@@ -647,7 +647,7 @@
     var sv = savedTrainingDevices();
     return AUTO_CONNECT_ORDER.filter(function (t) {
       if (!sv[t] || c[AUTO_CONNECT_TYPE_KEY[t]]) return false;
-      return inWindow || AUTO_CONNECT_INTERMITTENT[t] || !!(sess && sess.seen[t]);
+      return true; // 2026-11-21 10분이 지나도 저장된 모든 기기를 계속 대기(전원을 늦게 켜는 심박계 등) — 간격은 아래에서 넓게
     });
   }
   function setAutoConnectWaitingLabel(text) {
@@ -728,7 +728,7 @@
           curDrop.tries++;
         }
         sess.cur = null;
-        sess.nextAt = now + 1500;
+        sess.nextAt = now + (inWindow ? 1500 : 20000); // 10분 이후에는 시도 사이 20초 휴식(배터리·발열)
       } else return;
     }
     if (!pending.length || now < (sess.nextAt || 0)) return;
