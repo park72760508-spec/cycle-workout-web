@@ -39608,3 +39608,27 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     linear-gradient(90deg, var(--rr-sbl, #ff3b3b), transparent 75%) left / 50% 100% no-repeat,
     linear-gradient(90deg, transparent 25%, var(--rr-sbr, #2563eb)) right / 50% 100% no-repeat;
 }
+
+/* ==========================================================================
+   STELVIO Race 다크 모드 — 트랙 경기장 도로 (2026-11-21, frontend-design)
+   원칙: 도로는 무대 — 조용히 물러나고, 주인공(선수 마스코트·완주 궤적·결승선)만 밝게.
+   · 초록 잔디 띠·유광 하이라이트·노란 점선·촘촘한 눈금 = 시선을 분산시키는 요소 → 차분하게 낮춤
+   · 도로는 야간 서킷처럼 균일한 짙은 슬레이트, 가장자리는 또렷한 흰 선 하나
+   · 중간 지점(50%)만 눈금을 강조해 진행 위치를 한눈에, 완주 궤적은 시안 글로우로 가장 밝게
+   (SVG 속성 fill/opacity 는 CSS 가 덮어쓴다 — JS 마크업은 그대로, 화이트 모드는 그대로)
+   ========================================================================== */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg rect[fill^="url(#trk-grass"] { fill: #0a101c; }
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg rect[fill^="url(#trk-asphalt"] { fill: #161e2e; }
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg rect[fill^="url(#trk-gloss"] { opacity: 0; }
+/* 가장자리 라인: 또렷하게 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg rect[fill="#ffffff"][opacity="0.35"] { opacity: .7; }
+/* 중앙 점선: 중립 회청색, 아주 옅게 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg line[stroke="#fde68a"] { stroke: #94a3b8; opacity: .2; }
+/* 10% 눈금: 거의 안 보이게, 50% 지점만 강조 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg line[stroke="#fff"][opacity="0.45"] { opacity: .14; }
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg line[stroke="#fff"][opacity="0.45"]:nth-of-type(10),
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg line[stroke="#fff"][opacity="0.45"]:nth-of-type(11) { opacity: .6; stroke-width: 1.6; }
+/* 완주 궤적: 도로 위에서 가장 밝은 요소 — 시안 글로우 */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .straight-track-svg .track-done-fill {
+  opacity: .8; filter: drop-shadow(0 0 3px rgba(34, 211, 238, .75));
+}
