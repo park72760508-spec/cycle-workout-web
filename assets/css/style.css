@@ -39823,3 +39823,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
     -8px 0 22px 2px color-mix(in srgb, var(--rr-sbr1, #2563eb) 40%, transparent);
 }
 
+
+/* 화이트 모드: 속도계의 조 배지(1조·2조…) 숨김 — 조 구분은 카드 상단 조 색 라인으로 충분 (2026-11-21) */
+#rollerRaceDashboardScreen.rr-theme-light .rr-group-badge { display: none !important; }
