@@ -39875,7 +39875,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (prefers-reduced-motion: reduce) { #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::before, #rollerRaceDashboardScreen .scoreboard-display.rr-sb-grp::after { animation: none !important; } }
 
 /* STELVIO Race 선수 프로필: 상단 이전/다음 트랙 이동 + 우측 속도계(화면 속도계 복제) (2026-11-21) */
-#rollerRaceDashboardScreen .rrp__card { width: min(1180px, 96vw); }
+#rollerRaceDashboardScreen .rrp__card { width: min(1040px, 96vw); }
 #rollerRaceDashboardScreen .rrp__top { margin-right: 60px; }
 #rollerRaceDashboardScreen .rrp__nav {
   height: 30px; padding: 0 14px; border: 1px solid color-mix(in srgb, var(--rr-c) 55%, transparent); cursor: pointer;
@@ -39884,14 +39884,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #rollerRaceDashboardScreen .rrp__nav:hover { background: var(--rr-c); color: #06101a; }
 #rollerRaceDashboardScreen .rrp__nav:active { transform: translateY(1px); }
-#rollerRaceDashboardScreen .rrp__body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(260px, 31%, 380px); gap: 22px; align-items: center; }
-#rollerRaceDashboardScreen .rrp__main { min-width: 0; }
-#rollerRaceDashboardScreen .rrp__main .rrp__hero { gap: 24px; padding: 0 8px; }
-#rollerRaceDashboardScreen .rrp__main .rrp__stats { grid-template-columns: repeat(3, 1fr); margin: 22px 8px 0; }
-#rollerRaceDashboardScreen .rrp__main .rrp__stat b { font-size: 34px; }
-#rollerRaceDashboardScreen .rrp__gauge { min-width: 0; }
-#rollerRaceDashboardScreen .rrp__gauge .speedometer-container { width: 100%; max-width: none; margin: 0; }
-@media (max-width: 900px) {
-  #rollerRaceDashboardScreen .rrp__body { grid-template-columns: 1fr; }
-  #rollerRaceDashboardScreen .rrp__gauge { max-width: 380px; margin: 0 auto; width: 100%; }
+#rollerRaceDashboardScreen .rrp__hero { flex-wrap: nowrap; justify-content: space-between; }
+#rollerRaceDashboardScreen .rrp__id { flex: 1 1 auto; }
+#rollerRaceDashboardScreen .rrp__gauge { flex: 0 0 clamp(220px, 32%, 330px); min-width: 0; }
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-container { width: 100%; max-width: none; margin: 0; padding: 0; background: transparent; border: 0; box-shadow: none; }
+#rollerRaceDashboardScreen .rrp__gauge .speedometer-container::before { display: none; }
+@media (max-width: 720px) {
+  #rollerRaceDashboardScreen .rrp__hero { flex-wrap: wrap; }
+  #rollerRaceDashboardScreen .rrp__gauge { flex: 1 1 100%; max-width: 330px; margin: 0 auto; }
 }

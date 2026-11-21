@@ -7767,15 +7767,19 @@ function rrProfileRender() {
   if (rank > 1) { var g = rrFormatGap(Math.max(0, sorted[0].totalDistance - sp.totalDistance)); gap = g; }
   else if (rank === 1) gap = 'LEADER';
   q('[data-f="gap"]').textContent = gap;
-  // 우측: 화면에 보이는 해당 트랙의 속도계 카드를 그대로 복제(0.5초마다 갱신)
+  // 우측(사진·순위 오른쪽): 화면에 보이는 해당 트랙 속도계의 원호(다이얼)만 복제 — 헤더·정보 블럭·순위 배지는 제외(0.5초마다 갱신)
   var gz = q('.rrp__gauge');
   if (gz) {
     var srcCard = document.getElementById('speedometer-' + tid);
-    if (srcCard) {
-      var cl = srcCard.cloneNode(true);
-      cl.removeAttribute('id');
-      cl.classList.add('rrp__gauge-card');
-      gz.replaceChildren(cl);
+    var srcDial = srcCard && srcCard.querySelector('.speedometer-dial');
+    if (srcDial) {
+      var wrap = document.createElement('div');
+      wrap.className = 'speedometer-container rrp__gauge-card' + (srcCard.classList.contains('rr-grouped') ? ' rr-grouped' : '') + (srcCard.classList.contains('rr-idle') ? ' rr-idle' : '');
+      var gc = srcCard.style.getPropertyValue('--rr-gc'); if (gc) wrap.style.setProperty('--rr-gc', gc);
+      var dc = srcDial.cloneNode(true);
+      dc.querySelectorAll('.rank-display-bottom, .rr-sp-badge').forEach(function (n) { n.remove(); });
+      wrap.appendChild(dc);
+      gz.replaceChildren(wrap);
     } else { gz.textContent = ''; }
   }
   // 사진(크게)
@@ -7829,13 +7833,13 @@ window.rrOpenProfile = function (tid, ev) {
       '<div class="rrp__card" role="dialog" aria-modal="true" aria-label="선수 프로필">' +
         '<button type="button" class="rrp__close" aria-label="닫기">✕</button>' +
         '<div class="rrp__top"><button type="button" class="rrp__nav" data-nav="-1" aria-label="이전 트랙">‹ 이전</button><span class="rrp__track"></span><button type="button" class="rrp__nav" data-nav="1" aria-label="다음 트랙">다음 ›</button><span class="rrp__live">LIVE</span></div>' +
-        '<div class="rrp__body"><div class="rrp__main">' +
         '<div class="rrp__hero">' +
           '<div class="rrp__photo-wrap"><div class="rrp__photo"></div>' +
             '<button type="button" class="rrp__change">사진 변경</button>' +
             '<button type="button" class="rrp__change rrp__adjust" hidden>위치 조정</button></div>' +
           '<div class="rrp__id"><div class="rrp__name"></div>' +
             '<div class="rrp__rank"><span class="rrp__rank-num">-</span><span class="rrp__rank-suf"></span><span class="rrp__rank-of"></span></div></div>' +
+          '<div class="rrp__gauge" aria-label="속도계"></div>' +
         '</div>' +
         '<div class="rrp__stats">' +
           '<div class="rrp__stat rrp__stat--speed"><label>SPEED</label><b data-f="speed">-</b><small>km/h</small></div>' +
@@ -7844,7 +7848,6 @@ window.rrOpenProfile = function (tid, ev) {
           '<div class="rrp__stat"><label>MAX</label><b data-f="max">0.0</b><small>km/h</small></div>' +
           '<div class="rrp__stat rrp__stat--gap"><label>GAP</label><b data-f="gap">-</b><small>to leader</small></div>' +
         '</div>' +
-        '</div><div class="rrp__gauge" aria-label="속도계"></div></div>' +
       '</div>';
     host.appendChild(root);
     root.addEventListener('click', function (e) { if (e.target === root) rrCloseProfile(); });
