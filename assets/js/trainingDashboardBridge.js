@@ -614,11 +614,15 @@
     var names = typeof S.loadSavedDeviceNames === 'function' ? S.loadSavedDeviceNames() : {};
     var c = global.connectedDevices || {};
     var list = [];
+    var inWin = !sess || (Date.now() - sess.start) < AUTO_CONNECT_WINDOW_MS;
     AUTO_CONNECT_ORDER.forEach(function (k) {
       if (!saved[k] || c[AUTO_CONNECT_TYPE_KEY[k]]) return;
+      // 10분 이후에는 이번 훈련에서 연결됐다가 끊긴 기기만 대기(발열 절감)
+      if (!inWin && !(sess && (sess.seen[k] || sess.drop[k]))) return;
       list.push({ deviceType: k, deviceId: saved[k], deviceName: (names && names[k]) ? names[k] : '' });
     });
-    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list });
+    // webKnowsSaved: 웹이 저장 기기를 알고 있으면 앱은 자기 저장소로 목록을 보충하지 않는다(제외한 기기가 되살아나지 않게)
+    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0 });
   }
   function stopWatchSavedDevices() {
     if (_watchTimer) { clearInterval(_watchTimer); _watchTimer = null; }
@@ -647,7 +651,9 @@
     var sv = savedTrainingDevices();
     return AUTO_CONNECT_ORDER.filter(function (t) {
       if (!sv[t] || c[AUTO_CONNECT_TYPE_KEY[t]]) return false;
-      return true; // 2026-11-21 10분이 지나도 저장된 모든 기기를 계속 대기(전원을 늦게 켜는 심박계 등) — 간격은 아래에서 넓게
+      if (inWindow) return true; // 처음 10분: 저장된 모든 기기
+      // 10분 이후: 이번 훈련에서 한 번이라도 연결됐다가 끊긴 기기만 계속(자주 안 쓰는 기기는 자동 시도 목록에서 제외)
+      return !!(sess && (sess.seen[t] || sess.drop[t]));
     });
   }
   function setAutoConnectWaitingLabel(text) {
@@ -766,7 +772,7 @@
    *  - 휴대폰 화면이 다시 켜지거나 앱으로 돌아오면(휴식 후 복귀) · 훈련 화면을 터치하면(재개 버튼 등) 기다리지 않고 즉시 재시도
    *  - 10분 연결 대기가 끝난 뒤에 끊겨도 재연결 세션을 다시 열어 동작
    */
-  var RECONNECT_GAPS_MS = [2000, 5000, 10000, 15000];
+  var RECONNECT_GAPS_MS = [2000, 5000, 10000, 15000, 30000, 60000]; // 오래 쉬는 기기는 점점 간격을 늘림(발열 절감) — 깨어나면 앱의 대기 연결이 즉시 연결
   /** 끊긴 기기 한 번 시도 시간(연결 + 센서 준비 약 7초 포함) — 여러 대가 끊겨도 빨리 돌아가도록 25초 */
   var RECONNECT_ATTEMPT_MS = 25000;
   var RECONNECT_LABEL = { hr: '심박계', power: '파워미터', trainer: '스마트로라', speed: '속도계' };
