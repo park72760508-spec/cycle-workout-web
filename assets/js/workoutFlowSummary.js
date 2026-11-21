@@ -139,7 +139,7 @@ window.buildWorkoutFlowSummary = function(workout, ftp, rangesOut) {
 };
 })();
 
-/** 구간별 요약 행: [{kind:'WU'|'INT'|'CD', content:'…%', detail:'…W'}] — content 는 % 표기, detail 은 내 FTP 기준 W 표기(FTP 없으면 '') */
+/** 구간별 요약 행: [{kind:'WU'|'INT'|'RST'|'CD', content:'…%', detail:'…W'}] — content 는 % 표기, detail 은 내 FTP 기준 W 표기(FTP 없으면 '') */
 (function () {
   window.buildWorkoutFlowRows = function (workout, ftp) {
     var ranges = [];
@@ -151,6 +151,12 @@ window.buildWorkoutFlowSummary = function(workout, ftp, rangesOut) {
       var kind = 'INT', c = txt, d = B.length === A.length ? B[i] : '';
       if (/^WU /.test(txt)) { kind = 'WU'; c = txt.slice(3); d = d.replace(/^WU /, ''); }
       else if (/^CD /.test(txt)) { kind = 'CD'; c = txt.slice(3); d = d.replace(/^CD /, ''); }
+      else if (ranges[i] && ranges[i][0] === ranges[i][1] && txt.indexOf(' X (') < 0 && txt.indexOf('+') < 0) {
+        /* 반복 블록에 속하지 않은 단독 구간이 전 구간 FTP 60% 이하면 휴식(RST) — 반복(INT) 사이의 휴식은 해당 없음 */
+        var rest = txt.replace(/^(?:\d+h)?(?:\d+m)?(?:\d+s)?/, '');
+        var nums = rest.match(/\d+(?:\.\d+)?/g);
+        if (nums && Math.max.apply(null, nums.map(Number)) <= 60) kind = 'RST';
+      }
       return { kind: kind, content: c, detail: d, segFrom: ranges[i] ? ranges[i][0] : -1, segTo: ranges[i] ? ranges[i][1] : -1 };
     });
   };

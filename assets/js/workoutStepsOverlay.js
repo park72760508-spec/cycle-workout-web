@@ -1,6 +1,6 @@
 /**
  * 모바일 훈련 화면 워크아웃 그래프 클릭 → 구간별 요약표 오버레이 (Race 컨셉: 다크 네이비 + 시안/라임/오렌지 포인트)
- * 표: 구분(WU/INT/CD) | 훈련 내용(% 표기) | 상세 내용(내 FTP 기준 W 표기)
+ * 표: 구분(WU/INT/RST/CD) | 훈련 내용(% 표기) | 상세 내용(내 FTP 기준 W 표기)
  */
 (function () {
   'use strict';
@@ -24,7 +24,7 @@
     '.wso-kind.wso-now{animation:wsoBlink 1s ease-in-out infinite;}' +
     '.wso-empty{padding:24px 8px;text-align:center;color:#9fb0cc;font-size:13px;}' +
     '.wso-note{margin-top:6px;font-size:10.5px;color:#8fa0c0;text-align:right;}';
-  var COLORS = { WU: '#22d3ee', INT: '#ff8c00', CD: '#a3e635' };
+  var COLORS = { WU: '#22d3ee', INT: '#ff8c00', RST: '#94a3b8', CD: '#a3e635' };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function ensureCss() {
     if (document.getElementById('wsoStyle')) return;
