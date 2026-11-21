@@ -39568,12 +39568,24 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #outdoorRideScreen .outd-busrt__list .outd-oval .outd-ov-tr .outd-busrt__veh { padding-bottom: 3px; }
 }
 
-/* 단체 + 다크 모드: 트랙 경기장 줄 맨 왼쪽에 조 색상 띠 + 흰색 테두리 구분선(시인성) — 화이트 모드 띠와 같은 위치·두께 (2026-11-21) */
-#rollerRaceDashboardScreen:not(.rr-theme-light) .speedometer-list-item.rr-grouped { position: relative; }
+/* 단체 + 다크 모드: 트랙 경기장 줄 맨 왼쪽 조 구분 띠를 경기장 투광기(전조등) 램프로 표현 (2026-11-21)
+   - 렌즈: 조 색이 켜진 램프 한 줄(가운데가 가장 밝은 핫코어) + 칸막이(루버)로 투광기 패널 느낌
+   - 빛: 램프 둘레 글로우 + 줄 안쪽으로 번지는 빔(배경 그라데이션, 글자 아래라 가독성 유지) */
+#rollerRaceDashboardScreen:not(.rr-theme-light) .speedometer-list-item.rr-grouped {
+  position: relative;
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--rr-gc) 34%, transparent) 0%, color-mix(in srgb, var(--rr-gc) 10%, transparent) 22%, transparent 46%);
+}
 #rollerRaceDashboardScreen:not(.rr-theme-light) .speedometer-list-item.rr-grouped::before {
-  content: ''; position: absolute; left: -1px; top: -1px; bottom: -1px; width: 7px;
-  box-sizing: border-box; background: var(--rr-gc);
-  border: 1.5px solid #ffffff; border-radius: 8px 0 0 8px;
+  content: ''; position: absolute; left: -2px; top: 3px; bottom: 3px; width: 8px;
+  box-sizing: border-box; border: 0; border-radius: 3px;
+  background:
+    repeating-linear-gradient(0deg, rgba(0,0,0,0) 0 6px, rgba(0,0,0,.42) 6px 7px),
+    linear-gradient(90deg, color-mix(in srgb, var(--rr-gc) 62%, #000) 0%, var(--rr-gc) 38%, color-mix(in srgb, var(--rr-gc) 45%, #fff) 70%, color-mix(in srgb, var(--rr-gc) 78%, #000) 100%);
+  box-shadow:
+    inset 0 0 2px rgba(255,255,255,.55),
+    0 0 5px 1px var(--rr-gc),
+    0 0 14px 3px color-mix(in srgb, var(--rr-gc) 55%, transparent),
+    6px 0 18px 2px color-mix(in srgb, var(--rr-gc) 38%, transparent);
   pointer-events: none;
 }
 
