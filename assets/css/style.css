@@ -40114,3 +40114,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 전광판 누적거리: '누적 / 목표 km' — 목표거리와 단위는 소수점 이하와 같은 작은 글자·같은 기준선, 흐린 흰색 (2026-11-21) */
 .rr-group-dist__row .rr-gd-d .rr-frac.rr-gd-tg { font-size: .62em; font-weight: 700; color: rgba(255,255,255,.55) !important; text-shadow: none; white-space: nowrap; letter-spacing: .01em; }
+
+/* 전광판 조 라벨·누적거리·목표거리 30% 확대 (줄1 전체 1.3배 — 달성 바 줄은 그대로) (2026-11-21) */
+.rr-group-dist__row .rr-gd-l1 { font-size: 1.3em; }
