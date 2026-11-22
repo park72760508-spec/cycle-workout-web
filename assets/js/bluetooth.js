@@ -829,14 +829,14 @@ async function connectTrainer(isNewSearch) {
         if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
           await oldDevice.gatt.disconnect();
         }
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('trainer', oldDevice); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('trainer', oldDevice);
         // UI 업데이트를 위해 잠시 대기
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (disconnectError) {
         console.warn('[connectTrainer] 기존 연결 해제 실패:', disconnectError);
         // 강제로 연결 상태 해제
         window.connectedDevices.trainer = null;
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('trainer', null); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('trainer', null);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
@@ -1168,14 +1168,14 @@ async function connectHeartRate(isNewSearch) {
         if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
           await oldDevice.gatt.disconnect();
         }
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('heartRate', oldDevice); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('heartRate', oldDevice);
         // UI 업데이트를 위해 잠시 대기
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (disconnectError) {
         console.warn('[connectHeartRate] 기존 연결 해제 실패:', disconnectError);
         // 강제로 연결 상태 해제
         window.connectedDevices.heartRate = null;
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('heartRate', null); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('heartRate', null);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
@@ -1263,14 +1263,14 @@ async function connectPowerMeter(isNewSearch) {
         if (oldDevice && oldDevice.gatt && oldDevice.gatt.connected) {
           await oldDevice.gatt.disconnect();
         }
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('powerMeter', oldDevice); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('powerMeter', oldDevice);
         // UI 업데이트를 위해 잠시 대기
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (disconnectError) {
         console.warn('[connectPowerMeter] 기존 연결 해제 실패:', disconnectError);
         // 강제로 연결 상태 해제
         window.connectedDevices.powerMeter = null;
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('powerMeter', null); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('powerMeter', null);
         await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
@@ -1346,11 +1346,11 @@ async function connectSpeedometer(isNewSearch) {
       try {
         const oldDevice = window.connectedDevices.speed.device;
         if (oldDevice?.gatt?.connected) await oldDevice.gatt.disconnect();
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('speed', oldDevice); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('speed', oldDevice);
         await new Promise(r => setTimeout(r, 100));
       } catch (e) {
         window.connectedDevices.speed = null;
-        { window._stelvioSkipAutoReconnect = true; try { handleDisconnect('speed', null); } finally { window._stelvioSkipAutoReconnect = false; } }
+        handleDisconnect('speed', null);
         await new Promise(r => setTimeout(r, 100));
       }
     }
@@ -1487,10 +1487,11 @@ function handleDisconnect(type, device) {
 
   // [웹 전용] gattserverdisconnected 기반 자동 재연결: 저장된 기기가 있으면 지수 백오프(1s→2s→4s→8s)로 재시도
   if (isWebEnvironment()) {
-    var saved = pickSavedDeviceForReconnect(type);
-    if (saved && !window._stelvioSkipAutoReconnect && (!window._stelvioReconnectScheduled || !window._stelvioReconnectScheduled[type])) {
+    var savedList = getSavedDevicesByType(type);
+    if (savedList.length > 0 && (!window._stelvioReconnectScheduled || !window._stelvioReconnectScheduled[type])) {
       if (!window._stelvioReconnectScheduled) window._stelvioReconnectScheduled = {};
       window._stelvioReconnectScheduled[type] = true;
+      var saved = savedList[0];
       scheduleWebReconnectWithBackoff(type, saved.deviceId, 0);
     }
   }
@@ -1557,8 +1558,7 @@ function watchWebDeviceAdvertisement(deviceType, deviceId) {
 }
 function runWebReconnectAttemptNow(deviceType, reason) {
   var st = _webReconnect[deviceType];
-  if (!st) return;
-  if (st.busy) { st.kick = true; return; } // 2026-11-21 시도 중 광고(전원 켜짐) 감지 → 끝나는 즉시 다시 시도
+  if (!st || st.busy) return;
   if (st.timer) { clearTimeout(st.timer); st.timer = null; }
   console.log('[bluetooth] 재연결 즉시 시도', deviceType, reason || '');
   doWebReconnectAttempt(deviceType);
@@ -1570,44 +1570,27 @@ function doWebReconnectAttempt(deviceType) {
   var connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (window.connectToSavedDeviceById || null);
   if (!connectById) { stopWebReconnect(deviceType); return; }
   st.busy = true;
-  var afterFail = function () {
-    st.busy = false;
-    if (st.kick && _webReconnect[deviceType] === st) { st.kick = false; doWebReconnectAttempt(deviceType); return; }
-    scheduleWebReconnectWithBackoff(deviceType, st.deviceId, st.attempt + 1);
-  };
   reconnectToSavedDevice(st.deviceId, deviceType).then(function (result) {
     st.busy = false;
     if (result && result.device && result.server) {
       stopWebReconnect(deviceType);
-      // 여러 기기가 동시에 켜져도 서비스 설정 단계는 한 번에 하나씩(BLE 스택 포화 방지)
-      runWebConnectExclusive(function () {
-        if (window.connectedDevices && window.connectedDevices[deviceType]) return null;
-        return connectById(st.deviceId, deviceType);
-      });
+      connectById(st.deviceId, deviceType).catch(function () {});
     } else {
-      afterFail();
+      scheduleWebReconnectWithBackoff(deviceType, st.deviceId, st.attempt + 1);
     }
-  }).catch(afterFail);
+  }).catch(function () {
+    st.busy = false;
+    scheduleWebReconnectWithBackoff(deviceType, st.deviceId, st.attempt + 1);
+  });
 }
-var _webConnectChain = Promise.resolve();
-function runWebConnectExclusive(fn) {
-  _webConnectChain = _webConnectChain.then(function () { return fn(); }).catch(function () {});
-  return _webConnectChain;
-}
-/** 같은 종류의 저장 기기가 여럿이면 가장 최근에 연결한 기기부터 */
-function pickSavedDeviceForReconnect(type) {
-  var list = getSavedDevicesByType(type).slice().sort(function (a, b) { return (b.lastConnected || 0) - (a.lastConnected || 0); });
-  return list[0] || null;
-}
-function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex, opts) {
+function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex) {
   if (!isWebEnvironment() || isAppEnvironment()) return;
   var connectById = typeof connectToSavedDeviceById === 'function' ? connectToSavedDeviceById : (window.connectToSavedDeviceById || null);
   if (!connectById) return;
   var st = _webReconnect[deviceType];
   if (!st || attemptIndex === 0) {
     if (st) stopWebReconnect(deviceType);
-    st = _webReconnect[deviceType] = { deviceId: deviceId, attempt: 0, startedAt: Date.now(), timer: null, busy: false, adAbort: null, noticed: false, kick: false, silent: !!(opts && opts.silent) };
-    watchWebDeviceAdvertisement(deviceType, deviceId); // 2026-11-21 첫 시도 때부터 광고 감지(전원 켜짐 즉시 연결)
+    st = _webReconnect[deviceType] = { deviceId: deviceId, attempt: 0, startedAt: Date.now(), timer: null, busy: false, adAbort: null, noticed: false };
     if (!window._stelvioReconnectScheduled) window._stelvioReconnectScheduled = {};
     window._stelvioReconnectScheduled[deviceType] = true;
     installWebReconnectResumeHooks();
@@ -1619,14 +1602,13 @@ function scheduleWebReconnectWithBackoff(deviceType, deviceId, attemptIndex, opt
   } else if (Date.now() - st.startedAt < WEB_RECONNECT_MAX_MS) {
     // 2026-11-15 화면과 무관하게 슬립(슬림 모드)에서 깨어날 때까지 계속 시도(훈련 화면 밖은 30초 간격, 광고 감지 시 즉시)
     var onTr = isOnTrainingScreenForReconnect();
-    if (onTr && !st.noticed && !st.silent) { st.noticed = true; webReconnectFailNotice(deviceType, true); }
+    if (onTr && !st.noticed) { st.noticed = true; webReconnectFailNotice(deviceType, true); }
     watchWebDeviceAdvertisement(deviceType, deviceId);
     delay = onTr ? WEB_RECONNECT_STEADY_MS : 30000;
   } else {
     console.warn('[bluetooth] 최대 재연결 시도 횟수 초과. 연결 실패.');
-    var wasSilent = st.silent;
     stopWebReconnect(deviceType);
-    if (!wasSilent) webReconnectFailNotice(deviceType, false);
+    webReconnectFailNotice(deviceType, false);
     return;
   }
   st.timer = setTimeout(function () {
@@ -1639,19 +1621,11 @@ window.StelvioResumeWebReconnect = function (reason) {
   try {
     if (!isWebEnvironment() || isAppEnvironment()) return;
     var dropped = window._stelvioDisconnectedTypes || {};
-    var enter = reason === 'screen-enter';
-    ['heartRate', 'powerMeter', 'trainer', 'speed'].forEach(function (t, i) {
-      if (window.connectedDevices && window.connectedDevices[t]) return;
-      // 2026-11-21 화면 진입 시에는 끊긴 적 없는(처음부터 꺼져 있던) 저장 기기도 대상 — 전원이 켜지면 자동 연결
-      if (!dropped[t] && !enter) return;
+    ['heartRate', 'powerMeter', 'trainer', 'speed'].forEach(function (t) {
+      if (!dropped[t] || (window.connectedDevices && window.connectedDevices[t])) return;
       if (_webReconnect[t]) { runWebReconnectAttemptNow(t, reason || 'resume'); return; }
-      var sv = pickSavedDeviceForReconnect(t);
-      if (!sv) return;
-      // 기기 종류별 시작 시점을 0.5초씩 어긋나게(동시 gatt.connect 방지). 진입 자동연결은 안내 토스트 없이 조용히
-      setTimeout(function () {
-        if ((window.connectedDevices && window.connectedDevices[t]) || _webReconnect[t]) return;
-        scheduleWebReconnectWithBackoff(t, sv.deviceId, 0, { silent: !dropped[t] });
-      }, enter ? i * 500 : 0);
+      var list = getSavedDevicesByType(t);
+      if (list.length > 0) scheduleWebReconnectWithBackoff(t, list[0].deviceId, 0);
     });
   } catch (e) {}
 };

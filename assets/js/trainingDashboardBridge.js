@@ -596,75 +596,6 @@
   var AUTO_CONNECT_TYPE_KEY = { hr: 'heartRate', power: 'powerMeter', trainer: 'trainer', speed: 'speed' };
   var AUTO_CONNECT_INTERMITTENT = { trainer: true, speed: true };
   var _acSession = null;
-  /*
-   * 2026-11-21 저장 기기 상시 대기 연결(앱): 훈련 화면에 있는 동안 저장된 기기(미연결 종류)를 앱이 OS에 '대기 연결'로 걸어둔다.
-   * 폰 설정의 페어링 기기처럼 기기 전원이 켜지는 순간 자동 연결 — 위의 번갈아 시도(30초씩)를 기다리지 않는다.
-   * 웹은 30초마다 목록을 갱신(앱은 90초 갱신이 없으면 스스로 해제), 훈련 화면을 떠나면 즉시 해제 요청.
-   */
-  var WATCH_KEEPALIVE_MS = 30000;
-  /*
-   * 테스트 빌드 전용 진단 표시(앱이 window.StelvioBleDiagOn=true 로 켬): 앱의 BLE 자동 연결 상태·최근 로그를
-   * 화면 왼쪽 아래에 작게 표시 — 스크린샷만으로 어디서 막히는지 확인. 배포 빌드에서는 표시되지 않음.
-   */
-  global.addEventListener('stelvioBleDiag', function (ev) {
-    try {
-      if (!global.StelvioBleDiagOn) return;
-      var el = document.getElementById('stelvioBleDiag');
-      if (!el) {
-        el = document.createElement('div');
-        el.id = 'stelvioBleDiag';
-        el.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:2147483001;max-width:92vw;padding:4px 6px;border-radius:6px;' +
-          'background:rgba(0,0,0,.72);color:#7CFC9A;font:10px/1.35 ui-monospace,Menlo,monospace;pointer-events:none;white-space:pre-wrap;';
-        document.body.appendChild(el);
-      }
-      var d = ev && ev.detail ? ev.detail : {};
-      var active = getActiveScreenId();
-      el.style.display = (active && isTargetScreen(active)) ? 'block' : 'none';
-      el.textContent = (d.state || '') + '\n' + (d.lines || []).join('\n');
-    } catch (e) {}
-  });
-  /**
-   * 앱(상시 대기)에 내려보내는 원격 설정 — 검색 주기·시간을 앱 재배포 없이 웹에서 조정한다(앱 새 빌드부터 적용, 이전 빌드는 무시).
-   * tiers: [훈련 진입 후 N초 미만, 검색 간격(초), 검색 시간(초)] / tail: 마지막 구간 이후 단계별 간격(초)
-   */
-  var WATCH_CFG = { tiers: [[180, 5, 4], [300, 20, 6], [600, 30, 8]], tail: [20, 60, 120], manualGuardMs: 16000, iosPhase1Ms: 300000, ttlMs: 90000 };
-  var _watchTimer = null;
-  function sendWatchSavedDevices() {
-    if (!isAppEnvironmentNow()) return;
-    var sess = _acSession;
-    if (sess && Date.now() < (sess.pauseUntil || 0)) return; // 수동 연결 중에는 갱신 보류
-    var S = global.StelvioDeviceBridgeStorage;
-    if (!S || typeof S.loadSavedDevices !== 'function') return;
-    var saved = S.loadSavedDevices();
-    if (!saved || typeof saved !== 'object') return;
-    var names = typeof S.loadSavedDeviceNames === 'function' ? S.loadSavedDeviceNames() : {};
-    var c = global.connectedDevices || {};
-    var list = [];
-    if (!sess) return; // 세션이 없으면(종료됨) 목록을 보내지 않음
-    var inWin = (Date.now() - sess.start) < AUTO_CONNECT_WINDOW_MS;
-    AUTO_CONNECT_ORDER.forEach(function (k) {
-      if (!saved[k] || c[AUTO_CONNECT_TYPE_KEY[k]]) return;
-      // 10분 이후에는 이번 훈련에서 연결됐다가 끊긴 기기만 대기(발열 절감)
-      if (!inWin && !(sess && (sess.seen[k] || sess.drop[k]))) return;
-      list.push({ deviceType: k, deviceId: saved[k], deviceName: (names && names[k]) ? names[k] : '' });
-    });
-    // webKnowsSaved: 웹이 저장 기기를 알고 있으면 앱은 자기 저장소로 목록을 보충하지 않는다(제외한 기기가 되살아나지 않게)
-    safePostToNative({ type: 'WATCH_SAVED_DEVICES', devicesList: list, webKnowsSaved: Object.keys(saved).length > 0, sessAgeMs: Date.now() - sess.start, cfg: WATCH_CFG });
-  }
-  function stopWatchSavedDevices() {
-    if (_watchTimer) { clearInterval(_watchTimer); _watchTimer = null; }
-    try { safePostToNative({ type: 'STOP_WATCH_SAVED_DEVICES' }); } catch (e) {}
-  }
-  function startWatchSavedDevices() {
-    if (!isAppEnvironmentNow()) return;
-    if (_watchTimer) clearInterval(_watchTimer);
-    sendWatchSavedDevices();
-    _watchTimer = setInterval(function () {
-      var active = getActiveScreenId();
-      if (!active || !isTargetScreen(active)) { stopWatchSavedDevices(); return; }
-      sendWatchSavedDevices();
-    }, WATCH_KEEPALIVE_MS);
-  }
   function savedTrainingDevices() {
     try {
       var S = global.StelvioDeviceBridgeStorage;
@@ -678,9 +609,7 @@
     var sv = savedTrainingDevices();
     return AUTO_CONNECT_ORDER.filter(function (t) {
       if (!sv[t] || c[AUTO_CONNECT_TYPE_KEY[t]]) return false;
-      if (inWindow) return true; // 처음 10분: 저장된 모든 기기
-      // 10분 이후: 이번 훈련에서 한 번이라도 연결됐다가 끊긴 기기만 계속(자주 안 쓰는 기기는 자동 시도 목록에서 제외)
-      return !!(sess && (sess.seen[t] || sess.drop[t]));
+      return inWindow || AUTO_CONNECT_INTERMITTENT[t] || !!(sess && sess.seen[t]);
     });
   }
   function setAutoConnectWaitingLabel(text) {
@@ -713,7 +642,7 @@
     if (!sess) return;
     var now = Date.now();
     var active = getActiveScreenId();
-    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(true); stopWatchSavedDevices(); return; }
+    if (!active || !isTargetScreen(active)) { stopAutoConnectSession(true); return; }
     var c = global.connectedDevices || {};
     AUTO_CONNECT_ORDER.forEach(function (t) { if (c[AUTO_CONNECT_TYPE_KEY[t]]) sess.seen[t] = true; });
     var left = AUTO_CONNECT_WINDOW_MS - (now - sess.start);
@@ -730,7 +659,7 @@
         setAutoConnectWaitingLabel(dropAny.length
           ? '재연결 대기 · ' + dropAny.map(function (t) { return RECONNECT_LABEL[t]; }).join('·')
           : '연결 대기 중 · ' + Math.ceil(left / 60000) + '분');
-        if (now - sess.lastSent >= (inWindow ? AUTO_CONNECT_RESEND_MS : 60000)) { sess.lastSent = now; sendRequestAutoConnect(); }
+        if (now - sess.lastSent >= AUTO_CONNECT_RESEND_MS) { sess.lastSent = now; sendRequestAutoConnect(); }
       }
       return;
     }
@@ -761,7 +690,7 @@
           curDrop.tries++;
         }
         sess.cur = null;
-        sess.nextAt = now + (inWindow ? 1500 : 20000); // 10분 이후에는 시도 사이 20초 휴식(배터리·발열)
+        sess.nextAt = now + 1500;
       } else return;
     }
     if (!pending.length || now < (sess.nextAt || 0)) return;
@@ -799,7 +728,7 @@
    *  - 휴대폰 화면이 다시 켜지거나 앱으로 돌아오면(휴식 후 복귀) · 훈련 화면을 터치하면(재개 버튼 등) 기다리지 않고 즉시 재시도
    *  - 10분 연결 대기가 끝난 뒤에 끊겨도 재연결 세션을 다시 열어 동작
    */
-  var RECONNECT_GAPS_MS = [2000, 5000, 10000, 15000, 30000, 60000]; // 오래 쉬는 기기는 점점 간격을 늘림(발열 절감) — 깨어나면 앱의 대기 연결이 즉시 연결
+  var RECONNECT_GAPS_MS = [2000, 5000, 10000, 15000];
   /** 끊긴 기기 한 번 시도 시간(연결 + 센서 준비 약 7초 포함) — 여러 대가 끊겨도 빨리 돌아가도록 25초 */
   var RECONNECT_ATTEMPT_MS = 25000;
   var RECONNECT_LABEL = { hr: '심박계', power: '파워미터', trainer: '스마트로라', speed: '속도계' };
@@ -834,7 +763,6 @@
     }
     sess.nextAt = Math.min(sess.nextAt || 0, Date.now() + 500);
     setTimeout(tickAutoConnectSession, 600);
-    sendWatchSavedDevices(); // 끊긴 기기를 앱 상시 대기 목록에 즉시 반영
   }
   var _lastReconnectKickAt = 0;
   /** 휴식 후 복귀 신호 → 끊긴 기기 즉시 재시도 */
@@ -842,7 +770,7 @@
     var sess = _acSession;
     if (!sess || !Object.keys(sess.drop).length) return;
     var now = Date.now();
-    if (now - _lastReconnectKickAt < (reason === 'touch' ? 60000 : 8000)) return; // 터치는 60초에 한 번만(재시도 간격 점증이 매번 초기화되지 않게)
+    if (now - _lastReconnectKickAt < 8000) return;
     _lastReconnectKickAt = now;
     Object.keys(sess.drop).forEach(function (t) { sess.drop[t].nextAt = now; sess.drop[t].tries = 0; });
     sess.pauseUntil = 0;
@@ -870,12 +798,7 @@
     }, true);
   }
   /** 훈련 화면 진입 시 호출 — 첫 요청 + 연결 대기 시작 */
-  var _lastSessionStartScreen = null;
   function startAutoConnectSession() {
-    // 진입 직후 중복 호출(showScreen 래퍼 + 화면 감지 폴백)이 방금 보낸 연결 요청을 ABORT 로 취소하지 않게: 같은 화면에서 8초 안의 재시작은 무시
-    var curScreen = getActiveScreenId();
-    if (_acSession && curScreen && curScreen === _lastSessionStartScreen && Date.now() - _acSession.start < 8000) return;
-    _lastSessionStartScreen = curScreen;
     stopAutoConnectSession(true);
     if (!isAppEnvironmentNow()) {
       // 웹: 슬립으로 끊겨 재연결을 포기했던 기기를 훈련 화면 진입 시 다시 시도
@@ -889,15 +812,13 @@
     (function seedDropMemo() {
       var cc = global.connectedDevices || {};
       Object.keys(_dropMemo).forEach(function (t) {
-        // 30분 넘게 지난 끊김 기록은 무시(지난 라이딩 후 꺼진 기기가 영구 재시도 대상이 되지 않게)
-        if (!cc[AUTO_CONNECT_TYPE_KEY[t]] && Date.now() - _dropMemo[t] < 30 * 60 * 1000) {
+        if (!cc[AUTO_CONNECT_TYPE_KEY[t]]) {
           _acSession.seen[t] = true;
           _acSession.drop[t] = { at: _dropMemo[t], tries: 0, nextAt: Date.now() };
         }
       });
       _dropMemo = {};
     })();
-    startWatchSavedDevices(); // 2026-11-21 저장 기기 상시 대기 연결(전원 켜짐 즉시 연결) — 세션 생성 후 시작
     tickAutoConnectSession(); // 바로 첫 기기(저장 목록이 없으면 전체) 요청
     if (_acSession) _acSession.timer = setInterval(tickAutoConnectSession, 2000);
   }
