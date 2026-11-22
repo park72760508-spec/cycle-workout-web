@@ -4844,6 +4844,19 @@ function rrScheduleUsbRecovery() {
  * 15초 동안 ANT+ 데이터가 전혀 안 들어오면(USB 읽기 멈춤·스틱 스캔 모드 해제 등) 스캔 모드를 다시 설정하고 수신 루프를 새로 시작.
  * 45초에 한 번까지만 시도.
  */
+/** 수신 통계 스냅샷 문자열(카운터는 초기화) — 4E=전체 브로드캐스트, spd=속도계 형식, short=확장정보 없음, other=기타 메시지 ID별 개수 */
+function rrStatSnap() {
+  const st = window.__rrMsgStat; if (!st) return 'no-stat';
+  const o = Object.keys(st.other).map(function (k) { return (isNaN(k) ? k : '0x' + Number(k).toString(16)) + '×' + st.other[k]; }).join(' ');
+  const txt = '4E=' + st.n + ' spd=' + st.spd + ' short=' + st.shortN + (o ? ' other[' + o + ']' : '');
+  window.__rrMsgStat = { n: 0, spd: 0, shortN: 0, other: {} };
+  return txt;
+}
+setInterval(function () {
+  const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+  if (rs === 'running' || rs === 'paused') rrBB('health/min', rrStatSnap());
+}, 60000);
+
 function rrReceiverWatchdog() {
   try {
     const a = window.antState;
@@ -4870,7 +4883,8 @@ function rrReceiverWatchdog() {
     //  3단계(50초~, 5분에 1회): USB 닫았다 다시 열기(rrScheduleUsbRecovery)
     if (!W.r1) {
       W.r1 = now;
-      console.warn('[ANT+] 수신 멈춤 감지 → 1단계 복구(수신 루프 재시작·스캔 재명령)'); rrBB('wd-stage1', usbStall ? 'USB 무수신' : '센서만 무수신');
+      console.warn('[ANT+] 수신 멈춤 감지 → 1단계 복구(수신 루프 재시작·스캔 재명령)'); rrBB('wd-stage1', (usbStall ? 'USB 무수신 ' : '센서만 무수신 ') + rrStatSnap() + ' buf=' + (typeof masterRxBuffer !== 'undefined' ? masterRxBuffer.length : '?') + ' scr=' + ((document.querySelector('.screen.active') || {}).id || '?'));
+      try { masterRxBuffer = new Uint8Array(0); packetBuffer = new Uint8Array(0); } catch (eBuf) {} // 파서 동기 틀어짐 가능성 제거
       a.isScanning = true; window.antMessageListenerActive = true;
       startANTMessageListener();
       sendANTMessage(0x5B, [0x00]).catch(function () {});
@@ -4879,7 +4893,7 @@ function rrReceiverWatchdog() {
     if (age >= 20000 && now - W.r2 >= 60000) {
       W.r2 = now;
       console.warn('[ANT+] 수신 멈춤 지속(' + Math.round(age / 1000) + '초) → 2단계 복구(Reset 없이 스캔 모드 재설정)');
-      rrBB('wd-stage2', usbStall ? 'USB 무수신' : '센서만 무수신');
+      rrBB('wd-stage2', (usbStall ? 'USB 무수신 ' : '센서만 무수신 ') + rrStatSnap());
       rrRearmScanNoReset();
       return;
     }
@@ -4887,7 +4901,14 @@ function rrReceiverWatchdog() {
       W.r3 = now;
       // 3단계는 '스틱이 응답하지 않을 때만' USB 재오픈(전 트랙이 몇 초간 동시에 끊김). 스틱이 응답하면 센서가 조용한 것(라이더 정지·센서 절전)이므로 Reset 없이 재설정만.
       rrProbeStick(1500).then(function (alive) {
-        if (alive) { rrBB('wd-stage3-skip', '스틱 응답함 → 재오픈 생략'); rrRearmScanNoReset(); return; }
+        if (alive) {
+          // 스틱은 응답하는데 센서가 계속 안 들어온다 = 스틱 내부 스캔 상태가 틀어진 것. 이미 모든 속도계가 조용하므로 Reset 으로 잃을 것이 없다 → Reset 재초기화
+          rrBB('wd-stage3-reset', '스틱 응답·센서 무수신 지속 → USB 유지한 채 Reset 재초기화 ' + rrStatSnap());
+          a.isScanningActive = false;
+          window.__rrAllowReset = true;
+          Promise.resolve(startContinuousScan()).catch(function () {}).then(function () { window.__rrAllowReset = false; });
+          return;
+        }
         console.warn('[ANT+] 수신 멈춤 지속(' + Math.round(age / 1000) + '초) + 스틱 무응답 → 3단계 복구(USB 재오픈)');
         rrBB('wd-stage3', '스틱 무응답 → USB 재오픈');
         a.isScanning = false; a.isScanningActive = false; window.antMessageListenerActive = false;
@@ -6570,6 +6591,18 @@ function routeANTMessage(packet) {
       return;
   }
 
+  // 2026-11-22 수신 통계(가벼운 카운터): 분 단위로 블랙박스에 남겨 '센서만 사라졌는지/형식이 바뀌었는지/스틱이 리셋됐는지' 구분
+  const __st = window.__rrMsgStat || (window.__rrMsgStat = { n: 0, spd: 0, shortN: 0, other: {} });
+  if (msgId === 0x4E) __st.n++;
+  else {
+    __st.other[msgId] = (__st.other[msgId] || 0) + 1;
+    // 스틱이 스스로 리셋되면 시작 메시지(0x6F)가 온다 → 스캔 설정이 사라진 것이므로 즉시 기록하고 재설정
+    if (msgId === 0x6F) { rrBB('stick-reset-msg', '스틱 시작 메시지(0x6F) 수신 payload=' + Array.from(payload).join(',')); window.__rrStickReset = Date.now();
+      // 우리가 보낸 Reset(초기화 중)이 아닌데 스틱이 스스로 리셋됐다면(전원 순간 저하·펌웨어 재시작) 스캔 설정이 사라졌으므로 바로 다시 설정
+      if (!window.antState.isInitializing && !window.__rrRearmBusy) setTimeout(function () { if (!window.antState.isInitializing) rrRearmScanNoReset(); }, 600);
+    }
+    else if (msgId === 0x40 && payload.length >= 3 && payload[2] !== 0x00 && (__st.other['e' + payload[2]] = (__st.other['e' + payload[2]] || 0) + 1) <= 2) rrBB('ant-event', 'ch' + payload[0] + ' msg0x' + payload[1].toString(16) + ' code0x' + payload[2].toString(16));
+  }
   // 센서 데이터 (0x4E) 처리
   if (msgId === 0x4E) {
       rrAntLog(`[Race] Broadcast Data (0x4E) 처리: payload.length=${payload.length}`);
@@ -6594,6 +6627,7 @@ function routeANTMessage(packet) {
 // Training 모드의 심박계 데이터는 처리하지 않도록 Race 모드에서만 동작
 function handleBroadcastData(payload) {
   if (payload.length < 9) return;
+  if (payload.length < 13 && window.__rrMsgStat) window.__rrMsgStat.shortN++; // 확장 정보(기기 ID)가 없는 형식 — 속도계로 인식되지 않음
   
   // 현재 화면 확인 (Training 화면이면 처리하지 않음)
   const currentScreen = document.querySelector('.screen.active');
@@ -6623,6 +6657,7 @@ function handleBroadcastData(payload) {
       // 심박계(0x7D)는 Training 모드에서만 처리
       if (deviceType === 0x79 || deviceType === 0x7A || deviceType === 0x7B || deviceType === 0x78) {
         // 목록 추가 및 데이터 업데이트 (processSpeedCadenceData를 통해 가민 필터 적용)
+        if (window.__rrMsgStat) window.__rrMsgStat.spd++;
         addFoundDeviceToUI(extendedId, deviceType);
         updateSpeedometerDataInternal(extendedId, antData);
       }
