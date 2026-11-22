@@ -4515,7 +4515,12 @@ async function startANTMessageListener(chainToken) {
       
       // 현재 화면 확인 (Race 모드와 Training 모드 분리)
       const currentScreen = document.querySelector('.screen.active');
-      const isRaceScreen = currentScreen && currentScreen.id === 'rollerRaceDashboardScreen';
+      // 2026-11-22 경기가 진행·일시정지 중이면 활성 화면이 잠시 다른 화면(프로필·결과·팝업 화면 등)이어도 수신 데이터를 버리지 않는다
+      // (예전엔 활성 화면이 레이스 화면이 아니면 모든 패킷을 무시해 전 트랙이 5초 뒤 동시에 '끊김'으로 보였다)
+      const __rsNow = window.rollerRaceState && window.rollerRaceState.raceState;
+      const __raceLive = __rsNow === 'running' || __rsNow === 'paused';
+      const isRaceScreen = (currentScreen && currentScreen.id === 'rollerRaceDashboardScreen') ||
+        (__raceLive && !(currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen'));
       const isTrainingScreen = currentScreen && currentScreen.id === 'indoorTrainingDashboardScreen';
       
       // Training 화면일 때는 Training의 processBuffer 사용 (Race와 독립적으로 구동)
@@ -4688,7 +4693,19 @@ function rrReceiverWatchdog() {
     const lastRx = Math.max(a.lastRxDataAt || 0, 0);
     if (!lastRx || now - lastRx < 15000) return;
     if (window.__rrRxRecoverAt && now - window.__rrRxRecoverAt < 45000) return;
+    // 같은 멈춤 구간의 첫 시도는 '부드러운 복구'(수신 루프 재시작 + Rx 스캔 모드 재명령, Reset 없음 → 다른 센서 수신을 끊지 않음).
+    // 그래도 45초 뒤까지 데이터가 없으면 아래 전체 재설정(Reset)으로 넘어간다.
+    const soft = !(window.__rrRxSoftAt && window.__rrRxSoftAt > lastRx);
     window.__rrRxRecoverAt = now;
+    if (soft && (a.isScanningActive || a.isScanning)) {
+      window.__rrRxSoftAt = now;
+      console.warn('[ANT+] 수신 멈춤 감지(' + Math.round((now - lastRx) / 1000) + '초) → 부드러운 복구(Reset 없음)');
+      a.isScanning = true;
+      window.antMessageListenerActive = true;
+      startANTMessageListener();
+      sendANTMessage(0x5B, [0x00]).catch(function () {});
+      return;
+    }
     console.warn('[ANT+] 수신 멈춤 감지(' + Math.round((now - lastRx) / 1000) + '초) → 스캔 모드 재설정·수신 루프 재시작');
     a.isScanningActive = false;
     window.antMessageListenerActive = false;
