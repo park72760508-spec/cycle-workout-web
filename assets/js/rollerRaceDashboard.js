@@ -136,6 +136,10 @@ async function rrProbeStick(timeoutMs) {
   }
   return false;
 }
+/** 2026-11-22 USB 작업(close/reset/open)이 멈춘 스틱에서 영원히 끝나지 않을 수 있어(macOS 에서 대기 중 전송이 남아 있으면 특히) 제한 시간을 둔다 */
+function rrWithTimeout(promise, ms, label) {
+  return Promise.race([promise, new Promise(function (_, rej) { setTimeout(function () { rej(new Error(label + ' 시간 초과')); }, ms); })]);
+}
 window.rrAntDiagToggle = function (on) {
   try { localStorage.setItem('rrAntDiag', on ? '1' : '0'); } catch (e) {}
   window.RR_ANT_DEBUG = !!on;
@@ -4283,6 +4287,9 @@ async function initializeANT() {
  */
 async function sendANTMessage(messageId, data) {
   if (!window.antState.usbDevice) return;
+  // 2026-11-22 직전 쓰기가 시간 초과(스틱이 쓰기를 받지 않음)였으면 복구가 끝날 때까지 쓰기를 쌓지 않는다.
+  // macOS 로그에서 멈춘 스틱 OUT 엔드포인트에 요청이 3~6개씩 쌓인 뒤 스톨 → 'hardware connection lost' 로 이어진 것이 확인됨.
+  if (window.__rrTxDeadAt && Date.now() - window.__rrTxDeadAt < 15000) return;
   
   const length = data.length + 1; // MsgID 포함 길이
   let checksum = 0xA4 ^ length ^ messageId;
@@ -4303,8 +4310,22 @@ async function sendANTMessage(messageId, data) {
       window.antState.usbDevice.transferOut(window.antState.outEndpoint, paddedPacket),
       new Promise((_, rej) => setTimeout(() => rej(new Error('TX_TIMEOUT')), 3000))
     ]);
+    window.__rrTxTimeoutN = 0;
   } catch (e) {
     console.warn('[ANT+] 전송 실패:', e);
+    if (e && e.message === 'TX_TIMEOUT') {
+      // 쓰기가 연속 2회 멈추면 스틱 정지로 확정 → 즉시 USB 리셋 복구(워치독 사다리를 기다리지 않음)
+      window.__rrTxTimeoutN = (window.__rrTxTimeoutN || 0) + 1;
+      rrBB('tx-timeout', '연속 ' + window.__rrTxTimeoutN + '회 (메시지 0x' + messageId.toString(16) + ')');
+      if (window.__rrTxTimeoutN >= 2) {
+        window.__rrTxDeadAt = Date.now();
+        window.__rrWedge = true;
+        window.__rrTxTimeoutN = 0;
+        const a = window.antState;
+        a.isScanning = false; a.isScanningActive = false; window.antMessageListenerActive = false;
+        rrScheduleUsbRecovery();
+      }
+    }
   }
 }
 
@@ -4790,9 +4811,15 @@ function rrScheduleUsbRecovery() {
         if (!same) { busy = false; return; } // 아직 뽑혀 있음 — 다시 꽂을 때까지 대기
         dev = same;
       }
-      try { if (dev.opened) await dev.close(); } catch (eC) {}
-      const ok = await autoConnectANTUSBStick(dev);
+      // 멈춘 스틱은 close 가 끝나지 않을 수 있어 제한 시간을 둔다. 정지(wedge)가 확인된 경우 USB 포트 리셋(reset)으로 스틱을 깨운다.
+      if (window.__rrWedge && dev.opened) {
+        try { await rrWithTimeout(dev.reset(), 5000, 'USB reset'); rrBB('usb-reset', '정지 복구용 USB 리셋'); } catch (eR) { rrBB('usb-reset-fail', eR && eR.message); }
+      }
+      try { if (dev.opened) await rrWithTimeout(dev.close(), 4000, 'USB close'); } catch (eC) { rrBB('usb-close-fail', eC && eC.message); }
+      window.__rrTxDeadAt = 0;
+      const ok = await rrWithTimeout(autoConnectANTUSBStick(dev), 12000, 'USB 열기');
       if (ok) {
+        window.__rrWedge = false;
         window.__rrNetErrN = 0;
         a.isScanningActive = false;
         window.antMessageListenerActive = false;
@@ -4806,6 +4833,7 @@ function rrScheduleUsbRecovery() {
       }
     } catch (e) {
       rrWarnThrottled('usbrec', '[ANT+] USB 자동 복구 재시도:', e);
+      rrBB('usb-recovery-retry', (e && e.name) + ' ' + (e && e.message));
     }
     busy = false;
   }, 3000);
