@@ -94,7 +94,14 @@ function rrWarnThrottled(key, msg, err) {
   w[key] = t;
   console.warn(msg, err && (err.message || err));
 }
-function rrAntLog() { if (rrAntDiagOn()) console.log.apply(console, arguments); }
+/** 2026-11-22 패킷 단위 상세 로그는 경기 진행·일시정지 중에는 끈다(진단을 켜 둔 채여도). 초당 수십~수백 줄 콘솔 출력이 메인 스레드를 막아
+ *  USB 읽기가 밀리면 일부 스틱이 멈춘다. 수신률 표시(트랙별 /s)는 그대로 동작. 꼭 필요하면 window.RR_ANT_VERBOSE = true */
+function rrAntVerbose() {
+  if (window.RR_ANT_VERBOSE === true) return rrAntDiagOn();
+  const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+  return rrAntDiagOn() && !(rs === 'running' || rs === 'paused');
+}
+function rrAntLog() { if (rrAntVerbose()) console.log.apply(console, arguments); }
 window.rrAntDiagToggle = function (on) {
   try { localStorage.setItem('rrAntDiag', on ? '1' : '0'); } catch (e) {}
   window.RR_ANT_DEBUG = !!on;
@@ -4563,7 +4570,7 @@ async function startANTMessageListener(chainToken) {
       window.antState.lastRxDataAt = window.antState.lastRxLoopAt;
       
       // [디버깅용] 들어오는 모든 데이터를 콘솔에 출력(진단 켰을 때만 문자열 생성 — 패킷마다 만들면 장시간 경기에서 CPU·메모리 낭비)
-      if (rrAntDiagOn()) rrAntLog('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
+      if (rrAntVerbose()) rrAntLog('[RX Raw]', Array.from(data).map(b => b.toString(16).padStart(2,'0').toUpperCase()).join(' '));
       
       // 현재 화면 확인 (Race 모드와 Training 모드 분리)
       const currentScreen = document.querySelector('.screen.active');
