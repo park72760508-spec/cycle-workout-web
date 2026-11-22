@@ -8623,7 +8623,7 @@ function rrGroupRefresh() {
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + '">' +
           '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
-          (tgt > 0 ? '<div class="rr-gd-l2"><span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span></div>' : '') +
+          ((tgt > 0 || rrDonOn()) ? '<div class="rr-gd-l2">' + (tgt > 0 ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
           '</div>';
       }).join('');
       /* 폭 초과 시 줄임: 5% 단위 + 히스테리시스(흔들림 방지) */
@@ -8957,3 +8957,9 @@ setInterval(function () {
   } catch (e) {}
 }, 500);
 document.addEventListener('visibilitychange', function () { if (!document.hidden) { try { rrDonSnap(); rrGroupRefresh(); } catch (e) {} } });
+
+/** 기부 라이딩: 진행바 % 옆 누적거리 — 정수는 크게, 소수점 이하·단위(km)는 정수의 40% 크기 */
+function rrDonKmHtml(km) {
+  const t = (Math.max(0, Number(km) || 0)).toFixed(2), i = t.indexOf('.');
+  return '<span class="rr-gd-km2"><b>' + t.slice(0, i) + '</b><span class="rr-gd-kf">' + t.slice(i) + '&nbsp;km</span></span>';
+}

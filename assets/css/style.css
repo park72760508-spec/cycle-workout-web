@@ -40201,3 +40201,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   100% { transform:translate(var(--rr-cx),var(--rr-cdy)) rotateY(1080deg) scale(.2); opacity:0; }
 }
 @media (prefers-reduced-motion: reduce) { .rr-coin { display:none; } }
+.rr-group-dist__row .rr-gd-km2 { flex: none; display: inline-flex; align-items: baseline; font-size: 1.9em; font-weight: 900; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; margin-left: .2em; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
+.rr-group-dist__row .rr-gd-km2 b { font-weight: 900; }
+.rr-group-dist__row .rr-gd-km2 .rr-gd-kf { font-size: .4em; font-weight: 800; letter-spacing: 0; }
