@@ -40204,3 +40204,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-group-dist__row .rr-gd-km2 { flex: none; display: inline-flex; align-items: baseline; font-size: 1.9em; font-weight: 900; line-height: 1; color: #fff; font-variant-numeric: tabular-nums; margin-left: .2em; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
 .rr-group-dist__row .rr-gd-km2 b { font-weight: 900; }
 .rr-group-dist__row .rr-gd-km2 .rr-gd-kf { font-size: .4em; font-weight: 800; letter-spacing: 0; }
+/* 2026-11-23 페어링 버튼·'준비됨' 표시등 색 = 2조 파랑(#2563eb) */
+#rollerRaceDashboardScreen .list-item-actions .btn-primary { background: linear-gradient(180deg, #2563eb, #1e40af) !important; }
+#rollerRaceDashboardScreen .status-dot.ready { background: #2563eb; box-shadow: 0 0 6px rgba(37, 99, 235, 0.75); }

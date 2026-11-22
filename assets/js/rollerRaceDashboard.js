@@ -8886,7 +8886,7 @@ function rrDonHtml(g) {
   rrDon.tgt[g.no] = t;
   if (rrDon.disp[g.no] === undefined || rrDon.disp[g.no] > t) rrDon.disp[g.no] = t;
   rrDonKick();
-  return '<span class="rr-don" data-g="' + g.no + '"><i class="rr-coin-ico" aria-hidden="true"></i><b class="rr-don-n">' + rrDonFmt(rrDon.disp[g.no]) + '</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+  return '<span class="rr-don" data-g="' + g.no + '"><b class="rr-don-n">' + rrDonFmt(rrDon.disp[g.no]) + '</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
 }
 /** 설정 변경·새 경기 시 표시 값을 실제 값으로 맞춤 */
 function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; }
