@@ -2367,6 +2367,39 @@ function saveSpeedometerPairing() {
     }
 }
 
+
+/**
+ * 2026-11-22 Reset(0x4A) 없이 스캔 모드를 다시 설정(경기 중 복구용): 채널 0 닫기 → 네트워크 키·채널·주파수·LibConfig → Rx Scan Mode(0x5B).
+ * Reset 을 쓰지 않아 스틱이 멈춘 상태가 아니면 수신이 거의 끊기지 않는다.
+ */
+async function rrRearmScanNoReset() {
+  const a = window.antState;
+  if (!a || !a.usbDevice || window.__rrRearmBusy) return;
+  window.__rrRearmBusy = true;
+  try {
+    a.isScanning = true;
+    await sendANTMessage(0x4C, [0x00]);                   // Close Channel 0 (이미 닫혀 있어도 무해)
+    await new Promise(r => setTimeout(r, 200));
+    await sendANTMessage(0x46, [0x00, 0xB9, 0xA5, 0x21, 0xFB, 0xBD, 0x72, 0xC3, 0x45]);
+    await new Promise(r => setTimeout(r, 100));
+    await sendANTMessage(0x42, [0x00, 0x00, 0x00]);
+    await new Promise(r => setTimeout(r, 100));
+    await sendANTMessage(0x51, [0x00, 0x00, 0x00, 0x00, 0x00]);
+    await new Promise(r => setTimeout(r, 100));
+    await sendANTMessage(0x45, [0x00, 57]);
+    await new Promise(r => setTimeout(r, 100));
+    await sendANTMessage(0x6E, [0x00, 0xE0]);
+    await new Promise(r => setTimeout(r, 100));
+    await sendANTMessage(0x5B, [0x00]);
+    a.isScanningActive = true;
+    if (!window.antMessageListenerActive) { window.antMessageListenerActive = true; startANTMessageListener(); }
+  } catch (e) {
+    rrWarnThrottled('rearm', '[ANT+] 스캔 모드 재설정 오류:', e);
+  } finally {
+    window.__rrRearmBusy = false;
+  }
+}
+
 /**
  * [신규] 연속 스캔 모드 시작 (경기 중 데이터 수신용)
  */
@@ -2404,19 +2437,33 @@ async function startContinuousScan() {
   // (재시작하면 모든 트랙의 센서 수신이 끊겨 경기가 중단됨 — 센서 교체는 경기 흐름을 방해하지 않아야 함)
   {
     const rs = window.rollerRaceState && window.rollerRaceState.raceState;
-    if ((rs === 'running' || rs === 'paused') && window.antState.isScanningActive) {
-      console.log('[ANT+] 경기 중 — 이미 스캔 중이므로 수신기 재초기화 생략');
-      return;
+    if (rs === 'running' || rs === 'paused') {
+      if (window.antState.isScanningActive) {
+        console.log('[ANT+] 경기 중 — 이미 스캔 중이므로 수신기 재초기화 생략');
+        return;
+      }
+      // 2026-11-22 경기 중에는 USB 재오픈 복구(rrScheduleUsbRecovery)만 Reset(0x4A)을 허용한다.
+      // 그 밖의 호출(경기 시작·모달·워치독 등)은 모든 센서 수신을 끊는 Reset 대신 Reset 없는 재설정으로 대체.
+      if (!window.__rrAllowReset) {
+        console.log('[ANT+] 경기 중 — Reset 없이 스캔 모드만 다시 설정');
+        await rrRearmScanNoReset();
+        return;
+      }
     }
   }
   
-  // [수정] 중복 실행 방지 (이미 초기화 중이면 차단)
+  // [수정] 중복 실행 방지 (이미 초기화 중이면 차단) — 2026-11-22 20초 넘게 안 풀린 잠금은 멈춘 것으로 보고 무시
+  if (window.antState.isInitializing && Date.now() - (window.antState.initStartedAt || 0) > 20000) {
+    console.warn('[ANT+] 초기화 잠금이 20초 넘게 유지됨 → 해제하고 진행');
+    window.antState.isInitializing = false;
+  }
   if (window.antState.isInitializing) {
     console.log('[ANT+] 이미 초기화가 진행 중입니다. 중복 실행을 차단합니다.');
     return;
   }
   
   window.antState.isInitializing = true;
+  window.antState.initStartedAt = Date.now();
   window.antState.isScanning = true;
 
   console.log('[ANT+] Tacx T2028 스캔 가동 (안정성 강화 모드)...');
@@ -4210,7 +4257,11 @@ async function sendANTMessage(messageId, data) {
   
   try {
     // console.log('[TX]', Array.from(message).map(b=>b.toString(16).padStart(2,'0')).join(' '));
-    await window.antState.usbDevice.transferOut(window.antState.outEndpoint, paddedPacket);
+    // 2026-11-22 USB 쓰기가 에러 없이 멈추면(스틱·허브 정지) 초기화 잠금이 영구히 남아 모든 복구가 막힌다 → 3초 제한
+    await Promise.race([
+      window.antState.usbDevice.transferOut(window.antState.outEndpoint, paddedPacket),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('TX_TIMEOUT')), 3000))
+    ]);
   } catch (e) {
     console.warn('[ANT+] 전송 실패:', e);
   }
@@ -4505,6 +4556,7 @@ async function startANTMessageListener(chainToken) {
     const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 64);
     window.antState.lastRxLoopAt = Date.now();
     window.__rrNetErrN = 0; // 읽기 성공 → 연속 USB 오류 카운터 초기화
+    window.__rrOtherErrN = 0;
     
     if (result.data && result.data.byteLength > 0) {
       const data = new Uint8Array(result.data.buffer);
@@ -4599,9 +4651,23 @@ async function startANTMessageListener(chainToken) {
       }
     }
   } catch (error) {
+    // 2026-11-22 이미 새 수신 체인으로 교체된(낡은) 체인의 오류는 전역 상태를 건드리지 않고 조용히 종료
+    if (chainToken !== window.__rrRxChain) return;
     // 타임아웃이나 장치 분리 에러가 아니면 로그 출력
     if (error.name !== 'NetworkError' && error.name !== 'NotFoundError') {
-        // console.warn('RX Error:', error); // 너무 잦은 에러는 무시
+        // 알 수 없는 오류(InvalidStateError 등)가 계속되거나 스틱이 닫혔으면 영구 무수신이 되므로 USB 복구로 넘긴다
+        window.__rrOtherErrN = (window.__rrOtherErrN || 0) + 1;
+        const closed = !window.antState.usbDevice || !window.antState.usbDevice.opened;
+        if (closed || window.__rrOtherErrN >= 20) {
+          console.error('[ANT+] 수신 오류 지속 → USB 복구로 전환', error && error.name);
+          window.__rrOtherErrN = 0;
+          window.antState.isScanning = false;
+          window.antState.isScanningActive = false;
+          window.antMessageListenerActive = false;
+          updateANTUSBStatusUI('error', 'USB 수신 오류 — 자동 복구 시도 중', null);
+          rrScheduleUsbRecovery();
+          return;
+        }
     } else if (error.name === 'NetworkError' && window.antState.usbDevice && window.antState.usbDevice.opened &&
                (window.__rrNetErrN = (window.__rrNetErrN || 0) + 1) <= 40) {
         // 2026-11-22 NetworkError 는 스틱이 뽑힌 경우만이 아니라 USB 일시 전송 오류(스톨·절전 복귀)도 포함한다.
@@ -4645,7 +4711,9 @@ function rrScheduleUsbRecovery() {
   window.__rrUsbRecoverTimer = setInterval(async () => {
     if (busy) return;
     const a = window.antState;
-    if (!a || !a.usbDevice || Date.now() - t0 > 600000 || (a.isScanning && Date.now() - (a.lastRxDataAt || 0) < 5000)) {
+    const __rs = window.rollerRaceState && window.rollerRaceState.raceState;
+    const __live = __rs === 'running' || __rs === 'paused';
+    if (!a || !a.usbDevice || (!__live && Date.now() - t0 > 600000) || (a.isScanning && Date.now() - (a.lastRxDataAt || 0) < 5000)) {
       clearInterval(window.__rrUsbRecoverTimer); window.__rrUsbRecoverTimer = null; return;
     }
     busy = true;
@@ -4666,7 +4734,8 @@ function rrScheduleUsbRecovery() {
         a.isScanning = true;
         startANTMessageListener();
         window.antMessageListenerActive = true;
-        if (typeof startContinuousScan === 'function') await startContinuousScan();
+        window.__rrAllowReset = true; // USB 재오픈 직후의 전체 초기화(Reset)는 여기서만 허용
+        try { if (typeof startContinuousScan === 'function') await startContinuousScan(); } finally { window.__rrAllowReset = false; }
         console.warn('[ANT+] USB 수신기 자동 복구 완료');
         clearInterval(window.__rrUsbRecoverTimer); window.__rrUsbRecoverTimer = null;
       }
@@ -4685,37 +4754,70 @@ function rrScheduleUsbRecovery() {
 function rrReceiverWatchdog() {
   try {
     const a = window.antState;
-    if (!a || !a.usbDevice || !a.usbDevice.opened || a.isInitializing) return;
+    if (!a || !a.usbDevice || a.isInitializing || window.__rrRearmBusy) return;
     const now = Date.now();
+    const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+    const live = rs === 'running' || rs === 'paused';
     const sps = (window.rollerRaceState && window.rollerRaceState.speedometers) || [];
-    const recentSensor = sps.some(s => s && s.deviceId && s.lastPacketTime && now - s.lastPacketTime < 120000);
-    if (!recentSensor) return;
-    const lastRx = Math.max(a.lastRxDataAt || 0, 0);
-    if (!lastRx || now - lastRx < 15000) return;
-    if (window.__rrRxRecoverAt && now - window.__rrRxRecoverAt < 45000) return;
-    // 같은 멈춤 구간의 첫 시도는 '부드러운 복구'(수신 루프 재시작 + Rx 스캔 모드 재명령, Reset 없음 → 다른 센서 수신을 끊지 않음).
-    // 그래도 45초 뒤까지 데이터가 없으면 아래 전체 재설정(Reset)으로 넘어간다.
-    const soft = !(window.__rrRxSoftAt && window.__rrRxSoftAt > lastRx);
-    window.__rrRxRecoverAt = now;
-    if (soft && (a.isScanningActive || a.isScanning)) {
-      window.__rrRxSoftAt = now;
-      console.warn('[ANT+] 수신 멈춤 감지(' + Math.round((now - lastRx) / 1000) + '초) → 부드러운 복구(Reset 없음)');
-      a.isScanning = true;
-      window.antMessageListenerActive = true;
+    const regs = sps.filter(s => s && s.deviceId);
+    const lastSensor = regs.reduce((m, s) => Math.max(m, s.lastPacketTime || 0), 0);
+    const lastRx = a.lastRxDataAt || 0;
+    // 멈춤 판정: (1) USB 로 아무 바이트도 15초 이상 안 옴(센서 신호가 최근 2분 안에 있었을 때), 또는
+    //            (2) 경기 중 등록된 모든 속도계 패킷이 12초 이상 없음(USB 에는 다른 바이트가 들어와도 센서만 사라진 경우 포함)
+    const usbStall = a.usbDevice.opened && lastRx && now - lastRx >= 15000 && lastSensor && now - lastSensor < 120000;
+    const sensorStall = live && regs.length > 0 && lastSensor && now - lastSensor >= 12000;
+    const W = window.__rrWd || (window.__rrWd = { t0: 0, r1: 0, r2: 0, r3: 0 });
+    if (!usbStall && !sensorStall) { W.t0 = 0; return; }
+    if (!W.t0) { W.t0 = now; W.r1 = W.r2 = W.r3 = 0; }
+    const age = now - W.t0;
+    if (!a.usbDevice.opened) { rrScheduleUsbRecovery(); return; }
+    // 복구 사다리 — 경기 중에는 Reset(0x4A) 을 쓰지 않는다(모든 트랙이 동시에 끊기므로). 단계는 시간이 지날수록 강해지며 무기한 반복(백오프).
+    //  1단계(즉시): 수신 루프 재시작 + Rx 스캔 모드 재명령
+    //  2단계(20초~): Reset 없이 스캔 모드 전체 재설정
+    //  3단계(50초~, 5분에 1회): USB 닫았다 다시 열기(rrScheduleUsbRecovery)
+    if (!W.r1) {
+      W.r1 = now;
+      console.warn('[ANT+] 수신 멈춤 감지 → 1단계 복구(수신 루프 재시작·스캔 재명령)');
+      a.isScanning = true; window.antMessageListenerActive = true;
       startANTMessageListener();
       sendANTMessage(0x5B, [0x00]).catch(function () {});
       return;
     }
-    console.warn('[ANT+] 수신 멈춤 감지(' + Math.round((now - lastRx) / 1000) + '초) → 스캔 모드 재설정·수신 루프 재시작');
-    a.isScanningActive = false;
-    window.antMessageListenerActive = false;
-    a.isScanning = true;
-    startANTMessageListener();
-    window.antMessageListenerActive = true;
-    if (typeof startContinuousScan === 'function') startContinuousScan();
+    if (age >= 20000 && now - W.r2 >= 60000) {
+      W.r2 = now;
+      console.warn('[ANT+] 수신 멈춤 지속(' + Math.round(age / 1000) + '초) → 2단계 복구(Reset 없이 스캔 모드 재설정)');
+      rrRearmScanNoReset();
+      return;
+    }
+    if (age >= 50000 && now - W.r3 >= 300000) {
+      W.r3 = now;
+      console.warn('[ANT+] 수신 멈춤 지속(' + Math.round(age / 1000) + '초) → 3단계 복구(USB 재오픈)');
+      a.isScanning = false; a.isScanningActive = false; window.antMessageListenerActive = false;
+      rrScheduleUsbRecovery();
+    }
   } catch (e) { rrWarnThrottled('rxwd', '[ANT+] 수신기 워치독 오류:', e); }
 }
 setInterval(rrReceiverWatchdog, 3000);
+
+/** 2026-11-22 USB 스틱이 뽑히거나 재열거되면 오류를 기다리지 않고 즉시 복구 예약(경기 중 사람이 만지지 않게) */
+try {
+  if (navigator.usb && navigator.usb.addEventListener) {
+    navigator.usb.addEventListener('disconnect', function (ev) {
+      const a = window.antState; if (!a || !a.usbDevice) return;
+      if (ev.device && (ev.device === a.usbDevice || (ev.device.vendorId === a.usbDevice.vendorId && ev.device.productId === a.usbDevice.productId))) {
+        console.warn('[ANT+] USB 분리 이벤트 → 복구 대기');
+        a.isScanning = false; a.isScanningActive = false; window.antMessageListenerActive = false;
+        updateANTUSBStatusUI('error', 'USB 연결 끊김 — 다시 꽂으면 자동 복구', null);
+        rrScheduleUsbRecovery();
+      }
+    });
+    navigator.usb.addEventListener('connect', function (ev) {
+      const a = window.antState; if (!a || !a.usbDevice) return;
+      if (ev.device && ev.device.vendorId === a.usbDevice.vendorId) { console.warn('[ANT+] USB 연결 이벤트 → 자동 복구'); rrScheduleUsbRecovery(); }
+    });
+  }
+} catch (e) {}
+
 
 /**
  * 수신 데이터 파싱 (버퍼링 처리)
