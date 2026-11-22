@@ -5827,7 +5827,7 @@ async function performUpdateFromModal() {
     return;
   }
   if (isRun) {
-    ftp = 0;
+    // 2026-11-22 RUN 분류로 저장해도 기존 FTP 는 지우지 않는다(실내 사이클 훈련·워크아웃 W 계산에 계속 필요)
     if (weight == null || weight < 0) {
       if (savingOverlay) savingOverlay.classList.add('hidden');
       showToast('올바른 체중을 입력해주세요.');
@@ -5852,7 +5852,6 @@ async function performUpdateFromModal() {
     const userData = {
       name,
       contact: contactDB,
-      ftp: needsFtp ? ftp : 0,
       weight,
       birth_year: birthYear,
       gender: gender,
@@ -5860,6 +5859,8 @@ async function performUpdateFromModal() {
       challenge: challengeFields.challenge,
       run_challenge: challengeFields.run_challenge
     };
+    // FTP 가 필요 없는 분류(RUN)로 저장할 때는 ftp 를 보내지 않아 기존 값을 보존한다(예전엔 0 으로 덮어써 사라짐)
+    if (needsFtp) userData.ftp = ftp;
 
     // 관리자 전용 필드 업데이트 (grade=1만 관리자 권한)
     if (viewerGrade === '1') {
@@ -6131,7 +6132,6 @@ async function completeUserInfo() {
     const updateData = {
       name: nameRaw,
       contact: contactDB,
-      ftp: ftpToUse,
       weight: weight,
       birth_year: birthYear,
       gender: gender,
@@ -6140,6 +6140,7 @@ async function completeUserInfo() {
       run_challenge: challengeFields.run_challenge,
       expiry_date: normalizeExpiryDate(extendedExpiryDate) // 6개월 무료 연장 적용
     };
+    if (needsFtp) updateData.ftp = ftpToUse; // RUN 분류면 기존 FTP 보존(0 으로 덮어쓰지 않음)
 
     try {
       const existingRes = await apiGetUser(currentUser.uid);
