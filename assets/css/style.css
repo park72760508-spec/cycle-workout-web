@@ -40174,3 +40174,30 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   opacity: .92; pointer-events: none; user-select: none;
   filter: drop-shadow(0 0 8px color-mix(in srgb, var(--rr-c) 45%, transparent));
 }
+
+/* ---- 2026-11-22 기부 라이딩: 조 칸 적립액 + 황금 동전 ---- */
+.rrgm__don { flex-wrap:wrap; }
+.rrgm__donl { display:flex; align-items:center; gap:6px; cursor:pointer; }
+.rrgm__donl input { width:auto; accent-color:#f5b800; }
+.rr-don { display:inline-flex; align-items:center; gap:.22em; font-variant-numeric:tabular-nums; }
+.rr-don .rr-don-n { font-weight:900; letter-spacing:-.01em; background:linear-gradient(180deg,#fff6c7 0%,#ffd84a 45%,#e0a100 100%); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent; filter:drop-shadow(0 1px 0 rgba(90,50,0,.55)); }
+.rr-don .rr-don-w { color:#ffd84a !important; font-weight:800; }
+.rr-coin-ico { display:inline-block; width:.78em; height:.78em; border-radius:50%; flex:none;
+  background:radial-gradient(circle at 34% 30%, #fffbe0 0%, #ffd84a 38%, #d99a00 78%, #9a6500 100%);
+  box-shadow:0 0 0 .06em #b87900 inset, 0 0 .5em rgba(255,200,40,.65); }
+.rr-don.rr-ting .rr-coin-ico { animation:rrCoinPulse .38s ease-out; }
+.rr-don.rr-ting .rr-don-n { animation:rrDonPop .3s ease-out; }
+@keyframes rrCoinPulse { 0%{transform:scale(1)} 40%{transform:scale(1.35) rotate(18deg); box-shadow:0 0 0 .06em #b87900 inset, 0 0 1em rgba(255,220,80,.95)} 100%{transform:scale(1)} }
+@keyframes rrDonPop { 0%{transform:scale(1)} 40%{transform:scale(1.06)} 100%{transform:scale(1)} }
+.rr-coin-layer { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:20; border-radius:inherit; }
+.rr-coin { position:absolute; display:block; border-radius:50%;
+  background:radial-gradient(circle at 34% 28%, #fffbe0 0%, #ffd84a 36%, #d99a00 76%, #8f5d00 100%);
+  box-shadow:0 0 0 2px #b87900 inset, 0 0 12px rgba(255,205,50,.85), 0 2px 4px rgba(0,0,0,.4);
+  animation-name:rrCoinFall; animation-timing-function:cubic-bezier(.45,.05,.9,.6); animation-fill-mode:forwards; }
+.rr-coin::after { content:''; position:absolute; inset:22%; border-radius:50%; border:2px solid rgba(160,100,0,.55); }
+@keyframes rrCoinFall {
+  0%   { transform:translate(0,0) rotateY(0) scale(1); opacity:1; }
+  85%  { transform:translate(var(--rr-cx),var(--rr-cdy)) rotateY(900deg) scale(1); opacity:1; }
+  100% { transform:translate(var(--rr-cx),var(--rr-cdy)) rotateY(1080deg) scale(.2); opacity:0; }
+}
+@media (prefers-reduced-motion: reduce) { .rr-coin { display:none; } }

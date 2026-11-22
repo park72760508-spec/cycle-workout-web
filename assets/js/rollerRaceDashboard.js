@@ -8622,7 +8622,7 @@ function rrGroupRefresh() {
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + '">' +
-          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>') + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
+          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
           (tgt > 0 ? '<div class="rr-gd-l2"><span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span></div>' : '') +
           '</div>';
       }).join('');
@@ -8698,6 +8698,7 @@ function rrGroupOpen() {
     m.innerHTML = '<div class="rrgm__card" role="dialog" aria-modal="true" aria-label="단체 설정">' +
       '<div class="rrgm__head"><b>단체 설정</b><button type="button" class="rrgm__x" aria-label="닫기">✕</button></div>' +
       '<div class="rrgm__cnt"><label for="rrGroupCount">조 구분</label><input type="number" id="rrGroupCount" min="1" max="10" step="1" inputmode="numeric"><span>(1~10)</span></div>' +
+      '<div class="rrgm__cnt rrgm__don"><label class="rrgm__donl"><input type="checkbox" id="rrDonOn"> 기부 라이딩</label><label for="rrDonPer">바퀴당</label><input type="number" id="rrDonPer" min="1" max="1000" step="1" inputmode="numeric" value="10"><span>원 적립</span></div>' +
       '<div class="rrgm__rows" id="rrGroupRows"></div>' +
       '<div class="rrgm__foot"><button type="button" class="rrgm__ok">확인</button></div></div>';
     document.body.appendChild(m);
@@ -8715,6 +8716,13 @@ function rrGroupOpen() {
     });
   }
   m.querySelector('#rrGroupCount').value = Math.max(1, Math.min(10, Number(st.groupCount) || 2));
+  { const dOn = m.querySelector('#rrDonOn'), dPer = m.querySelector('#rrDonPer');
+    dOn.checked = !!st.donOn; dPer.value = rrDonPer();
+    if (!dOn.__bound) {
+      dOn.__bound = true;
+      dOn.addEventListener('change', function () { rrGroupSettings().donOn = !!this.checked; rrGroupPersist(); rrDonSnap(); rrGroupRefresh(); });
+      dPer.addEventListener('input', function () { const v = parseFloat(this.value); if (!(v >= 1)) return; rrGroupSettings().donPer = Math.min(1000, v); rrGroupPersist(); rrDonSnap(); rrGroupRefresh(); });
+    } }
   rrGroupRenderRows();
   m.classList.add('show');
 }
@@ -8846,3 +8854,106 @@ function rrSplitApplyN() {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
   setTimeout(go, 500);
 })();
+
+
+/* =====================================================================
+ * 2026-11-22 기부 라이딩 — 단체(조별) 모드에서 바퀴 한 바퀴당 N원(기본 10원) 적립
+ *  - 적립액 = Σ 조에 속한 트랙의 (누적거리 ÷ 그 트랙에 설정된 바퀴 둘레) × 바퀴당 금액  (경기 중에만 거리가 누적되므로 경과시간 기준으로 증가)
+ *  - 전광판 좌/우 조 칸의 거리 자리에 적립액 표시. 1원 단위로 빈 숫자 없이 차례로 채워 올라감(밀리면 한 프레임에 여러 원씩 따라잡음)
+ *  - 적립될 때마다 황금 동전이 떨어져 적립 칸으로 들어가는 애니메이션
+ * ===================================================================== */
+function rrDonOn() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; return !!st && st.distanceMode === 'group' && !!st.donOn; }
+function rrDonPer() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; const v = st && Number(st.donPer); return v >= 1 ? v : 10; }
+/** 조별 실제 적립액(원, 소수 포함) */
+function rrDonTotal(g) {
+  const sps = window.rollerRaceState.speedometers || [];
+  const per = rrDonPer();
+  let won = 0;
+  (g.tracks || []).forEach(function (id) {
+    const sp = sps.find(function (x) { return Number(x.id) === Number(id); });
+    if (!sp) return;
+    const circM = rrWheelSpecFor(sp).circumference / 1000;
+    if (!(circM > 0)) return;
+    won += ((Number(sp.totalDistance) || 0) * 1000 / circM) * per;
+  });
+  return won;
+}
+var rrDon = { disp: {}, tgt: {}, acc: {}, last: {}, active: 0, raf: 0 };
+function rrDonFmt(n) { return Math.floor(n).toLocaleString('en-US'); }
+/** 전광판 칸에 넣을 HTML — 표시 숫자는 카운트업 중인 값(재렌더돼도 숫자가 되돌아가지 않음) */
+function rrDonHtml(g) {
+  const t = Math.floor(rrDonTotal(g));
+  rrDon.tgt[g.no] = t;
+  if (rrDon.disp[g.no] === undefined || rrDon.disp[g.no] > t) rrDon.disp[g.no] = t;
+  rrDonKick();
+  return '<span class="rr-don" data-g="' + g.no + '"><i class="rr-coin-ico" aria-hidden="true"></i><b class="rr-don-n">' + rrDonFmt(rrDon.disp[g.no]) + '</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+}
+/** 설정 변경·새 경기 시 표시 값을 실제 값으로 맞춤 */
+function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; }
+function rrDonKick() { if (!rrDon.raf) rrDon.raf = requestAnimationFrame(rrDonTick); }
+function rrDonLayer() {
+  const sb = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
+  if (!sb) return null;
+  let l = sb.querySelector(':scope > .rr-coin-layer');
+  if (!l) { l = document.createElement('div'); l.className = 'rr-coin-layer'; sb.appendChild(l); }
+  return l;
+}
+/** 황금 동전 하나: 위에서 떨어져 해당 조 적립 칸으로 들어감 */
+function rrDonCoin(no) {
+  const layer = rrDonLayer();
+  const amt = document.querySelector('.rr-don[data-g="' + no + '"]');
+  if (!layer || !amt || rrDon.active >= 12) return;
+  const lr = layer.getBoundingClientRect(), ar = amt.getBoundingClientRect();
+  if (!lr.width || !ar.width) return;
+  const ico = amt.querySelector('.rr-coin-ico');
+  const ir = (ico || amt).getBoundingClientRect();
+  const size = Math.max(14, Math.min(34, ar.height * 0.9));
+  const x = ir.left - lr.left + ir.width / 2 - size / 2 + (Math.random() - 0.5) * ar.width * 0.5;
+  const y1 = ar.top - lr.top + ar.height / 2 - size / 2;
+  const y0 = -size - Math.random() * lr.height * 0.25;
+  const c = document.createElement('i');
+  c.className = 'rr-coin';
+  c.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + x.toFixed(1) + 'px;top:' + y0.toFixed(1) + 'px;--rr-cdy:' + (y1 - y0).toFixed(1) + 'px;--rr-cx:' + ((Math.random() - 0.5) * 16).toFixed(1) + 'px;animation-duration:' + (0.55 + Math.random() * 0.25).toFixed(2) + 's;';
+  layer.appendChild(c);
+  rrDon.active++;
+  const done = function () { try { c.remove(); } catch (e) {} rrDon.active = Math.max(0, rrDon.active - 1); const a2 = document.querySelector('.rr-don[data-g="' + no + '"]'); if (a2) { a2.classList.remove('rr-ting'); void a2.offsetWidth; a2.classList.add('rr-ting'); } };
+  c.addEventListener('animationend', done, { once: true });
+  setTimeout(function () { if (c.parentNode) done(); }, 1600);
+}
+function rrDonTick() {
+  rrDon.raf = 0;
+  if (!rrDonOn()) return;
+  if (document.hidden) { Object.keys(rrDon.tgt).forEach(function (k) { rrDon.disp[k] = rrDon.tgt[k]; }); return; }
+  let more = false;
+  const now = performance.now();
+  Object.keys(rrDon.tgt).forEach(function (k) {
+    const t = rrDon.tgt[k];
+    let d = rrDon.disp[k] === undefined ? t : rrDon.disp[k];
+    if (d < t) {
+      const back = t - d;
+      const step = Math.max(1, Math.ceil(back / 60)); /* 1원씩, 밀리면 따라잡기 */
+      d = Math.min(t, d + step);
+      rrDon.disp[k] = d;
+      rrDon.acc[k] = (rrDon.acc[k] || 0) + step;
+      if (rrDon.acc[k] >= rrDonPer() && now - (rrDon.last[k] || 0) > 110) { rrDon.acc[k] = 0; rrDon.last[k] = now; rrDonCoin(k); }
+      more = true;
+    }
+    const el = document.querySelector('.rr-don[data-g="' + k + '"] .rr-don-n');
+    const txt = rrDonFmt(rrDon.disp[k] === undefined ? t : rrDon.disp[k]);
+    if (el && el.textContent !== txt) el.textContent = txt;
+  });
+  if (more) rrDon.raf = requestAnimationFrame(rrDonTick);
+}
+/* 거리는 1초마다 갱신되므로 목표값도 0.5초마다 새로 계산(표시는 rAF 로 1원씩 따라감). 경기 초기화(거리 0)면 즉시 0 */
+setInterval(function () {
+  try {
+    if (!rrDonOn()) return;
+    rrGroupStats().forEach(function (g) {
+      const t = Math.floor(rrDonTotal(g));
+      rrDon.tgt[g.no] = t;
+      if (rrDon.disp[g.no] === undefined || rrDon.disp[g.no] > t) rrDon.disp[g.no] = t;
+    });
+    rrDonKick();
+  } catch (e) {}
+}, 500);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) { try { rrDonSnap(); rrGroupRefresh(); } catch (e) {} } });
