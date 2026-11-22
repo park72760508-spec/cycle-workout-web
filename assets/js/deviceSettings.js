@@ -91,13 +91,13 @@
 
   /** 카테고리별 이름 키워드 (대소문자 구분 없이 포함 여부로 검사). UUID 매칭 실패 시에도 이름에 키워드 있으면 표시 */
   var NAME_KEYWORDS_BY_TYPE = {
-    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
-    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare'],
+    hr: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare', 'tickr', 'polar', 'h10', 'h9', 'scosche', 'rhythm', 'viiiiva', 'wahoo hr'],
+    heartRate: ['heart', 'hrm', 'hr', 'pulse', 'magene', 'coospo', 'fitcare', 'tickr', 'polar', 'h10', 'h9', 'scosche', 'rhythm', 'viiiiva', 'wahoo hr'],
     // 2026-10-19: 시마노(FC-R9200-P 등 'FC-' 이름) 등 주요 파워미터 브랜드 보강 — 광고에 0x1818 이 안 실려도 이름으로 찾음
     power: POWER_NAME_KEYWORDS,
     powerMeter: POWER_NAME_KEYWORDS,
     trainer: ['trainer', 'wahoo', 'tacx', 'kickr', 'hammer', 'direto', 'flux', 'smart', '스마트로라', 'smartrola', 'rola'],
-    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport']
+    speed: ['speed', 'cadence', 'spd', 'cad', 'igpsport', 'rpm', 'rsc']
   };
 
   /** 모달에 이미 추가된 기기 ID 집합 (중복 제거용). 스캔 모달 열릴 때마다 초기화 */
@@ -214,6 +214,17 @@
   }
 
   /**
+   * 2026-11-22 수동 검색 직전 정리(웹에서 처리 — 앱 재배포 불필요): 훈련 화면의 '상시 대기 연결'과 재연결 루프를 멈춘다.
+   * 안 그러면 저장된 센서의 광고가 보이는 순간 앱이 검색을 중단하고 그 센서에 연결해 버려 검색 목록이 끊기거나,
+   * 연결 중이던 센서를 다시 검색하려고 끊었을 때 재연결이 곧바로 되잡아 광고가 멈춘다.
+   */
+  function prepareManualScan() {
+    try { if (typeof global.abortAutoConnect === 'function') global.abortAutoConnect(); } catch (e) {}
+    try { safePostToNative({ type: 'STOP_WATCH_SAVED_DEVICES' }); } catch (e) {}
+    try { safePostToNative({ type: 'ABORT_AUTO_CONNECT' }); } catch (e) {}
+  }
+
+  /**
    * 재검색 실행: 목록 초기화 후 START_SCAN·REQUEST_KNOWN_DEVICES 재전송, "기기 검색 중..." 표시
    */
   function triggerDeviceRescan() {
@@ -236,6 +247,7 @@
     if (modal) modal.classList.remove('device-scan-state-complete');
     resetScanLists();
     try {
+      prepareManualScan();
       safePostToNative({ type: 'START_SCAN', deviceType: savedTargetType, allowReplace: true });
       safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: savedTargetType });
     } catch (e) {
@@ -275,6 +287,7 @@
     }
     if (rescanWrap) rescanWrap.style.display = 'none';
     try {
+      prepareManualScan();
       safePostToNative({ type: 'START_SCAN', deviceType: deviceType, allowReplace: true });
       safePostToNative({ type: 'REQUEST_KNOWN_DEVICES', deviceType: deviceType });
     } catch (e) {
