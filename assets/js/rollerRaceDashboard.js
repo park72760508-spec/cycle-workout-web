@@ -4504,6 +4504,7 @@ async function startANTMessageListener(chainToken) {
     // 64바이트 읽기 시도
     const result = await window.antState.usbDevice.transferIn(window.antState.inEndpoint, 64);
     window.antState.lastRxLoopAt = Date.now();
+    window.__rrNetErrN = 0; // 읽기 성공 → 연속 USB 오류 카운터 초기화
     
     if (result.data && result.data.byteLength > 0) {
       const data = new Uint8Array(result.data.buffer);
@@ -4596,13 +4597,22 @@ async function startANTMessageListener(chainToken) {
     // 타임아웃이나 장치 분리 에러가 아니면 로그 출력
     if (error.name !== 'NetworkError' && error.name !== 'NotFoundError') {
         // console.warn('RX Error:', error); // 너무 잦은 에러는 무시
+    } else if (error.name === 'NetworkError' && window.antState.usbDevice && window.antState.usbDevice.opened &&
+               (window.__rrNetErrN = (window.__rrNetErrN || 0) + 1) <= 40) {
+        // 2026-11-22 NetworkError 는 스틱이 뽑힌 경우만이 아니라 USB 일시 전송 오류(스톨·절전 복귀)도 포함한다.
+        // 예전에는 이 한 번으로 수신 루프를 영구 종료해 모든 속도계가 5초 뒤 동시에 '끊김'이 됐다 → 스톨 해제 후 재시도(최대 약 6초)
+        try { await window.antState.usbDevice.clearHalt('in', window.antState.inEndpoint); } catch (eHalt) {}
+        if (window.__rrNetErrN === 1) console.warn('[ANT+] USB 전송 오류 — 복구 재시도 중');
+        rxErr = true;
+        window.__rrRxRetryMs = 150;
     } else {
-        console.error('[ANT+] USB 끊김 감지');
+        console.error('[ANT+] USB 끊김 감지', error && error.name);
         window.antState.isScanning = false;
         // 다시 꽂았을 때 스캔 모드를 처음부터 다시 설정하도록 상태 정리(예전에는 '이미 스캔 중'으로 남아 재설정이 생략돼 센서가 안 들어옴)
         window.antState.isScanningActive = false;
         window.antMessageListenerActive = false;
-        updateANTUSBStatusUI('error', 'USB 연결 끊김', null);
+        updateANTUSBStatusUI('error', 'USB 연결 끊김 — 자동 복구 시도 중', null);
+        rrScheduleUsbRecovery();
         return;
     }
     rxErr = true;
@@ -4610,11 +4620,56 @@ async function startANTMessageListener(chainToken) {
   
   // 끊기지 않고 계속 대기 — 정상: 바로 다음 읽기(마이크로태스크, 탭이 가려져도 타이머 지연 없음) / 오류: 30ms 쉬고(연속 오류 시 CPU 과열 방지)
   if (window.antState.isScanning) {
-     if (rxErr) setTimeout(() => startANTMessageListener(chainToken), 30);
+     if (rxErr) { const ms = window.__rrRxRetryMs || 30; window.__rrRxRetryMs = 0; setTimeout(() => startANTMessageListener(chainToken), ms); }
      else Promise.resolve().then(() => startANTMessageListener(chainToken));
   } else {
      window.antMessageListenerActive = false;
   }
+}
+
+
+/**
+ * 2026-11-22 USB 수신기 자동 복구: 수신 루프가 USB 오류로 멈춘 뒤 3초마다(최대 10분) 스틱을 닫았다 다시 열고
+ * ANT+ 초기화·연속 스캔·수신 루프를 되살린다(스틱을 뽑았다 꽂거나 절전에서 복귀해도 경기 중 사람이 만지지 않게).
+ * 사용자가 수신기를 직접 해제(usbDevice=null)하면 중단.
+ */
+function rrScheduleUsbRecovery() {
+  if (window.__rrUsbRecoverTimer) return;
+  const t0 = Date.now();
+  let busy = false;
+  window.__rrUsbRecoverTimer = setInterval(async () => {
+    if (busy) return;
+    const a = window.antState;
+    if (!a || !a.usbDevice || Date.now() - t0 > 600000 || (a.isScanning && Date.now() - (a.lastRxDataAt || 0) < 5000)) {
+      clearInterval(window.__rrUsbRecoverTimer); window.__rrUsbRecoverTimer = null; return;
+    }
+    busy = true;
+    try {
+      let dev = a.usbDevice;
+      if (navigator.usb && typeof navigator.usb.getDevices === 'function') {
+        const list = await navigator.usb.getDevices();
+        const same = list.find(d => d.vendorId === dev.vendorId && d.productId === dev.productId);
+        if (!same) { busy = false; return; } // 아직 뽑혀 있음 — 다시 꽂을 때까지 대기
+        dev = same;
+      }
+      try { if (dev.opened) await dev.close(); } catch (eC) {}
+      const ok = await autoConnectANTUSBStick(dev);
+      if (ok) {
+        window.__rrNetErrN = 0;
+        a.isScanningActive = false;
+        window.antMessageListenerActive = false;
+        a.isScanning = true;
+        startANTMessageListener();
+        window.antMessageListenerActive = true;
+        if (typeof startContinuousScan === 'function') await startContinuousScan();
+        console.warn('[ANT+] USB 수신기 자동 복구 완료');
+        clearInterval(window.__rrUsbRecoverTimer); window.__rrUsbRecoverTimer = null;
+      }
+    } catch (e) {
+      rrWarnThrottled('usbrec', '[ANT+] USB 자동 복구 재시도:', e);
+    }
+    busy = false;
+  }, 3000);
 }
 
 /**
