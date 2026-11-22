@@ -4799,6 +4799,27 @@ function rrReceiverWatchdog() {
 }
 setInterval(rrReceiverWatchdog, 3000);
 
+/**
+ * 2026-11-22 화면 꺼짐·절전·창 가림 뒤 다시 보이거나 네트워크가 돌아오면 즉시 점검: 백그라운드에서는 브라우저가 타이머를 늦춰
+ * (워치독 3초 → 수십 초) 복구가 늦고, 절전에서 깨면 USB 스틱이 멈춘 채일 수 있다. 수신이 5초 넘게 끊겨 있으면 기다리지 않고 USB 재오픈 복구로 직행.
+ */
+function rrCheckAfterResume(why) {
+  try {
+    const a = window.antState;
+    if (!a || !a.usbDevice) return;
+    const now = Date.now();
+    if (a.lastRxDataAt && now - a.lastRxDataAt < 5000) return;
+    const rs = window.rollerRaceState && window.rollerRaceState.raceState;
+    if (!(rs === 'running' || rs === 'paused') && !(a.lastRxDataAt && now - a.lastRxDataAt < 120000)) return;
+    console.warn('[ANT+] ' + why + ' 후 수신 끊김 확인(' + Math.round((now - (a.lastRxDataAt || now)) / 1000) + '초) → 즉시 USB 복구');
+    a.isScanning = false; a.isScanningActive = false; window.antMessageListenerActive = false;
+    rrScheduleUsbRecovery();
+  } catch (e) {}
+}
+document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { rrCheckAfterResume('화면 복귀'); }, 1500); });
+window.addEventListener('focus', function () { setTimeout(function () { rrCheckAfterResume('창 포커스'); }, 1500); });
+window.addEventListener('online', function () { setTimeout(function () { rrCheckAfterResume('네트워크 복구'); }, 1500); });
+
 /** 2026-11-22 USB 스틱이 뽑히거나 재열거되면 오류를 기다리지 않고 즉시 복구 예약(경기 중 사람이 만지지 않게) */
 try {
   if (navigator.usb && navigator.usb.addEventListener) {
