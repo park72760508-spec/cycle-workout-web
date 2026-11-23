@@ -1538,8 +1538,7 @@ function updateElapsedTime() {
   if (elapsedTimeEl) elapsedTimeEl.textContent = timeString;
   
   // 전광판 경과시간 업데이트
-  const scoreboardTimeEl = document.getElementById('scoreboardTime');
-  if (scoreboardTimeEl) scoreboardTimeEl.textContent = timeString;
+  rrRenderScoreboardTime();
   
   // 경기 종료 조건 확인 (시간 체크)
   checkRaceEndConditions();
@@ -3227,7 +3226,17 @@ function updateAllStraightTrackMascots() {
   const isFinished = window.rollerRaceState.raceState === 'finished';
 
   // 3. 경기 모드별 진행 위치 계산
-  if (settings.distanceMode === 'total') {
+  const timeOnlyKm = rrTimeOnlyKm();
+  if (timeOnlyKm > 0) {
+    /* 2026-11-23 시간만 설정된 경기: 트랙 길이 = 시속 60km/h 로 설정 시간 동안 달린 거리 — 마스코트 위치 = 누적거리 ÷ 트랙 길이 */
+    window.rollerRaceState.speedometers.forEach(speedometer => {
+      if (!speedometer.connected || speedometer.totalDistance === 0) {
+        updateStraightTrackMascot(speedometer.id, 0, isFinished);
+        return;
+      }
+      updateStraightTrackMascot(speedometer.id, Math.min(speedometer.totalDistance / timeOnlyKm, 1.0), isFinished);
+    });
+  } else if (settings.distanceMode === 'total') {
     /**
      * [통합 경기 방식 개선 로직]
      * 목표: 모든 팀의 합산 거리가 Target에 도달할 때 1등 마스코트가 결승선에 도착
@@ -7802,9 +7811,10 @@ function rrGroupTrackKm(trackId) {
 function updateTrackDistanceMarkers() {
   const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
   const baseTarget = st && st.endByDistance ? Number(st.targetDistance) : 0;
+  const timeKm = rrTimeOnlyKm();
   document.querySelectorAll('.track-km-marks').forEach(g => {
     const tid = String(g.id || '').replace('track-km-marks-', '');
-    const target = baseTarget > 0 && st.distanceMode === 'group' ? rrGroupTrackKm(Number(tid)) : baseTarget;
+    const target = timeKm > 0 ? timeKm : (baseTarget > 0 && st.distanceMode === 'group' ? rrGroupTrackKm(Number(tid)) : baseTarget);
     g.innerHTML = rrTrackMarksHtml(target);
   });
 }
@@ -8622,7 +8632,7 @@ function rrGroupRefresh() {
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + ';--gb:' + rrGroupBandColor(g.no) + '">' +
-          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + ';animation-delay:-' + ((Date.now() / 1000) % 6).toFixed(2) + 's">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
+          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + ';animation-delay:-' + ((Date.now() / 1000) % 40).toFixed(2) + 's">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
           ((tgt > 0 || rrDonOn()) ? '<div class="rr-gd-l2">' + (tgt > 0 ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
           '</div>';
       }).join('');
@@ -8968,3 +8978,45 @@ function rrDonKmHtml(km) {
 
 /** 속도계 정보 표시 띠의 '센서 연결' 색 — 1조 주황, 2조 진단하기 띠 색(시안), 3조~ 조 색 (CSS .speedometer-info.connected 와 동일) */
 function rrGroupBandColor(no) { no = Number(no); return no === 1 ? '#ff8c00' : no === 2 ? '#22d3ee' : rrGroupColor(no); }
+
+/* =====================================================================
+ * 2026-11-23 시간 경기: 전광판 시간 = 설정 시간에서 카운트다운, 아래줄(50% 크기)에 경과 시간
+ *  시간만 설정된 경기는 트랙 길이 = 시속 60km/h × 설정 시간 (rrTimeOnlyKm)
+ * ===================================================================== */
+function rrTimeModeOn() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; return !!st && !!st.endByTime && Number(st.targetTime) > 0; }
+/** 시간만 설정(거리 목표 없음)이면 트랙 길이(km) = 60km/h × 설정 시간, 아니면 0 */
+function rrTimeOnlyKm() {
+  const st = window.rollerRaceState && window.rollerRaceState.raceSettings;
+  if (!st || !st.endByTime || !(Number(st.targetTime) > 0)) return 0;
+  if (st.endByDistance && Number(st.targetDistance) > 0) return 0;
+  return 60 * Number(st.targetTime) / 3600;
+}
+function rrFmtHMS(sec) {
+  sec = Math.max(0, Math.floor(sec || 0));
+  return String(Math.floor(sec / 3600)).padStart(2, '0') + ':' + String(Math.floor((sec % 3600) / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+}
+function rrRenderScoreboardTime() {
+  const rs = window.rollerRaceState;
+  const el = document.getElementById('scoreboardTime');
+  if (!rs || !el) return;
+  const elapsed = rs.raceState === 'idle' ? 0 : (rs.totalElapsedTime || 0);
+  let sub = document.getElementById('scoreboardElapsedSub');
+  if (rrTimeModeOn()) {
+    const target = Number(rs.raceSettings.targetTime);
+    const t1 = rrFmtHMS(target - elapsed);
+    if (el.textContent !== t1) el.textContent = t1;
+    if (!sub) {
+      sub = document.createElement('div');
+      sub.id = 'scoreboardElapsedSub'; sub.className = 'digital-number rr-sb-sub';
+      el.insertAdjacentElement('afterend', sub);
+    }
+    const t2 = rrFmtHMS(elapsed);
+    if (sub.textContent !== t2) sub.textContent = t2;
+    sub.style.display = 'block';
+  } else {
+    const t0 = rrFmtHMS(elapsed);
+    if (el.textContent !== t0) el.textContent = t0;
+    if (sub) sub.style.display = 'none';
+  }
+}
+setInterval(function () { try { rrRenderScoreboardTime(); } catch (e) {} }, 1000);

@@ -40224,7 +40224,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   background: linear-gradient(110deg, #94a3b8 0%, var(--gb) 50%, #94a3b8 100%) 0 0 / 300% 100% !important;
   color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.55);
   box-shadow: 0 0 .7em color-mix(in srgb, var(--gb) 75%, transparent) !important;
-  animation: rrPillShift 6s ease-in-out infinite;
+  animation: rrPillShift 40s ease-in-out infinite;
 }
 @keyframes rrPillShift { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .rr-group-dist__row.rr-lead .rr-group-pill { animation: none; background-position: 50% 0 !important; } }
@@ -40233,3 +40233,5 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-group-dist__row .rr-gd-km2 .rr-gd-kf { color: inherit; text-shadow: inherit; }
 .rr-group-dist__row .rr-gd-km2 .rr-gd-kd { color: var(--gb, #fff); }
 .rr-group-dist__row .rr-gd-km2 .rr-gd-ku { color: #94a3b8; text-shadow: none; }
+/* 시간 경기: 카운트다운 아래줄 경과 시간(50% 크기) */
+#rollerRaceDashboardScreen .scoreboard-value .rr-sb-sub { display: block; font-size: 50%; line-height: 1.15; opacity: .9; letter-spacing: 1px; }
