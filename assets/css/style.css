@@ -40207,3 +40207,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 /* 2026-11-23 페어링 버튼·'준비됨' 표시등 색 = 2조 파랑(#2563eb) */
 #rollerRaceDashboardScreen .list-item-actions .btn-primary { background: linear-gradient(180deg, #2563eb, #1e40af) !important; }
 #rollerRaceDashboardScreen .status-dot.ready { background: #2563eb; box-shadow: 0 0 6px rgba(37, 99, 235, 0.75); }
+
+/* 2026-11-23 속도계 정보 표시 띠 색
+   · 대기(미연결·준비됨·타임아웃): 통합·개인·단체 공통 — 비활성 트랙 경기장 안쪽 라인 색(#94a3b8)
+   · 센서 연결: 통합·개인 = 기존(라임) / 단체 = 1조 주황(예전 대기 색), 2조 '진단하기' 버튼 띠 색(#22d3ee), 3조~ 조 색 */
+#rollerRaceDashboardScreen .speedometer-info:not(.connected) { --st: #94a3b8; }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp] .speedometer-info.connected { --st: var(--rr-gc); }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="1"] .speedometer-info.connected { --st: #ff8c00; }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="2"] .speedometer-info.connected { --st: #22d3ee; }

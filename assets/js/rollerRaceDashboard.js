@@ -8643,8 +8643,10 @@ function rrGroupRefresh() {
   const map = on ? rrGroupOfTrackMap() : {};
   document.querySelectorAll('#speedometerGrid .speedometer-container').forEach(c => {
     const g = map[Number(c.dataset.speedometerId)];
-    if (on && g) { c.classList.add('rr-grouped'); c.style.setProperty('--rr-gc', rrGroupColor(g)); }
-    else { c.classList.remove('rr-grouped'); c.style.removeProperty('--rr-gc'); }
+    /* 2026-11-23 단체 속도계도 개인·통합과 같은 디자인(카드 색조·테두리 없음) — 조는 정보 표시 띠 색(연결 시)으로만 구분 */
+    c.classList.remove('rr-grouped');
+    if (on && g) { c.dataset.rrGrp = String(g); c.style.setProperty('--rr-gc', rrGroupColor(g)); }
+    else { delete c.dataset.rrGrp; c.style.removeProperty('--rr-gc'); }
   });
   /* 트랙 경기장 줄(맨 왼쪽 띠): 단체면 조 색상, 아니면 원래 색 */
   document.querySelectorAll('#speedometerList .speedometer-list-item').forEach((it, idx) => {
@@ -8661,7 +8663,7 @@ function rrGroupRefresh() {
   document.querySelectorAll('.rr-group-badge').forEach(el => {
     const id = Number(String(el.id).replace('rr-group-badge-', ''));
     const g = map[id];
-    if (on && g) { el.textContent = g + '조'; el.style.background = rrGroupColor(g); el.style.display = ''; } else { el.style.display = 'none'; }
+    el.style.display = 'none'; /* 단체 속도계의 조 표시 라벨 제거(2026-11-23) */
   });
 }
 setInterval(function () { try { rrGroupRefresh(); } catch (e) {} }, 1000);
