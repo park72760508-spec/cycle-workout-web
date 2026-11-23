@@ -1176,7 +1176,9 @@ function drawSegmentGraph(segments, currentSegmentIndex = -1, canvasId = 'segmen
         ctx.stroke();
         
         // 라벨 표시
-        if (ftpRatio === 1.0) {
+        if (ftpRatio === 1.0 && isIndividualDashboardCanvas) {
+          // 2026-11-24: 모바일 훈련 화면(개인·그룹·Coach 휴대폰) FTP 빨강 배지 제거 — 가이드 점선만 유지
+        } else if (ftpRatio === 1.0) {
           // FTP 값: 둥근 상자에 파워값만 표시 (바탕 민트, 폰트 검정)
           const powerText = Math.round(ftp).toString();
           const metrics = ctx.measureText(powerText);
