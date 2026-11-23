@@ -9013,7 +9013,7 @@ function rrRenderScoreboardTime() {
   const rs = window.rollerRaceState;
   const el = document.getElementById('scoreboardTime');
   if (!rs || !el) return;
-  const elapsed = rs.raceState === 'idle' ? 0 : (rs.totalElapsedTime || 0);
+  const elapsed = rrSmoothElapsed(rs);
   let sub = document.getElementById('scoreboardElapsedSub');
   if (rrTimeModeOn()) {
     const target = Number(rs.raceSettings.targetTime);
@@ -9033,4 +9033,20 @@ function rrRenderScoreboardTime() {
     if (sub) sub.style.display = 'none';
   }
 }
-setInterval(function () { try { rrRenderScoreboardTime(); } catch (e) {} }, 1000);
+/** 2026-11-23 초 건너뛰기 방지: 1초 타이머 지터(1→3초)로 숫자가 뛰던 문제 — 시작 시각 기준 실제 경과를 100ms 마다 계산하고,
+ *  표시는 한 번에 +1초씩만 올림(밀리면 0.45초 간격으로 따라잡음). 되돌아가지 않으며 리셋·큰 점프(10초↑)만 즉시 맞춤 */
+var rrTimeSm = { v: 0, at: 0 };
+function rrSmoothElapsed(rs) {
+  let target;
+  if (rs.raceState === 'idle') target = 0;
+  else if (rs.raceState === 'running' && rs.startTime) target = Math.max(0, Math.floor((Date.now() - rs.startTime - (rs.pausedTime || 0)) / 1000));
+  else target = rs.totalElapsedTime || 0;
+  const now = performance.now();
+  const sm = rrTimeSm;
+  if (target < sm.v || target - sm.v > 10 || document.hidden) { sm.v = target; sm.at = now; }
+  else if (target > sm.v) {
+    if (target - sm.v === 1 || now - sm.at >= 450) { sm.v += 1; sm.at = now; }
+  }
+  return sm.v;
+}
+setInterval(function () { try { rrRenderScoreboardTime(); } catch (e) {} }, 100);
