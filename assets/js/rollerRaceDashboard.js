@@ -6999,6 +6999,11 @@ function rrBuildGroupReportHTML(settings) {
     const f = gf[g.no];
     return { no: g.no, dist: g.dist, members: members, finish: f || null, don: rrDonTotal(g) };
   }).filter((g) => g.members.length > 0);
+  // 2026-11-24: 전체 참가자 순위(이동거리 큰 순, 동률은 트랙 번호순) — 조 안 순위 대신 표시
+  const overallRank = {};
+  groups.reduce((a, g) => a.concat(g.members), [])
+    .sort((a, b) => (Number(b.totalDistance) || 0) - (Number(a.totalDistance) || 0) || Number(a.id) - Number(b.id))
+    .forEach((sp, i) => { overallRank[sp.id] = i + 1; });
   // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
   groups.sort((a, b) => {
     if (a.finish && b.finish) return a.finish.order - b.finish.order;
@@ -7018,7 +7023,7 @@ function rrBuildGroupReportHTML(settings) {
     const gTime = g.finish ? formatTime(g.finish.time) : formatTime(total);
     const rows = g.members.map((sp, i) => `
         <tr style="background: ${i % 2 === 0 ? '#f9f9f9' : 'white'};">
-          <td style="${tdc}">${i + 1}</td>
+          <td style="${tdc}">${overallRank[sp.id]}</td>
           <td style="${tdc}">트랙${sp.id}</td>
           <td style="${tdc}">${esc(sp.pairingName || '-')}</td>
           <td style="${tdr}">${fmt(sp.totalDistance, 2)}</td>
@@ -7040,7 +7045,7 @@ function rrBuildGroupReportHTML(settings) {
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
             <tr style="background: #f1f5f9; color: #334155;">
-              <th style="${th}">조내 순위</th><th style="${th}">트랙</th><th style="${th}">이름</th>
+              <th style="${th}">전체 순위</th><th style="${th}">트랙</th><th style="${th}">이름</th>
               <th style="${th}">이동거리(km)</th><th style="${th}">평균속도(km/h)</th><th style="${th}">최고속도(km/h)</th>
               <th style="${th}">바퀴(mm)</th><th style="${th}">Total Time</th>${dOn ? `<th style="${th}">기부금(원)</th>` : ''}
             </tr>
