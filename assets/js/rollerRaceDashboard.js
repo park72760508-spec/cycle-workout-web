@@ -8963,7 +8963,7 @@ document.addEventListener('visibilitychange', function () { if (!document.hidden
 /** 기부 라이딩: 진행바 % 옆 누적거리 — 정수는 크게, 소수점 이하·단위(km)는 정수의 40% 크기 */
 function rrDonKmHtml(km) {
   const t = (Math.max(0, Number(km) || 0)).toFixed(2), i = t.indexOf('.');
-  return '<span class="rr-gd-km2"><b>' + t.slice(0, i) + '</b><span class="rr-gd-kf">' + t.slice(i) + '&nbsp;km</span></span>';
+  return '<span class="rr-gd-km2"><b>' + t.slice(0, i) + '</b><span class="rr-gd-kf"><span class="rr-gd-kd">' + t.slice(i) + '</span><span class="rr-gd-ku">&nbsp;km</span></span></span>';
 }
 
 /** 속도계 정보 표시 띠의 '센서 연결' 색 — 1조 주황, 2조 진단하기 띠 색(시안), 3조~ 조 색 (CSS .speedometer-info.connected 와 동일) */
