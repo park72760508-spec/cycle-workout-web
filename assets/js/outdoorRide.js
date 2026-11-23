@@ -8046,7 +8046,7 @@
    */
   var SPEED_PEAK_WINDOWS = [[1, 60, 70], [5, 300, 70], [10, 600, 70], [20, 1200, 70], [40, 2400, 70], [60, 3600, 70]]; // 구간별 순위 상한 모두 70 km/h(2026-10-25)
   function computeSpeedPeaksFromTrack(tr) {
-    var out = {};
+    var out = {}, detail = {};
     if (!tr || tr.length < 2) return out;
     var t = [], d = [0], a = [];
     for (var i = 0; i < tr.length; i++) {
@@ -8058,7 +8058,7 @@
     var totalSec = t[n - 1] - t[0];
     var rankable = !(totalSec > 0 && d[n - 1] / totalSec * 3.6 > 60); // 기록 전체 평균 60 km/h 초과 → 차량 이동 등으로 보고 순위 제외(2026-10-25: 45 → 60, 시합 평속 허용)
     SPEED_PEAK_WINDOWS.forEach(function (w) {
-      var best = 0, bestRank = 0, j = 0;
+      var best = 0, bestRank = 0, j = 0, bestKm = 0, bestSec = 0;
       for (var i = 0; i < n; i++) {
         if (j < i) j = i;
         while (j < n && t[j] - t[i] < w[1]) j++;
@@ -8069,23 +8069,24 @@
         if (!(dist > 0)) continue;
         var kmh = dist / span * 3.6;
         if (kmh > 100) continue;
-        if (kmh > best) best = kmh;
+        if (kmh > best) { best = kmh; bestKm = dist / 1000; bestSec = span; }
         if (!rankable || kmh > w[2] || kmh <= bestRank) continue;
         if (a[i] != null && a[j] != null && (a[j] - a[i]) / dist < -0.015) continue;
         bestRank = kmh;
       }
-      if (best > 0) out['max_' + w[0] + 'min_speed_kmh'] = Math.round(best * 10) / 10;
+      if (best > 0) { out['max_' + w[0] + 'min_speed_kmh'] = Math.round(best * 10) / 10; detail[w[0]] = { kmh: Math.round(best * 10) / 10, km: Math.round(bestKm * 100) / 100, sec: Math.round(bestSec) }; }
       if (bestRank > 0) out['rank_' + w[0] + 'min_speed_kmh'] = Math.round(bestRank * 10) / 10;
     });
     // 단조 규칙: 1분 ≥ 5분 ≥ … ≥ 60분(긴 구간이 크면 앞 구간 값으로, 앞 구간이 없으면 긴 구간도 비움)
+    Object.defineProperty(out, '__detail', { value: detail, enumerable: false });
     ['max', 'rank'].forEach(function (pre) {
       var prev = null;
       SPEED_PEAK_WINDOWS.forEach(function (w, idx) {
         var k = pre + '_' + w[0] + 'min_speed_kmh';
         var v = Number(out[k]) || 0;
         if (idx === 0) { prev = v > 0 ? v : null; return; }
-        if (prev == null || !(v > 0)) { delete out[k]; prev = null; return; }
-        if (v > prev) out[k] = prev;
+        if (prev == null || !(v > 0)) { delete out[k]; if (pre === 'max') delete detail[w[0]]; prev = null; return; }
+        if (v > prev) { out[k] = prev; if (pre === 'max' && detail[w[0]]) detail[w[0]].kmh = prev; }
         prev = out[k];
       });
     });
@@ -8325,6 +8326,13 @@
     };
     var speedPeaks = {};
     try { if (kind === 'ride') speedPeaks = computeSpeedPeaksFromTrack(st.track); } catch (eSpk) {}
+    if (kind === 'ride') {
+      // 자전거 기록은 속도·이동거리 기반(파워 제외) 구간 기록을 기록 저장과 같은 호출로 함께 보낸다
+      payload.speed_peaks = speedPeaks;
+      var det = (speedPeaks && speedPeaks.__detail) || {};
+      if (st.maxSpeedKmh > 0) det.max = { kmh: Math.round(st.maxSpeedKmh * 10) / 10 };
+      payload.speed_detail = det;
+    }
     // 라이딩 TSS·IF 추정(GPS 속도·경사·체중, FTP 기준) — 주간 TSS·분석에 반영
     if (kind === 'ride') {
       try {
@@ -8478,6 +8486,7 @@
         '</div>' +
         '<p class="outd-finish__why">자동 판별: ' + KIND_LABEL[cls.kind] + ' · ' + cls.reason + '</p>' +
         '<dl class="outd-finish__stats">' + statsHtml() + '</dl>' +
+        (chosen === 'ride' && (km < 0.05 || movingSec < 60) ? '<p class="outd-finish__why" style="color:#f59e0b">이동거리가 거의 없거나 이동 시간이 1분 미만이라 구간(1·5·10·20·40·60분) 평속·거리 기록은 만들어지지 않습니다. 기록 자체는 저장됩니다.</p>' : '') +
         (isMotoTrip ? '<p class="outd-finish__why" style="color:#ef4444">오토바이 길찾기로 이동한 기록입니다 — 운동 기록(훈련 일지·랭킹)에 저장하지 않는 것을 권장합니다.</p>' : '') +
         splitsHtml() +
         '<div class="outd-finish__btns">' +
