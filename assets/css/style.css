@@ -40217,17 +40217,11 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .speedometer-container[data-rr-grp="2"] .speedometer-info.connected { --st: #22d3ee; }
 
 /* 2026-11-23 기부 라이딩 전광판 누적거리: 숫자 = 속도계 정보 띠 '연결' 색(--gb), 단위(km) = 정보 띠 '대기' 색
-   조 표시 라벨 선두(rr-lead): 흰 바탕 대신 대기 색 ↔ 연결 색을 서서히 오가는 그라데이션 */
+ */
 .rr-group-dist__row .rr-gd-km2, .rr-group-dist__row .rr-gd-km2 b { color: var(--gb, #fff); text-shadow: 0 0 10px color-mix(in srgb, var(--gb, #fff) 50%, transparent); }
 .rr-group-dist__row .rr-gd-km2 .rr-gd-kf { color: #94a3b8; text-shadow: none; }
-.rr-group-dist__row.rr-lead .rr-group-pill {
-  background: linear-gradient(110deg, #94a3b8 0%, var(--gb) 50%, #94a3b8 100%) 0 0 / 300% 100% !important;
-  color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,.55);
-  box-shadow: 0 0 .7em color-mix(in srgb, var(--gb) 75%, transparent) !important;
-  animation: rrPillShift 40s ease-in-out infinite;
-}
-@keyframes rrPillShift { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
-@media (prefers-reduced-motion: reduce) { .rr-group-dist__row.rr-lead .rr-group-pill { animation: none; background-position: 50% 0 !important; } }
+/* 2026-11-23 선두 조 라벨: 그라데이션·흰 바탕 없이 일반 조 색 — 우세는 전광판 양쪽 전등으로 구분 */
+.rr-group-dist__row.rr-lead .rr-group-pill { background: var(--gc) !important; color: #fff !important; box-shadow: 0 0 0 1px rgba(255,255,255,.55), 0 0 .6em color-mix(in srgb, var(--gc) 70%, transparent) !important; animation: none; }
 /* 2026-11-23 기부 라이딩 누적거리: 소수점 이하도 정수와 같은 색(연결 색), 단위만 대기 색 / 숫자 30% 확대(1.9em → 2.47em) */
 .rr-group-dist__row .rr-gd-km2 { font-size: 2.47em; }
 .rr-group-dist__row .rr-gd-km2 .rr-gd-kf { color: inherit; text-shadow: inherit; }

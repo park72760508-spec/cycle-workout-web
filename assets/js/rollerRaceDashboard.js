@@ -8561,8 +8561,12 @@ function rrGroupRefresh() {
       const actOf = function (arr) {
         return arr.some(g => g.tracks.some(t => { const sp = spsAll.find(x => Number(x.id) === Number(t)); return !!(sp && sp.connected && (Number(sp.currentSpeed) || 0) > 0); }));
       };
-      sbEl.classList.toggle('rr-act-l', actOf(parts[0]));
-      sbEl.classList.toggle('rr-act-r', actOf(parts[1]));
+      /* 2026-11-23 우세 조가 있는 쪽 전등만 점멸 유지(동작 중일 때), 열세 쪽은 점멸 없이 점등 상태 — 우세 조가 아직 없으면(모두 0) 기존처럼 동작 여부로 */
+      let ld0 = 0, ldD0 = 0;
+      gs.forEach(g => { if (!gf[g.no] && g.dist > ldD0 + 1e-9) { ldD0 = g.dist; ld0 = g.no; } });
+      const leadL = ld0 > 0 && parts[0].some(g => g.no === ld0), leadR = ld0 > 0 && parts[1].some(g => g.no === ld0);
+      sbEl.classList.toggle('rr-act-l', ld0 > 0 ? (leadL && actOf(parts[0])) : actOf(parts[0]));
+      sbEl.classList.toggle('rr-act-r', ld0 > 0 ? (leadR && actOf(parts[1])) : actOf(parts[1]));
       const prevLit = sbEl.__rrLit || { l: 0, r: 0 };
       sbEl.__rrLit = { l: fL, r: fR };
       [['l', fL, parts[0]], ['r', fR, parts[1]]].forEach(function (a) {
@@ -8635,7 +8639,7 @@ function rrGroupRefresh() {
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + ';--gb:' + rrGroupBandColor(g.no) + '">' +
-          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + ';animation-delay:-' + ((Date.now() / 1000) % 40).toFixed(2) + 's">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
+          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
           ((tgt > 0 || tmode || rrDonOn()) ? '<div class="rr-gd-l2">' + ((tgt > 0 || tmode) ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
           '</div>';
       }).join('');
