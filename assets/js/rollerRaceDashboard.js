@@ -8621,8 +8621,8 @@ function rrGroupRefresh() {
         const pct = tgt > 0 ? Math.max(0, Math.min(100, dv / tgt * 100)) : 0;
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
-        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + '">' +
-          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + '">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
+        return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + ';--gb:' + rrGroupBandColor(g.no) + '">' +
+          '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + ';animation-delay:-' + ((Date.now() / 1000) % 6).toFixed(2) + 's">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
           ((tgt > 0 || rrDonOn()) ? '<div class="rr-gd-l2">' + (tgt > 0 ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
           '</div>';
       }).join('');
@@ -8965,3 +8965,6 @@ function rrDonKmHtml(km) {
   const t = (Math.max(0, Number(km) || 0)).toFixed(2), i = t.indexOf('.');
   return '<span class="rr-gd-km2"><b>' + t.slice(0, i) + '</b><span class="rr-gd-kf">' + t.slice(i) + '&nbsp;km</span></span>';
 }
+
+/** 속도계 정보 표시 띠의 '센서 연결' 색 — 1조 주황, 2조 진단하기 띠 색(시안), 3조~ 조 색 (CSS .speedometer-info.connected 와 동일) */
+function rrGroupBandColor(no) { no = Number(no); return no === 1 ? '#ff8c00' : no === 2 ? '#22d3ee' : rrGroupColor(no); }
