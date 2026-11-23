@@ -6997,7 +6997,7 @@ function rrBuildGroupReportHTML(settings) {
       .filter((sp) => sp && (sp.deviceId || sp.pairingName || Number(sp.totalDistance) > 0))
       .sort((a, b) => (Number(b.totalDistance) || 0) - (Number(a.totalDistance) || 0));
     const f = gf[g.no];
-    return { no: g.no, dist: g.dist, members: members, finish: f || null };
+    return { no: g.no, dist: g.dist, members: members, finish: f || null, don: rrDonTotal(g) };
   }).filter((g) => g.members.length > 0);
   // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
   groups.sort((a, b) => {
@@ -7006,6 +7006,10 @@ function rrBuildGroupReportHTML(settings) {
     if (b.finish) return 1;
     return b.dist - a.dist;
   });
+  const dOn = rrDonOn();
+  const donMember = (sp) => { const c = rrWheelSpecFor(sp).circumference / 1000; return c > 0 ? Math.floor(((Number(sp.totalDistance) || 0) * 1000 / c) * rrDonPer()) : 0; };
+  const won = (n) => Math.floor(n).toLocaleString('ko-KR');
+  const totalDon = groups.reduce((a, g) => a + g.don, 0);
   const th = 'padding: 8px; text-align: center; border: 1px solid #ddd;';
   const tdc = 'padding: 7px; text-align: center; border: 1px solid #ddd;';
   const tdr = 'padding: 7px; text-align: right; border: 1px solid #ddd;';
@@ -7021,7 +7025,8 @@ function rrBuildGroupReportHTML(settings) {
           <td style="${tdr}">${fmt(sp.averageSpeed, 1)}</td>
           <td style="${tdr}">${fmt(sp.maxSpeed, 1)}</td>
           <td style="${tdc}">${rrWheelSpecFor(sp).circumference}</td>
-          <td style="${tdc}">${gTime}</td>
+          <td style="${tdc}">${gTime}</td>${dOn ? `
+          <td style="${tdr}">${won(donMember(sp))}</td>` : ''}
         </tr>`).join('');
     const withAvg = g.members.filter((sp) => Number(sp.averageSpeed) > 0);
     const avgSpd = withAvg.length ? withAvg.reduce((a, sp) => a + Number(sp.averageSpeed), 0) / withAvg.length : 0;
@@ -7030,14 +7035,14 @@ function rrBuildGroupReportHTML(settings) {
     return `
       <div style="margin-bottom: 22px; page-break-inside: avoid;">
         <div style="background: ${color}; color: white; padding: 8px 12px; font-size: 15px; font-weight: 800; border-radius: 6px 6px 0 0;">
-          ${gi + 1}위 · ${g.no}조 <span style="font-weight: 600; font-size: 12px; opacity: .9;">(${g.finish ? '목표 거리 도착 ' + gTime : '목표 거리 미도착'})</span>
+          ${gi + 1}위 · ${g.no}조 <span style="font-weight: 600; font-size: 12px; opacity: .9;">(${g.finish ? '목표 거리 도착 ' + gTime : '목표 거리 미도착'})</span>${dOn ? ` <span style="float: right; font-size: 13px;">기부금 ${won(g.don)}원</span>` : ''}
         </div>
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
           <thead>
             <tr style="background: #f1f5f9; color: #334155;">
               <th style="${th}">조내 순위</th><th style="${th}">트랙</th><th style="${th}">이름</th>
               <th style="${th}">이동거리(km)</th><th style="${th}">평균속도(km/h)</th><th style="${th}">최고속도(km/h)</th>
-              <th style="${th}">바퀴(mm)</th><th style="${th}">Total Time</th>
+              <th style="${th}">바퀴(mm)</th><th style="${th}">Total Time</th>${dOn ? `<th style="${th}">기부금(원)</th>` : ''}
             </tr>
           </thead>
           <tbody>${rows}
@@ -7047,7 +7052,8 @@ function rrBuildGroupReportHTML(settings) {
               <td style="${tdr}">${fmt(avgSpd, 1)}</td>
               <td style="${tdr}">${fmt(maxSpd, 1)}</td>
               <td style="${tdc}">-</td>
-              <td style="${tdc}">${gTime}</td>
+              <td style="${tdc}">${gTime}</td>${dOn ? `
+              <td style="${tdr}">${won(g.don)}</td>` : ''}
             </tr>
           </tbody>
         </table>
@@ -7060,7 +7066,8 @@ function rrBuildGroupReportHTML(settings) {
         </h1>
         <div style="margin-bottom: 20px; font-size: 14px;">
           <p><strong>경기 일시:</strong> ${new Date().toLocaleString('ko-KR')}</p>
-          <p><strong>경기 시간:</strong> ${formatTime(total)}</p>
+          <p><strong>경기 시간:</strong> ${formatTime(total)}</p>${dOn ? `
+          <p><strong>총 기부금:</strong> ${won(totalDon)}원 <span style="color:#64748b;">(바퀴당 ${rrDonPer()}원 적립)</span></p>` : ''}
           <p><strong>경기 방식:</strong> 단체(조별) · 목표 ${Number(settings.targetDistance) > 0 ? Number(settings.targetDistance) + 'km' : '-'}</p>
         </div>
         ${sections || '<p style="text-align:center;color:#64748b;">참가한 조가 없습니다.</p>'}
@@ -8984,7 +8991,7 @@ function rrDonKmHtml(km) {
 }
 
 /** 속도계 정보 표시 띠의 '센서 연결' 색 — 1조 주황, 2조 진단하기 띠 색(시안), 3조~ 조 색 (CSS .speedometer-info.connected 와 동일) */
-function rrGroupBandColor(no) { no = Number(no); return no === 1 ? '#ff8c00' : no === 2 ? '#22d3ee' : rrGroupColor(no); }
+function rrGroupBandColor(no) { no = Number(no); return no === 1 ? '#c8453f' : no === 2 ? '#3f6fd0' : 'color-mix(in srgb, ' + rrGroupColor(no) + ' 78%, #64748b)'; }
 
 /* =====================================================================
  * 2026-11-23 시간 경기: 전광판 시간 = 설정 시간에서 카운트다운, 아래줄(50% 크기)에 경과 시간

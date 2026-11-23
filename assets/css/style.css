@@ -40213,8 +40213,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
    · 센서 연결: 통합·개인 = 기존(라임) / 단체 = 1조 주황(예전 대기 색), 2조 '진단하기' 버튼 띠 색(#22d3ee), 3조~ 조 색 */
 #rollerRaceDashboardScreen .speedometer-info:not(.connected) { --st: #94a3b8; }
 #rollerRaceDashboardScreen .speedometer-container[data-rr-grp] .speedometer-info.connected { --st: var(--rr-gc); }
-#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="1"] .speedometer-info.connected { --st: #ff8c00; }
-#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="2"] .speedometer-info.connected { --st: #22d3ee; }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="1"] .speedometer-info.connected { --st: #c8453f; }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp="2"] .speedometer-info.connected { --st: #3f6fd0; }
+#rollerRaceDashboardScreen .speedometer-container[data-rr-grp]:not([data-rr-grp="1"]):not([data-rr-grp="2"]) .speedometer-info.connected { --st: color-mix(in srgb, var(--rr-gc) 78%, #64748b); }
 
 /* 2026-11-23 기부 라이딩 전광판 누적거리: 숫자 = 속도계 정보 띠 '연결' 색(--gb), 단위(km) = 정보 띠 '대기' 색
  */
