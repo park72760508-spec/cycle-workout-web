@@ -8533,7 +8533,10 @@ function rrGroupRefresh() {
     /* 단체: 통합 누적거리·개인 랭킹 숨김. 2개조 = 좌 1조 / 가운데 경과시간 / 우 2조, 3개조 이상 = 좌 1·2조 / 우 3·4조… (CSS .rr-sb-grp) */
     const gs = rrGroupStats();
     const gf = window.rollerRaceState.groupFinish || {};
-    const tgt = Number(rrGroupSettings().targetDistance) || 0;
+    /* 진행바 기준(2026-11-23): 거리 체크 → 목표 거리 / 시간만 체크 → 설정 시간 대비 경과 / 둘 다 체크 → 거리 */
+    const tgt = (rrGroupSettings().endByDistance && Number(rrGroupSettings().targetDistance) > 0) ? Number(rrGroupSettings().targetDistance) : 0;
+    const tmode = !tgt && rrTimeModeOn();
+    const tpct = tmode ? Math.max(0, Math.min(100, ((window.rollerRaceState.raceState === 'idle' ? 0 : (window.rollerRaceState.totalElapsedTime || 0)) / Number(rrGroupSettings().targetTime)) * 100)) : 0;
     const n = gs.length;
     const nl = Math.ceil(n / 2);
     const parts = [gs.slice(0, nl), gs.slice(nl)];
@@ -8628,12 +8631,12 @@ function rrGroupRefresh() {
         const d = di < 0 ? d0 : d0.slice(0, di) + '<span class="rr-frac">' + d0.slice(di) + '</span>';
         const col = rrGroupColor(g.no);
         const dv = tgt > 0 && f ? Math.max(g.dist, tgt) : g.dist;
-        const pct = tgt > 0 ? Math.max(0, Math.min(100, dv / tgt * 100)) : 0;
+        const pct = tgt > 0 ? Math.max(0, Math.min(100, dv / tgt * 100)) : tpct;
         const lead = (g.no === leadNo && !f) ? ' rr-lead' : '';
         /* 한 줄 = [조 태그] 누적거리 / 목표 · 달성 바(머리 불빛) · 달성율 · 결과 */
         return '<div class="rr-group-dist__row' + (g.active ? '' : ' rr-off') + (f ? ' rr-done' : '') + lead + '" style="--gc:' + col + ';--gb:' + rrGroupBandColor(g.no) + '">' +
           '<div class="rr-gd-l1"><span class="rr-group-pill" style="background:' + col + ';animation-delay:-' + ((Date.now() / 1000) % 40).toFixed(2) + 's">' + g.no + '조</span><span class="rr-gd-d">' + (rrDonOn() ? rrDonHtml(g) : d + (tgt > 0 ? '<span class="rr-frac rr-gd-tg">&nbsp;/&nbsp;' + (tgt % 1 ? tgt.toFixed(1) : tgt) + '&nbsp;km</span>' : '<span class="rr-frac rr-gd-tg">&nbsp;km</span>')) + '</span>' + (f ? (f.order === 1 ? ' <i class="rr-winner"><svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M7 3h10v2h3a1 1 0 0 1 1 1v1a5 5 0 0 1-4.3 4.95A5.01 5.01 0 0 1 13 14.9V17h3v2h1v2H7v-2h1v-2h3v-2.1a5.01 5.01 0 0 1-3.7-2.95A5 5 0 0 1 3 7V6a1 1 0 0 1 1-1h3V3Zm-2 4a3 3 0 0 0 2.2 2.9A8 8 0 0 1 7 7H5Zm14 0h-2a8 8 0 0 1-.2 2.9A3 3 0 0 0 19 7Z"/></svg> Winner</i>' : ' <i>' + f.order + '위</i>') : '') + '</div>' +
-          ((tgt > 0 || rrDonOn()) ? '<div class="rr-gd-l2">' + (tgt > 0 ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
+          ((tgt > 0 || tmode || rrDonOn()) ? '<div class="rr-gd-l2">' + ((tgt > 0 || tmode) ? '<span class="rr-gd-bar" aria-hidden="true"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="rr-gd-pct">' + Math.floor(pct) + '%</span>' : '') + (rrDonOn() ? rrDonKmHtml(dv) : '') + '</div>' : '') +
           '</div>';
       }).join('');
       /* 폭 초과 시 줄임: 5% 단위 + 히스테리시스(흔들림 방지) */
