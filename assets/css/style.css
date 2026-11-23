@@ -40228,3 +40228,8 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 @keyframes rrPillShift { 0%, 100% { background-position: 0% 0; } 50% { background-position: 100% 0; } }
 @media (prefers-reduced-motion: reduce) { .rr-group-dist__row.rr-lead .rr-group-pill { animation: none; background-position: 50% 0 !important; } }
+/* 2026-11-23 기부 라이딩 누적거리: 소수점 이하도 정수와 같은 색(연결 색), 단위만 대기 색 / 숫자 30% 확대(1.9em → 2.47em) */
+.rr-group-dist__row .rr-gd-km2 { font-size: 2.47em; }
+.rr-group-dist__row .rr-gd-km2 .rr-gd-kf { color: inherit; text-shadow: inherit; }
+.rr-group-dist__row .rr-gd-km2 .rr-gd-kd { color: var(--gb, #fff); }
+.rr-group-dist__row .rr-gd-km2 .rr-gd-ku { color: #94a3b8; text-shadow: none; }
