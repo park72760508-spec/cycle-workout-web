@@ -49,6 +49,10 @@ jobs:
           name: github-pages-${{ github.run_attempt }}
           path: _site
 
+      # 2026-11-24: 업로드 직후 deploy-pages 가 아티팩트 목록을 조회하면 가끔 0개로 나오는 GitHub 쪽 반영 지연(11-24 실패: 업로드는 성공했는데 'Found 0 artifact(s)')
+      - name: 아티팩트 반영 대기
+        run: sleep 20
+
       - id: deployment
         uses: actions/deploy-pages@v4
         with:
