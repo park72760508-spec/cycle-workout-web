@@ -9047,6 +9047,8 @@ function rrDonSbRefresh() {
     box.style.display = 'none';
     if (prog) { prog.style.display = 'none'; prog.innerHTML = ''; }
     sbEl.style.removeProperty('--rr-don-fs');
+    sbEl.querySelectorAll(':scope > .scoreboard-item').forEach(function (it) { it.style.flex = ''; });
+    const rk0 = sbEl.querySelector('.scoreboard-ranks-container'); if (rk0) rk0.style.zoom = '';
     return;
   }
   box.style.display = '';
@@ -9060,17 +9062,29 @@ function rrDonSbRefresh() {
   if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
   const nEl = box.querySelector('.rr-don-n');
   if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
-  /* 글자 크기: 누적거리 숫자 크기의 약 1.25배로 시작해 가운데 칸 폭을 넘으면 줄임 → 경과시간 등 보조 글자는 이 크기(--rr-don-fs) 비율 */
+  /* 글자 크기: 누적거리 숫자 크기의 약 1.25배. 금액이 늘어 중앙 칸이 모자라면 오른쪽 순위 칸을 줄여(zoom) 자리를 내줌 — 왼쪽(누적거리·진행바)은 고정 */
   try {
     const dEl = document.getElementById('scoreboardDistance');
     const base = (dEl && parseFloat(getComputedStyle(dEl).fontSize)) || 28;
     const don = box.querySelector('.rr-don');
     let f = base * 1.25;
     don.style.fontSize = f.toFixed(1) + 'px';
-    const item = box.closest('.scoreboard-item');
-    if (item && item.clientWidth > 40 && don.scrollWidth > item.clientWidth * 0.94) {
-      f = Math.max(16, f * (item.clientWidth * 0.92 / don.scrollWidth));
-      don.style.fontSize = f.toFixed(1) + 'px';
+    const items = Array.prototype.filter.call(sbEl.children, function (el) { return el.classList.contains('scoreboard-item'); });
+    const rk = items[2] && items[2].querySelector('.scoreboard-ranks-container');
+    if (items.length >= 3) {
+      const cs = getComputedStyle(sbEl);
+      const W = sbEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - 2 * (parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0);
+      if (W > 320) {
+        const L0 = W * 1.15 / 3.7, C0 = W * 1.55 / 3.7, R0 = W / 3.7;
+        const pad = 28, need = don.scrollWidth + pad;
+        let C = Math.max(C0, need), R = W - L0 - C, z = 1;
+        if (R < R0) { z = Math.max(0.4, R / R0); R = Math.max(R0 * 0.4, R); C = W - L0 - R; }
+        if (don.scrollWidth + pad > C) { f = Math.max(16, f * (C - pad) / don.scrollWidth); don.style.fontSize = f.toFixed(1) + 'px'; }
+        items[0].style.flex = '0 0 ' + L0.toFixed(1) + 'px';
+        items[1].style.flex = '0 0 ' + C.toFixed(1) + 'px';
+        items[2].style.flex = '0 0 ' + R.toFixed(1) + 'px';
+        if (rk) rk.style.zoom = z < 0.999 ? z.toFixed(3) : '';
+      }
     }
     sbEl.style.setProperty('--rr-don-fs', f.toFixed(1) + 'px');
   } catch (e) {}

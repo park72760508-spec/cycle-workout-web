@@ -40268,13 +40268,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:nth-child(2) .scoreboard-value { margin: .18em 0 0; font-size: inherit; }
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardTime,
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardElapsedSub {
-  font-size: calc(var(--rr-don-fs, 40px) * .3) !important; line-height: 1.15; font-weight: 700; letter-spacing: .04em; color: #b6c4de; text-shadow: none; display: inline-block; margin: 0 .45em;
+  font-size: calc(var(--rr-don-fs, 40px) * .42) !important; line-height: 1.15; font-weight: 700; letter-spacing: .04em; color: #b6c4de; text-shadow: none; display: inline-block; margin: 0 .45em;
 }
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:nth-child(2) .scoreboard-value { display: flex; justify-content: center; align-items: baseline; flex-wrap: nowrap; }
-#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don.rr-sb-tmode #scoreboardTime::before { content: '남은 '; font-weight: 600; opacity: .7; }
 /* 좌측 진행율 바 — 대각선으로 깎은 레이싱 바, 눈금 10칸, 채움은 레드→앰버→골드, 끝에 빛나는 머리 */
 .rr-sb-prog { width: 100%; max-width: 100%; margin-top: .55em; }
-.rr-sb-prog-bar { position: relative; height: clamp(12px, 1.7vh, 18px); background: #0a1124; border: 1px solid rgba(255,255,255,.14);
+.rr-sb-prog-bar { width: 66.667%; position: relative; height: clamp(12px, 1.7vh, 18px); background: #0a1124; border: 1px solid rgba(255,255,255,.14);
   clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%); overflow: hidden; }
 .rr-sb-prog-bar::after { content: ''; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 1.5px), rgba(5,9,20,.85) calc(10% - 1.5px) 10%); }
@@ -40298,3 +40297,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-don #scoreboardTime,
 #rollerRaceDashboardScreen.rr-theme-light .scoreboard-display.rr-sb-don #scoreboardElapsedSub { color: #475569; }
 @media (prefers-reduced-motion: reduce) { .rr-sb-prog-fill::before, .rr-sb-prog-fill::after { animation: none; } }
+
+/* 누적거리 단위(km) 색 = 진행바 아래 '목표' 표시 톤 */
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:nth-child(1) .scoreboard-unit { color: #8fa0c0 !important; }
