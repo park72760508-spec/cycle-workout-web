@@ -842,7 +842,7 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    line.setAttribute('stroke', 'rgba(255, 140, 0, 0.55)'); // 2026-11-24: 속도계 '준비됨' 정보 띠 색(앰버 #ff8c00, style.css --st) 반투명 (이전: 시안 → 그 전 민트)
+    line.setAttribute('stroke', 'rgba(148, 163, 184, 0.7)'); // 2026-11-24: 속도계 '준비됨(미연결 포함)' 정보 띠 색 슬레이트 그레이 #94a3b8 (style.css `.speedometer-info:not(.connected){--st}`) 반투명
     line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
