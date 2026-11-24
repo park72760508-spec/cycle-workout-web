@@ -40300,3 +40300,14 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 
 /* 누적거리 단위(km) 색 = 진행바 아래 '목표' 표시 톤 */
 #rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:nth-child(1) .scoreboard-unit { color: #8fa0c0 !important; }
+
+/* 2026-11-25 흔들림 제거: 숫자 칸 고정 폭 + 적립 시 확대(pop) 효과 제거 (적립금·경과시간) */
+.rr-dc { display: inline-block; width: .54em; text-align: center; font-style: inherit; }
+.rr-dc.rr-ds { width: .3em; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardTime .rr-dc,
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardElapsedSub .rr-dc { width: .6em; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardTime .rr-dc.rr-ds,
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don #scoreboardElapsedSub .rr-dc.rr-ds { width: .32em; }
+.rr-sb-donate .rr-don .rr-don-n { background: none; -webkit-text-fill-color: initial; color: transparent; }
+.rr-sb-donate .rr-dc { background: linear-gradient(180deg,#fff6c7 0%,#ffd84a 45%,#e0a100 100%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
+.rr-sb-donate .rr-don.rr-ting .rr-don-n { animation: none; }

@@ -9053,13 +9053,13 @@ function rrDonSbRefresh() {
   }
   box.style.display = '';
   if (!box.querySelector('.rr-don[data-g="T"]')) {
-    box.innerHTML = '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.webp" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+    box.innerHTML = '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.webp" alt="" draggable="false"><b class="rr-don-n"><i class="rr-dc">0</i></b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
   }
   const t = Math.floor(rrDonTotalAll());
   rrDon.tgt.T = t;
   if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
   const nEl = box.querySelector('.rr-don-n');
-  if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
+  if (nEl && !rrDon.raf) { const tx = rrDonFmt(rrDon.disp.T); if (nEl.__t !== tx) { nEl.__t = tx; nEl.innerHTML = rrCells(tx); } }
   /* 칸 폭 고정(2026-11-25): 왼쪽(누적거리·진행바)·오른쪽(순위, 기존 폭의 2/3)을 고정하고 나머지를 중앙 적립금 칸이 차지 — 금액이 바뀌어도 칸·글자 크기가 흔들리지 않게.
      글자는 누적거리 숫자의 1.6배, 칸 폭을 넘을 때만 5% 단위로 줄임(히스테리시스로 되돌림 떨림 방지) */
   try {
@@ -9181,7 +9181,8 @@ function rrDonTick() {
     }
     const el = document.querySelector('.rr-don[data-g="' + k + '"] .rr-don-n');
     const txt = rrDonFmt(rrDon.disp[k] === undefined ? t : rrDon.disp[k]);
-    if (el && el.textContent !== txt) el.textContent = txt;
+    if (el && k === 'T') { if (el.__t !== txt) { el.__t = txt; el.innerHTML = rrCells(txt); } }
+    else if (el && el.textContent !== txt) el.textContent = txt;
   });
   if (more) rrDon.raf = requestAnimationFrame(rrDonTick);
 }
@@ -9225,6 +9226,17 @@ function rrFmtHMS(sec) {
   sec = Math.max(0, Math.floor(sec || 0));
   return String(Math.floor(sec / 3600)).padStart(2, '0') + ':' + String(Math.floor((sec % 3600) / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
 }
+/** 2026-11-25 자릿수마다 고정 폭 칸(<i class="rr-dc">) — 숫자가 바뀌어도 글자 폭이 변하지 않아 좌우로 흔들리지 않게 */
+function rrCells(t) {
+  return String(t).split('').map(function (ch) { return '<i class="rr-dc' + (/\d/.test(ch) ? '' : ' rr-ds') + '">' + ch + '</i>'; }).join('');
+}
+/** 전광판이 기부 라이딩 모드(.rr-sb-don)면 고정 폭 칸으로, 아니면 일반 텍스트로 표시 */
+function rrSetTime(el, t) {
+  const cells = !!document.querySelector('#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don');
+  if (el.textContent === t && !!el.__rrCells === cells) return;
+  el.__rrCells = cells;
+  if (cells) el.innerHTML = rrCells(t); else el.textContent = t;
+}
 function rrRenderScoreboardTime() {
   const rs = window.rollerRaceState;
   const el = document.getElementById('scoreboardTime');
@@ -9234,18 +9246,18 @@ function rrRenderScoreboardTime() {
   if (rrTimeModeOn()) {
     const target = Number(rs.raceSettings.targetTime);
     const t1 = rrFmtHMS(target - elapsed);
-    if (el.textContent !== t1) el.textContent = t1;
+    rrSetTime(el, t1);
     if (!sub) {
       sub = document.createElement('div');
       sub.id = 'scoreboardElapsedSub'; sub.className = 'digital-number rr-sb-sub';
       el.insertAdjacentElement('afterend', sub);
     }
     const t2 = rrFmtHMS(elapsed);
-    if (sub.textContent !== t2) sub.textContent = t2;
+    rrSetTime(sub, t2);
     sub.style.display = 'block';
   } else {
     const t0 = rrFmtHMS(elapsed);
-    if (el.textContent !== t0) el.textContent = t0;
+    rrSetTime(el, t0);
     if (sub) sub.style.display = 'none';
   }
 }
