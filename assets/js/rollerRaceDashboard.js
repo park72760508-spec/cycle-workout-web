@@ -842,7 +842,7 @@ function updateSpeedometerNeedlePath(speedometerId, speed) {
     line.setAttribute('y1', y1);
     line.setAttribute('x2', x2);
     line.setAttribute('y2', y2);
-    line.setAttribute('stroke', 'rgba(0, 255, 200, 0.4)'); // 민트색 반투명
+    line.setAttribute('stroke', 'rgba(34, 211, 238, 0.5)'); // 2026-11-24: 진단하기 버튼 상단띠 시안(#22d3ee) 반투명 (기존 민트 rgba(0,255,200,.4))
     line.setAttribute('stroke-width', '1.2');
     line.setAttribute('stroke-linecap', 'round');
     
