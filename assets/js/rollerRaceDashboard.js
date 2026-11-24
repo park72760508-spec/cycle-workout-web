@@ -7904,6 +7904,14 @@ function rrFillSplitHeight() {
   const scr = document.getElementById('rollerRaceDashboardScreen');
   const sb = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
   if (!scr || !sb) return;
+  /* 2026-11-25 기부 라이딩(통합·개인) + 창분할: 1.5초마다 글자 크기를 처음부터 다시 맞추면 전광판 크기가 매번 달라져 흔들림 →
+     화면 크기·표시 개수 등 입력이 같으면 다시 계산하지 않고 마지막 결과 고정 */
+  let fitKey = null;
+  if (sb.classList.contains('rr-sb-don') && scr.classList.contains('rr-split')) {
+    fitKey = [scr.clientWidth, scr.clientHeight, rrSplitN(), document.querySelectorAll('#speedometerGrid .speedometer-container').length,
+      (document.getElementById('speedometerList') || {}).childElementCount, sb.clientWidth].join('|');
+    if (window.__rrFillKey === fitKey) return;
+  } else window.__rrFillKey = null;
   const vals = sb.querySelectorAll('.scoreboard-value');
   const units = sb.querySelectorAll('.scoreboard-unit');
   const setFs = fs => {
@@ -7962,6 +7970,7 @@ function rrFillSplitHeight() {
     fs = Math.max(12, Math.floor(fs * Math.min(T / h, wOver) * 0.97));
     setFs(fs);
   }
+  if (fitKey) window.__rrFillKey = fitKey;
 }
 window.addEventListener('resize', () => { clearTimeout(window.__rrFillT); window.__rrFillT = setTimeout(rrFillSplitHeight, 150); });
 setInterval(rrFillSplitHeight, 1500);
@@ -9084,9 +9093,6 @@ function rrDonSbRefresh() {
         if (rk) rk.style.zoom = '0.667';
         let q = don.scrollWidth + pad > C ? (C - pad) / don.scrollWidth : 1;
         q = Math.floor(Math.min(1, q) * 20) / 20;
-        const prev = box.__rrSc;
-        if (prev && q > prev && q < prev * 1.1) q = prev;
-        box.__rrSc = q;
         if (q < 0.999) { f = Math.max(16, f * q); don.style.fontSize = f.toFixed(1) + 'px'; }
       }
     }
