@@ -9052,7 +9052,7 @@ function rrDonSbRefresh() {
   box.style.display = '';
   if (!box.querySelector('.rr-don[data-g="T"]')) {
     box.innerHTML = '<div class="rr-sb-don-cap">기부 라이딩 · 바퀴당 <b id="rrSbDonPer"></b>원 적립</div>' +
-      '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.svg" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+      '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.webp" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
   }
   const capPer = box.querySelector('#rrSbDonPer'); if (capPer) capPer.textContent = String(rrDonPer());
   const t = Math.floor(rrDonTotalAll());
