@@ -9037,18 +9037,22 @@ function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; rrDon.ms
 function rrDonSbRefresh() {
   const sbEl = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
   const box = document.getElementById('scoreboardDonate');
+  const prog = document.getElementById('scoreboardProgress');
   if (!sbEl || !box) return;
   const on = rrDonOn() && !rrGroupIsOn();
   sbEl.classList.toggle('rr-sb-don', on);
+  sbEl.classList.toggle('rr-sb-tmode', on && rrTimeModeOn());
   if (!on) {
-    if (box.innerHTML) { box.innerHTML = ''; delete rrDon.tgt.T; delete rrDon.disp.T; delete rrDon.acc.T; }
+    if (box.innerHTML) { box.innerHTML = ''; delete rrDon.tgt.T; delete rrDon.disp.T; delete rrDon.acc.T; delete rrDon.ms.T; }
     box.style.display = 'none';
+    if (prog) { prog.style.display = 'none'; prog.innerHTML = ''; }
+    sbEl.style.removeProperty('--rr-don-fs');
     return;
   }
   box.style.display = '';
   if (!box.querySelector('.rr-don[data-g="T"]')) {
-    box.innerHTML = '<div class="rr-sb-don-cap">기부 라이딩 · 바퀴당 <b id="rrSbDonPer"></b>원</div>' +
-      '<span class="rr-don" data-g="T"><i class="rr-coin-ico"></i><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+    box.innerHTML = '<div class="rr-sb-don-cap">기부 라이딩 · 바퀴당 <b id="rrSbDonPer"></b>원 적립</div>' +
+      '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.svg" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
   }
   const capPer = box.querySelector('#rrSbDonPer'); if (capPer) capPer.textContent = String(rrDonPer());
   const t = Math.floor(rrDonTotalAll());
@@ -9056,20 +9060,57 @@ function rrDonSbRefresh() {
   if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
   const nEl = box.querySelector('.rr-don-n');
   if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
-  /* 글자 크기: 누적거리 숫자와 같은 크기로 시작해 칸 폭을 넘으면 줄임 */
+  /* 글자 크기: 누적거리 숫자 크기의 약 1.25배로 시작해 가운데 칸 폭을 넘으면 줄임 → 경과시간 등 보조 글자는 이 크기(--rr-don-fs) 비율 */
   try {
     const dEl = document.getElementById('scoreboardDistance');
     const base = (dEl && parseFloat(getComputedStyle(dEl).fontSize)) || 28;
     const don = box.querySelector('.rr-don');
-    let f = base * 0.95;
+    let f = base * 1.25;
     don.style.fontSize = f.toFixed(1) + 'px';
-    const item = box.closest('.scoreboard-item'), row = box.parentNode;
-    if (item && row && row.scrollWidth > item.clientWidth * 0.98 && row.scrollWidth > 0) {
-      f = Math.max(14, f * (item.clientWidth * 0.96 / row.scrollWidth));
+    const item = box.closest('.scoreboard-item');
+    if (item && item.clientWidth > 40 && don.scrollWidth > item.clientWidth * 0.94) {
+      f = Math.max(16, f * (item.clientWidth * 0.92 / don.scrollWidth));
       don.style.fontSize = f.toFixed(1) + 'px';
     }
+    sbEl.style.setProperty('--rr-don-fs', f.toFixed(1) + 'px');
   } catch (e) {}
+  rrSbProgressRefresh(prog);
   rrDonKick();
+}
+/**
+ * 2026-11-25 통합·개인 기부 라이딩 전광판 좌측 진행율 바 — 거리 설정(통합=전체 합산, 개인=선두 선수) 우선,
+ * 거리 설정이 없고 시간만 있으면 경과 시간 ÷ 설정 시간. 둘 다 없으면 숨김.
+ */
+function rrSbProgressRefresh(prog) {
+  if (!prog) return;
+  const rs = window.rollerRaceState, st = rs.raceSettings || {};
+  const dTgt = (st.endByDistance && Number(st.targetDistance) > 0) ? Number(st.targetDistance) : 0;
+  const tTgt = rrTimeModeOn() ? Number(st.targetTime) : 0;
+  if (!dTgt && !tTgt) { prog.style.display = 'none'; prog.innerHTML = ''; return; }
+  const sps = rs.speedometers || [];
+  let pct, meta;
+  if (dTgt) {
+    const cur = st.distanceMode === 'individual'
+      ? sps.reduce((m, sp) => Math.max(m, Number(sp.totalDistance) || 0), 0)
+      : sps.reduce((a, sp) => a + (Number(sp.totalDistance) || 0), 0);
+    pct = cur / dTgt * 100;
+    meta = '목표 ' + (dTgt % 1 ? dTgt.toFixed(1) : dTgt) + 'km' + (st.distanceMode === 'individual' ? ' · 선두' : '');
+  } else {
+    const el = rs.raceState === 'idle' ? 0 : (rs.totalElapsedTime || 0);
+    pct = el / tTgt * 100;
+    meta = '목표 시간 ' + rrFmtHMS(tTgt);
+  }
+  pct = Math.max(0, Math.min(100, pct));
+  prog.style.display = '';
+  if (!prog.firstChild) {
+    prog.innerHTML = '<div class="rr-sb-prog-bar"><i class="rr-sb-prog-fill"></i></div>' +
+      '<div class="rr-sb-prog-meta"><b class="rr-sb-prog-pct">0</b><span class="rr-sb-prog-u">%</span><span class="rr-sb-prog-t"></span></div>';
+  }
+  const fill = prog.querySelector('.rr-sb-prog-fill');
+  fill.style.width = pct.toFixed(2) + '%';
+  prog.classList.toggle('rr-full', pct >= 100);
+  prog.querySelector('.rr-sb-prog-pct').textContent = String(Math.floor(pct));
+  prog.querySelector('.rr-sb-prog-t').textContent = meta;
 }
 function rrDonKick() { if (!rrDon.raf) rrDon.raf = requestAnimationFrame(rrDonTick); }
 function rrDonLayer() {
