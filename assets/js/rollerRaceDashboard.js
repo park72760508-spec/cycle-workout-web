@@ -9294,3 +9294,143 @@ function rrSmoothElapsed(rs) {
   return sm.v;
 }
 setInterval(function () { try { rrRenderScoreboardTime(); } catch (e) {} }, 100);
+
+
+/* =====================================================================
+ * 2026-11-25 레이스 이어하기 — 브라우저 오류·재부팅으로 화면이 다시 열려도 직전 레이스를 이어서 진행
+ *  - 경기 중(진행·일시정지) 2초마다 + 화면 닫힘/숨김 시점에 이 PC(localStorage 'rrRaceResume')에 저장:
+ *    경과시간, 트랙별 이동거리·회전수·평속 집계·완주기록, 단체 조별 완주/스냅샷, 경기 설정(기부 라이딩 포함)
+ *  - 기부 적립금은 이동거리×바퀴 둘레로 계산되므로 거리만 복원하면 그대로 이어짐
+ *  - 재접속 시 '이어서 진행 / 새로 시작' 선택 → 이어서 진행은 일시정지 상태로 복원, 시작 버튼을 누르면 경과시간이 이어서 흐름
+ *  - 정상 종료(경기 종료)·새로 시작 선택 시 저장본 삭제
+ * ===================================================================== */
+var RR_RESUME_KEY = 'rrRaceResume';
+var RR_RESUME_MAX_AGE = 24 * 3600 * 1000;
+function rrResumeElapsed() {
+  const rs = window.rollerRaceState;
+  if (!rs.startTime) return 0;
+  const end = rs.raceState === 'paused' && rs.pauseStartTime ? rs.pauseStartTime : Date.now();
+  return Math.max(0, Math.floor((end - rs.startTime - (rs.pausedTime || 0)) / 1000));
+}
+function rrResumeSave() {
+  try {
+    const rs = window.rollerRaceState;
+    if (!rs || (rs.raceState !== 'running' && rs.raceState !== 'paused')) return;
+    const snap = {
+      v: 1, savedAt: Date.now(), raceState: rs.raceState, elapsed: rrResumeElapsed(),
+      settings: rs.raceSettings,
+      groupFinish: rs.groupFinish || {}, groupSnapshot: rs.groupSnapshot || null,
+      sps: (rs.speedometers || []).map(function (s) {
+        return { id: s.id, deviceId: s.deviceId || null, totalDistance: Number(s.totalDistance) || 0, totalRevolutions: Number(s.totalRevolutions) || 0,
+          maxSpeed: Number(s.maxSpeed) || 0, averageSpeed: Number(s.averageSpeed) || 0, speedSum: Number(s.speedSum) || 0, speedCount: Number(s.speedCount) || 0,
+          finishTime: s.finishTime == null ? null : s.finishTime, distFrozen: !!s.distFrozen };
+      })
+    };
+    localStorage.setItem(RR_RESUME_KEY, JSON.stringify(snap));
+  } catch (e) {}
+}
+function rrResumeClear() { try { localStorage.removeItem(RR_RESUME_KEY); } catch (e) {} }
+function rrResumeLoad() {
+  try {
+    const s = JSON.parse(localStorage.getItem(RR_RESUME_KEY) || 'null');
+    if (!s || s.v !== 1 || !Array.isArray(s.sps)) return null;
+    if (Date.now() - s.savedAt > RR_RESUME_MAX_AGE) { rrResumeClear(); return null; }
+    return s;
+  } catch (e) { return null; }
+}
+function rrResumeApply(s) {
+  const rs = window.rollerRaceState;
+  if (rs.raceState !== 'idle') return;
+  const now = Date.now();
+  if (s.settings) { rs.raceSettings = Object.assign({}, rs.raceSettings, s.settings); try { updateRaceSettingsUI(); } catch (e) {} }
+  rs.startTime = now - s.elapsed * 1000;
+  rs.pausedTime = 0;
+  rs.pauseStartTime = now;
+  rs.totalElapsedTime = s.elapsed;
+  rs.raceState = 'paused';
+  rs.groupFinish = s.groupFinish || {};
+  rs.groupSnapshot = s.groupSnapshot || null;
+  s.sps.forEach(function (d) {
+    const sp = rs.speedometers.find(function (x) { return Number(x.id) === Number(d.id); });
+    if (!sp) return;
+    sp.totalDistance = d.totalDistance; sp.totalRevolutions = d.totalRevolutions;
+    sp.maxSpeed = d.maxSpeed; sp.averageSpeed = d.averageSpeed; sp.speedSum = d.speedSum; sp.speedCount = d.speedCount;
+    sp.finishTime = d.finishTime; sp.distFrozen = d.distFrozen;
+    sp.needsSync = true; sp.lastEventTime = 0; sp.currentSpeed = 0;
+    try { updateStraightTrackStats(sp.id, 0, sp.totalDistance); } catch (e) {}
+  });
+  const hh = Math.floor(s.elapsed / 3600), mm = Math.floor((s.elapsed % 3600) / 60), ss = s.elapsed % 60;
+  const ts = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0') + ':' + String(ss).padStart(2, '0');
+  const e1 = document.getElementById('elapsedTime'); if (e1) e1.textContent = ts;
+  try { updateDashboardStats(); } catch (e) {}
+  try { updateRankings(); } catch (e) {}
+  try { updateAllStraightTrackMascots(); } catch (e) {}
+  try { rrDonSnap(); } catch (e) {}
+  try { rrRenderScoreboardTime(); } catch (e) {}
+  try { rrGroupRefresh(); } catch (e) {}
+  const b = function (id, dis) { const el = document.getElementById(id); if (el) el.disabled = dis; };
+  b('btnStartRace', false); b('btnPauseRace', true); b('btnStopRace', false); b('btnBackFromRollerRace', true);
+  rrResumeSave();
+  if (typeof showToast === 'function') showToast('이전 레이스를 복원했습니다. 시작 버튼을 누르면 이어서 진행됩니다.');
+}
+function rrResumePrompt() {
+  if (window.__rrResumeAsked) return;
+  const rs = window.rollerRaceState;
+  if (!rs || rs.raceState !== 'idle') return;
+  const s = rrResumeLoad();
+  if (!s) return;
+  window.__rrResumeAsked = true;
+  const dist = s.sps.reduce(function (a, d) { return a + d.totalDistance; }, 0);
+  const el = s.elapsed, f2 = function (n) { return String(n).padStart(2, '0'); };
+  const ts = f2(Math.floor(el / 3600)) + ':' + f2(Math.floor((el % 3600) / 60)) + ':' + f2(el % 60);
+  let line = '경과 ' + ts + ' · 총 이동거리 ' + dist.toFixed(2) + 'km';
+  if (s.settings && s.settings.donOn) {
+    const per = Number(s.settings.donPer) >= 1 ? Number(s.settings.donPer) : 10;
+    let won = 0;
+    s.sps.forEach(function (d) {
+      const sp = rs.speedometers.find(function (x) { return Number(x.id) === Number(d.id); });
+      if (!sp) return;
+      const c = rrWheelSpecFor(sp).circumference / 1000;
+      if (c > 0) won += (d.totalDistance * 1000 / c) * per;
+    });
+    line += ' · 기부 적립 ' + Math.floor(won).toLocaleString('en-US') + '원';
+  }
+  const at = new Date(s.savedAt);
+  const m = document.createElement('div');
+  m.id = 'rrResumeModal';
+  m.style.cssText = 'position:fixed;inset:0;z-index:2147483000;background:rgba(2,6,23,.72);display:flex;align-items:center;justify-content:center;padding:16px;';
+  m.innerHTML = '<div style="background:#0f172a;color:#e2e8f0;border:1px solid #334155;border-radius:14px;max-width:460px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.5);font-family:inherit;">'
+    + '<div style="font-size:18px;font-weight:800;margin-bottom:6px;">이전 레이스가 중단되었습니다</div>'
+    + '<div style="font-size:13px;color:#94a3b8;margin-bottom:14px;">' + (at.getMonth() + 1) + '월 ' + at.getDate() + '일 ' + f2(at.getHours()) + ':' + f2(at.getMinutes()) + ':' + f2(at.getSeconds()) + '까지 이 PC에 저장된 기록입니다.</div>'
+    + '<div style="font-size:15px;font-weight:700;background:#1e293b;border-radius:10px;padding:12px 14px;margin-bottom:16px;line-height:1.5;">' + line + '</div>'
+    + '<div style="display:flex;gap:10px;"><button id="rrResumeNo" style="flex:1;padding:12px;border-radius:10px;border:1px solid #475569;background:transparent;color:#cbd5e1;font-size:15px;font-weight:700;cursor:pointer;">새로 시작</button>'
+    + '<button id="rrResumeYes" style="flex:1.4;padding:12px;border-radius:10px;border:0;background:#38bdf8;color:#04121f;font-size:15px;font-weight:800;cursor:pointer;">이어서 진행</button></div>'
+    + '<div style="font-size:12px;color:#64748b;margin-top:10px;">이어서 진행하면 일시정지 상태로 복원되고, 시작 버튼을 누르면 저장된 경과시간부터 다시 흐릅니다.</div></div>';
+  document.body.appendChild(m);
+  m.querySelector('#rrResumeYes').onclick = function () { m.remove(); rrResumeApply(s); };
+  m.querySelector('#rrResumeNo').onclick = function () { m.remove(); rrResumeClear(); };
+}
+(function () {
+  setInterval(rrResumeSave, 2000);
+  window.addEventListener('pagehide', rrResumeSave);
+  window.addEventListener('beforeunload', rrResumeSave);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) rrResumeSave(); });
+  /* 정상 종료 시 저장본 삭제 */
+  const _stop = window.stopRace;
+  if (typeof _stop === 'function') {
+    window.stopRace = function () {
+      const r = _stop.apply(this, arguments);
+      if (window.rollerRaceState.raceState === 'finished') rrResumeClear();
+      return r;
+    };
+  }
+  /* 화면 초기화 후 이어하기 안내 */
+  const _init = window.initRollerRaceDashboard;
+  if (typeof _init === 'function') {
+    window.initRollerRaceDashboard = function () {
+      const r = _init.apply(this, arguments);
+      setTimeout(rrResumePrompt, 800);
+      return r;
+    };
+  }
+})();
