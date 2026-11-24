@@ -6982,6 +6982,31 @@ function saveRaceDataSnapshot() {
 }
 
 /**
+ * 2026-11-24 결과표 순위 비교기 (표시 정밀도 기준: 거리 0.01km·시간 1초 — 리포트에 같은 값으로 보이면 동률)
+ *  - 거리 설정 레이스: 목표 거리 도달 경과시간(finishTime)이 작은 선수 우선(도달 선수가 미도달보다 우선),
+ *    동일 시간이면 이동거리가 긴 선수, 그래도 같으면 평속이 높은 선수
+ *  - 시간 설정 레이스: 이동거리가 긴 선수 우선, 동률이면 평속이 높은 선수
+ *  - 그 외(설정 없음): 이동거리 → 평속
+ */
+function rrReportRankCmp(settings) {
+  const st = settings || {};
+  const distMode = !!st.endByDistance;
+  const d2 = (v) => Math.round((Number(v) || 0) * 100);
+  const t1 = (v) => (v === null || v === undefined || isNaN(Number(v))) ? Infinity : Math.round(Number(v));
+  return (a, b) => {
+    if (distMode) {
+      const ta = t1(a.finishTime), tb = t1(b.finishTime);
+      if (ta !== tb) return ta === Infinity ? 1 : tb === Infinity ? -1 : ta - tb;
+    }
+    const dd = d2(b.totalDistance) - d2(a.totalDistance);
+    if (dd) return dd;
+    const sd = (Number(b.averageSpeed) || 0) - (Number(a.averageSpeed) || 0);
+    if (Math.abs(sd) > 1e-9) return sd;
+    return Number(a.id) - Number(b.id);
+  };
+}
+
+/**
  * 2026-11-20 단체(조별) 경기 결과 리포트 HTML — 조 순위(목표 거리 도착 순서, 미도착 조는 합산거리 순) 순으로
  * 조별 참가자 경기결과 리스트 + 조별 소합계. 조 안에서는 이동거리 큰 순.
  */
@@ -6995,14 +7020,14 @@ function rrBuildGroupReportHTML(settings) {
   const groups = rrGroupStats().map((g) => {
     const members = g.tracks.map((id) => sps.find((s) => Number(s.id) === Number(id)))
       .filter((sp) => sp && (sp.deviceId || sp.pairingName || Number(sp.totalDistance) > 0))
-      .sort((a, b) => (Number(b.totalDistance) || 0) - (Number(a.totalDistance) || 0));
+      .sort(rrReportRankCmp(settings));
     const f = gf[g.no];
     return { no: g.no, dist: g.dist, members: members, finish: f || null, don: rrDonTotal(g) };
   }).filter((g) => g.members.length > 0);
   // 2026-11-24: 전체 참가자 순위(이동거리 큰 순, 동률은 트랙 번호순) — 조 안 순위 대신 표시
   const overallRank = {};
   groups.reduce((a, g) => a.concat(g.members), [])
-    .sort((a, b) => (Number(b.totalDistance) || 0) - (Number(a.totalDistance) || 0) || Number(a.id) - Number(b.id))
+    .sort(rrReportRankCmp(settings))
     .forEach((sp, i) => { overallRank[sp.id] = i + 1; });
   // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
   groups.sort((a, b) => {
@@ -7107,39 +7132,10 @@ function generateRaceReportPDF() {
     
     // 순위별 데이터 정렬
     const settings = window.rollerRaceState.raceSettings || {};
-    let sorted;
-    
-    if (settings.endByDistance) {
-      // 거리 경기: 경과시간(finishTime)이 작을수록 선순위
-      sorted = [...window.rollerRaceState.speedometers]
-        .filter(s => s.totalDistance > 0)
-        .sort((a, b) => {
-          // finishTime이 있는 경우: 작을수록 선순위
-          const aTime = a.finishTime !== null && a.finishTime !== undefined ? a.finishTime : Infinity;
-          const bTime = b.finishTime !== null && b.finishTime !== undefined ? b.finishTime : Infinity;
-          
-          if (aTime !== Infinity && bTime !== Infinity) {
-            return aTime - bTime; // 오름차순 (작을수록 선순위)
-          } else if (aTime !== Infinity) {
-            return -1; // a가 finishTime이 있으면 선순위
-          } else if (bTime !== Infinity) {
-            return 1; // b가 finishTime이 있으면 선순위
-          } else {
-            // 둘 다 finishTime이 없으면 거리로 정렬 (큰 거리가 선순위)
-            return b.totalDistance - a.totalDistance;
-          }
-        });
-    } else if (settings.endByTime) {
-      // 시간 경기: 이동거리가 클수록 선순위
-      sorted = [...window.rollerRaceState.speedometers]
-        .filter(s => s.totalDistance > 0)
-        .sort((a, b) => b.totalDistance - a.totalDistance);
-    } else {
-      // 기본값: 이동거리로 정렬
-      sorted = [...window.rollerRaceState.speedometers]
-        .filter(s => s.totalDistance > 0)
-        .sort((a, b) => b.totalDistance - a.totalDistance);
-    }
+    // 2026-11-24 순위 산출: rrReportRankCmp (거리=도달시간→이동거리→평속, 시간=이동거리→평속)
+    const sorted = [...window.rollerRaceState.speedometers]
+      .filter(s => s.totalDistance > 0)
+      .sort(rrReportRankCmp(settings));
     
     // HTML 테이블 생성 (한글 폰트 문제 해결을 위해 HTML로 생성 후 이미지 변환)
     const reportHTML = (settings.distanceMode === 'group' && typeof rrGroupStats === 'function') ? rrBuildGroupReportHTML(settings) : `
