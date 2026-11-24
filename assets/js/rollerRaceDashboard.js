@@ -1786,6 +1786,12 @@ function checkRaceEndConditions() {
         const gf = (window.rollerRaceState.groupFinish = window.rollerRaceState.groupFinish || {});
         active.forEach(g => {
           if (g.dist >= settings.targetDistance - 1e-6 && gf[g.no] == null) {
+            // 2026-11-24 첫 조가 목표 거리에 도달한 시점의 전체 선수 이동거리·평속 스냅샷 — 개인 전체 순위 기준(이후 기록은 순위 무관)
+            if (!window.rollerRaceState.groupSnapshot) {
+              const byId = {};
+              (window.rollerRaceState.speedometers || []).forEach(sp => { byId[sp.id] = { dist: Number(sp.totalDistance) || 0, avg: Number(sp.averageSpeed) || 0 }; });
+              window.rollerRaceState.groupSnapshot = { time: elapsed, groupNo: g.no, byId: byId };
+            }
             gf[g.no] = { time: elapsed, order: Object.keys(gf).length + 1 };
             console.log(`[결승점 도달] ${g.no}조: ${elapsed}초 (${gf[g.no].order}위)`);
           }
@@ -2001,6 +2007,7 @@ function startRace() {
       s.distFrozen = false;
     });
     window.rollerRaceState.groupFinish = {};
+    window.rollerRaceState.groupSnapshot = null;
     
     window.rollerRaceState.needleAngles = {};
     window.rollerRaceState.speedometers.forEach(s => {
@@ -7023,15 +7030,20 @@ function rrBuildGroupReportHTML(settings) {
     const f = gf[g.no];
     return { no: g.no, dist: g.dist, members: members, finish: f || null, don: rrDonTotal(g) };
   }).filter((g) => g.members.length > 0);
-  // 2026-11-24: 전체 참가자 순위 — 선수 기록 시간 = 소속 조의 목표 거리 도착 시간(같은 조는 동일 시간)을 먼저,
-  //  같은 시간이면 이동거리·평속 순. (먼저 도착한 조 선수는 늦게 도착한 조 선수가 더 멀리 달렸어도 앞선다 — 조 도착 후에도 달린 거리 비교 오류 방지)
-  //  미도착 조는 시간 없음(맨 뒤) → 이동거리 순
+  // 2026-11-24: 전체 참가자 순위 — 첫 조가 목표 거리에 도달한 시점의 전체 선수 이동거리(스냅샷) 기준.
+  //  같은 시점 거리가 같으면(0.01km) 그 시점 평속, 그래도 같으면 트랙 번호. 이후 다른 조의 남은 시간 기록은 순위에 영향 없음.
+  //  스냅샷이 없으면(목표 미도달로 종료 등) 현재 이동거리·평속으로 대체.
+  const snap = state.groupSnapshot && state.groupSnapshot.byId ? state.groupSnapshot : null;
+  const snapOf = (sp) => (snap && snap.byId[sp.id]) ? snap.byId[sp.id] : { dist: Number(sp.totalDistance) || 0, avg: Number(sp.averageSpeed) || 0 };
   const overallRank = {};
-  const grpCmp = rrReportRankCmp({ endByDistance: true });
-  const eff = (sp, g) => ({ id: sp.id, totalDistance: sp.totalDistance, averageSpeed: sp.averageSpeed, finishTime: g.finish ? g.finish.time : null });
-  const effAll = [];
-  groups.forEach((g) => g.members.forEach((sp) => effAll.push(eff(sp, g))));
-  effAll.sort(grpCmp).forEach((e, i) => { overallRank[e.id] = i + 1; });
+  const all = groups.reduce((a, g) => a.concat(g.members), []);
+  all.sort((a, b) => {
+    const sa = snapOf(a), sb = snapOf(b);
+    const dd = Math.round(sb.dist * 100) - Math.round(sa.dist * 100);
+    if (dd) return dd;
+    if (Math.abs(sb.avg - sa.avg) > 1e-9) return sb.avg - sa.avg;
+    return Number(a.id) - Number(b.id);
+  }).forEach((sp, i) => { overallRank[sp.id] = i + 1; });
   groups.forEach((g) => { g.members.sort((a, b) => overallRank[a.id] - overallRank[b.id]); });
   // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
   groups.sort((a, b) => {
@@ -7056,6 +7068,7 @@ function rrBuildGroupReportHTML(settings) {
           <td style="${tdc}">트랙${sp.id}</td>
           <td style="${tdc}">${esc(sp.pairingName || '-')}</td>
           <td style="${tdr}">${fmt(sp.totalDistance, 2)}</td>
+          <td style="${tdr}">${fmt(snapOf(sp).dist, 2)}</td>
           <td style="${tdr}">${fmt(sp.averageSpeed, 1)}</td>
           <td style="${tdr}">${fmt(sp.maxSpeed, 1)}</td>
           <td style="${tdc}">${rrWheelSpecFor(sp).circumference}</td>
@@ -7075,7 +7088,7 @@ function rrBuildGroupReportHTML(settings) {
           <thead>
             <tr style="background: #f1f5f9; color: #334155;">
               <th style="${th}">전체 순위</th><th style="${th}">트랙</th><th style="${th}">이름</th>
-              <th style="${th}">이동거리(km)</th><th style="${th}">평균속도(km/h)</th><th style="${th}">최고속도(km/h)</th>
+              <th style="${th}">이동거리(km)</th><th style="${th}">순위기준 거리(km)</th><th style="${th}">평균속도(km/h)</th><th style="${th}">최고속도(km/h)</th>
               <th style="${th}">바퀴(mm)</th><th style="${th}">Total Time</th>${dOn ? `<th style="${th}">기부금(원)</th>` : ''}
             </tr>
           </thead>
@@ -7083,6 +7096,7 @@ function rrBuildGroupReportHTML(settings) {
             <tr style="background: #e2e8f0; font-weight: 800;">
               <td style="${tdc}" colspan="3">${g.no}조 소합계 (${g.members.length}명)</td>
               <td style="${tdr}">${fmt(sumDist, 2)}</td>
+              <td style="${tdr}">${fmt(g.members.reduce((a, sp) => a + snapOf(sp).dist, 0), 2)}</td>
               <td style="${tdr}">${fmt(avgSpd, 1)}</td>
               <td style="${tdr}">${fmt(maxSpd, 1)}</td>
               <td style="${tdc}">-</td>
@@ -7103,6 +7117,7 @@ function rrBuildGroupReportHTML(settings) {
           <p><strong>경기 시간:</strong> ${formatTime(total)}</p>${dOn ? `
           <p><strong>총 기부금:</strong> ${won(totalDon)}원 <span style="color:#64748b;">(바퀴당 ${rrDonPer()}원 적립)</span></p>` : ''}
           <p><strong>경기 방식:</strong> 단체(조별) · 목표 ${Number(settings.targetDistance) > 0 ? Number(settings.targetDistance) + 'km' : '-'}</p>
+          <p style="color:#64748b;font-size:12px;">${snap ? '개인 전체 순위: ' + snap.groupNo + '조가 목표 거리에 도달한 시점(' + formatTime(snap.time) + ')의 전체 선수 이동거리 기준 — 이후 기록은 순위에 반영하지 않음' : '개인 전체 순위: 이동거리 기준'}</p>
         </div>
         ${sections || '<p style="text-align:center;color:#64748b;">참가한 조가 없습니다.</p>'}
       </div>
