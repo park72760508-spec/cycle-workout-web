@@ -9090,7 +9090,7 @@ function rrDonSbRefresh() {
         items[0].style.flex = '0 0 ' + L.toFixed(1) + 'px';
         items[1].style.flex = '0 0 ' + C.toFixed(1) + 'px'; items[1].style.marginLeft = '0';
         items[2].style.flex = '0 0 ' + R.toFixed(1) + 'px'; items[2].style.marginLeft = 'auto';
-        if (rk) rk.style.zoom = '0.667';
+        if (rk) rk.style.zoom = '0.887';
         let q = don.scrollWidth + pad > C ? (C - pad) / don.scrollWidth : 1;
         q = Math.floor(Math.min(1, q) * 20) / 20;
         if (q < 0.999) { f = Math.max(16, f * q); don.style.fontSize = f.toFixed(1) + 'px'; }
