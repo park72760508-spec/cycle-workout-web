@@ -40311,3 +40311,9 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-sb-donate .rr-don .rr-don-n { background: none; -webkit-text-fill-color: initial; color: transparent; }
 .rr-sb-donate .rr-dc { background: linear-gradient(180deg,#fff6c7 0%,#ffd84a 45%,#e0a100 100%); -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent; }
 .rr-sb-donate .rr-don.rr-ting .rr-don-n { animation: none; }
+
+/* 2026-11-25 좌측: 누적거리 30% 확대, '0% 목표 3km' 는 누적거리 줄 오른쪽 끝 = 진행바 윗줄 오른쪽 끝 */
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don .rr-sb-distrow { width: 66.667%; justify-content: space-between; align-items: flex-end; gap: .6em; flex-wrap: nowrap; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don .rr-sb-distrow .scoreboard-value { zoom: 1.3; }
+.rr-sb-distrow > .rr-sb-prog-meta { margin: 0 0 .25em auto; flex: none; }
+.rr-sb-distrow > .rr-sb-prog-meta .rr-sb-prog-pct { font-size: clamp(16px, 1.9vw, 26px); }

@@ -9055,6 +9055,7 @@ function rrDonSbRefresh() {
     if (box.innerHTML) { box.innerHTML = ''; delete rrDon.tgt.T; delete rrDon.disp.T; delete rrDon.acc.T; delete rrDon.ms.T; }
     box.style.display = 'none';
     if (prog) { prog.style.display = 'none'; prog.innerHTML = ''; }
+    { const m0 = document.getElementById('scoreboardProgMeta'); if (m0) m0.remove(); }
     sbEl.style.removeProperty('--rr-don-fs');
     sbEl.querySelectorAll(':scope > .scoreboard-item').forEach(function (it) { it.style.flex = ''; it.style.marginLeft = ''; });
     const rk0 = sbEl.querySelector('.scoreboard-ranks-container'); if (rk0) rk0.style.zoom = '';
@@ -9110,7 +9111,7 @@ function rrSbProgressRefresh(prog) {
   const rs = window.rollerRaceState, st = rs.raceSettings || {};
   const dTgt = (st.endByDistance && Number(st.targetDistance) > 0) ? Number(st.targetDistance) : 0;
   const tTgt = rrTimeModeOn() ? Number(st.targetTime) : 0;
-  if (!dTgt && !tTgt) { prog.style.display = 'none'; prog.innerHTML = ''; return; }
+  if (!dTgt && !tTgt) { prog.style.display = 'none'; prog.innerHTML = ''; const m1 = document.getElementById('scoreboardProgMeta'); if (m1) m1.remove(); return; }
   const sps = rs.speedometers || [];
   let pct, meta;
   if (dTgt) {
@@ -9126,15 +9127,24 @@ function rrSbProgressRefresh(prog) {
   }
   pct = Math.max(0, Math.min(100, pct));
   prog.style.display = '';
-  if (!prog.firstChild) {
-    prog.innerHTML = '<div class="rr-sb-prog-bar"><i class="rr-sb-prog-fill"></i></div>' +
-      '<div class="rr-sb-prog-meta"><b class="rr-sb-prog-pct">0</b><span class="rr-sb-prog-u">%</span><span class="rr-sb-prog-t"></span></div>';
+  if (!prog.firstChild) prog.innerHTML = '<div class="rr-sb-prog-bar"><i class="rr-sb-prog-fill"></i></div>';
+  /* 2026-11-25 '0% 목표 3km' 는 누적거리 줄의 오른쪽 끝(진행바 윗줄 오른쪽 끝)에 배치 */
+  const row = prog.parentNode && prog.parentNode.querySelector('.rr-sb-distrow');
+  let mEl = document.getElementById('scoreboardProgMeta');
+  if (row && (!mEl || mEl.parentNode !== row)) {
+    if (mEl) mEl.remove();
+    mEl = document.createElement('div');
+    mEl.id = 'scoreboardProgMeta'; mEl.className = 'rr-sb-prog-meta';
+    mEl.innerHTML = '<b class="rr-sb-prog-pct">0</b><span class="rr-sb-prog-u">%</span><span class="rr-sb-prog-t"></span>';
+    row.appendChild(mEl);
   }
   const fill = prog.querySelector('.rr-sb-prog-fill');
   fill.style.width = pct.toFixed(2) + '%';
   prog.classList.toggle('rr-full', pct >= 100);
-  prog.querySelector('.rr-sb-prog-pct').textContent = String(Math.floor(pct));
-  prog.querySelector('.rr-sb-prog-t').textContent = meta;
+  if (mEl) {
+    mEl.querySelector('.rr-sb-prog-pct').textContent = String(Math.floor(pct));
+    mEl.querySelector('.rr-sb-prog-t').textContent = meta;
+  }
 }
 function rrDonKick() { if (!rrDon.raf) rrDon.raf = requestAnimationFrame(rrDonTick); }
 function rrDonLayer() {
