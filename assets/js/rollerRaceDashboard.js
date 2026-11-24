@@ -9060,7 +9060,8 @@ function rrDonSbRefresh() {
   if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
   const nEl = box.querySelector('.rr-don-n');
   if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
-  /* 글자 크기: 누적거리 숫자 크기의 약 1.6배(안내 문구 제거로 생긴 여백 활용). 금액이 늘어 중앙 칸이 모자라면 오른쪽 순위 칸을 줄여(zoom) 자리를 내줌 — 왼쪽(누적거리·진행바)은 고정 */
+  /* 칸 폭 고정(2026-11-25): 왼쪽(누적거리·진행바)·오른쪽(순위, 기존 폭의 2/3)을 고정하고 나머지를 중앙 적립금 칸이 차지 — 금액이 바뀌어도 칸·글자 크기가 흔들리지 않게.
+     글자는 누적거리 숫자의 1.6배, 칸 폭을 넘을 때만 5% 단위로 줄임(히스테리시스로 되돌림 떨림 방지) */
   try {
     const dEl = document.getElementById('scoreboardDistance');
     const base = (dEl && parseFloat(getComputedStyle(dEl).fontSize)) || 28;
@@ -9073,15 +9074,17 @@ function rrDonSbRefresh() {
       const cs = getComputedStyle(sbEl);
       const W = sbEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - 2 * (parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0);
       if (W > 320) {
-        const L0 = W * 1.15 / 3.7, C0 = W * 1.55 / 3.7, R0 = W / 3.7;
-        const pad = 28, need = don.scrollWidth + pad;
-        let C = Math.max(C0, need), R = W - L0 - C, z = 1;
-        if (R < R0) { z = Math.max(0.4, R / R0); R = Math.max(R0 * 0.4, R); C = W - L0 - R; }
-        if (don.scrollWidth + pad > C) { f = Math.max(16, f * (C - pad) / don.scrollWidth); don.style.fontSize = f.toFixed(1) + 'px'; }
-        items[0].style.flex = '0 0 ' + L0.toFixed(1) + 'px';
+        const L = W * 1.15 / 3.7, R0 = W / 3.7, R = R0 * 2 / 3, C = W - L - R, pad = 28;
+        items[0].style.flex = '0 0 ' + L.toFixed(1) + 'px';
         items[1].style.flex = '0 0 ' + C.toFixed(1) + 'px';
         items[2].style.flex = '0 0 ' + R.toFixed(1) + 'px';
-        if (rk) rk.style.zoom = z < 0.999 ? z.toFixed(3) : '';
+        if (rk) rk.style.zoom = '0.667';
+        let q = don.scrollWidth + pad > C ? (C - pad) / don.scrollWidth : 1;
+        q = Math.floor(Math.min(1, q) * 20) / 20;
+        const prev = box.__rrSc;
+        if (prev && q > prev && q < prev * 1.1) q = prev;
+        box.__rrSc = q;
+        if (q < 0.999) { f = Math.max(16, f * q); don.style.fontSize = f.toFixed(1) + 'px'; }
       }
     }
     sbEl.style.setProperty('--rr-don-fs', f.toFixed(1) + 'px');

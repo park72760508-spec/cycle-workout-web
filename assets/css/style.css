@@ -40179,7 +40179,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rrgm__don { flex-wrap:wrap; }
 .rrgm__donl { display:flex; align-items:center; gap:6px; cursor:pointer; }
 .rrgm__donl input { width:auto; accent-color:#f5b800; }
-.rr-don { display:inline-flex; align-items:center; gap:.22em; font-variant-numeric:tabular-nums; }
+.rr-don { display:inline-flex; align-items:center; gap:.22em; font-variant-numeric:tabular-nums; font-feature-settings:'tnum' 1; }
 .rr-don .rr-don-n { font-weight:900; letter-spacing:-.01em; background:linear-gradient(180deg,#fff6c7 0%,#ffd84a 45%,#e0a100 100%); -webkit-background-clip:text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent; filter:drop-shadow(0 1px 0 rgba(90,50,0,.55)); }
 .rr-don .rr-don-w { color:#ffd84a !important; font-weight:800; }
 .rr-coin-ico { display:inline-block; width:.78em; height:.78em; border-radius:50%; flex:none;
