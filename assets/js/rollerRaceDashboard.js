@@ -9047,7 +9047,7 @@ function rrDonSbRefresh() {
     box.style.display = 'none';
     if (prog) { prog.style.display = 'none'; prog.innerHTML = ''; }
     sbEl.style.removeProperty('--rr-don-fs');
-    sbEl.querySelectorAll(':scope > .scoreboard-item').forEach(function (it) { it.style.flex = ''; });
+    sbEl.querySelectorAll(':scope > .scoreboard-item').forEach(function (it) { it.style.flex = ''; it.style.marginLeft = ''; });
     const rk0 = sbEl.querySelector('.scoreboard-ranks-container'); if (rk0) rk0.style.zoom = '';
     return;
   }
@@ -9072,12 +9072,15 @@ function rrDonSbRefresh() {
     const rk = items[2] && items[2].querySelector('.scoreboard-ranks-container');
     if (items.length >= 3) {
       const cs = getComputedStyle(sbEl);
-      const W = sbEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0) - 2 * (parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0);
+      const gap = parseFloat(cs.columnGap) || parseFloat(cs.gap) || 0;
+      const Wi = sbEl.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+      const W = Wi - 2 * gap;
       if (W > 320) {
-        const L = W * 1.15 / 3.7, R0 = W / 3.7, R = R0 * 2 / 3, C = W - L - R, pad = 28;
+        /* 중앙 칸을 전광판 정중앙에 고정: 왼쪽 칸(L+간격) 만큼 양쪽을 비우고, 오른쪽 순위 칸은 맨 오른쪽에 붙임(margin-left:auto) */
+        const L = W * 1.15 / 3.7, R = W / 3.7 * 2 / 3, C = Wi - 2 * (L + gap), pad = 28;
         items[0].style.flex = '0 0 ' + L.toFixed(1) + 'px';
-        items[1].style.flex = '0 0 ' + C.toFixed(1) + 'px';
-        items[2].style.flex = '0 0 ' + R.toFixed(1) + 'px';
+        items[1].style.flex = '0 0 ' + C.toFixed(1) + 'px'; items[1].style.marginLeft = '0';
+        items[2].style.flex = '0 0 ' + R.toFixed(1) + 'px'; items[2].style.marginLeft = 'auto';
         if (rk) rk.style.zoom = '0.667';
         let q = don.scrollWidth + pad > C ? (C - pad) / don.scrollWidth : 1;
         q = Math.floor(Math.min(1, q) * 20) / 20;
