@@ -7019,16 +7019,20 @@ function rrBuildGroupReportHTML(settings) {
   const esc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const groups = rrGroupStats().map((g) => {
     const members = g.tracks.map((id) => sps.find((s) => Number(s.id) === Number(id)))
-      .filter((sp) => sp && (sp.deviceId || sp.pairingName || Number(sp.totalDistance) > 0))
-      .sort(rrReportRankCmp(settings));
+      .filter((sp) => sp && (sp.deviceId || sp.pairingName || Number(sp.totalDistance) > 0));
     const f = gf[g.no];
     return { no: g.no, dist: g.dist, members: members, finish: f || null, don: rrDonTotal(g) };
   }).filter((g) => g.members.length > 0);
-  // 2026-11-24: 전체 참가자 순위(이동거리 큰 순, 동률은 트랙 번호순) — 조 안 순위 대신 표시
+  // 2026-11-24: 전체 참가자 순위 — 선수 기록 시간 = 소속 조의 목표 거리 도착 시간(같은 조는 동일 시간)을 먼저,
+  //  같은 시간이면 이동거리·평속 순. (먼저 도착한 조 선수는 늦게 도착한 조 선수가 더 멀리 달렸어도 앞선다 — 조 도착 후에도 달린 거리 비교 오류 방지)
+  //  미도착 조는 시간 없음(맨 뒤) → 이동거리 순
   const overallRank = {};
-  groups.reduce((a, g) => a.concat(g.members), [])
-    .sort(rrReportRankCmp(settings))
-    .forEach((sp, i) => { overallRank[sp.id] = i + 1; });
+  const grpCmp = rrReportRankCmp({ endByDistance: true });
+  const eff = (sp, g) => ({ id: sp.id, totalDistance: sp.totalDistance, averageSpeed: sp.averageSpeed, finishTime: g.finish ? g.finish.time : null });
+  const effAll = [];
+  groups.forEach((g) => g.members.forEach((sp) => effAll.push(eff(sp, g))));
+  effAll.sort(grpCmp).forEach((e, i) => { overallRank[e.id] = i + 1; });
+  groups.forEach((g) => { g.members.sort((a, b) => overallRank[a.id] - overallRank[b.id]); });
   // 조 순위: 도착한 조는 도착 순서, 미도착 조는 합산 거리 큰 순으로 뒤에
   groups.sort((a, b) => {
     if (a.finish && b.finish) return a.finish.order - b.finish.order;
