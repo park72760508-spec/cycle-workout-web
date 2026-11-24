@@ -8959,7 +8959,66 @@ function rrDonTotalAll() {
   const ids = ((window.rollerRaceState && window.rollerRaceState.speedometers) || []).map(function (sp) { return sp.id; });
   return rrDonTotal({ tracks: ids });
 }
-var rrDon = { disp: {}, tgt: {}, acc: {}, last: {}, active: 0, raf: 0 };
+var rrDon = { disp: {}, tgt: {}, acc: {}, last: {}, ms: {}, active: 0, raf: 0 };
+/* 2026-11-24 적립금 1만원 달성마다 미니 축포 + '띠링' 효과음 (통합·개인·단체 공통) */
+const RR_DON_MILESTONE = 10000;
+var rrDonAudio = null;
+function rrDonDing() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!rrDonAudio) rrDonAudio = new AC();
+    const ctx = rrDonAudio;
+    if (ctx.state === 'suspended') ctx.resume();
+    const t0 = ctx.currentTime + 0.01;
+    /* 띠(E6) → 링(A6) 두 음 + 은은한 배음 */
+    [[1318.5, 0, 0.5], [1760, 0.11, 0.85]].forEach(function (n) {
+      [[1, 0.22], [2.01, 0.07]].forEach(function (h) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = n[0] * h[0];
+        const st = t0 + n[1];
+        g.gain.setValueAtTime(0.0001, st);
+        g.gain.exponentialRampToValueAtTime(h[1], st + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, st + n[2]);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(st); o.stop(st + n[2] + 0.05);
+      });
+    });
+  } catch (e) {}
+}
+/** 적립 칸 위치에서 터지는 미니 축포(색종이 입자) */
+function rrDonConfetti(key) {
+  const layer = rrDonLayer();
+  const amt = document.querySelector('.rr-don[data-g="' + key + '"]');
+  if (!layer || !amt) return;
+  const lr = layer.getBoundingClientRect(), ar = amt.getBoundingClientRect();
+  if (!lr.width || !ar.width) return;
+  const cx = ar.left - lr.left + ar.width / 2, cy = ar.top - lr.top + ar.height / 2;
+  const cols = ['#ffd84a', '#ff5a5a', '#38bdf8', '#a3e635', '#f472b6', '#ffffff'];
+  const N = 26;
+  for (let i = 0; i < N; i++) {
+    const p = document.createElement('i');
+    const sz = 4 + Math.random() * 5;
+    p.style.cssText = 'position:absolute;left:' + cx.toFixed(1) + 'px;top:' + cy.toFixed(1) + 'px;width:' + sz.toFixed(1) + 'px;height:' + (sz * (i % 3 ? 1 : 0.5)).toFixed(1) + 'px;background:' + cols[i % cols.length] + ';border-radius:' + (i % 4 === 0 ? '50%' : '1px') + ';pointer-events:none;z-index:25;';
+    layer.appendChild(p);
+    const ang = Math.random() * Math.PI * 2, dist = 40 + Math.random() * Math.max(60, ar.width * 0.55);
+    const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist * 0.8 - 26;
+    const a = p.animate([
+      { transform: 'translate(-50%,-50%) rotate(0deg) scale(1)', opacity: 1 },
+      { transform: 'translate(' + (dx * 0.8).toFixed(1) + 'px,' + dy.toFixed(1) + 'px) rotate(' + (Math.random() * 540 - 270).toFixed(0) + 'deg) scale(1)', opacity: 1, offset: 0.55 },
+      { transform: 'translate(' + dx.toFixed(1) + 'px,' + (dy + 46).toFixed(1) + 'px) rotate(' + (Math.random() * 720 - 360).toFixed(0) + 'deg) scale(.6)', opacity: 0 }
+    ], { duration: 900 + Math.random() * 400, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards' });
+    a.onfinish = function () { try { p.remove(); } catch (e) {} };
+    setTimeout(function () { try { p.remove(); } catch (e) {} }, 2000);
+  }
+  amt.classList.remove('rr-milestone'); void amt.offsetWidth; amt.classList.add('rr-milestone');
+}
+/** 표시 금액이 1만원 단위를 새로 넘을 때 한 번(밀려서 여러 단위를 한 번에 넘어도 1회) 축포+효과음 */
+function rrDonMilestoneCheck(key, d) {
+  const m = Math.floor(d / RR_DON_MILESTONE);
+  if (rrDon.ms[key] === undefined || m < rrDon.ms[key]) { rrDon.ms[key] = m; return; }
+  if (m > rrDon.ms[key]) { rrDon.ms[key] = m; if (!document.hidden) { rrDonConfetti(key); rrDonDing(); } }
+}
 function rrDonFmt(n) { return Math.floor(n).toLocaleString('en-US'); }
 /** 전광판 칸에 넣을 HTML — 표시 숫자는 카운트업 중인 값(재렌더돼도 숫자가 되돌아가지 않음) */
 function rrDonHtml(g) {
@@ -8970,7 +9029,7 @@ function rrDonHtml(g) {
   return '<span class="rr-don" data-g="' + g.no + '"><b class="rr-don-n">' + rrDonFmt(rrDon.disp[g.no]) + '</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
 }
 /** 설정 변경·새 경기 시 표시 값을 실제 값으로 맞춤 */
-function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; }
+function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; rrDon.ms = {}; }
 /**
  * 2026-11-24 통합·개인 전광판: 기부 라이딩 ON → 누적거리를 좌측으로 붙이고 그 오른쪽 옆에 적립금(카운트업 + 황금 동전 애니메이션) 표시.
  * rrGroupRefresh(매 갱신)와 0.5초 타이머에서 호출. 단체 모드·OFF 에서는 숨기고 정리.
@@ -9056,6 +9115,7 @@ function rrDonTick() {
       const step = Math.max(1, Math.ceil(back / 60)); /* 1원씩, 밀리면 따라잡기 */
       d = Math.min(t, d + step);
       rrDon.disp[k] = d;
+      rrDonMilestoneCheck(k, d);
       rrDon.acc[k] = (rrDon.acc[k] || 0) + step;
       if (rrDon.acc[k] >= rrDonPer() && now - (rrDon.last[k] || 0) > 110) { rrDon.acc[k] = 0; rrDon.last[k] = now; rrDonCoin(k); }
       more = true;

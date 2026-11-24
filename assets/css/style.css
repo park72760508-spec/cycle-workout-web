@@ -40244,3 +40244,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-sb-don-cap b { font-weight: 900; }
 #rollerRaceDashboardScreen.rr-theme-light .rr-sb-donate { background: linear-gradient(90deg, rgba(217,154,0,.16), rgba(217,154,0,0) 85%); }
 #rollerRaceDashboardScreen.rr-theme-light .rr-sb-don-cap { color: #9a6500; }
+
+/* 1만원 달성 순간: 적립 칸이 한 번 크게 반짝 */
+.rr-don.rr-milestone .rr-don-n { animation: rrDonMile .7s ease-out; }
+@keyframes rrDonMile { 0%{transform:scale(1);filter:drop-shadow(0 0 0 rgba(255,216,74,0))} 30%{transform:scale(1.22);filter:drop-shadow(0 0 14px rgba(255,216,74,.95))} 100%{transform:scale(1);filter:drop-shadow(0 1px 0 rgba(90,50,0,.55))} }
