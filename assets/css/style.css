@@ -40230,3 +40230,17 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 .rr-group-dist__row .rr-gd-km2 .rr-gd-ku { color: #94a3b8; text-shadow: none; }
 /* 시간 경기: 카운트다운 아래줄 경과 시간(50% 크기) */
 #rollerRaceDashboardScreen .scoreboard-value .rr-sb-sub { display: block; font-size: 50%; line-height: 1.15; opacity: .9; letter-spacing: 1px; }
+
+/* ---- 2026-11-24 통합·개인 기부 라이딩: 누적거리 좌측 + 우측 옆 적립금(황금 카운트업) ---- */
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:first-child { flex: 2.6; align-items: flex-start; text-align: left; min-width: 0; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don > .scoreboard-item:first-child .scoreboard-label { align-self: flex-start; }
+#rollerRaceDashboardScreen .scoreboard-display.rr-sb-don .rr-sb-distrow { justify-content: flex-start; align-items: center; gap: .9em; width: 100%; }
+.rr-sb-donate { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: .1em; min-width: 0; white-space: nowrap;
+  padding: .12em .7em .14em; border-left: 3px solid #ffd84a; border-radius: 4px;
+  background: linear-gradient(90deg, rgba(255,216,74,.16), rgba(255,216,74,0) 85%);
+  box-shadow: 0 0 22px rgba(255,200,40,.18); font-family: 'Barlow Semi Condensed', sans-serif; font-style: italic; font-weight: 800; }
+.rr-sb-donate .rr-don { font-size: 1em; line-height: 1.05; }
+.rr-sb-don-cap { font: italic 700 12px/1.2 'Barlow Semi Condensed','Noto Sans KR',sans-serif; letter-spacing: .06em; color: #ffd84a; opacity: .9; }
+.rr-sb-don-cap b { font-weight: 900; }
+#rollerRaceDashboardScreen.rr-theme-light .rr-sb-donate { background: linear-gradient(90deg, rgba(217,154,0,.16), rgba(217,154,0,0) 85%); }
+#rollerRaceDashboardScreen.rr-theme-light .rr-sb-don-cap { color: #9a6500; }

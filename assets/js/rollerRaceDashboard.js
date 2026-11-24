@@ -7165,7 +7165,8 @@ function generateRaceReportPDF() {
         
         <div style="margin-bottom: 20px; font-size: 14px;">
           <p><strong>경기 일시:</strong> ${new Date().toLocaleString('ko-KR')}</p>
-          <p><strong>경기 시간:</strong> ${formatTime(window.rollerRaceState.totalElapsedTime || 0)}</p>
+          <p><strong>경기 시간:</strong> ${formatTime(window.rollerRaceState.totalElapsedTime || 0)}</p>${(typeof rrDonOn === 'function' && rrDonOn()) ? `
+          <p><strong>총 기부금:</strong> ${Math.floor(rrDonTotalAll()).toLocaleString('ko-KR')}원 <span style="color:#64748b;">(바퀴당 ${rrDonPer()}원 적립)</span></p>` : ''}
         </div>
         
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
@@ -8556,7 +8557,9 @@ function rrGroupRefresh() {
     /* 통합/개인 모드: 단체 적용 전 화면 그대로 — 조별 표시·인라인 스타일 모두 제거 */
     [boxL, boxR].forEach(bx => { if (bx) { bx.style.display = 'none'; bx.innerHTML = ''; bx.removeAttribute('style'); bx.style.display = 'none'; } });
     const r0 = boxL && boxL.parentNode; if (r0) { r0.style.flexDirection = ''; r0.style.alignItems = ''; }
+    try { rrDonSbRefresh(); } catch (e) {}
   } else if (boxL && boxR) {
+    try { rrDonSbRefresh(); } catch (e) {}
     /* 단체: 통합 누적거리·개인 랭킹 숨김. 2개조 = 좌 1조 / 가운데 경과시간 / 우 2조, 3개조 이상 = 좌 1·2조 / 우 3·4조… (CSS .rr-sb-grp) */
     const gs = rrGroupStats();
     const gf = window.rollerRaceState.groupFinish || {};
@@ -8829,9 +8832,36 @@ window.rrGroupOnModeChange = function () {
     st.distanceMode = sel.value;
     rrGroupPersist();
     try { updateTargetSettingsDisplay(); } catch (e) {}
+    rrDonSnap();
     rrGroupRefresh();
+    try { rrDonOpen(); } catch (e) {}   /* 2026-11-24 통합/개인 선택 시 기부 라이딩 설정 팝업 */
   }
 };
+/** 2026-11-24 통합·개인 거리 모드 기부 라이딩 설정 팝업 */
+function rrDonOpen() {
+  const st = window.rollerRaceState.raceSettings;
+  let m = document.getElementById('rrDonModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'rrDonModal';
+    m.className = 'rrgm';
+    m.innerHTML = '<div class="rrgm__card" role="dialog" aria-modal="true" aria-label="기부 라이딩 설정">' +
+      '<div class="rrgm__head"><b>기부 라이딩</b><button type="button" class="rrgm__x" aria-label="닫기">✕</button></div>' +
+      '<div class="rrgm__cnt rrgm__don"><label class="rrgm__donl"><input type="checkbox" id="rrDonOn2"> 기부 라이딩</label><label for="rrDonPer2">바퀴당</label><input type="number" id="rrDonPer2" min="1" max="1000" step="1" inputmode="numeric" value="10"><span>원 적립</span></div>' +
+      '<div class="rrgm__foot"><button type="button" class="rrgm__ok">확인</button></div></div>';
+    document.body.appendChild(m);
+    const close = function () { m.classList.remove('show'); rrGroupPersist(); rrGroupRefresh(); };
+    m.addEventListener('click', function (e) { if (e.target === m) close(); });
+    m.querySelector('.rrgm__x').onclick = close;
+    m.querySelector('.rrgm__ok').onclick = close;
+    m.querySelector('#rrDonOn2').addEventListener('change', function () { window.rollerRaceState.raceSettings.donOn = !!this.checked; rrGroupPersist(); rrDonSnap(); rrGroupRefresh(); });
+    m.querySelector('#rrDonPer2').addEventListener('input', function () { const v = parseFloat(this.value); if (!(v >= 1)) return; window.rollerRaceState.raceSettings.donPer = Math.min(1000, v); rrGroupPersist(); rrDonSnap(); rrGroupRefresh(); });
+  }
+  m.querySelector('#rrDonOn2').checked = !!st.donOn;
+  m.querySelector('#rrDonPer2').value = rrDonPer();
+  m.classList.add('show');
+}
+window.rrDonOpen = rrDonOpen;
 (function rrGroupInitUi() {
   function init() {
     const sel = document.getElementById('targetDistanceMode');
@@ -8908,7 +8938,7 @@ function rrSplitApplyN() {
  *  - 전광판 좌/우 조 칸의 거리 자리에 적립액 표시. 1원 단위로 빈 숫자 없이 차례로 채워 올라감(밀리면 한 프레임에 여러 원씩 따라잡음)
  *  - 적립될 때마다 황금 동전이 떨어져 적립 칸으로 들어가는 애니메이션
  * ===================================================================== */
-function rrDonOn() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; return !!st && st.distanceMode === 'group' && !!st.donOn; }
+function rrDonOn() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; return !!st && !!st.donOn; } /* 2026-11-24: 통합·개인·단체 공통 설정 */
 function rrDonPer() { const st = window.rollerRaceState && window.rollerRaceState.raceSettings; const v = st && Number(st.donPer); return v >= 1 ? v : 10; }
 /** 조별 실제 적립액(원, 소수 포함) */
 function rrDonTotal(g) {
@@ -8924,6 +8954,11 @@ function rrDonTotal(g) {
   });
   return won;
 }
+/** 2026-11-24 통합·개인: 전체 참가 트랙의 적립액(원, 소수 포함) */
+function rrDonTotalAll() {
+  const ids = ((window.rollerRaceState && window.rollerRaceState.speedometers) || []).map(function (sp) { return sp.id; });
+  return rrDonTotal({ tracks: ids });
+}
 var rrDon = { disp: {}, tgt: {}, acc: {}, last: {}, active: 0, raf: 0 };
 function rrDonFmt(n) { return Math.floor(n).toLocaleString('en-US'); }
 /** 전광판 칸에 넣을 HTML — 표시 숫자는 카운트업 중인 값(재렌더돼도 숫자가 되돌아가지 않음) */
@@ -8936,6 +8971,47 @@ function rrDonHtml(g) {
 }
 /** 설정 변경·새 경기 시 표시 값을 실제 값으로 맞춤 */
 function rrDonSnap() { rrDon.disp = {}; rrDon.tgt = {}; rrDon.acc = {}; }
+/**
+ * 2026-11-24 통합·개인 전광판: 기부 라이딩 ON → 누적거리를 좌측으로 붙이고 그 오른쪽 옆에 적립금(카운트업 + 황금 동전 애니메이션) 표시.
+ * rrGroupRefresh(매 갱신)와 0.5초 타이머에서 호출. 단체 모드·OFF 에서는 숨기고 정리.
+ */
+function rrDonSbRefresh() {
+  const sbEl = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
+  const box = document.getElementById('scoreboardDonate');
+  if (!sbEl || !box) return;
+  const on = rrDonOn() && !rrGroupIsOn();
+  sbEl.classList.toggle('rr-sb-don', on);
+  if (!on) {
+    if (box.innerHTML) { box.innerHTML = ''; delete rrDon.tgt.T; delete rrDon.disp.T; delete rrDon.acc.T; }
+    box.style.display = 'none';
+    return;
+  }
+  box.style.display = '';
+  if (!box.querySelector('.rr-don[data-g="T"]')) {
+    box.innerHTML = '<div class="rr-sb-don-cap">기부 라이딩 · 바퀴당 <b id="rrSbDonPer"></b>원</div>' +
+      '<span class="rr-don" data-g="T"><i class="rr-coin-ico"></i><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+  }
+  const capPer = box.querySelector('#rrSbDonPer'); if (capPer) capPer.textContent = String(rrDonPer());
+  const t = Math.floor(rrDonTotalAll());
+  rrDon.tgt.T = t;
+  if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
+  const nEl = box.querySelector('.rr-don-n');
+  if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
+  /* 글자 크기: 누적거리 숫자와 같은 크기로 시작해 칸 폭을 넘으면 줄임 */
+  try {
+    const dEl = document.getElementById('scoreboardDistance');
+    const base = (dEl && parseFloat(getComputedStyle(dEl).fontSize)) || 28;
+    const don = box.querySelector('.rr-don');
+    let f = base * 0.95;
+    don.style.fontSize = f.toFixed(1) + 'px';
+    const item = box.closest('.scoreboard-item'), row = box.parentNode;
+    if (item && row && row.scrollWidth > item.clientWidth * 0.98 && row.scrollWidth > 0) {
+      f = Math.max(14, f * (item.clientWidth * 0.96 / row.scrollWidth));
+      don.style.fontSize = f.toFixed(1) + 'px';
+    }
+  } catch (e) {}
+  rrDonKick();
+}
 function rrDonKick() { if (!rrDon.raf) rrDon.raf = requestAnimationFrame(rrDonTick); }
 function rrDonLayer() {
   const sb = document.querySelector('#rollerRaceDashboardScreen .scoreboard-display');
@@ -8994,6 +9070,7 @@ function rrDonTick() {
 setInterval(function () {
   try {
     if (!rrDonOn()) return;
+    if (!rrGroupIsOn()) { rrDonSbRefresh(); return; }
     rrGroupStats().forEach(function (g) {
       const t = Math.floor(rrDonTotal(g));
       rrDon.tgt[g.no] = t;
