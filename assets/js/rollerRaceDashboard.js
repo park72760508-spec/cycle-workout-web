@@ -9053,21 +9053,19 @@ function rrDonSbRefresh() {
   }
   box.style.display = '';
   if (!box.querySelector('.rr-don[data-g="T"]')) {
-    box.innerHTML = '<div class="rr-sb-don-cap">기부 라이딩 · 바퀴당 <b id="rrSbDonPer"></b>원 적립</div>' +
-      '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.webp" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
+    box.innerHTML = '<span class="rr-don" data-g="T"><img class="rr-coin-ico" src="assets/img/coin10.webp" alt="" draggable="false"><b class="rr-don-n">0</b><span class="rr-frac rr-don-w">&nbsp;원</span></span>';
   }
-  const capPer = box.querySelector('#rrSbDonPer'); if (capPer) capPer.textContent = String(rrDonPer());
   const t = Math.floor(rrDonTotalAll());
   rrDon.tgt.T = t;
   if (rrDon.disp.T === undefined || rrDon.disp.T > t) rrDon.disp.T = t;
   const nEl = box.querySelector('.rr-don-n');
   if (nEl && !rrDon.raf) nEl.textContent = rrDonFmt(rrDon.disp.T);
-  /* 글자 크기: 누적거리 숫자 크기의 약 1.25배. 금액이 늘어 중앙 칸이 모자라면 오른쪽 순위 칸을 줄여(zoom) 자리를 내줌 — 왼쪽(누적거리·진행바)은 고정 */
+  /* 글자 크기: 누적거리 숫자 크기의 약 1.6배(안내 문구 제거로 생긴 여백 활용). 금액이 늘어 중앙 칸이 모자라면 오른쪽 순위 칸을 줄여(zoom) 자리를 내줌 — 왼쪽(누적거리·진행바)은 고정 */
   try {
     const dEl = document.getElementById('scoreboardDistance');
     const base = (dEl && parseFloat(getComputedStyle(dEl).fontSize)) || 28;
     const don = box.querySelector('.rr-don');
-    let f = base * 1.25;
+    let f = base * 1.6;
     don.style.fontSize = f.toFixed(1) + 'px';
     const items = Array.prototype.filter.call(sbEl.children, function (el) { return el.classList.contains('scoreboard-item'); });
     const rk = items[2] && items[2].querySelector('.scoreboard-ranks-container');
