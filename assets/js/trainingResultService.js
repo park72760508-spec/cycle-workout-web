@@ -550,6 +550,7 @@ function completePendingClubMissionAfterSave(trainingData, trainingLogId) {
               const sc = res.result && res.result.score != null ? ' 달성 점수 ' + Math.floor(res.result.score) + '점' : '';
               toast(t.stepOrd + '번 미션을 완료했습니다!' + sc, 'success');
             }
+            else if (res && res.reason === 'insufficient_data') toast('구간 기록이 부족합니다. 센서(파워미터·로라) 수신이 거의 없어 ' + t.stepOrd + '번 미션 완료로 올리지 않았습니다. 센서 연결을 확인하고 다시 도전해 주세요.', 'error');
             else if (res && res.reason === 'too_short') toast('훈련 시간이 짧아 미션 완료로 인정되지 않았습니다.', 'error');
           })
           .catch((err) => {

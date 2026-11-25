@@ -25,6 +25,8 @@ const MAX_SEGMENTS = 200;
 const MAX_STEPS = 60;
 /** 훈련 로그 수행 시간이 워크아웃 총 시간의 이 비율 이상이어야 완료로 인정 */
 const MIN_COMPLETION_RATIO = 0.9;
+/** 전체 시간 평균 파워(일량÷시간)가 이 값(W) 미만이면 센서 데이터 부족으로 보고 미션 완료로 올리지 않음 */
+const MIN_AVG_POWER_W_FOR_MISSION = 20;
 const VALID_SOURCES = new Set(["gas", "club"]);
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -429,6 +431,15 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
   const needSec = Math.floor((Number(step.totalSeconds) || 0) * MIN_COMPLETION_RATIO);
   if (needSec > 0 && (Number(log.duration_sec) || 0) < needSec) {
     return { success: true, completed: false, reason: "too_short", needSec };
+  }
+  // 센서 데이터 부족(파워미터·스마트로라 미수신 등): 전체 시간 대비 일량이 극히 낮으면 0점 미달성 기록을 남기지 않고 미완료로 돌려보낸다.
+  // (2026-11-25 사례: 142분 훈련인데 21kJ = 평균 2.5W → 구간 파워 전부 0W 로 0점 기록)
+  {
+    const durSec = Number(log.duration_sec) || 0;
+    const kj = Number(log.kilojoules);
+    if (durSec > 0 && log.kilojoules != null && isFinite(kj) && (kj * 1000) / durSec < MIN_AVG_POWER_W_FOR_MISSION) {
+      return { success: true, completed: false, reason: "insufficient_data", avgPowerW: Math.round((kj * 1000) / durSec) };
+    }
   }
 
   // 세그먼트 목표가 없으면(미션 저장 당시 조회 실패·기능 추가 전 미션) 지금 조회해 미션에 채워 둔다
