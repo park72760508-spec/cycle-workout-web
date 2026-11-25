@@ -12971,9 +12971,9 @@ exports.matchExistingGpxCourse = onRequest(
  * 크루/클럽 가입·승인·거절·탈퇴 — Supabase Primary 쓰기 4종 공용 핸들러.
  * @see functions/ridingGroupSupabaseWrites.js — 검증·Supabase 쓰기·Firestore 동기 미러링 로직
  */
-function registerRidingGroupSupabaseWriteEndpoint(exportName, handlerFn) {
+function registerRidingGroupSupabaseWriteEndpoint(exportName, handlerFn, extraCfg) {
   exports[exportName] = onRequest(
-    supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 30 }),
+    supabaseDualWriteServer.appendServiceRoleSecret(Object.assign({ cors: true, timeoutSeconds: 30 }, extraCfg || {})),
     async (req, res) => {
       res.set("Access-Control-Allow-Origin", "*");
       res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -13034,11 +13034,13 @@ registerRidingGroupSupabaseWriteEndpoint(
 );
 
 /** 클럽 챌린지 미션 — 조회(내 진행 포함)·생성/수정(방장·관리자)·단계 완료(훈련 저장 직후) */
-registerRidingGroupSupabaseWriteEndpoint("getClubMissionSupabase", clubMissions.handleGetClubMission);
+clubMissions.setStravaHelpers({ refreshStravaTokenForUser, fetchStravaStreams });
+registerRidingGroupSupabaseWriteEndpoint("getClubMissionSupabase", clubMissions.handleGetClubMission, { timeoutSeconds: 60 });
 registerRidingGroupSupabaseWriteEndpoint("saveClubMissionSupabase", clubMissions.handleSaveClubMission);
 registerRidingGroupSupabaseWriteEndpoint(
   "completeClubMissionStepSupabase",
-  clubMissions.handleCompleteClubMissionStep
+  clubMissions.handleCompleteClubMissionStep,
+  { timeoutSeconds: 60 }
 );
 
 /**

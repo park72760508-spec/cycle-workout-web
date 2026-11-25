@@ -205,6 +205,9 @@ async function handleGetClubMission(admin, uid, body) {
   const wantId = String((body && body.missionId) || "").trim();
   const row = (wantId && allRows.find((r) => String(r.id) === wantId)) || pickCurrentMissionRow(allRows, todayYmd);
   const missions = allRows.map((r) => missionListItem(r, todayYmd));
+  if (row && uid) {
+    try { await Promise.race([retryStravaJudgements(admin, uid, supabase, userUuid, row, gid), new Promise((r) => setTimeout(r, 25000))]); } catch (e) { console.warn("[ClubMission] retry", e && e.message); }
+  }
 
   let completedOrds = [];
   const failedOrds = [];
@@ -374,6 +377,140 @@ async function handleSaveClubMission(admin, uid, body) {
   return { success: true, id: data.id, updated: false };
 }
 
+/* ===== 2026-11-26 센서 데이터 부족 시 Strava 기록으로 자동 판정 =====
+ * STELVIO 훈련 기록에 파워가 거의 없을 때(평균 20W 미만) 같은 날 Strava 활동의 파워 스트림으로 구간별 평균을 구해 점수를 산출한다.
+ * Strava 활동은 STELVIO 저장보다 늦게 올라올 수 있어, 못 찾으면 users/{uid}/mission_strava_pending 에 보관하고
+ * 미션 화면을 열 때(handleGetClubMission) 5분 간격으로 재시도한다(최대 3일). */
+let stravaHelpers = null;
+function setStravaHelpers(h) { stravaHelpers = h; }
+const STRAVA_PENDING_COL = "mission_strava_pending";
+const STRAVA_RETRY_MS = 5 * 60 * 1000;
+const STRAVA_PENDING_MAX_MS = 3 * 24 * 3600 * 1000;
+const STRAVA_MIN_CORR = 0.5;
+const STRAVA_RIDE_TYPES = new Set(["Ride", "VirtualRide", "EBikeRide", "GravelRide", "MountainBikeRide"]);
+
+function isInsufficientLog(log) {
+  const durSec = Number(log && log.duration_sec) || 0;
+  const kj = Number(log && log.kilojoules);
+  return durSec > 0 && log.kilojoules != null && isFinite(kj) && (kj * 1000) / durSec < MIN_AVG_POWER_W_FOR_MISSION;
+}
+
+/** 같은 날 Strava 활동 중 워크아웃 파워 패턴과 가장 잘 맞는 것의 구간별 평균 파워. 없으면 null. */
+async function stravaSegmentAvgForLog(admin, uid, log, segments, needSec, ftp) {
+  if (!stravaHelpers) return null;
+  const date = String(log.date || "").slice(0, 10);
+  if (!YMD_RE.test(date)) return null;
+  const durs = segments.map((sg) => Math.max(0, Math.round(Number(sg && (sg.duration_sec != null ? sg.duration_sec : sg.duration)) || 0)));
+  const totalSec = durs.reduce((a, b) => a + b, 0);
+  if (!(totalSec > 0) || !(ftp > 0)) return null;
+  const tgts = segments.map((sg) => {
+    const pct = clubMissionScoring.segmentTargetFtpPct(sg);
+    return pct > 0 ? (pct / 100) * ftp : 0;
+  });
+  if (!tgts.some((x) => x > 0)) return null;
+
+  const db = admin.firestore();
+  const ud = (await db.collection("users").doc(uid).get()).data() || {};
+  if (!ud.strava_refresh_token) return null;
+  let accessToken = ud.strava_access_token || "";
+  if (!accessToken || Number(ud.strava_expires_at || 0) < Math.floor(Date.now() / 1000) + 300) {
+    accessToken = (await stravaHelpers.refreshStravaTokenForUser(db, uid)).accessToken;
+  }
+  const after = Math.floor(Date.parse(date + "T00:00:00+09:00") / 1000);
+  const listUrl = "https://www.strava.com/api/v3/athlete/activities?per_page=30&after=" + after + "&before=" + (after + 86400);
+  let lr = await fetch(listUrl, { headers: { Authorization: "Bearer " + accessToken } });
+  if (lr.status === 401) {
+    accessToken = (await stravaHelpers.refreshStravaTokenForUser(db, uid)).accessToken;
+    lr = await fetch(listUrl, { headers: { Authorization: "Bearer " + accessToken } });
+  }
+  if (!lr.ok) return null;
+  const acts = await lr.json().catch(() => []);
+  const cands = (Array.isArray(acts) ? acts : [])
+    .filter((a) => a && STRAVA_RIDE_TYPES.has(String(a.sport_type || a.type || "")) && Number(a.elapsed_time) >= needSec && (a.device_watts === true || Number(a.average_watts) > 0))
+    .slice(0, 5);
+
+  const prof = new Array(totalSec);
+  let c = 0;
+  durs.forEach((d, i) => { for (let k = 0; k < d; k++) prof[c++] = tgts[i]; });
+  let pm = 0; for (let k = 0; k < totalSec; k++) pm += prof[k]; pm /= totalSec;
+  let pv = 0; for (let k = 0; k < totalSec; k++) pv += (prof[k] - pm) * (prof[k] - pm);
+
+  let best = null;
+  for (const a of cands) {
+    const sr = await stravaHelpers.fetchStravaStreams(accessToken, String(a.id));
+    if (!sr || !sr.success || !Array.isArray(sr.watts) || !sr.watts.length) continue;
+    const tArr = Array.isArray(sr.time) && sr.time.length === sr.watts.length ? sr.time : sr.watts.map((_, i) => i);
+    const n = Math.max(0, Math.floor(Number(tArr[tArr.length - 1]) || 0)) + 1;
+    const w = new Array(n).fill(0);
+    for (let i = 0; i < tArr.length; i++) { const k = Math.floor(Number(tArr[i]) || 0); if (k >= 0 && k < n) w[k] = Math.max(0, Number(sr.watts[i]) || 0); }
+    const maxOff = Math.max(0, Math.min(900, n - totalSec));
+    let bestOff = 0, bestCorr = -2;
+    for (let off = 0; off <= maxOff; off++) {
+      let wm = 0; for (let k = 0; k < totalSec; k++) wm += w[off + k] || 0; wm /= totalSec;
+      let cov = 0, wv = 0;
+      for (let k = 0; k < totalSec; k++) { const x = (w[off + k] || 0) - wm; cov += x * (prof[k] - pm); wv += x * x; }
+      const corr = wv > 0 && pv > 0 ? cov / Math.sqrt(wv * pv) : -1;
+      if (corr > bestCorr) { bestCorr = corr; bestOff = off; }
+    }
+    if (bestCorr < STRAVA_MIN_CORR) continue;
+    const out = [];
+    let cur = bestOff;
+    durs.forEach((d) => {
+      if (d <= 0) { out.push(null); return; }
+      let sum = 0;
+      for (let k = cur; k < cur + d && k < n; k++) sum += w[k];
+      out.push(Math.round(sum / d));
+      cur += d;
+    });
+    if (!best || bestCorr > best.corr) best = { segmentAvgWatts: out, corr: bestCorr, activityId: String(a.id), offsetSec: bestOff };
+  }
+  return best;
+}
+
+async function savePendingStrava(admin, uid, p) {
+  try {
+    const ref = admin.firestore().collection("users").doc(uid).collection(STRAVA_PENDING_COL).doc(p.missionId + "_" + p.stepOrd);
+    const snap = await ref.get();
+    if (snap.exists) return;
+    await ref.set(Object.assign({ createdAt: Date.now(), lastTry: Date.now() }, p));
+  } catch (e) { console.warn("[ClubMission] pending 저장 실패", e && e.message); }
+}
+
+/** 미션 화면 조회 시: 센서 부족으로 보류/미달성된 단계를 Strava 로 재판정 */
+async function retryStravaJudgements(admin, uid, supabase, userUuid, row, groupId) {
+  if (!stravaHelpers || !userUuid || !row) return;
+  const db = admin.firestore();
+  const col = db.collection("users").doc(uid).collection(STRAVA_PENDING_COL);
+  // 최근 3일 안의 미달성 단계 중 센서 부족 기록은 보류 목록에 올린다(이미 0점으로 저장된 건 구제)
+  const since = new Date(Date.now() - STRAVA_PENDING_MAX_MS).toISOString();
+  const { data: failed } = await supabase
+    .from("club_mission_completions")
+    .select("step_ord, step_score, training_log_id, completed_at")
+    .eq("mission_id", row.id).eq("user_id", userUuid).gte("completed_at", since);
+  for (const f of (failed || [])) {
+    if (clubMissionScoring.isPassedScore(f.step_score) || !f.training_log_id) continue;
+    const ref = col.doc(row.id + "_" + f.step_ord);
+    if ((await ref.get()).exists) continue;
+    const ls = await db.collection("users").doc(uid).collection("logs").doc(String(f.training_log_id)).get();
+    if (ls.exists && isInsufficientLog(ls.data() || {})) {
+      await ref.set({ groupId, missionId: row.id, stepOrd: Number(f.step_ord), logId: String(f.training_log_id), createdAt: Date.now(), lastTry: 0 });
+    }
+  }
+  const snap = await col.where("missionId", "==", row.id).get();
+  for (const d of snap.docs) {
+    const p = d.data() || {};
+    if (Date.now() - (Number(p.createdAt) || 0) > STRAVA_PENDING_MAX_MS) { await d.ref.delete(); continue; }
+    if (Date.now() - (Number(p.lastTry) || 0) < STRAVA_RETRY_MS) continue;
+    await d.ref.update({ lastTry: Date.now() });
+    try {
+      const r = await handleCompleteClubMissionStep(admin, uid, { groupId: p.groupId || groupId, missionId: p.missionId, stepOrd: p.stepOrd, trainingLogId: p.logId });
+      if (!r || (r.reason !== "insufficient_data" && r.reason !== "too_short")) await d.ref.delete();
+    } catch (e) {
+      console.warn("[ClubMission] Strava 재판정 실패:", e && e.message ? e.message : e);
+    }
+  }
+}
+
 /**
  * 미션 단계 완료 — 훈련 저장 직후 호출.
  * 검증: 활성 회원 · 미션 기간 내 · 다음 순서 단계 · 훈련 로그의 workout_id 일치 · 수행 시간 90% 이상.
@@ -432,16 +569,6 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
   if (needSec > 0 && (Number(log.duration_sec) || 0) < needSec) {
     return { success: true, completed: false, reason: "too_short", needSec };
   }
-  // 센서 데이터 부족(파워미터·스마트로라 미수신 등): 전체 시간 대비 일량이 극히 낮으면 0점 미달성 기록을 남기지 않고 미완료로 돌려보낸다.
-  // (2026-11-25 사례: 142분 훈련인데 21kJ = 평균 2.5W → 구간 파워 전부 0W 로 0점 기록)
-  {
-    const durSec = Number(log.duration_sec) || 0;
-    const kj = Number(log.kilojoules);
-    if (durSec > 0 && log.kilojoules != null && isFinite(kj) && (kj * 1000) / durSec < MIN_AVG_POWER_W_FOR_MISSION) {
-      return { success: true, completed: false, reason: "insufficient_data", avgPowerW: Math.round((kj * 1000) / durSec) };
-    }
-  }
-
   // 세그먼트 목표가 없으면(미션 저장 당시 조회 실패·기능 추가 전 미션) 지금 조회해 미션에 채워 둔다
   let segments = Array.isArray(step.segments) ? step.segments : [];
   if (!segments.length) {
@@ -451,9 +578,25 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
       await supabase.from("club_missions").update({ steps: nextSteps }).eq("id", row.id);
     }
   }
+  // 센서 데이터 부족 → 같은 날 Strava 파워 스트림으로 자동 판정, 못 찾으면 보류(미션 화면 열 때 재시도)
+  let segAvg = log.segment_avg_watts;
+  let stravaInfo = null;
+  if (isInsufficientLog(log)) {
+    try {
+      stravaInfo = await stravaSegmentAvgForLog(admin, uid, log, segments, needSec, Number(log.ftp_at_time));
+    } catch (e) {
+      console.warn("[ClubMission] Strava 판정 조회 실패:", e && e.message ? e.message : e);
+    }
+    if (!stravaInfo) {
+      await savePendingStrava(admin, uid, { groupId: gid, missionId, stepOrd, logId });
+      return { success: true, completed: false, reason: "insufficient_data", avgPowerW: Math.round(((Number(log.kilojoules) || 0) * 1000) / (Number(log.duration_sec) || 1)) };
+    }
+    segAvg = stravaInfo.segmentAvgWatts;
+    console.log("[ClubMission] Strava 로 판정", { uid, missionId, stepOrd, activityId: stravaInfo.activityId, corr: Math.round(stravaInfo.corr * 100) / 100, offsetSec: stravaInfo.offsetSec });
+  }
   const result = clubMissionScoring.computeStepAchievement(
     segments,
-    log.segment_avg_watts,
+    segAvg,
     Number(log.ftp_at_time),
     Number(log.weight),
     Number(log.avg_watts)
@@ -466,7 +609,7 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     interval_achievement: result ? result.intervalAchievement : null,
     wkg: result ? result.wkg : null,
     wkg_factor: result ? result.wkgFactor : null,
-    score_method: result ? result.method : null,
+    score_method: result ? (stravaInfo ? "strava" : result.method) : null,
   };
   const passed = result ? result.passed : true;
   if (prevFailed) {
@@ -486,10 +629,11 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     );
     if (error && error.code !== "23505") throw error;
   }
-  return { success: true, completed: passed, passed, retry: !passed, stepOrd, result, passScore: clubMissionScoring.PASS_SCORE };
+  return { success: true, completed: passed, passed, retry: !passed, stepOrd, result, passScore: clubMissionScoring.PASS_SCORE, source: stravaInfo ? "strava" : "stelvio" };
 }
 
 module.exports = {
+  setStravaHelpers,
   handleGetClubMission,
   handleSaveClubMission,
   handleCompleteClubMissionStep,
