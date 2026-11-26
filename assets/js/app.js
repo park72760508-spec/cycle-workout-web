@@ -15631,6 +15631,115 @@ window.saveGeminiApiKey = saveGeminiApiKey;
 window.testGeminiApiKey = testGeminiApiKey;
 window.closeTrainingAnalysisModal = closeTrainingAnalysisModal;
 
+// ── Strava 재연결 안내 알림톡 발송 팝업 (관리자 전용, 템플릿 UO_3097) ──
+function openStravaReconnectAlimtalkModal() {
+  var old = document.getElementById('stravaReconnectModal');
+  if (old) old.remove();
+  var esc = function (v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  };
+  var ov = document.createElement('div');
+  ov.id = 'stravaReconnectModal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.innerHTML =
+    '<div style="background:#fff;color:#111;border-radius:12px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3);">' +
+    '<div style="padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">' +
+    '<strong style="font-size:15px;">Strava 재연결 안내 발송</strong>' +
+    '<button type="button" id="srmClose" style="border:none;background:none;font-size:20px;cursor:pointer;line-height:1;">×</button></div>' +
+    '<div style="padding:8px 16px;font-size:12px;color:#6b7280;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">' +
+    '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="srmAll" /> 전체 선택</label>' +
+    '<span id="srmCount">불러오는 중…</span></div>' +
+    '<div id="srmList" style="overflow:auto;flex:1;min-height:120px;"></div>' +
+    '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;">' +
+    '<button type="button" id="srmCancel" class="btn btn-default-style" style="flex:1;">닫기</button>' +
+    '<button type="button" id="srmSend" class="btn stelvio-purple-btn" style="flex:1;border:none;font-weight:600;" disabled>발송하기</button></div></div>';
+  document.body.appendChild(ov);
+  var close = function () { ov.remove(); };
+  ov.querySelector('#srmClose').onclick = close;
+  ov.querySelector('#srmCancel').onclick = close;
+  var listEl = ov.querySelector('#srmList');
+  var countEl = ov.querySelector('#srmCount');
+  var sendBtn = ov.querySelector('#srmSend');
+  var allBox = ov.querySelector('#srmAll');
+  var users = [];
+
+  var call = async function (body) {
+    var u = (window.authV9 && window.authV9.currentUser) || (window.auth && window.auth.currentUser);
+    if (!u) throw new Error('로그인이 필요합니다.');
+    var tok = await u.getIdToken();
+    var pid = (window.authV9 && window.authV9.app && window.authV9.app.options && window.authV9.app.options.projectId) || 'stelvio-ai';
+    var r = await fetch('https://asia-northeast3-' + pid + '.cloudfunctions.net/stravaReconnectAlimtalkAdmin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+      body: JSON.stringify(body),
+    });
+    var d = null;
+    try { d = await r.json(); } catch (e) { throw new Error('서버 응답을 읽을 수 없습니다.'); }
+    if (!r.ok || !d || d.success !== true) throw new Error((d && d.error) || 'HTTP ' + r.status);
+    return d;
+  };
+  var checks = function () { return Array.prototype.slice.call(listEl.querySelectorAll('input.srm-chk')); };
+  var refresh = function () {
+    var n = checks().filter(function (c) { return c.checked; }).length;
+    countEl.textContent = users.length ? n + ' / ' + users.length + '명 선택' : '';
+    sendBtn.disabled = n === 0;
+    allBox.checked = users.length > 0 && n === users.length;
+  };
+  var render = function () {
+    if (!users.length) {
+      listEl.innerHTML = '<p style="text-align:center;color:#6b7280;font-size:13px;padding:32px 16px;">재연결이 필요한 회원이 없습니다.</p>';
+      refresh();
+      return;
+    }
+    listEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:28px 1fr 1.3fr;gap:6px;padding:6px 16px;font-size:11px;color:#94a3b8;"><span></span><span>이름</span><span>연락처</span></div>' +
+      users.map(function (u, i) {
+        var sent = u.lastSentAt ? '<div style="font-size:10px;color:#16a34a;grid-column:2/4;">최근 발송 ' + esc(String(u.lastSentAt).slice(0, 16).replace('T', ' ')) + '</div>' : '';
+        return '<label style="display:grid;grid-template-columns:28px 1fr 1.3fr;gap:6px;align-items:center;padding:9px 16px;border-top:1px solid #f1f5f9;font-size:13px;cursor:pointer;">' +
+          '<input type="checkbox" class="srm-chk" data-i="' + i + '"' + (u.contact ? '' : ' disabled') + ' />' +
+          '<span>' + esc(u.name || '(이름 없음)') + '</span><span>' + (u.contact ? esc(u.contact) : '<em style="color:#dc2626;">연락처 없음</em>') + '</span>' + sent + '</label>';
+      }).join('');
+    checks().forEach(function (c) { c.onchange = refresh; });
+    refresh();
+  };
+  allBox.onchange = function () {
+    checks().forEach(function (c) { if (!c.disabled) c.checked = allBox.checked; });
+    refresh();
+  };
+  sendBtn.onclick = async function () {
+    var ids = checks().filter(function (c) { return c.checked; }).map(function (c) { return users[Number(c.getAttribute('data-i'))].id; });
+    if (!ids.length) return;
+    if (!window.confirm(ids.length + '명에게 Strava 재연결 안내 알림톡을 발송합니다. 계속할까요?')) return;
+    sendBtn.disabled = true;
+    sendBtn.textContent = '발송 중…';
+    try {
+      var d = await call({ action: 'send', userIds: ids });
+      var failed = (d.results || []).filter(function (r) { return !r.ok; });
+      var msg = '발송 완료: ' + d.sent + '명 성공' + (failed.length ? ', ' + failed.length + '명 실패' : '');
+      if (failed.length) msg += '\n' + failed.slice(0, 5).map(function (r) { return '- ' + r.error; }).join('\n');
+      alert(msg);
+      var l = await call({ action: 'list' });
+      users = l.users || [];
+      render();
+    } catch (e) {
+      alert('발송 실패: ' + (e && e.message ? e.message : e));
+    } finally {
+      sendBtn.textContent = '발송하기';
+      refresh();
+    }
+  };
+  call({ action: 'list' }).then(function (d) {
+    users = d.users || [];
+    render();
+  }).catch(function (e) {
+    countEl.textContent = '';
+    listEl.innerHTML = '<p style="text-align:center;color:#dc2626;font-size:13px;padding:32px 16px;">목록을 불러오지 못했습니다: ' + esc(e && e.message ? e.message : e) + '</p>';
+  });
+}
+window.openStravaReconnectAlimtalkModal = openStravaReconnectAlimtalkModal;
+
 // 환경 설정 팝업 관련 함수
 /** 관리자(grade=1)일 때만 📊 시스템 접속 통계 버튼을 동적 생성 (중복 방지) */
 function ensureStelvioAdminAccessStatsButton() {
@@ -15640,6 +15749,8 @@ function ensureStelvioAdminAccessStatsButton() {
   const g = typeof getViewerGrade === 'function' ? String(getViewerGrade()) : '2';
   const isAdmin =
     typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g);
+  const stravaReconnectRow = document.getElementById('settingsStravaReconnectAdminRow');
+  if (stravaReconnectRow) stravaReconnectRow.style.display = isAdmin ? 'flex' : 'none';
   const existing = document.getElementById('stelvioDynamicAccessStatsBtn');
   if (!isAdmin) {
     host.style.display = 'none';

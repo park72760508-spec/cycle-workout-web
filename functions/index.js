@@ -18826,6 +18826,120 @@ async function handleMarketProgressAlimtalkNotify(req, res, opts) {
   }
 }
 
+/**
+ * Strava 재연결 안내 알림톡(UO_3097) — 관리자 전용. 환경설정 > STRAVA 블록의 "발송하기" 팝업이 호출한다.
+ * VPC egress(알리고 IP 화이트리스트) 포함. 인증: Firebase ID 토큰 + users/{uid}.grade == 1.
+ * body.action: "list"(재연결 필요 사용자 목록) | "send"(body.userIds 에게 발송)
+ */
+const stravaReconnectAlimtalk = require("./stravaReconnectAlimtalk");
+exports.stravaReconnectAlimtalkAdmin = onRequest(
+  (() => {
+    const o = Object.assign({ cors: true, timeoutSeconds: 120, memory: "256MiB" }, aligoKakaoNatEgress.ALIGO_KAKAO_CLOUD_FUNCTIONS_VPC_EGRESS_OPTS);
+    o.secrets = [aligoApiKeySecret, aligoUserIdSecret, aligoTokenSecret];
+    return o;
+  })(),
+  async (req, res) => {
+    setCorsHeaders(req, res);
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ success: false, error: "POST만 허용됩니다." });
+      return;
+    }
+    const logTag = "[stravaReconnectAlimtalkAdmin]";
+    try {
+      const decoded = await verifyRaceRequestAuth(req);
+      const db = admin.firestore();
+      const callerSnap = await db.collection("users").doc(decoded.uid).get();
+      if (String((callerSnap.data() || {}).grade) !== "1") {
+        res.status(403).json({ success: false, error: "관리자만 사용할 수 있습니다." });
+        return;
+      }
+      const body = typeof req.body === "object" && req.body !== null ? req.body : {};
+      const action = String(body.action || "list");
+
+      if (action === "list") {
+        const snap = await db.collection("users").where("strava_auth_invalid", "==", true).get();
+        const users = [];
+        snap.forEach((d) => {
+          const u = d.data() || {};
+          if (!stravaSyncRetry.isStravaAuthInvalidUserData(u)) return;
+          users.push({
+            id: d.id,
+            name: String(u.name || u.displayName || u.display_name || "").trim(),
+            contact: String(u.contact || u.phone || u.phoneNumber || "").trim(),
+            invalidAt: u.strava_auth_invalid_at || "",
+            lastSentAt: u.strava_reconnect_alimtalk_sent_at || "",
+          });
+        });
+        users.sort((a, b) => String(b.invalidAt).localeCompare(String(a.invalidAt)));
+        res.status(200).json({ success: true, users });
+        return;
+      }
+
+      if (action === "send") {
+        const ids = Array.isArray(body.userIds)
+          ? Array.from(new Set(body.userIds.map((x) => String(x || "").trim()).filter(Boolean)))
+          : [];
+        if (!ids.length) {
+          res.status(400).json({ success: false, error: "발송 대상을 선택해 주세요." });
+          return;
+        }
+        if (ids.length > 300) {
+          res.status(400).json({ success: false, error: "한 번에 최대 300명까지 발송할 수 있습니다." });
+          return;
+        }
+        const cfg = await stravaReconnectAlimtalk.loadStravaReconnectAlimtalkConfig(db);
+        const results = [];
+        for (const id of ids) {
+          /* eslint-disable no-await-in-loop */
+          const r = { id, ok: false, error: "" };
+          try {
+            const ref = db.collection("users").doc(id);
+            const snap = await ref.get();
+            const u = snap.exists ? snap.data() || {} : {};
+            if (!stravaSyncRetry.isStravaAuthInvalidUserData(u)) {
+              r.error = "이미 재연결되었거나 대상이 아닙니다.";
+            } else {
+              const phone = String(u.contact || u.phone || u.phoneNumber || "").replace(/\D/g, "");
+              const name = String(u.name || u.displayName || u.display_name || "").trim() || "회원";
+              if (!phone) {
+                r.error = "연락처 없음";
+              } else {
+                await sendAlimtalkUnified(cfg, {
+                  receiverPhone: phone,
+                  displayName: name,
+                  subject: stravaReconnectAlimtalk.STRAVA_RECONNECT_ALIM_SUBJECT_KO,
+                  message: stravaReconnectAlimtalk.buildStravaReconnectAlimtalkMessage(name),
+                  templateKind: "strava_reconnect",
+                  logTag,
+                });
+                r.ok = true;
+                await ref.update({ strava_reconnect_alimtalk_sent_at: new Date().toISOString() });
+              }
+            }
+          } catch (e) {
+            r.error = e && e.message ? e.message : String(e);
+            console.error(`${logTag} ${id} 발송 실패:`, r.error);
+          }
+          results.push(r);
+          /* eslint-enable no-await-in-loop */
+        }
+        res.status(200).json({ success: true, sent: results.filter((r) => r.ok).length, results });
+        return;
+      }
+
+      res.status(400).json({ success: false, error: "알 수 없는 action" });
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      console.error(`${logTag}`, msg);
+      res.status(e && e.status ? e.status : 500).json({ success: false, error: msg });
+    }
+  }
+);
+
 /** 가격 조정 요구(네고) — 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 호출 */
 exports.notifyMarketNegoRequest = onRequest(buildMarketAlimtalkFunctionOptions(), async (req, res) => {
   await handleMarketProgressAlimtalkNotify(req, res, {
