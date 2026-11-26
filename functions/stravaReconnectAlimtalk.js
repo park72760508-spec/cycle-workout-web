@@ -16,6 +16,23 @@ const ALIGO_CONFIG_DOC = "aligo";
 const STRAVA_RECONNECT_ALIM_SUBJECT_KO = "Strava 재연결 안내";
 const DEFAULT_STRAVA_RECONNECT_TPL_CODE = "UO_3097";
 
+/**
+ * 승인 템플릿 하단 버튼("STELVIO 바로 연결") — 버튼이 빠지면 "메시지가 템플릿과 일치하지않음".
+ * name 은 카카오 채널에 등록된 버튼명과 동일해야 한다. linkType·URL 이 다르면
+ * ALIGO_STRAVA_RECONNECT_BUTTON_1(env) 또는 appConfig/aligo.strava_reconnect_button_1(JSON 문자열)로 덮어쓴다.
+ */
+const DEFAULT_STRAVA_RECONNECT_BUTTON_1 = JSON.stringify({
+  button: [
+    {
+      name: "STELVIO 바로 연결",
+      linkType: "WL",
+      linkTypeName: "웹링크",
+      linkMo: "https://stelvio.ai.kr",
+      linkPc: "https://stelvio.ai.kr",
+    },
+  ],
+});
+
 /** 승인 템플릿 본문 조립 — #{이름} 만 치환 */
 function buildStravaReconnectAlimtalkMessage(name) {
   const n = String(name || "").trim() || "회원";
@@ -48,6 +65,12 @@ async function loadStravaReconnectAlimtalkConfig(db) {
       DEFAULT_STRAVA_RECONNECT_TPL_CODE
   );
 
+  const button1 = String(
+    process.env.ALIGO_STRAVA_RECONNECT_BUTTON_1 ||
+      appConfig.strava_reconnect_button_1 ||
+      DEFAULT_STRAVA_RECONNECT_BUTTON_1
+  ).trim();
+
   const missing = [];
   if (!senderkey) missing.push("senderkey");
   if (!sender) missing.push("sender");
@@ -56,7 +79,7 @@ async function loadStravaReconnectAlimtalkConfig(db) {
   if (!token) missing.push("ALIGO_TOKEN");
   if (missing.length) throw new Error(`Strava 재연결 알림톡 설정 누락: ${missing.join(" · ")}`);
 
-  return { senderkey, tpl_code: tplCode, sender, apikey, userid, token };
+  return { senderkey, tpl_code: tplCode, sender, apikey, userid, token, button_1: button1 };
 }
 
 module.exports = {
