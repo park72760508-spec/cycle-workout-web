@@ -18883,11 +18883,17 @@ exports.stravaReconnectAlimtalkAdmin = onRequest(
         const ids = Array.isArray(body.userIds)
           ? Array.from(new Set(body.userIds.map((x) => String(x || "").trim()).filter(Boolean)))
           : [];
-        if (!ids.length) {
+        const manual = (Array.isArray(body.manual) ? body.manual : [])
+          .map((m) => ({
+            name: String((m && m.name) || "").trim().slice(0, 40) || "회원",
+            phone: String((m && m.contact) || "").replace(/\D/g, ""),
+          }))
+          .filter((m) => /^01\d{8,9}$/.test(m.phone));
+        if (!ids.length && !manual.length) {
           res.status(400).json({ success: false, error: "발송 대상을 선택해 주세요." });
           return;
         }
-        if (ids.length > 300) {
+        if (ids.length + manual.length > 300) {
           res.status(400).json({ success: false, error: "한 번에 최대 300명까지 발송할 수 있습니다." });
           return;
         }
@@ -18923,6 +18929,26 @@ exports.stravaReconnectAlimtalkAdmin = onRequest(
           } catch (e) {
             r.error = e && e.message ? e.message : String(e);
             console.error(`${logTag} ${id} 발송 실패:`, r.error);
+          }
+          results.push(r);
+          /* eslint-enable no-await-in-loop */
+        }
+        for (const m of manual) {
+          /* eslint-disable no-await-in-loop */
+          const r = { id: `manual:${m.phone}`, ok: false, error: "" };
+          try {
+            await sendAlimtalkUnified(cfg, {
+              receiverPhone: m.phone,
+              displayName: m.name,
+              subject: stravaReconnectAlimtalk.STRAVA_RECONNECT_ALIM_SUBJECT_KO,
+              message: stravaReconnectAlimtalk.buildStravaReconnectAlimtalkMessage(m.name),
+              templateKind: "strava_reconnect",
+              logTag,
+            });
+            r.ok = true;
+          } catch (e) {
+            r.error = e && e.message ? e.message : String(e);
+            console.error(`${logTag} manual 발송 실패:`, r.error);
           }
           results.push(r);
           /* eslint-enable no-await-in-loop */

@@ -15642,7 +15642,7 @@ function openStravaReconnectAlimtalkModal() {
   };
   var ov = document.createElement('div');
   ov.id = 'stravaReconnectModal';
-  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:2147483600;display:flex;align-items:center;justify-content:center;padding:16px;';
   ov.innerHTML =
     '<div style="background:#fff;color:#111;border-radius:12px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 10px 40px rgba(0,0,0,.3);">' +
     '<div style="padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center;">' +
@@ -15651,6 +15651,10 @@ function openStravaReconnectAlimtalkModal() {
     '<div style="padding:8px 16px;font-size:12px;color:#6b7280;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center;">' +
     '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="srmAll" /> 전체 선택</label>' +
     '<span id="srmCount">불러오는 중…</span></div>' +
+    '<div style="padding:8px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:6px;">' +
+    '<input id="srmAddName" placeholder="이름" style="flex:1;min-width:0;padding:7px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />' +
+    '<input id="srmAddContact" placeholder="연락처(010…)" inputmode="tel" style="flex:1.3;min-width:0;padding:7px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />' +
+    '<button type="button" id="srmAddBtn" class="btn btn-default-style" style="white-space:nowrap;padding:0 12px;">추가</button></div>' +
     '<div id="srmList" style="overflow:auto;flex:1;min-height:120px;"></div>' +
     '<div style="padding:12px 16px;border-top:1px solid #e5e7eb;display:flex;gap:8px;">' +
     '<button type="button" id="srmCancel" class="btn btn-default-style" style="flex:1;">닫기</button>' +
@@ -15664,6 +15668,7 @@ function openStravaReconnectAlimtalkModal() {
   var sendBtn = ov.querySelector('#srmSend');
   var allBox = ov.querySelector('#srmAll');
   var users = [];
+  var manualUsers = [];
 
   var call = async function (body) {
     var u = (window.authV9 && window.authV9.currentUser) || (window.auth && window.auth.currentUser);
@@ -15683,45 +15688,65 @@ function openStravaReconnectAlimtalkModal() {
   var checks = function () { return Array.prototype.slice.call(listEl.querySelectorAll('input.srm-chk')); };
   var refresh = function () {
     var n = checks().filter(function (c) { return c.checked; }).length;
-    countEl.textContent = users.length ? n + ' / ' + users.length + '명 선택' : '';
+    var total = users.length + manualUsers.length;
+    countEl.textContent = total ? n + ' / ' + total + '명 선택' : '';
     sendBtn.disabled = n === 0;
-    allBox.checked = users.length > 0 && n === users.length;
+    allBox.checked = total > 0 && n === total;
   };
   var render = function () {
-    if (!users.length) {
-      listEl.innerHTML = '<p style="text-align:center;color:#6b7280;font-size:13px;padding:32px 16px;">재연결이 필요한 회원이 없습니다.</p>';
+    var all = users.concat(manualUsers);
+    if (!all.length) {
+      listEl.innerHTML = '<p style="text-align:center;color:#6b7280;font-size:13px;padding:32px 16px;">재연결이 필요한 회원이 없습니다. 위에서 연락처를 추가할 수 있습니다.</p>';
       refresh();
       return;
     }
+    var prevChecked = {};
+    checks().forEach(function (c) { if (c.checked) prevChecked[c.getAttribute('data-i')] = 1; });
     listEl.innerHTML =
       '<div style="display:grid;grid-template-columns:28px 1fr 1.3fr;gap:6px;padding:6px 16px;font-size:11px;color:#94a3b8;"><span></span><span>이름</span><span>연락처</span></div>' +
-      users.map(function (u, i) {
+      all.map(function (u, i) {
         var sent = u.lastSentAt ? '<div style="font-size:10px;color:#16a34a;grid-column:2/4;">최근 발송 ' + esc(String(u.lastSentAt).slice(0, 16).replace('T', ' ')) + '</div>' : '';
         return '<label style="display:grid;grid-template-columns:28px 1fr 1.3fr;gap:6px;align-items:center;padding:9px 16px;border-top:1px solid #f1f5f9;font-size:13px;cursor:pointer;">' +
-          '<input type="checkbox" class="srm-chk" data-i="' + i + '"' + (u.contact ? '' : ' disabled') + ' />' +
-          '<span>' + esc(u.name || '(이름 없음)') + '</span><span>' + (u.contact ? esc(u.contact) : '<em style="color:#dc2626;">연락처 없음</em>') + '</span>' + sent + '</label>';
+          '<input type="checkbox" class="srm-chk" data-i="' + i + '"' + (u.contact ? '' : ' disabled') + (prevChecked[i] || u.manual ? ' checked' : '') + ' />' +
+          '<span>' + esc(u.name || '(이름 없음)') + (u.manual ? ' <small style="color:#7c3aed;">(추가)</small>' : '') + '</span><span>' + (u.contact ? esc(u.contact) : '<em style="color:#dc2626;">연락처 없음</em>') + '</span>' + sent + '</label>';
       }).join('');
     checks().forEach(function (c) { c.onchange = refresh; });
     refresh();
+  };
+  ov.querySelector('#srmAddBtn').onclick = function () {
+    var nm = ov.querySelector('#srmAddName');
+    var ct = ov.querySelector('#srmAddContact');
+    var digits = String(ct.value || '').replace(/\D/g, '');
+    if (!/^01\d{8,9}$/.test(digits)) { alert('연락처를 010으로 시작하는 휴대폰 번호로 입력해 주세요.'); return; }
+    if (manualUsers.some(function (m) { return String(m.contact).replace(/\D/g, '') === digits; })) { alert('이미 추가된 연락처입니다.'); return; }
+    manualUsers.push({ id: 'manual:' + digits, name: (nm.value || '').trim() || '회원', contact: digits, manual: true });
+    nm.value = ''; ct.value = '';
+    render();
   };
   allBox.onchange = function () {
     checks().forEach(function (c) { if (!c.disabled) c.checked = allBox.checked; });
     refresh();
   };
   sendBtn.onclick = async function () {
-    var ids = checks().filter(function (c) { return c.checked; }).map(function (c) { return users[Number(c.getAttribute('data-i'))].id; });
-    if (!ids.length) return;
-    if (!window.confirm(ids.length + '명에게 Strava 재연결 안내 알림톡을 발송합니다. 계속할까요?')) return;
+    var all = users.concat(manualUsers);
+    var sel = checks().filter(function (c) { return c.checked; }).map(function (c) { return all[Number(c.getAttribute('data-i'))]; });
+    var ids = sel.filter(function (u) { return !u.manual; }).map(function (u) { return u.id; });
+    var manual = sel.filter(function (u) { return u.manual; }).map(function (u) { return { name: u.name, contact: u.contact }; });
+    if (!sel.length) return;
+    if (!window.confirm(sel.length + '명에게 Strava 재연결 안내 알림톡을 발송합니다. 계속할까요?')) return;
     sendBtn.disabled = true;
     sendBtn.textContent = '발송 중…';
     try {
-      var d = await call({ action: 'send', userIds: ids });
+      var d = await call({ action: 'send', userIds: ids, manual: manual });
       var failed = (d.results || []).filter(function (r) { return !r.ok; });
       var msg = '발송 완료: ' + d.sent + '명 성공' + (failed.length ? ', ' + failed.length + '명 실패' : '');
       if (failed.length) msg += '\n' + failed.slice(0, 5).map(function (r) { return '- ' + r.error; }).join('\n');
       alert(msg);
       var l = await call({ action: 'list' });
       users = l.users || [];
+      var okPhones = {};
+      (d.results || []).forEach(function (r) { if (r.ok && String(r.id).indexOf('manual:') === 0) okPhones[r.id.slice(7)] = 1; });
+      manualUsers = manualUsers.filter(function (m) { return !okPhones[String(m.contact).replace(/\D/g, '')]; });
       render();
     } catch (e) {
       alert('발송 실패: ' + (e && e.message ? e.message : e));
