@@ -10170,19 +10170,7 @@ async function analyzeTrainingWithGemini(date, resultData, user, apiKey) {
     let workoutDetails = null;
     if (workoutId) {
       try {
-        const ensureBaseUrl = () => {
-          const base = window.GAS_URL;
-          if (!base) throw new Error('GAS_URL is not set');
-          return base;
-        };
-        
-        const baseUrl = ensureBaseUrl();
-        const params = new URLSearchParams({
-          action: 'getWorkout',
-          id: workoutId
-        });
-        const response = await fetch(`${baseUrl}?${params.toString()}`);
-        const result = await response.json();
+        const result = await window.stelvioWorkoutGet(workoutId);
         
         if (result?.success && result.item) {
           workoutDetails = result.item;
@@ -13068,15 +13056,10 @@ async function stelvioFetchWorkoutDetailsResilient(workoutIds, listItems, opts) 
           }, timeoutMs)
         : null;
     try {
-      var params = new URLSearchParams({ action: 'getWorkout', id: String(workoutId) });
-      var res = await fetch(base + '?' + params.toString(), {
-        method: 'GET',
-        signal: ctl ? ctl.signal : undefined,
-      });
-      if (timer != null) clearTimeout(timer);
-      var result = await res.json().catch(function () {
+      var result = await window.stelvioWorkoutGet(workoutId).catch(function () {
         return null;
       });
+      if (timer != null) clearTimeout(timer);
       if (result && result.success && result.item) return result.item;
     } catch (eFetch) {
       if (timer != null) clearTimeout(timer);
@@ -15472,13 +15455,7 @@ async function selectRecommendedWorkout(workoutId, date) {
       return base;
     };
     
-    const baseUrl = ensureBaseUrl();
-    const params = new URLSearchParams({
-      action: 'getWorkout',
-      id: workoutId
-    });
-    const response = await fetch(`${baseUrl}?${params.toString()}`);
-    const result = await response.json();
+    const result = await window.stelvioWorkoutGet(workoutId);
     
     if (!result.success || !result.item) {
       throw new Error('워크아웃 정보를 불러올 수 없습니다.');

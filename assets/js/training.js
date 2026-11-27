@@ -512,8 +512,7 @@ async function joinTrainingRoom() {
 // ========== 워크아웃 로드 ==========
 async function loadWorkoutForGroup(workoutId) {
   try {
-    const response = await fetch(`${window.GAS_URL}?action=getWorkout&id=${workoutId}`);
-    const result = await response.json();
+    const result = await window.stelvioWorkoutGet(workoutId);
     
     if (result.success) {
       window.selectedWorkout = result.workout;

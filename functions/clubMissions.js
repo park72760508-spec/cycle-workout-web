@@ -17,9 +17,6 @@ const supabaseUidMap = require("./supabaseUidMap");
 
 const { WriteError, fetchOrBackfillGroupRow, isRidingGroupAdminGrade } = ridingGroupSupabaseWrites;
 
-/** STELVIO(구글시트) 워크아웃 조회 — 프런트 window.GAS_URL 과 동일한 공개 웹앱 */
-const GAS_WORKOUT_URL =
-  "https://script.google.com/macros/s/AKfycbzF8br63uD3ziNxCFkp0UUSpP49zURthDsEVZ6o3uRu47pdS5uXE5S1oJ3d7AKHFouJ/exec";
 const MAX_SEGMENTS = 200;
 
 const MAX_STEPS = 60;
@@ -81,9 +78,13 @@ async function fetchStepSegments(supabase, step) {
         .order("ord", { ascending: true });
       return sanitizeSegments(data || []);
     }
-    const res = await fetch(GAS_WORKOUT_URL + "?action=getWorkout&id=" + encodeURIComponent(step.workoutId));
-    const json = await res.json();
-    return sanitizeSegments(json && json.success && json.item ? json.item.segments : []);
+    // STELVIO 공용 워크아웃(구글시트 → Supabase stelvio_workouts, 2026-11-27 이전). id 는 시트 id 그대로.
+    const { data } = await supabase
+      .from("stelvio_workout_segments")
+      .select("*")
+      .eq("workout_id", step.workoutId)
+      .order("ord", { ascending: true });
+    return sanitizeSegments(data || []);
   } catch (err) {
     console.warn("[clubMissions] segments fetch failed:", step.workoutSource, step.workoutId, err && err.message);
     return [];

@@ -9652,7 +9652,7 @@
 <script src="assets/js/workoutFlowSummary.js?v=8"></script>
 <script src="assets/js/workoutStepsOverlay.js?v=9"></script>
 <script src="assets/js/workoutSummaryParser.js?v=20261121sum1"></script>
-<script src="assets/js/workoutManager.js?v=20261124ftp1"></script>
+<script src="assets/js/workoutManager.js?v=20261127sb"></script>
 <!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
 <script type="module" src="assets/js/referral/stelvioReferral.js?v=20261101goal"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -9675,7 +9675,7 @@
         { id: 'Tempo', label: 'Tempo', icon: 'assets/img/tempo.png', color: 'var(--zone-3)' },
         { id: 'Threshold', label: 'Threshold', icon: 'assets/img/threshold.png', color: 'var(--zone-4)' },
         { id: 'VO2 Max', label: 'VO2 Max', icon: 'assets/img/vo2max.png', color: 'var(--zone-5)' },
-        { id: '기타', label: '입문자 전용', icon: 'assets/img/etc.png', color: 'var(--zone-1)' },
+        { id: 'my-training', label: '나의 훈련 목록', icon: 'assets/img/workout-bars-purple.svg?v=20261111', color: '#7c3aed' },
         /* 클럽 관리자(방장·관리자·부관리자)에게만 표시 — 그룹세션 클럽 전용 워크아웃 */
         { id: '클럽', label: '클럽 전용', icon: 'assets/img/club.svg', color: 'var(--zone-1)' }
       ];
@@ -9941,6 +9941,14 @@
             '<div class="category-count">' + (clubCount > 0 ? clubCount + '개 클럽' : '-') + '</div>' +
             '</div>';
         }
+        // 나의 훈련 목록: Claude 가 생성해 저장한 워크아웃 모달을 연다
+        if (c.id === 'my-training') {
+          return '<div class="workout-category-card" data-category="my-training" data-zone="1" onclick="openClaudeSavedList && openClaudeSavedList()">' +
+            '<img src="' + c.icon + '" alt="' + c.label + '" class="category-icon-img" style="width: 32px; height: 32px; object-fit: contain;">' +
+            '<div class="category-label">' + c.label + '</div>' +
+            '<div class="category-count">Claude 생성 워크아웃</div>' +
+            '</div>';
+        }
         // AI 분석 카테고리는 특별 처리
         if (c.id === 'ai-recommendation') {
           var iconHtml = c.icon && c.icon.indexOf('.gif') !== -1 
@@ -9971,7 +9979,7 @@
         if (!grid) return;
         var cats = WORKOUT_CATEGORIES;
         var byId = function(id) { return cats.find(function(x) { return x.id === id; }); };
-        var catsOrdered = [byId('all'), byId('ai-recommendation'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('기타')].filter(Boolean);
+        var catsOrdered = [byId('all'), byId('ai-recommendation'), byId('Active Recovery'), byId('Endurance'), byId('Sweet Spot'), byId('Tempo'), byId('Threshold'), byId('VO2 Max'), byId('my-training')].filter(Boolean);
         if (Array.isArray(workoutManagedClubs) && workoutManagedClubs.length > 0) catsOrdered.push(byId('클럽'));
         window.__workoutCategoryLastWorkouts = workouts;
         var renderRow = function(arr) {
@@ -30251,7 +30259,7 @@
   <script src="assets/js/outdoorSpeedFilter.js?v=20261031ca"></script>
   <script src="assets/js/outdoorWeather.js?v=20261031exp"></script>
   <script src="assets/js/outdoorRide.js?v=20261123spd"></script>
-  <script src="assets/js/claudeWorkoutRecommend.js?v=20261117wu"></script>
+  <script src="assets/js/claudeWorkoutRecommend.js?v=20261127sc"></script>
   <script src="assets/js/rollerRaceMobile.js?v=20261117rs1"></script>
   <!-- OpenRidingScreens.jsx(500KB+)는 브라우저 실시간 Babel 변환 시 코드 생성기가 deoptimize되어
        페이지 로드마다 변환 비용이 컸음 → scripts/compile-jsx.mjs로 사전 컴파일한 일반 스크립트로 로드.
@@ -35294,13 +35302,13 @@
 <script src="assets/js/bluetooth.js?v=20261121pwr"></script>
 <script src="assets/js/ErgController.js"></script>
 <script src="assets/js/ergMode.js"></script>
-<script src="assets/js/training.js"></script>
+<script src="assets/js/training.js?v=20261127sb"></script>
 <!-- 그룹 훈련 모듈들 -->
 <script src="assets/js/groupTrainingManager.js"></script>
 <script src="assets/js/groupTrainingManager_part2.js"></script>
 <!-- 훈련 스케줄 모듈 (다른 JS 파일들과 동일한 위치) -->
 <script src="assets/js/scheduleManager.js"></script>
-  <script src="assets/js/scheduleAIManager.js"></script>
+  <script src="assets/js/scheduleAIManager.js?v=20261127sb"></script>
 <!-- Training Manager - 주간 목표 TSS 계산 -->
 <script src="assets/js/trainingManager.js"></script>
 <!-- Training Room 모듈 -->
@@ -35324,7 +35332,7 @@
   <script src="assets/js/deviceBridgeStorage.js?v=20261115ant"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261122web"></script>
-  <script src="assets/js/app.js?v=20261126sr2"></script>
+  <script src="assets/js/app.js?v=20261127sb"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   

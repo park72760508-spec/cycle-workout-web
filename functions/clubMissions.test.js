@@ -8,12 +8,8 @@ const path = require('node:path');
 const tables = {
   club_missions: [], club_mission_completions: [], riding_group_members: [], riding_groups: [],
   club_workout_segments: [], v_user_public_profile: [],
+  stelvio_workout_segments: [{ workout_id: 'w1', ord: 1, segment_type: 'interval', duration_sec: 3600, target_type: 'ftp_pct', target_value: '80' }],
 };
-/* 외부 네트워크(GAS 워크아웃 조회) 차단 — 테스트는 스텁 응답만 사용 */
-global.fetch = async () => ({ json: async () => ({ success: true, item: { segments: [
-  { segment_type: 'interval', duration_sec: 3600, target_type: 'ftp_pct', target_value: '80' },
-] } }) });
-
 function query(table) {
   let rows = tables[table].slice();
   const q = {

@@ -180,6 +180,46 @@ function initializeWorkoutManager() {
   }
 }
 
+/**
+ * STELVIO 공용 워크아웃 API — 구글시트(GAS) 대신 Supabase(stelvio_workouts) RPC (2026-11-27 이전).
+ * 응답 모양은 기존 GAS 응답({success, items|item|segments...})과 동일. 읽기는 anon(비로그인 화면 포함), 쓰기는 로그인 사용자 토큰.
+ */
+async function wmWorkoutRpcRead(fn, args) {
+  const cfg = window.STELVIO_SUPABASE_CONFIG || {};
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return { success: false, error: 'Supabase 설정 없음' };
+  const res = await fetch(cfg.supabaseUrl + '/rest/v1/rpc/' + fn, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: cfg.supabaseAnonKey, Authorization: 'Bearer ' + cfg.supabaseAnonKey },
+    body: JSON.stringify(args || {})
+  });
+  if (!res.ok) return { success: false, error: 'HTTP ' + res.status };
+  return await res.json();
+}
+async function wmWorkoutRpcWrite(fn, args) {
+  try {
+    const rpc = typeof window.stelvioSupabaseRpc === 'function'
+      ? window.stelvioSupabaseRpc
+      : (await import('/assets/js/supabaseDualWrite.js')).callSupabaseRpcAsUser;
+    return await rpc(fn, args);
+  } catch (e) {
+    return { success: false, error: (e && e.message) || String(e) };
+  }
+}
+async function wmWorkoutApi(params) {
+  const id = params.id != null ? Number(params.id) : (params.workoutId != null ? Number(params.workoutId) : null);
+  switch (params.action) {
+    case 'listWorkouts': return wmWorkoutRpcRead('fn_stelvio_workouts_list', {});
+    case 'getWorkout': return wmWorkoutRpcRead('fn_stelvio_workout_get', { p_id: id });
+    case 'getWorkoutSegments': return wmWorkoutRpcRead('fn_stelvio_workout_segments', { p_id: id });
+    case 'updateWorkout': return wmWorkoutRpcWrite('fn_stelvio_workout_update', { p_id: id, p_workout: params });
+    case 'deleteWorkout': return wmWorkoutRpcWrite('fn_stelvio_workout_delete', { p_id: id });
+  }
+  return { success: false, error: 'unsupported action: ' + params.action };
+}
+// 다른 화면(app.js·training.js·scheduleAIManager.js)이 쓰는 단건 조회: {success, item:{...,segments}}
+window.stelvioWorkoutGet = function (id) { return wmWorkoutApi({ action: 'getWorkout', id: id }); };
+window.stelvioWorkoutList = function () { return wmWorkoutApi({ action: 'listWorkouts' }); };
+
 // 개선된 JSONP 요청 함수 (60초 타임아웃) - groupTrainingManager의 jsonpRequest와 분리
 function jsonpRequest(url, params = {}, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -2913,7 +2953,7 @@ async function reconcileWorkoutCacheInBackground(cache) {
   try {
     if (!window.GAS_URL) return;
 
-    const serverResult = await jsonpRequest(window.GAS_URL, {
+    const serverResult = await wmWorkoutApi({
       action: 'listWorkouts'
     });
 
@@ -2993,7 +3033,7 @@ async function apiGetWorkouts(forceRefresh = false) {
       };
     }
     
-    const result = await jsonpRequest(window.GAS_URL, { 
+    const result = await wmWorkoutApi({ 
       action: 'listWorkouts'
     });
     
@@ -3062,7 +3102,7 @@ async function apiGetWorkout(id) {
   }
   
   try {
-    return await jsonpRequest(window.GAS_URL, { action: 'getWorkout', id: String(id) });
+    return await wmWorkoutApi({ action: 'getWorkout', id: String(id) });
   } catch (error) {
     console.error('apiGetWorkout 실패:', error);
     return { success: false, error: error.message };
@@ -3099,7 +3139,7 @@ async function apiGetWorkoutSegments(workoutId, forceRefresh = false, opts) {
   }
   
   const doFetch = async () => {
-    const result = await (typeof wmJsonpRequest === 'function' ? wmJsonpRequest : jsonpRequest)(window.GAS_URL, { action: 'getWorkoutSegments', workoutId: String(workoutId) }, SEGMENT_JSONP_TIMEOUT);
+    const result = await wmWorkoutApi({ action: 'getWorkoutSegments', workoutId: String(workoutId) });
     if (!result || !result.success) return [];
     const segs = result.segments || result.items || (Array.isArray(result) ? result : []);
     return Array.isArray(segs) ? segs : [];
@@ -3201,111 +3241,54 @@ function updateWorkoutRowRoomStatus(workoutId, status, roomCode, grade) {
  * 통합 워크아웃 생성 함수 (개선된 버전)
  */
 async function apiCreateWorkoutWithSegments(workoutData) {
-  console.log('=== 통합 워크아웃 생성 시작 ===');
-  console.log('워크아웃 데이터:', workoutData);
-  
   if (!workoutData || typeof workoutData !== 'object') {
     return { success: false, error: '유효하지 않은 워크아웃 데이터입니다.' };
   }
-  
   try {
-    // 1단계: 워크아웃 기본 정보만으로 먼저 생성
-    const baseParams = {
-      action: 'createWorkout',
-      title: String(workoutData.title || ''),
-      description: String(workoutData.description || ''),
-      author: String(workoutData.author || ''),
-      status: String(workoutData.status || '보이기'),
-      publish_date: String(workoutData.publish_date || ''),
-      password: String(workoutData.password || '')
-    };
-    
-    console.log('1단계: 기본 워크아웃 생성...');
-    const createResult = await jsonpRequestWithRetry(window.GAS_URL, baseParams);
-    
-    if (!createResult.success) {
-      throw new Error(createResult.error || '워크아웃 생성 실패');
-    }
-    
-    const workoutId = createResult.workoutId || createResult.id;
-    console.log('워크아웃 생성 완료. ID:', workoutId);
-    
-    // 2단계: 세그먼트가 있으면 배치별로 추가
-   // 2단계: 세그먼트가 있으면 배치별로 추가
-   const segments = workoutData.segments || [];
-   if (segments.length > 0) {
-     console.log(`2단계: ${segments.length}개 세그먼트를 배치별로 추가 중...`);
-     
-     // 세그먼트 데이터 정규화 및 검증
-     const normalizedSegments = segments.map((seg, index) => {
-       const targetType = String(seg.target_type || 'ftp_pct');
-       let targetValue = seg.target_value;
-       
-       // target_type에 따라 target_value 처리
-       if (targetType === 'dual') {
-         // dual 타입: target_value는 "100/120" 형식의 문자열로 저장
-         targetValue = String(targetValue || '100/90');
-       } else if (targetType === 'ftp_pctz') {
-         // ftp_pctz 타입: target_value는 "56/75" 형식의 문자열로 저장 (하한, 상한)
-         targetValue = String(targetValue || '60/75');
-       } else if (targetType === 'cadence_rpm') {
-         // cadence_rpm 타입: 숫자로 저장 (50-200 범위)
-         targetValue = Math.max(50, Math.min(200, Number(targetValue) || 90));
-       } else {
-         // ftp_pct 타입: 숫자로 저장 (30-200 범위)
-         targetValue = Math.max(30, Math.min(200, Number(targetValue) || 100));
-       }
-       
-       const normalized = {
-         label: String(seg.label || `세그먼트 ${index + 1}`).trim(),
-         segment_type: normalizeSegmentType(seg.segment_type),
-         duration_sec: Math.max(1, Number(seg.duration_sec) || 300),
-         target_type: targetType,
-         target_value: targetValue,
-         ramp: seg.ramp === 'linear' ? 'linear' : 'none',
-         ramp_to_value: seg.ramp === 'linear' ? Number(seg.ramp_to_value) : null
-       };
-       
-       console.log(`세그먼트 ${index + 1} 정규화:`, normalized);
-       return normalized;
-     });
-     
-     const addResult = await addSegmentsBatch(workoutId, normalizedSegments);
-      
-      if (!addResult.success) {
-        console.warn('세그먼트 추가 중 일부 실패:', addResult.error);
-        return {
-          success: true,
-          workoutId: workoutId,
-          warning: '일부 세그먼트 추가 실패: ' + addResult.error,
-          addedSegments: addResult.addedCount || 0,
-          totalSegments: segments.length
-        };
+    // 세그먼트 정규화 (target_type 별 값 범위 보정) 후 Supabase RPC 한 번으로 워크아웃+세그먼트 저장
+    const normalizedSegments = (workoutData.segments || []).map((seg, index) => {
+      const targetType = String(seg.target_type || 'ftp_pct');
+      let targetValue = seg.target_value;
+      if (targetType === 'dual') {
+        targetValue = String(targetValue || '100/90');
+      } else if (targetType === 'ftp_pctz') {
+        targetValue = String(targetValue || '60/75');
+      } else if (targetType === 'cadence_rpm') {
+        targetValue = Math.max(50, Math.min(200, Number(targetValue) || 90));
+      } else {
+        targetValue = Math.max(30, Math.min(200, Number(targetValue) || 100));
       }
-      
-      console.log(`모든 세그먼트 추가 완료: ${addResult.addedCount}/${segments.length}`);
-      // 워크아웃 생성 성공 시 캐시 무효화
-      clearWorkoutCache();
-      console.log('[apiCreateWorkoutWithSegments] 워크아웃 생성 완료 - 캐시 무효화');
       return {
-        success: true,
-        workoutId: workoutId,
-        addedSegments: addResult.addedCount,
-        totalSegments: segments.length
+        label: String(seg.label || `세그먼트 ${index + 1}`).trim(),
+        segment_type: normalizeSegmentType(seg.segment_type),
+        duration_sec: Math.max(1, Number(seg.duration_sec) || 300),
+        target_type: targetType,
+        target_value: targetValue,
+        ramp: seg.ramp === 'linear' ? 'linear' : 'none',
+        ramp_to_value: seg.ramp === 'linear' ? Number(seg.ramp_to_value) : null
       };
-    }
-    
-    console.log('세그먼트 없는 워크아웃 생성 완료');
-    // 워크아웃 생성 성공 시 캐시 무효화
+    });
+
+    const result = await wmWorkoutRpcWrite('fn_stelvio_workout_create', {
+      p_workout: {
+        title: String(workoutData.title || ''),
+        description: String(workoutData.description || ''),
+        author: String(workoutData.author || ''),
+        status: String(workoutData.status || '보이기'),
+        publish_date: String(workoutData.publish_date || ''),
+        password: String(workoutData.password || '')
+      },
+      p_segments: normalizedSegments
+    });
+    if (!result || !result.success) throw new Error((result && result.error) || '워크아웃 생성 실패');
+
     clearWorkoutCache();
-    console.log('[apiCreateWorkoutWithSegments] 워크아웃 생성 완료 - 캐시 무효화');
     return {
       success: true,
-      workoutId: workoutId,
-      addedSegments: 0,
-      totalSegments: 0
+      workoutId: result.workoutId,
+      addedSegments: result.addedSegments || 0,
+      totalSegments: normalizedSegments.length
     };
-    
   } catch (error) {
     console.error('통합 워크아웃 생성 실패:', error);
     return { success: false, error: error.message };
@@ -3489,7 +3472,7 @@ async function apiUpdateWorkout(id, workoutData) {
   };
   
   try {
-    const result = await jsonpRequest(window.GAS_URL, params);
+    const result = await wmWorkoutApi(params);
     // 성공 시 캐시 무효화
     if (result && result.success) {
       clearWorkoutCache();
@@ -3508,7 +3491,7 @@ async function apiDeleteWorkout(id) {
   }
   
   try {
-    const result = await jsonpRequest(window.GAS_URL, { action: 'deleteWorkout', id: String(id) });
+    const result = await wmWorkoutApi({ action: 'deleteWorkout', id: String(id) });
     // 성공 시 캐시 무효화
     if (result && result.success) {
       clearWorkoutCache();

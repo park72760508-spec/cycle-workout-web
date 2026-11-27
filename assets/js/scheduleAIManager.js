@@ -629,17 +629,18 @@
    */
   function fetchLightweightWorkouts() {
     return new Promise(function (resolve) {
-      if (!window.GAS_URL) {
-        resolve([]);
-        return;
-      }
-      fetch(window.GAS_URL + '?action=getWorkoutsByCategory&categories=Endurance,Tempo,SweetSpot,Threshold,VO2Max,Recovery,Active%20Recovery,Anaerobic%20Capacity')
-        .then(function (r) { return r.json(); })
+      // 공개('보이기') 워크아웃 중 AI 스케줄이 쓰는 카테고리만 — author 의 '(Z2)' 같은 존 표기는 제거해 기존 카테고리 매핑과 맞춘다
+      window.stelvioWorkoutList()
         .then(function (result) {
           if (!result?.success || !Array.isArray(result.items)) {
             resolve([]);
             return;
           }
+          result = { items: result.items.filter(function (w) { return String(w.status || '').trim() === '보이기'; }).map(function (w) {
+            return Object.assign({}, w, { author: String(w.author || '').replace(/\(.*\)\s*$/, '').trim() });
+          }).filter(function (w) {
+            return /^(endurance|tempo|sweet ?spot|threshold|vo2 ?max|active recovery)$/i.test(w.author);
+          }) };
           const authorToCategory = {
             'Active Recovery': 'Recovery',
             'Endurance': 'Endurance',
@@ -1806,10 +1807,9 @@ ${workoutsContext}
 
       /* 훈련 상세: 워크아웃 카드와 동일한 막대형 그래프(renderSegmentedWorkoutGraph) */
       graphEl.innerHTML = '';
-      if (d.workoutId && window.GAS_URL) {
+      if (d.workoutId) {
         try {
-          const res = await fetch(`${window.GAS_URL}?action=getWorkout&id=${d.workoutId}`);
-          const r = await res.json();
+          const r = await window.stelvioWorkoutGet(d.workoutId);
           if (r?.success && r.item?.segments?.length) {
             const segs = r.item.segments;
             if (typeof renderSegmentedWorkoutGraph === 'function') {
@@ -2032,9 +2032,8 @@ ${workoutsContext}
       }
     }
 
-    if (workoutId && window.GAS_URL) {
-      fetch(`${window.GAS_URL}?action=getWorkout&id=${workoutId}`)
-        .then(r => r.json())
+    if (workoutId) {
+      window.stelvioWorkoutGet(workoutId)
         .then(function (result) {
           if (result?.success && result.item) {
             window.currentWorkout = result.item;

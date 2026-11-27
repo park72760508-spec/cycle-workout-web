@@ -638,36 +638,58 @@
       var items = (res.items || []).map(function (it) { return { id: it.id, rank: it.rank, name: it.title, category: it.category, why: it.why, flow: it.flow, seconds: it.total_seconds, tss: it.tss, segments: it.segments || [], date: String(it.workout_date).slice(0, 10) }; });
       w.__claudeSaved = items;
       if (!items.length) { body.textContent = '저장된 워크아웃이 없습니다. Claude 추천을 받으면 이곳에 저장됩니다.'; return; }
-      var html = '', lastDate = '';
-      items.forEach(function (wk, i) {
-        if (wk.date !== lastDate) { lastDate = wk.date; html += '<div style="font-weight:700;color:#111827;margin:12px 0 6px;text-align:left;">' + esc(wk.date) + '</div>'; }
-        html += '<div data-card="' + i + '" style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;content-visibility:auto;contain-intrinsic-size:auto 130px;">' +
-          '<div style="display:flex;justify-content:space-between;gap:8px;"><div style="min-width:0;"><div style="font-weight:700;color:#111827;">' + esc(wk.name) + '</div><div style="font-size:12px;color:#6b7280;">' + esc(wk.category) + ' · ' + Math.round(wk.seconds / 60) + '분 · TSS ' + wk.tss + '</div></div>' +
-          '<div style="display:flex;gap:6px;flex:none;align-items:flex-start;"><button type="button" data-use="' + i + '" style="padding:6px 12px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-size:13px;cursor:pointer;">사용</button>' +
-          '<button type="button" data-del="' + i + '" aria-label="삭제" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#b91c1c;font-size:13px;cursor:pointer;">삭제</button></div></div>' +
-          '<div style="display:flex;align-items:flex-end;gap:1px;height:36px;background:#f9fafb;border-radius:6px;padding:4px;margin:8px 0 6px;">' + barsHtml(wk) + '</div>' +
-          '<div style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:#4b5563;word-break:break-word;">' + esc(wk.flow) + '</div></div>';
-      });
-      body.style.textAlign = 'left'; body.style.padding = '0'; body.innerHTML = html;
-      Array.prototype.forEach.call(body.querySelectorAll('[data-use]'), function (b) { b.onclick = function () { pick(w.__claudeSaved[Number(b.getAttribute('data-use'))]); }; });
-      Array.prototype.forEach.call(body.querySelectorAll('[data-del]'), function (b) {
-        b.onclick = async function () {
-          var wk = w.__claudeSaved[Number(b.getAttribute('data-del'))];
-          if (!wk || !confirm('"' + wk.name + '" 워크아웃을 목록에서 삭제할까요?')) return;
-          try {
-            await rpc('fn_ai_workout_delete', { p_id: wk.id });
-            try { var u = w.currentUser; if (u) localStorage.removeItem(dayKey(u)); } catch (e) {}
-            // 전체 목록을 다시 불러와 다시 그리지 않고 해당 카드만 제거(날짜 제목만 남으면 함께 제거)
-            var card = b.closest('[data-card]');
-            if (card) {
-              var prev = card.previousElementSibling, next = card.nextElementSibling;
-              card.remove();
-              if (prev && !prev.hasAttribute('data-card') && (!next || !next.hasAttribute('data-card'))) prev.remove();
-              if (!body.querySelector('[data-card]')) body.textContent = '저장된 워크아웃이 없습니다. Claude 추천을 받으면 이곳에 저장됩니다.';
-            } else { openSavedList(); }
-          } catch (e) { toast('삭제하지 못했습니다.', 'error'); }
-        };
-      });
+      var EMPTY = '저장된 워크아웃이 없습니다. Claude 추천을 받으면 이곳에 저장됩니다.';
+      function catOf(wk) { return String(wk.category || '').trim() || '기타'; }
+      var curCat = null;
+      function render() {
+        body.style.textAlign = 'left'; body.style.padding = '0';
+        var list = items.map(function (wk, i) { return { wk: wk, i: i }; });
+        if (curCat === null) {
+          // 1단계: 카테고리별 분류 (워크아웃이 많은 순)
+          var groups = {};
+          list.forEach(function (x) { var c = catOf(x.wk); (groups[c] = groups[c] || []).push(x); });
+          var names = Object.keys(groups).sort(function (a, b) { return groups[b].length - groups[a].length || a.localeCompare(b); });
+          var h = '';
+          names.forEach(function (c) {
+            h += '<div data-cat="' + esc(c) + '" role="button" style="display:flex;justify-content:space-between;align-items:center;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px;cursor:pointer;background:#fff;">' +
+              '<b style="color:#111827;">' + esc(c) + '</b><span style="font-size:13px;color:#6b7280;">' + groups[c].length + '개 ›</span></div>';
+          });
+          body.innerHTML = h;
+          Array.prototype.forEach.call(body.querySelectorAll('[data-cat]'), function (el) { el.onclick = function () { curCat = el.getAttribute('data-cat'); render(); }; });
+          return;
+        }
+        // 2단계: 선택한 카테고리의 워크아웃 목록
+        var html = '<button type="button" data-back style="border:0;background:none;color:#5b21b6;font-weight:700;font-size:14px;cursor:pointer;padding:0 0 10px;">‹ 카테고리</button>' +
+          '<div style="font-weight:700;color:#111827;margin-bottom:8px;">' + esc(curCat) + '</div>', lastDate = '';
+        list.filter(function (x) { return catOf(x.wk) === curCat; }).forEach(function (x) {
+          var wk = x.wk, i = x.i;
+          if (wk.date !== lastDate) { lastDate = wk.date; html += '<div style="font-weight:700;color:#111827;margin:12px 0 6px;text-align:left;">' + esc(wk.date) + '</div>'; }
+          html += '<div data-card="' + i + '" style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;margin-bottom:8px;text-align:left;content-visibility:auto;contain-intrinsic-size:auto 130px;">' +
+            '<div style="display:flex;justify-content:space-between;gap:8px;"><div style="min-width:0;"><div style="font-weight:700;color:#111827;">' + esc(wk.name) + '</div><div style="font-size:12px;color:#6b7280;">' + esc(wk.category) + ' · ' + Math.round(wk.seconds / 60) + '분 · TSS ' + wk.tss + '</div></div>' +
+            '<div style="display:flex;gap:6px;flex:none;align-items:flex-start;"><button type="button" data-del="' + i + '" aria-label="삭제" style="padding:6px 10px;border:1px solid #e5e7eb;border-radius:8px;background:#fff;color:#b91c1c;font-size:13px;cursor:pointer;">삭제</button></div></div>' +
+            '<div data-use="' + i + '" role="button" aria-label="이 워크아웃 선택" title="그래프를 누르면 선택됩니다" style="display:flex;align-items:flex-end;gap:1px;height:36px;background:#f9fafb;border-radius:6px;padding:4px;margin:8px 0 6px;cursor:pointer;">' + barsHtml(wk) + '</div>' +
+            '<div style="font-size:11px;font-family:ui-monospace,Menlo,monospace;color:#4b5563;word-break:break-word;">' + esc(wk.flow) + '</div></div>';
+        });
+        body.innerHTML = html;
+        body.querySelector('[data-back]').onclick = function () { curCat = null; render(); };
+        Array.prototype.forEach.call(body.querySelectorAll('[data-use]'), function (b) { b.onclick = function () { pick(w.__claudeSaved[Number(b.getAttribute('data-use'))]); }; });
+        Array.prototype.forEach.call(body.querySelectorAll('[data-del]'), function (b) {
+          b.onclick = async function () {
+            var wk = w.__claudeSaved[Number(b.getAttribute('data-del'))];
+            if (!wk || !confirm('"' + wk.name + '" 워크아웃을 목록에서 삭제할까요?')) return;
+            try {
+              await rpc('fn_ai_workout_delete', { p_id: wk.id });
+              try { var u = w.currentUser; if (u) localStorage.removeItem(dayKey(u)); } catch (e) {}
+              items = items.filter(function (it) { return it.id !== wk.id; });
+              w.__claudeSaved = items;
+              if (!items.length) { body.textContent = EMPTY; return; }
+              if (!items.some(function (it) { return catOf(it) === curCat; })) curCat = null; // 카테고리가 비면 분류 화면으로
+              render();
+            } catch (e) { toast('삭제하지 못했습니다.', 'error'); }
+          };
+        });
+      }
+      render();
     } catch (e) { body.textContent = (e && e.message) || '목록을 불러오지 못했습니다.'; }
   }
 
@@ -786,6 +808,7 @@
     openChooser();
   };
   w.openClaudeRecommendOptions = openOptionsModal;
+  w.openClaudeSavedList = openSavedList;
   w.startClaudeRecommendFlow = startClaudeFlow;
   w.__claudeReco = { loadToday: loadToday, saveDay: saveDay, blocksToSegments: blocksToSegments, calcTSS: calcTSS, calcIF: calcIF, summarizeLogs: summarizeLogs, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES };
 })(window);
