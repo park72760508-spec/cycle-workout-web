@@ -836,6 +836,24 @@ export async function updateRideByHost(db, rideId, hostUserId, input) {
   })();
   if (!isHostEditor && !isAdminEditor) throw new Error('FORBIDDEN');
   if (String(data.rideStatus || 'active') === 'cancelled') throw new Error('RIDE_CANCELLED');
+  /* 그룹세션(인도어 훈련 모임) 수정 — 생성 화면과 같은 항목(세션명·날짜·시간·참가 인원·워크아웃)만 갱신한다.
+     일반 모임용 필드(level·지역·초대 등)는 건드리지 않아 기존 값이 '중급' 등으로 덮이지 않는다. */
+  if (data.isGroupSession === true) {
+    const gsPatch = {
+      title: String(input.title || ''),
+      date: input.date instanceof Timestamp ? input.date : Timestamp.fromDate(new Date(input.date)),
+      departureTime: String(input.departureTime || ''),
+      maxParticipants: Math.max(1, Number(input.maxParticipants) || 10),
+      hostName: String(input.hostName != null ? input.hostName : data.hostName || ''),
+      contactInfo: String(input.contactInfo != null ? input.contactInfo : data.contactInfo || ''),
+      workoutId: input.workoutId != null && String(input.workoutId) ? String(input.workoutId) : data.workoutId != null ? String(data.workoutId) : null,
+      workoutSource: input.workoutSource ? String(input.workoutSource) : data.workoutSource != null ? String(data.workoutSource) : null,
+      updatedAt: serverTimestamp()
+    };
+    await updateDoc(rideRef, gsPatch);
+    await scheduleOpenRideDualWriteFromFirestore(db, rideId, hostUserId);
+    return;
+  }
   const isPrivate = !!input.isPrivate;
   const invitedRaw = Array.isArray(input.invitedList) ? input.invitedList : [];
   const invitedList = invitedRaw

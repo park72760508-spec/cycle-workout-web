@@ -8983,6 +8983,11 @@ function OpenRidingCreateForm(props) {
   });
   var form = st[0];
   var setForm = st[1];
+  /** 수정 모드의 그룹세션 소속 클럽 — 생성 때는 props.presetGroupId, 수정 때는 불러온 모임의 groupId */
+  var _rideGid = useState('');
+  var rideGroupId = _rideGid[0];
+  var setRideGroupId = _rideGid[1];
+  var groupSessionGroupId = presetGroupId || rideGroupId;
   var _workoutPicker = useState(function () {
     var draft = readOpenRidingClubWorkoutDraft(presetGroupId, editRideId);
     return { tab: (draft && draft.workoutPickerTab) || 'gas', gas: [], club: [], loading: false };
@@ -9038,15 +9043,15 @@ function OpenRidingCreateForm(props) {
           : Promise.resolve([]);
       var svcGroup = (typeof window !== 'undefined' && window.openRidingGroupService) || {};
       var clubPromise =
-        presetGroupId && typeof svcGroup.fetchClubWorkouts === 'function'
-          ? svcGroup.fetchClubWorkouts(presetGroupId).catch(function () { return []; })
+        groupSessionGroupId && typeof svcGroup.fetchClubWorkouts === 'function'
+          ? svcGroup.fetchClubWorkouts(groupSessionGroupId).catch(function () { return []; })
           : Promise.resolve([]);
       Promise.all([gasPromise, clubPromise]).then(function (results) {
         if (cancelled) return;
         setWorkoutPicker(function (prev) {
           return Object.assign({}, prev, { gas: results[0] || [], club: results[1] || [], loading: false });
         });
-        var resumedDraft = readOpenRidingClubWorkoutDraft(presetGroupId, editRideId);
+        var resumedDraft = readOpenRidingClubWorkoutDraft(groupSessionGroupId, editRideId);
         if (resumedDraft) {
           if (resumedDraft.newWorkout && resumedDraft.newWorkout.id) {
             set('workoutId', String(resumedDraft.newWorkout.id));
@@ -9060,7 +9065,7 @@ function OpenRidingCreateForm(props) {
         cancelled = true;
       };
     },
-    [form.isGroupSession, presetGroupId]
+    [form.isGroupSession, groupSessionGroupId]
   );
 
   var formCategory =
@@ -9366,6 +9371,23 @@ function OpenRidingCreateForm(props) {
                 if (fUid) rowOut.friendUid = fUid;
                 return rowOut;
               });
+          /* 그룹세션(인도어 훈련 모임) 수정 — 생성 화면과 같은 항목(세션명·날짜·시간·참가 인원·워크아웃)으로 열기 위해
+             그룹세션 필드도 채운다. 수정은 모임 1건이라 시간대는 그 모임의 출발 시각 1개. */
+          var gsEdit = !!ride.isGroupSession && !isCopyMode;
+          var gsExtra = gsEdit
+            ? {
+                isGroupSession: true,
+                sessionTimes: [String(ride.departureTime || '07:00')],
+                workoutId: ride.workoutId != null ? String(ride.workoutId) : '',
+                workoutSource: ride.workoutSource ? String(ride.workoutSource) : 'gas'
+              }
+            : {};
+          if (gsEdit) {
+            setRideGroupId(String(ride.groupId || '').trim());
+            setWorkoutPicker(function (prev) {
+              return Object.assign({}, prev, { tab: gsExtra.workoutSource === 'club' ? 'club' : 'gas' });
+            });
+          }
           setForm(
             Object.assign(
               {
@@ -9396,7 +9418,8 @@ function OpenRidingCreateForm(props) {
                       .replace(/\D/g, '')
                       .slice(0, 4)
               },
-              openRidingApplyPackRulesFromRide(ride)
+              openRidingApplyPackRulesFromRide(ride),
+              gsExtra
             )
           );
           setEditHydrated(true);
@@ -9857,10 +9880,51 @@ function OpenRidingCreateForm(props) {
     }
   }
 
+  /** 그룹세션 수정 — 생성 화면과 같은 항목만 검증·저장(updateRideByHost 가 그룹세션이면 해당 필드만 갱신) */
+  async function submitGroupSessionEdit() {
+    var checkList = [];
+    if (!firestore || !hostUserId) checkList.push('그룹세션을 저장할 수 없습니다. 로그인 상태와 네트워크를 확인해 주세요.');
+    if (!String(form.title || '').trim()) checkList.push('세션명을 입력해 주세요.');
+    if (!String(form.date || '').trim() || String(form.date).length < 10) checkList.push('날짜를 선택해 주세요.');
+    var time = String((form.sessionTimes || [])[0] || '').trim();
+    if (!time) checkList.push('시간을 입력해 주세요.');
+    var maxParsed =
+      form.maxParticipants === '' || form.maxParticipants === null || form.maxParticipants === undefined
+        ? NaN
+        : Number(form.maxParticipants);
+    if (!Number.isFinite(maxParsed) || maxParsed < 1) checkList.push('참가 인원을 1 이상 입력해 주세요.');
+    if (!form.workoutId) checkList.push('워크아웃을 선택해 주세요.');
+    if (checkList.length) {
+      showFormValidationMessages(checkList);
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateRideByHost(firestore, editRideId, hostUserId, {
+        title: form.title,
+        date: new Date(form.date + 'T12:00:00+09:00'),
+        departureTime: time,
+        maxParticipants: Math.max(1, Math.floor(maxParsed)),
+        hostName: form.hostName,
+        contactInfo: form.contactInfo,
+        isGroupSession: true,
+        workoutId: form.workoutId,
+        workoutSource: form.workoutSource || 'gas'
+      });
+      onEditSaved();
+    } catch (err) {
+      var rawMsg = err && err.message ? String(err.message) : '';
+      showFormValidationMessages([rawMsg || '그룹세션 수정 처리 중 오류가 발생했습니다.']);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submit(e) {
     e.preventDefault();
     if (form.isGroupSession) {
-      await submitGroupSessionCore();
+      if (editRideId) await submitGroupSessionEdit();
+      else await submitGroupSessionCore();
       return;
     }
     await submitCore(false);
@@ -9950,6 +10014,12 @@ function OpenRidingCreateForm(props) {
         </div>
         {editRideId ? (
           <p className="text-[11px] text-slate-500 m-0 leading-snug">저장된 모임 카테고리는 수정할 수 없습니다.</p>
+        ) : null}
+        {formCategory === 'CYCLE' && editRideId && form.isGroupSession ? (
+          <label className="flex items-center gap-2 pt-1">
+            <input type="checkbox" className="h-4 w-4 accent-violet-600" checked disabled readOnly />
+            <span className="text-sm text-slate-800">그룹세션 (인도어 훈련 모임)</span>
+          </label>
         ) : null}
         {formCategory === 'CYCLE' && !editRideId && presetGroupId ? (
           <label className="flex items-center gap-2 pt-1 cursor-pointer">
@@ -10815,7 +10885,7 @@ function OpenRidingCreateForm(props) {
                         set('sessionTimes', next);
                       }}
                     />
-                    {(form.sessionTimes || []).length > 1 ? (
+                    {!editRideId && (form.sessionTimes || []).length > 1 ? (
                       <button
                         type="button"
                         className="shrink-0 w-8 h-8 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-50"
@@ -10832,6 +10902,7 @@ function OpenRidingCreateForm(props) {
                   </div>
                 );
               })}
+              {editRideId ? null : (
               <button
                 type="button"
                 className="w-full py-2 rounded-lg border border-dashed border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
@@ -10843,9 +10914,10 @@ function OpenRidingCreateForm(props) {
               >
                 + 시간 추가
               </button>
+              )}
             </div>
             <p className="text-[11px] text-slate-500 mt-1 m-0 leading-snug">
-              추가한 시간대마다 별도의 그룹세션이 각각 생성됩니다.
+              {editRideId ? '이 그룹세션의 시간을 수정합니다.' : '추가한 시간대마다 별도의 그룹세션이 각각 생성됩니다.'}
             </p>
           </div>
 
@@ -10931,9 +11003,9 @@ function OpenRidingCreateForm(props) {
                 type="button"
                 className="mt-2 w-full py-2 rounded-lg border border-dashed border-violet-300 text-violet-700 text-sm font-medium hover:bg-violet-50"
                 onClick={function () {
-                  if (!presetGroupId || !hostUserId) return;
+                  if (!groupSessionGroupId || !hostUserId) return;
                   writeOpenRidingClubWorkoutDraft({
-                    groupId: presetGroupId,
+                    groupId: groupSessionGroupId,
                     editRideId: editRideId || null,
                     clubCategory: moimCategoryProp,
                     form: form,
@@ -10941,7 +11013,7 @@ function OpenRidingCreateForm(props) {
                   });
                   if (typeof window !== 'undefined' && typeof window.openClubWorkoutBuilder === 'function') {
                     window.openClubWorkoutBuilder({
-                      groupId: presetGroupId,
+                      groupId: groupSessionGroupId,
                       hostUserId: hostUserId,
                       returnScreen: 'openRidingRoomScreen',
                       onCreated: function (workout) {
