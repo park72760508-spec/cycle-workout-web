@@ -40360,7 +40360,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #workoutBuilderScreen .wbf-hint { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: #64748b; }
 /* 변환 블럭: 버튼(원 + 라벨)과 안내문을 한 줄에 — 원의 중심선이 라벨 위, 안내문은 원 세로 중앙 */
 #workoutBuilderScreen .wbf-action { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
-#workoutBuilderScreen .wbf-action .wb-tool { flex: 0 0 auto; min-width: 56px; }
+#workoutBuilderScreen .wbf-action .wb-tool { flex: 0 0 auto; min-width: 0; align-items: flex-start; } /* 원의 왼쪽 선을 입력창 왼쪽 선에 맞춘다 */
 #workoutBuilderScreen .wbf-action .wb-tool__c { width: 42px; max-width: none; height: 42px; aspect-ratio: auto; }
 #workoutBuilderScreen .wbf-action .wb-tool__t { white-space: nowrap; }
 #workoutBuilderScreen .wbf-action .wbf-hint { margin: 0 0 15px; flex: 1; min-width: 0; }
@@ -40368,7 +40368,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #workoutBuilderScreen .wbf-link svg { width: 28px; height: 28px; }
 #workoutBuilderScreen .wbf-result {
   margin: 10px 0 0; padding: 10px 12px; white-space: pre-wrap; word-break: break-word;
-  font: 600 13px/1.6 inherit; font-family: inherit; color: #1e1b4b;
+  font-family: inherit; font-size: 13px; font-weight: 600; line-height: 1.6; color: #1e1b4b;
   background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #7c3aed; border-radius: 12px;
 }
 #workoutBuilderScreen .wbf-error { margin-top: 8px; font-size: 13px; font-weight: 600; color: #dc2626; }
