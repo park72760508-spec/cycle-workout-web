@@ -8639,10 +8639,17 @@ function OpenRidingGroupCalendarSection(props) {
             var isTodayWithRide = isTodayCell && (hasGroupSession || isHostDay || hasMatch || showOtherOnly || hasPt);
             var isSel = selectedKey === key;
             var isOutside = cell.adjacent != null;
+            /* 이전/다음달 여백 날짜도 라이딩 모임 화면과 동일하게 모임 배지를 표시한다(2026-11).
+               이전달 여백은 지난 날짜 톤 그대로, 다음달 여백은 버튼 전체를 흐리게(클릭하면 선택·진하게). */
+            var isNextAdj = cell.adjacent === 'next';
             var isPastCell = key < todayYmd;
             var dayNumClass = 'relative z-10 tabular-nums ';
             if (isOutside) {
-              dayNumClass += 'text-slate-400 opacity-40';
+              /* 다음달 여백은 버튼 전체가 opacity-40 이라 숫자까지 또 흐리면 이중으로 옅어진다 —
+                 모임이 있으면 흰 숫자(배지 위), 없으면 slate-400. 이전달 여백은 숫자에만 opacity-40. */
+              dayNumClass += isNextAdj
+                ? ((hasPt || hasGroupSession || isHostDay || hasMatch) ? 'text-white font-medium' : 'text-slate-400')
+                : 'text-slate-400 opacity-40';
             } else if (hasPt) {
               dayNumClass += isPastCell ? 'text-sky-800/55 font-medium' : 'text-white font-semibold drop-shadow-[0_1px_0_rgba(0,0,0,0.2)]';
             } else if (hasGroupSession) {
@@ -8672,6 +8679,8 @@ function OpenRidingGroupCalendarSection(props) {
                 onClick={function () { setSelectedKey(key); }}
                 className={
                   'open-riding-cal-day relative overflow-visible h-9 rounded-lg text-sm flex items-center justify-center transition hover:bg-slate-50 ' +
+                  (isNextAdj ? 'opacity-40 hover:opacity-60 ' : '') +
+                  (isNextAdj && isSel ? 'font-semibold opacity-100 ' : '') +
                   (isTodayCell ? 'open-riding-cal-day--today ' : '') +
                   (isTodayWithRide ? 'open-riding-cal-day--today-with-ride ' : '')
                 }
@@ -8683,7 +8692,7 @@ function OpenRidingGroupCalendarSection(props) {
                     aria-hidden
                   />
                 ) : null}
-                {isOutside ? null : hasPt ? (
+                {hasPt ? (
                   <span
                     className={
                       'absolute z-[1] rounded-full pointer-events-none border ' +
@@ -8728,7 +8737,7 @@ function OpenRidingGroupCalendarSection(props) {
                     aria-hidden
                   />
                 ) : null}
-                {!isOutside && isConfirmedDay ? (
+                {isConfirmedDay ? (
                   <span
                     className={
                       'open-riding-cal-participant-badge absolute z-[20] pointer-events-none flex items-center justify-center rounded-full text-white shadow-sm ring-1 ring-white/90 ' +
