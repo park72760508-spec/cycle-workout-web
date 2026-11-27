@@ -6,8 +6,8 @@
 
   var SECRETS = [
     { key: 'ANTHROPIC_API_KEY', label: 'Claude API 키', ph: 'sk-ant-…', hint: '주간 콘텐츠 기획용. console.anthropic.com 에서 발급' },
-    { key: 'IG_USER_ID', label: '인스타그램 계정 ID', ph: '숫자 ID', hint: 'Graph API: GET /{페이지ID}?fields=instagram_business_account', pair: 'IG_ACCESS_TOKEN' },
-    { key: 'IG_ACCESS_TOKEN', label: '인스타그램 액세스 토큰', ph: '만료 없는 페이지 토큰', hint: '계정 ID 와 함께 입력해야 연결을 확인합니다' }
+    { key: 'IG_USER_ID', label: '인스타그램 계정 ID', ph: '숫자 ID', hint: '선택 — 자동 게시용. Graph API: GET /{페이지ID}?fields=instagram_business_account', optional: true },
+    { key: 'IG_ACCESS_TOKEN', label: '인스타그램 액세스 토큰', ph: '만료 없는 페이지 토큰', hint: '선택 — 자동 게시용. 계정 ID 와 함께 입력해야 연결을 확인합니다', optional: true }
   ];
   var STATUS_KO = { draft: '초안', approved: '승인됨', published: '게시됨', failed: '실패', rejected: '거부됨' };
   var STATUS_COLOR = { draft: '#64748b', approved: '#2563eb', published: '#16a34a', failed: '#dc2626', rejected: '#94a3b8' };
@@ -42,9 +42,10 @@
   var INPUT = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:13px;';
   var SEC_TITLE = 'font-size:13px;font-weight:700;color:#111827;margin:0 0 8px;';
 
-  function chip(ok, text) {
-    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;margin:0 4px 4px 0;' +
-      (ok ? 'background:#ecfdf5;color:#047857;' : 'background:#fef2f2;color:#b91c1c;') + '">' + (ok ? '✓ ' : '! ') + esc(text) + '</span>';
+  function chip(ok, text, optional) {
+    var style = ok ? 'background:#ecfdf5;color:#047857;' : (optional ? 'background:#f1f5f9;color:#64748b;' : 'background:#fef2f2;color:#b91c1c;');
+    return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:600;margin:0 4px 4px 0;' + style + '">' +
+      (ok ? '✓ ' : (optional ? '– ' : '! ')) + esc(text) + (!ok && optional ? ' (선택)' : '') + '</span>';
   }
 
   function openInstagramAgentModal() {
@@ -90,7 +91,7 @@
       // 1) 연결 상태
       html += '<div style="margin-bottom:16px;"><p style="' + SEC_TITLE + '">연결 상태</p>' +
         chip(st.github, 'GitHub 토큰') +
-        SECRETS.map(function (s) { return chip(!!secretsOk[s.key], s.label); }).join('') +
+        SECRETS.map(function (s) { return chip(!!secretsOk[s.key], s.label, s.optional); }).join('') +
         chip(supabaseOk, 'Supabase 저장소(서버 연결)') + '</div>';
 
       // 2) 연결 정보 입력
@@ -127,19 +128,22 @@
         var c = r.status !== 'completed' ? '#2563eb' : (r.conclusion === 'success' ? '#16a34a' : '#dc2626');
         return '<div style="font-size:11.5px;color:#64748b;">' + label + ': <b style="color:' + c + ';">' + t + '</b> · ' + kst(r.at) + ' · <a href="' + esc(r.url) + '" target="_blank" rel="noopener" style="color:#2e74e8;">로그</a></div>';
       }
-      var allSet = st.github && supabaseOk && SECRETS.every(function (s) { return secretsOk[s.key]; });
+      var allSet = st.github && supabaseOk && !!secretsOk.ANTHROPIC_API_KEY; // 기획·영상 제작에 필요한 것
+      var igSet = !!(secretsOk.IG_USER_ID && secretsOk.IG_ACCESS_TOKEN); // 자동 게시에만 필요
       html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:16px;">' +
         '<p style="' + SEC_TITLE + '">영상 게시하기</p>' +
-        (allSet ? '' : '<p style="font-size:11.5px;color:#b45309;margin:0 0 10px;">연결 정보를 모두 설정하면 실행할 수 있습니다.</p>') +
+        (allSet ? '' : '<p style="font-size:11.5px;color:#b45309;margin:0 0 10px;">GitHub 토큰, Supabase, Claude API 키를 설정하면 실행할 수 있습니다.</p>') +
         '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;">' +
         '<button type="button" id="igmPlan" class="btn stelvio-purple-btn" style="border:none;font-weight:600;padding:10px;"' + (allSet ? '' : ' disabled') + '>이번 주 기획·영상 만들기</button>' +
         '<div style="display:flex;gap:6px;">' +
         '<button type="button" id="igmDry" class="btn btn-default-style" style="flex:1;"' + (st.github ? '' : ' disabled') + '>샘플 영상 시험</button>' +
-        '<button type="button" id="igmPub" class="btn btn-default-style" style="flex:1;"' + (allSet ? '' : ' disabled') + '>게시 시각 확인·게시</button></div></div>' +
+        '<button type="button" id="igmPub" class="btn btn-default-style" style="flex:1;"' + (allSet && igSet ? '' : ' disabled') + ' title="' + (igSet ? '' : '인스타 연결 정보가 없어 자동 게시는 꺼져 있습니다') + '">게시 시각 확인·게시</button></div></div>' +
         '<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#64748b;margin-bottom:8px;"><input type="checkbox" id="igmForce" /> 이번 주 기획이 이미 있어도 다시 만들기</label>' +
         runLine('기획·제작', (st.runs || {}).weekly) + runLine('게시', (st.runs || {}).publish) +
         '<p id="igmRunMsg" style="display:none;font-size:12px;margin:8px 0 0;"></p>' +
-        '<p style="font-size:11px;color:#94a3b8;margin:8px 0 0;line-height:1.45;">매주 월요일 09:00 에 자동으로 기획·제작되고, 아래에서 승인하면 예정 시각(기본 화·금 19:00)에 게시됩니다. 샘플 영상 시험은 게시하지 않으며 결과 영상은 GitHub Actions 실행 결과의 아티팩트로 확인합니다.</p></div>';
+        (igSet
+          ? '<p style="font-size:11px;color:#94a3b8;margin:8px 0 0;line-height:1.45;">매주 월요일 09:00 에 자동으로 기획·제작되고, 아래에서 승인하면 예정 시각(기본 화·금 19:00)에 자동 게시됩니다. 샘플 영상 시험은 게시하지 않으며 결과 영상은 GitHub Actions 실행 결과의 아티팩트로 확인합니다.</p>'
+          : '<p style="font-size:11px;color:#475569;background:#f8fafc;border-radius:8px;padding:8px 10px;margin:8px 0 0;line-height:1.5;"><b>반자동 운영 중</b> — 매주 월요일 09:00 에 영상·캡션이 만들어져 GitHub Issue 에 올라옵니다. Issue 의 미리보기 링크에서 영상을 폰에 저장하고 Instagram 앱에서 직접 올려 주세요. (인스타 연결 정보를 등록하면 자동 게시로 바뀝니다.) 샘플 영상 시험은 게시하지 않으며 결과 영상은 GitHub Actions 실행 결과의 아티팩트로 확인합니다.</p>') + '</div>';
 
       // 4) 게시 현황
       html += '<div><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><p style="' + SEC_TITLE + 'margin:0;">게시 현황</p>' +
@@ -148,7 +152,7 @@
         html += '<p style="font-size:12px;color:#94a3b8;text-align:center;padding:14px 0;">아직 기획된 주차가 없습니다.</p>';
       }
       weeks.forEach(function (w) {
-        var canApprove = w.issue && w.issue.state === 'open' && !w.issue.approved && w.status === 'draft';
+        var canApprove = igSet && w.issue && w.issue.state === 'open' && !w.issue.approved && w.status === 'draft';
         html += '<div style="border:1px solid #e5e7eb;border-radius:10px;margin-bottom:10px;overflow:hidden;">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#f8fafc;">' +
           '<span style="font-size:13px;font-weight:700;">' + esc(w.week) + ' <span style="font-weight:600;color:' + (STATUS_COLOR[w.status] || '#64748b') + ';font-size:11px;">' + esc(STATUS_KO[w.status] || w.status) + '</span></span>' +

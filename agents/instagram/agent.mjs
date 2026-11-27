@@ -23,7 +23,12 @@ export function issueBody(plan) {
     `- 장면: ${p.scenes.map((s) => `\`${s.ref}\` "${s.sub}"`).join(' → ')}`,
     '', '```', p.caption, '', p.hashtags.join(' '), '```'
   ].join('\n')).join('\n\n');
-  return `${posts}\n\n---\n**승인하려면 이 Issue 에 \`ig-approved\` 라벨을 붙이세요.** 게시 시각이 되면 자동으로 올라갑니다. 올리지 않으려면 Issue 를 닫고 \`queue/${plan.week}.json\` 의 status 를 \`rejected\` 로 바꾸세요.`;
+  // 인스타 연결 정보(IG_ACCESS_TOKEN)가 없으면 자동 게시 없이 사람이 직접 올린다(반자동)
+  const auto = !!process.env.IG_ACCESS_TOKEN;
+  const foot = auto
+    ? `**승인하려면 이 Issue 에 \`ig-approved\` 라벨을 붙이세요.** 게시 시각이 되면 자동으로 올라갑니다. 올리지 않으려면 Issue 를 닫고 \`queue/${plan.week}.json\` 의 status 를 \`rejected\` 로 바꾸세요.`
+    : `**직접 올리는 방법(반자동):** 위 "미리보기" 링크에서 영상을 폰에 저장 → Instagram 앱에서 릴스로 올리고 → 캡션과 해시태그 블록을 복사해 붙여넣으세요. 게시 예정 시각 전후에 올리면 됩니다. 올린 뒤 이 Issue 를 닫으면 끝납니다. (자동 게시는 인스타 연결 정보를 관리자 화면에 등록하면 켜집니다.)`;
+  return `${posts}\n\n---\n${foot}`;
 }
 
 async function main() {

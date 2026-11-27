@@ -63,8 +63,20 @@ test('게시 대상: 승인+시각 도래+approved 만', () => {
   assert.equal(due.length, 1);
 });
 
-test('Issue 본문: 캡션·해시태그·승인 안내', () => {
-  const b = issueBody({ week: '2026-W49', posts: [{ title: 't', publishAt: '2026-12-01T10:00:00Z', videoUrl: 'https://x/v.mp4', scenes: [{ ref: 'workout-graph', sub: 's' }], caption: 'cap', hashtags: ['#a'] }] });
-  assert.match(b, /2026-12-01 19:00 KST/);
-  assert.match(b, /ig-approved/);
+test('Issue 본문: 캡션·해시태그, 인스타 연결 유무에 따라 승인/직접 업로드 안내', () => {
+  const plan = { week: '2026-W49', posts: [{ title: 't', publishAt: '2026-12-01T10:00:00Z', videoUrl: 'https://x/v.mp4', scenes: [{ ref: 'workout-graph', sub: 's' }], caption: 'cap', hashtags: ['#a'] }] };
+  const prev = process.env.IG_ACCESS_TOKEN;
+  try {
+    process.env.IG_ACCESS_TOKEN = 'x';
+    const auto = issueBody(plan);
+    assert.match(auto, /2026-12-01 19:00 KST/);
+    assert.match(auto, /ig-approved/);
+    delete process.env.IG_ACCESS_TOKEN;
+    const manual = issueBody(plan);
+    assert.match(manual, /직접 올리는 방법/);
+    assert.ok(!/ig-approved/.test(manual));
+    assert.match(manual, /cap/);
+  } finally {
+    if (prev === undefined) delete process.env.IG_ACCESS_TOKEN; else process.env.IG_ACCESS_TOKEN = prev;
+  }
 });
