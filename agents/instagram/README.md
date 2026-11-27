@@ -28,9 +28,10 @@
 | `ANTHROPIC_API_KEY` | 주간 기획용 Claude API 키 |
 | `IG_USER_ID` / `IG_ACCESS_TOKEN` | 위 5·4 단계 값 |
 | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | 영상 업로드용(서비스 롤 키는 절대 공개 금지) |
-| `STELVIO_STORAGE_STATE` | 촬영용 로그인 세션(아래 3) |
+| `STELVIO_STORAGE_STATE` | (선택) 촬영용 로그인 세션(아래 3) — 로그인 없이 보이는 화면만 쓰면 불필요 |
 
-### 3. 촬영용 로그인 세션
+### 3. (선택) 촬영용 로그인 세션
+워크아웃 목록·그래프·작성 화면은 **로그인 없이도** 공개 데이터로 녹화됩니다(dry-run 으로 확인). 훈련일지처럼 로그인이 필요한 장면을 쓸 때만 설정하세요.
 영상에는 **그 계정의 화면이 그대로** 찍힙니다. 개인정보가 없는 **촬영 전용 테스트 계정**을 쓰세요(관리자·개인 계정 금지).
 ```bash
 cd agents/instagram && npm install && npx playwright install chromium
