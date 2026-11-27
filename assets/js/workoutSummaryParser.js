@@ -9,7 +9,8 @@
  * 기본 문법은 엄격하지만, 아래처럼 어긋난 표현도 가능한 한 해석한다.
  *   - 전각 문자, 공백 유무, 대소문자, ~ – — 범위 기호, "분/초/min/sec", % · rpm 생략
  *   - 반복: 2X(...) · 2 x (...) · 2×(...) · 2*(...) · 괄호 없는 "3x 3m@88%", 중첩 반복
- *   - 섹션 머리말: WD/워밍업/워밍, 메인/MAIN, CD/쿨다운/쿨 (없으면 위치로 판단)
+ *   - 섹션 머리말: WD/WU/워밍업/워밍, 메인/MAIN, CD/쿨다운/쿨 (없으면 위치로 판단: 첫=워밍업, 끝=쿨다운, 사이=메인)
+ *   - 섹션 개수 제한 없음: 메인 섹션 여러 개 가능, 반복은 N X ( … ) 또는 N X [ … ] 중첩 가능
  */
 (function (root) {
   'use strict';
@@ -160,47 +161,50 @@
 
     var heads = rawSecs.map(sectionHead);
     var anyLabel = heads.some(function (h) { return h.role; });
+    var last = rawSecs.length - 1;
     var roles = [];
     if (anyLabel) {
-      // 머리말 있는 섹션은 그대로, 없는 섹션은 비어 있는 역할을 순서대로(1개뿐이면 메인)
+      // 워밍업·쿨다운 머리말은 각 1번만, 메인은 여러 섹션 가능
       var seen = {}, free = [];
       for (var i = 0; i < heads.length; i++) {
-        if (!heads[i].role) continue;
-        if (seen[heads[i].role]) return fail('같은 종류의 섹션이 중복됨: ' + SECTION_NAME[heads[i].role]);
-        seen[heads[i].role] = true;
+        var hr = heads[i].role;
+        if (!hr) continue;
+        if (hr !== 'main' && seen[hr]) return fail('같은 종류의 섹션이 중복됨: ' + SECTION_NAME[hr]);
+        seen[hr] = true;
       }
       ['wd', 'main', 'cd'].forEach(function (r) { if (!seen[r]) free.push(r); });
       var unl = heads.filter(function (h) { return !h.role; }).length;
-      if (unl > free.length) return fail('섹션이 너무 많음 (워밍업 | 메인 | 쿨다운 최대 3개)');
-      if (unl === 1 && free.indexOf('main') >= 0) free = ['main'];
-      var fi = 0;
-      for (var j = 0; j < heads.length; j++) roles.push(heads[j].role || free[fi++]);
-    } else if (rawSecs.length === 3) {
-      roles = ['wd', 'main', 'cd'];
+      if (unl <= free.length) {
+        // 머리말 없는 섹션은 비어 있는 역할을 순서대로(1개뿐이면 메인)
+        if (unl === 1 && free.indexOf('main') >= 0) free = ['main'];
+        var fi = 0;
+        for (var j = 0; j < heads.length; j++) roles.push(heads[j].role || free[fi++]);
+      } else {
+        // 머리말 없는 섹션이 더 많으면: 맨 앞(워밍업 비어 있을 때)·맨 뒤(쿨다운 비어 있을 때)만 해당 역할, 나머지는 메인
+        for (var k = 0; k < heads.length; k++) {
+          roles.push(heads[k].role || (k === 0 && !seen.wd ? 'wd' : k === last && !seen.cd ? 'cd' : 'main'));
+        }
+      }
     } else if (rawSecs.length === 1) {
       roles = ['main'];
+    } else if (rawSecs.length >= 3) {
+      // 머리말이 없으면 첫 섹션=워밍업, 마지막=쿨다운, 사이는 모두 메인
+      for (var m = 0; m < rawSecs.length; m++) roles.push(m === 0 ? 'wd' : m === last ? 'cd' : 'main');
     } else {
-      return fail('섹션은 " | "로 구분한 3개(워밍업 | 메인 | 쿨다운)여야 함 (현재 ' + rawSecs.length + '개)');
+      return fail('섹션은 " | "로 구분해 3개 이상(워밍업 | 메인 … | 쿨다운)이어야 함 (현재 ' + rawSecs.length + '개). 머리말(WU/CD)을 붙이면 개수와 상관없이 가능');
     }
 
-    var sections = {};
-    for (var s = 0; s < rawSecs.length; s++) {
-      var role = roles[s];
-      var body = anyLabel ? heads[s].body : rawSecs[s];
-      var nb = normalize(body);
-      sections[role] = { body: nb, name: SECTION_NAME[role] };
-    }
-
+    // 적은 순서대로 구간을 만든다 (섹션 순서 = 훈련 순서)
     var segments = [];
-    var roleList = ['wd', 'main', 'cd'];
-    for (var q = 0; q < roleList.length; q++) {
-      var rl = roleList[q];
-      var sec = sections[rl];
-      if (!sec) continue;
-      if (sec.body === '' ) return fail(sec.name + ' 섹션이 비어 있음 (구간이 없으면 "-" 입력)');
-      if (sec.body === '-') continue;
-      if (!parenBalanced(sec.body)) return fail(sec.name + ' 섹션: 괄호가 맞지 않음');
-      var res = parseItems(sec.body, sec.name, '');
+    var mainNo = 0;
+    for (var s = 0; s < rawSecs.length; s++) {
+      var rl = roles[s];
+      var name = SECTION_NAME[rl] + (rl === 'main' && roles.filter(function (r) { return r === 'main'; }).length > 1 ? ' ' + (++mainNo) : '');
+      var nb = normalize(anyLabel ? heads[s].body : rawSecs[s]);
+      if (nb === '') return fail(name + ' 섹션이 비어 있음 (구간이 없으면 "-" 입력)');
+      if (nb === '-') continue;
+      if (!parenBalanced(nb)) return fail(name + ' 섹션: 괄호가 맞지 않음');
+      var res = parseItems(nb, name, '');
       if (res.err) return fail(res.err);
       for (var z = 0; z < res.items.length; z++) {
         var it = res.items[z];
