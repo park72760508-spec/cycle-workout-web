@@ -1,0 +1,55 @@
+# STELVIO 인스타그램 게시 — 승인된 주차의 게시 시각이 지난 릴스를 올린다 (2026-11-27)
+# 트리거: ① Issue 에 `ig-approved` 라벨(해당 주차 승인) ② 3시간마다(예약 시각 도래분 게시) ③ 수동
+# 필요한 비밀값: IG_USER_ID, IG_ACCESS_TOKEN
+name: Instagram publish
+
+on:
+  schedule:
+    - cron: '0 */3 * * *'
+  issues:
+    types: [labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: instagram-agent
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name != 'issues' || github.event.label.name == 'ig-approved'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: agents/instagram
+    env:
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 라벨로 승인된 주차 승인 처리
+        if: github.event_name == 'issues'
+        run: |
+          WEEK=$(echo "$ISSUE_TITLE" | grep -oE '[0-9]{4}-W[0-9]{2}' | head -1)
+          [ -n "$WEEK" ] || { echo "제목에서 주차를 찾지 못했습니다: $ISSUE_TITLE"; exit 1; }
+          node agent.mjs approve --week "$WEEK"
+
+      - name: 게시 시각이 지난 승인 항목 게시
+        run: node agent.mjs publish
+
+      - name: 결과 커밋
+        if: always()
+        run: |
+          git config user.name "stelvio-instagram-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add queue
+          git commit -m "인스타 에이전트: 게시 상태 갱신 [skip ci]" || exit 0
+          git pull --rebase -q && git push -q

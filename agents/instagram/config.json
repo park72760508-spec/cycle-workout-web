@@ -1,0 +1,77 @@
+{
+  "account": "stelvioai",
+  "site": "https://stelvio.ai.kr/",
+  "model": "claude-sonnet-5-5",
+  "reelsPerWeek": 2,
+  "slots": [{ "dow": 2, "time": "19:00" }, { "dow": 5, "time": "19:00" }],
+  "viewport": { "width": 540, "height": 960 },
+  "audience": "실내 로라·야외 라이딩을 하는 한국의 사이클·러닝 동호인",
+  "tone": "친근하고 간결한 존댓말, 과장·의학적 효능 주장 금지, 이모지는 1~2개",
+  "cta": "프로필 링크에서 STELVIO 시작하기",
+  "baseHashtags": ["#STELVIO", "#스텔비오", "#사이클링", "#로라훈련", "#FTP"],
+  "catalog": [
+    {
+      "id": "workout-categories",
+      "title": "카테고리별 워크아웃 목록",
+      "summary": "Active Recovery부터 VO2 Max까지 훈련 존별로 분류된 STELVIO 공용 워크아웃을 한눈에 고른다.",
+      "sec": 5,
+      "steps": [{ "screen": "workoutScreen" }, { "eval": "loadWorkouts('all')" }, { "wait": 3500 }]
+    },
+    {
+      "id": "workout-graph",
+      "title": "워크아웃 구간 그래프",
+      "summary": "Endurance 같은 카테고리를 열면 각 워크아웃의 시간·TSS·구간 그래프가 카드로 보인다.",
+      "sec": 6,
+      "steps": [{ "screen": "workoutScreen" }, { "eval": "workoutViewShowList('Endurance')" }, { "wait": 4500 }, { "scroll": 500 }, { "wait": 1000 }]
+    },
+    {
+      "id": "workout-builder",
+      "title": "워크아웃 직접 만들기",
+      "summary": "스텝 데이터를 붙여넣고 요약하기를 누르면 카테고리 분류와 한 줄 요약 표현이 만들어지고, 세그먼트 생성으로 바로 구간이 된다.",
+      "sec": 8,
+      "steps": [
+        { "screen": "workoutBuilderScreen" },
+        { "wait": 1500 },
+        { "eval": "document.getElementById('wbRawInput').value='워밍업 FTP 70% 05:00 인터벌 FTP 120% 00:20 휴식 FTP 55% 00:40 반복 2회 01:00 휴식 FTP 50% 03:00 인터벌 FTP 92% 10:00 휴식 FTP 50% 04:00 반복 3회 14:00 쿨다운 FTP 50% 05:00'" },
+        { "click": "#btnWbRawSummarize" },
+        { "wait": 2500 },
+        { "click": "#btnWbSummaryApply" },
+        { "wait": 1500 },
+        { "eval": "document.getElementById('segmentCount').scrollIntoView({block:'start'})" },
+        { "wait": 2000 }
+      ]
+    },
+    {
+      "id": "riding-moim",
+      "title": "라이딩 모임 캘린더",
+      "summary": "달력에서 모임 일정을 확인하고 참석 신청한다. 전월·다음달 날짜에도 모임이 표시된다.",
+      "sec": 5,
+      "steps": [{ "screen": "openRidingRoomScreen" }, { "wait": 4500 }]
+    },
+    {
+      "id": "journal",
+      "title": "라이딩 기록(훈련일지)",
+      "summary": "내 라이딩 로그를 달력과 통계로 돌아본다.",
+      "sec": 5,
+      "steps": [{ "screen": "trainingJournalScreen" }, { "wait": 4500 }]
+    },
+    {
+      "id": "ranking",
+      "title": "랭킹보드",
+      "summary": "GC·구간·평속·TSS·거리 랭킹으로 동료와 비교한다.",
+      "sec": 5,
+      "enabled": false,
+      "note": "다른 회원의 이름·프로필이 그대로 노출됨 — 개인정보 때문에 기본 제외",
+      "steps": [{ "screen": "stelvioRankingScreen" }, { "wait": 4500 }]
+    },
+    {
+      "id": "market",
+      "title": "중고랜드 마켓",
+      "summary": "라이더·러너를 위한 안전결제 중고거래.",
+      "sec": 5,
+      "enabled": false,
+      "note": "회원의 판매글·이미지가 그대로 노출됨 — 개인정보·저작권 때문에 기본 제외",
+      "steps": [{ "screen": "marketHomeScreen" }, { "wait": 4500 }]
+    }
+  ]
+}

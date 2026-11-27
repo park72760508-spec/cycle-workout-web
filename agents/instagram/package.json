@@ -1,0 +1,16 @@
+{
+  "name": "stelvio-instagram-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "login": "node agent.mjs login",
+    "plan": "node agent.mjs plan",
+    "produce": "node agent.mjs produce",
+    "publish": "node agent.mjs publish",
+    "insights": "node agent.mjs insights",
+    "test": "node --test test/agent.test.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0"
+  }
+}

@@ -1,0 +1,98 @@
+# STELVIO 인스타그램 주간 에이전트 — 기획·영상 제작·승인 요청 (2026-11-27)
+# 매주 월요일 09:00 KST(일 00:00 UTC): 지난주 성과 수집 → 이번 주 릴스 기획 → 실제 앱 화면 녹화+자막 영상 제작 →
+# 영상 업로드(Supabase 공개 버킷) → 승인용 Issue 생성. 사람이 Issue 에 `ig-approved` 라벨을 붙이면 instagram-publish 가 예약 시각에 게시.
+# 수동 실행: mode=dry-run 이면 샘플 기획으로 녹화·합성만 해서 영상을 아티팩트로 내려받아 확인(게시·업로드·Issue 없음).
+# 필요한 비밀값: ANTHROPIC_API_KEY, IG_USER_ID, IG_ACCESS_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_KEY, STELVIO_STORAGE_STATE(선택·촬영용 로그인 세션)
+name: Instagram weekly agent
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'plan = 실제 기획·업로드·Issue / dry-run = 샘플로 영상만 확인'
+        type: choice
+        options: [plan, dry-run]
+        default: plan
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: instagram-agent
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: agents/instagram
+    env:
+      DRY: ${{ inputs.mode == 'dry-run' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      IG_ACCESS_TOKEN: ${{ secrets.IG_ACCESS_TOKEN }}
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      STELVIO_STORAGE_STATE: ${{ secrets.STELVIO_STORAGE_STATE }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 50 # 최근 2주 커밋 제목을 기획 소재로 사용
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ffmpeg·한글 폰트 설치
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-noto-cjk
+
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+
+      - name: 지난 게시물 성과 수집 (실패해도 계속)
+        if: env.DRY != 'true'
+        run: node agent.mjs insights || echo "성과 수집 건너뜀"
+
+      - name: 주간 기획
+        run: node agent.mjs plan ${{ env.DRY == 'true' && '--sample --force' || '' }}
+
+      - name: 영상 제작 (앱 화면 녹화 + 자막)
+        run: node agent.mjs produce ${{ env.DRY == 'true' && '--dry' || '' }}
+
+      - name: 영상 검사·대표 프레임 추출 (dry-run)
+        if: env.DRY == 'true'
+        run: |
+          for f in out/*/*.mp4; do
+            ffprobe -v error -show_entries stream=codec_name,width,height,duration -of default=nw=1 "$f"
+            ffmpeg -y -v error -ss 3 -i "$f" -frames:v 1 "${f%.mp4}.png"
+          done
+
+      - name: 확인용 영상 업로드 (dry-run)
+        if: env.DRY == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: instagram-dry-run
+          path: |
+            agents/instagram/out/**/*.mp4
+            agents/instagram/out/**/*.png
+
+      - name: 초안 커밋·승인 요청 Issue 생성
+        if: env.DRY != 'true'
+        run: |
+          WEEK=$(node -e "import('./lib/util.mjs').then(m=>console.log(m.weekId()))")
+          git config user.name "stelvio-instagram-agent"
+          git config user.email "actions@users.noreply.github.com"
+          git add queue
+          git commit -m "인스타 에이전트: ${WEEK} 초안 [skip ci]" || echo "변경 없음"
+          git pull --rebase -q && git push -q
+          gh label create ig-draft --color FBCA04 --description "인스타 주간 초안" 2>/dev/null || true
+          gh label create ig-approved --color 0E8A16 --description "승인 — 예약 시각에 게시" 2>/dev/null || true
+          if [ -f "queue/${WEEK}.issue.md" ]; then
+            gh issue create --title "[인스타 초안] ${WEEK}" --body-file "queue/${WEEK}.issue.md" --label ig-draft
+          fi
