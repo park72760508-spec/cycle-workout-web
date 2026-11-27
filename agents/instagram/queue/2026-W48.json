@@ -1,0 +1,77 @@
+{
+  "week": "2026-W48",
+  "status": "draft",
+  "createdAt": "2026-11-27T16:23:47.475Z",
+  "posts": [
+    {
+      "id": "p1",
+      "type": "reel",
+      "title": "오늘 뭐 탈지 고민될 때 존별 워크아웃 고르기",
+      "caption": "오늘 뭘 탈지 고민된다면? 🚴\nActive Recovery부터 VO2 Max까지 존별로 워크아웃을 골라보세요.\n카드에서 시간·TSS·구간 그래프를 확인하고 선택, 라이딩 후엔 훈련일지로 돌아보면 됩니다.\n프로필 링크에서 STELVIO 시작하기",
+      "hashtags": [
+        "#실내로라",
+        "#로라훈련",
+        "#사이클훈련",
+        "#워크아웃",
+        "#TSS",
+        "#훈련일지",
+        "#STELVIO",
+        "#스텔비오",
+        "#사이클링",
+        "#FTP"
+      ],
+      "scenes": [
+        {
+          "ref": "workout-categories",
+          "sub": "오늘 뭐 탈지 존별로 골라요"
+        },
+        {
+          "ref": "workout-graph",
+          "sub": "시간·TSS·구간을 카드로 확인"
+        },
+        {
+          "ref": "journal",
+          "sub": "탄 뒤엔 달력과 통계로 복기"
+        }
+      ],
+      "status": "draft",
+      "publishAt": "2026-12-01T10:00:00.000Z",
+      "videoUrl": "https://eacrwhtbdqanaxpicqsm.supabase.co/storage/v1/object/public/instagram-media/2026-W48/p1.mp4"
+    },
+    {
+      "id": "p2",
+      "type": "reel",
+      "title": "모임 일정 확인하고 내 워크아웃 만들기",
+      "caption": "이번 주 라이딩, 미리 준비해볼까요? 📅\n달력에서 모임 일정을 확인하고 참석 신청까지 한 번에 해요.\n워크아웃 스텝 데이터를 붙여넣고 '요약하기'를 누르면 카테고리와 한 줄 요약이 만들어지고, 세그먼트 생성으로 바로 구간이 됩니다.\n프로필 링크에서 STELVIO 시작하기",
+      "hashtags": [
+        "#라이딩모임",
+        "#사이클링",
+        "#로라라이딩",
+        "#워크아웃만들기",
+        "#자전거동호회",
+        "#주말라이딩",
+        "#STELVIO",
+        "#스텔비오",
+        "#로라훈련",
+        "#FTP"
+      ],
+      "scenes": [
+        {
+          "ref": "riding-moim",
+          "sub": "달력에서 모임 일정 확인"
+        },
+        {
+          "ref": "workout-builder",
+          "sub": "스텝 붙여넣고 요약하기 클릭"
+        },
+        {
+          "ref": "workout-builder",
+          "sub": "세그먼트 생성으로 바로 구간"
+        }
+      ],
+      "status": "draft",
+      "publishAt": "2026-12-04T10:00:00.000Z",
+      "videoUrl": "https://eacrwhtbdqanaxpicqsm.supabase.co/storage/v1/object/public/instagram-media/2026-W48/p2.mp4"
+    }
+  ]
+}
