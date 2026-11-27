@@ -107,7 +107,7 @@ async function readQueue(gh) {
   return out;
 }
 
-function createHandler({ admin, verifyAuth, setCors, fetchImpl }) {
+function createHandler({ admin, verifyAuth, setCors, fetchImpl, getSupabaseServer }) {
   const f = fetchImpl || fetch;
   const cfgRef = () => admin.firestore().collection("adminSecrets").doc("instagramAgent");
   const getToken = async () => { const s = await cfgRef().get(); return clean(s.exists ? (s.data() || {}).githubToken : ""); };
@@ -164,7 +164,16 @@ function createHandler({ admin, verifyAuth, setCors, fetchImpl }) {
       }
 
       if (action === "saveConnection") {
-        const { values, checks } = await validateValues(body.values, f);
+        const input = Object.assign({}, body.values);
+        if (body.useServerSupabase) {
+          // 이미 서버(함수)가 쓰고 있는 Supabase 연결을 그대로 가져와 GitHub 비밀값으로 등록 — 화면에서 키를 입력하지 않는다
+          let sv = null;
+          try { sv = getSupabaseServer && getSupabaseServer(); } catch (_e) { sv = null; }
+          if (!sv || !clean(sv.url) || !clean(sv.key)) throw new HttpError(500, "서버에 설정된 Supabase 연결 정보를 읽지 못했습니다.");
+          input.SUPABASE_URL = sv.url;
+          input.SUPABASE_SERVICE_KEY = sv.key;
+        }
+        const { values, checks } = await validateValues(input, f);
         const pk = await gh("GET", `/repos/${REPO}/actions/secrets/public-key`);
         for (const [name, value] of Object.entries(values)) {
           await gh("PUT", `/repos/${REPO}/actions/secrets/${name}`, { encrypted_value: await encryptForGithub(pk.key, value), key_id: pk.key_id });

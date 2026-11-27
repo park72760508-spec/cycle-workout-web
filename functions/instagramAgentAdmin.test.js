@@ -39,7 +39,7 @@ test('검증: 외부 서비스 거부는 사용자에게 이유와 함께 전달
   await assert.rejects(validateValues({ SUPABASE_URL: 'https://abc.supabase.co', SUPABASE_SERVICE_KEY: 'k' }, nobucket), /버킷이 없습니다/);
 });
 
-function harness({ grade = '1', token = 'ghp_x', fetchImpl }) {
+function harness({ grade = '1', token = 'ghp_x', fetchImpl, sv }) {
   const store = { githubToken: token };
   const admin = { firestore: () => ({ collection: (c) => ({ doc: (d) => ({
     get: async () => (c === 'users' ? { data: () => ({ grade }) } : { exists: !!store.githubToken, data: () => store }),
@@ -47,7 +47,7 @@ function harness({ grade = '1', token = 'ghp_x', fetchImpl }) {
   }) }) }) };
   const out = {};
   const res = { status(c) { out.status = c; return this; }, json(b) { out.body = b; return this; }, send() { return this; } };
-  const handler = createHandler({ admin, verifyAuth: async () => ({ uid: 'u1' }), setCors() {}, fetchImpl });
+  const handler = createHandler({ admin, verifyAuth: async () => ({ uid: 'u1' }), setCors() {}, fetchImpl, getSupabaseServer: sv });
   return { call: async (body) => { await handler({ method: 'POST', body, headers: {} }, res); return out; }, store };
 }
 
@@ -104,4 +104,26 @@ test('approve: 해당 주차 Issue 에 ig-approved 라벨, 없으면 404 / run �
   const d = calls.find((c) => c.u.includes('instagram-weekly.yml/dispatches'));
   assert.deepEqual(JSON.parse(d.b), { ref: 'main', inputs: { mode: 'dry-run', force: 'true' } });
   assert.equal((await h.call({ action: 'run', workflow: 'nope' })).status, 400);
+});
+
+test('useServerSupabase: 서버가 쓰는 URL·키를 검증 후 GitHub 비밀값으로 등록(화면 입력 없음)', async () => {
+  await sodium.ready;
+  const kp = sodium.crypto_box_keypair();
+  const puts = [];
+  const f = async (url, opts = {}) => {
+    const u = String(url);
+    if (u.includes('/actions/secrets/public-key')) return json(200, { key: sodium.to_base64(kp.publicKey, sodium.base64_variants.ORIGINAL), key_id: 'k1' });
+    if (u.includes('/actions/secrets/') && opts.method === 'PUT') { puts.push(u.split('/').pop()); return { ok: true, status: 204, json: async () => null }; }
+    return json(200, {}); // supabase 버킷 확인
+  };
+  const h = harness({ fetchImpl: f, sv: () => ({ url: 'https://abc.supabase.co', key: 'server-key' }) });
+  const r = await h.call({ action: 'saveConnection', values: {}, useServerSupabase: true });
+  assert.equal(r.body.success, true);
+  assert.deepEqual(puts.sort(), ['SUPABASE_SERVICE_KEY', 'SUPABASE_URL']);
+  assert.equal(r.body.checks.supabase, 'ok');
+  // 서버 값을 못 읽으면 명확한 오류
+  const bad = harness({ fetchImpl: f, sv: () => { throw new Error('x'); } });
+  const e = await bad.call({ action: 'saveConnection', values: {}, useServerSupabase: true });
+  assert.equal(e.status, 500);
+  assert.match(e.body.error, /서버에 설정된 Supabase/);
 });

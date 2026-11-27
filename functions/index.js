@@ -18969,8 +18969,17 @@ exports.stravaReconnectAlimtalkAdmin = onRequest(
 /** 인스타그램 에이전트 관리자 API — 환경설정 > 인스타그램 업로드 화면(비밀값 GitHub 등록·워크플로 실행·승인) */
 const instagramAgentAdminModule = require("./instagramAgentAdmin");
 exports.instagramAgentAdmin = onRequest(
-  { cors: true, timeoutSeconds: 60, memory: "256MiB" },
-  instagramAgentAdminModule.createHandler({ admin, verifyAuth: verifyRaceRequestAuth, setCors: setCorsHeaders })
+  supabaseDualWriteServer.appendServiceRoleSecret({ cors: true, timeoutSeconds: 60, memory: "256MiB", invoker: "public" }),
+  instagramAgentAdminModule.createHandler({
+    admin,
+    verifyAuth: verifyRaceRequestAuth,
+    setCors: setCorsHeaders,
+    // 서버가 이미 쓰는 Supabase 연결(URL 파라미터 + SUPABASE_SERVICE_ROLE_KEY Secret) — 인스타 영상 업로드용으로 GitHub 비밀값에 복사
+    getSupabaseServer: () => ({
+      url: supabaseDualWriteServer.supabaseUrlParam.value(),
+      key: supabaseDualWriteServer.supabaseServiceRoleKey.value(),
+    }),
+  })
 );
 
 /** 가격 조정 요구(네고) — 구매자가 submitMarketNegoRequest(Supabase RPC) 성공 직후 호출 */

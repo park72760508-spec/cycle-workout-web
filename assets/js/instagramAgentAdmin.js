@@ -7,9 +7,7 @@
   var SECRETS = [
     { key: 'ANTHROPIC_API_KEY', label: 'Claude API 키', ph: 'sk-ant-…', hint: '주간 콘텐츠 기획용. console.anthropic.com 에서 발급' },
     { key: 'IG_USER_ID', label: '인스타그램 계정 ID', ph: '숫자 ID', hint: 'Graph API: GET /{페이지ID}?fields=instagram_business_account', pair: 'IG_ACCESS_TOKEN' },
-    { key: 'IG_ACCESS_TOKEN', label: '인스타그램 액세스 토큰', ph: '만료 없는 페이지 토큰', hint: '계정 ID 와 함께 입력해야 연결을 확인합니다' },
-    { key: 'SUPABASE_URL', label: 'Supabase URL', ph: 'https://….supabase.co', hint: '영상 업로드용 저장소(instagram-media 버킷)' },
-    { key: 'SUPABASE_SERVICE_KEY', label: 'Supabase 서비스 키', ph: 'service_role 키', hint: 'URL 과 함께 입력. 전체 권한 키이므로 외부에 공유하지 마세요' }
+    { key: 'IG_ACCESS_TOKEN', label: '인스타그램 액세스 토큰', ph: '만료 없는 페이지 토큰', hint: '계정 ID 와 함께 입력해야 연결을 확인합니다' }
   ];
   var STATUS_KO = { draft: '초안', approved: '승인됨', published: '게시됨', failed: '실패', rejected: '거부됨' };
   var STATUS_COLOR = { draft: '#64748b', approved: '#2563eb', published: '#16a34a', failed: '#dc2626', rejected: '#94a3b8' };
@@ -86,12 +84,14 @@
     function render(st) {
       var weeks = st.weeks || [];
       var secretsOk = st.secrets || {};
+      var supabaseOk = !!(secretsOk.SUPABASE_URL && secretsOk.SUPABASE_SERVICE_KEY);
       var html = '';
 
       // 1) 연결 상태
       html += '<div style="margin-bottom:16px;"><p style="' + SEC_TITLE + '">연결 상태</p>' +
         chip(st.github, 'GitHub 토큰') +
-        SECRETS.map(function (s) { return chip(!!secretsOk[s.key], s.label); }).join('') + '</div>';
+        SECRETS.map(function (s) { return chip(!!secretsOk[s.key], s.label); }).join('') +
+        chip(supabaseOk, 'Supabase 저장소(서버 연결)') + '</div>';
 
       // 2) 연결 정보 입력
       html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:16px;">' +
@@ -107,6 +107,9 @@
             '<input data-secret="' + s.key + '" type="password" autocomplete="off" placeholder="' + esc(s.ph) + (secretsOk[s.key] ? ' (설정됨 — 바꿀 때만 입력)' : '') + '" style="' + INPUT + 'margin-bottom:3px;" />' +
             '<p style="font-size:11px;color:#94a3b8;margin:0 0 10px;line-height:1.4;">' + esc(s.hint) + '</p>';
         }).join('') +
+        '<div style="background:#f5f3ff;border-radius:8px;padding:9px 11px;margin:2px 0 12px;font-size:11.5px;color:#4c1d95;line-height:1.5;">' +
+        '<b>Supabase 저장소</b>(URL·서비스 키)는 입력하지 않습니다. 서버가 이미 사용 중인 연결을 가져와 자동으로 등록합니다.' +
+        (supabaseOk ? '<label style="display:flex;align-items:center;gap:6px;margin-top:6px;color:#475569;"><input type="checkbox" id="igmSbAgain" /> 서버 연결을 다시 등록</label>' : '') + '</div>' +
         '<button type="button" id="igmSave" class="btn stelvio-purple-btn" style="width:100%;border:none;font-weight:600;padding:10px;">저장 및 연결 확인</button>' +
         '<p id="igmSaveMsg" style="display:none;font-size:12px;margin:8px 0 0;line-height:1.5;white-space:pre-line;"></p>' +
         '<details style="margin-top:12px;"><summary style="font-size:12px;color:#7c3aed;cursor:pointer;">Meta 앱·토큰 발급 방법</summary>' +
@@ -124,7 +127,7 @@
         var c = r.status !== 'completed' ? '#2563eb' : (r.conclusion === 'success' ? '#16a34a' : '#dc2626');
         return '<div style="font-size:11.5px;color:#64748b;">' + label + ': <b style="color:' + c + ';">' + t + '</b> · ' + kst(r.at) + ' · <a href="' + esc(r.url) + '" target="_blank" rel="noopener" style="color:#2e74e8;">로그</a></div>';
       }
-      var allSet = st.github && SECRETS.every(function (s) { return secretsOk[s.key]; });
+      var allSet = st.github && supabaseOk && SECRETS.every(function (s) { return secretsOk[s.key]; });
       html += '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:16px;">' +
         '<p style="' + SEC_TITLE + '">영상 게시하기</p>' +
         (allSet ? '' : '<p style="font-size:11.5px;color:#b45309;margin:0 0 10px;">연결 정보를 모두 설정하면 실행할 수 있습니다.</p>') +
@@ -169,7 +172,8 @@
       wire(st);
     }
 
-    function wire() {
+    function wire(st) {
+      var supabaseOk = !!(st && st.secrets && st.secrets.SUPABASE_URL && st.secrets.SUPABASE_SERVICE_KEY);
       var q = function (id) { return body.querySelector('#' + id); };
       q('igmRefresh').onclick = function () { load(); };
 
@@ -191,10 +195,12 @@
         var btn = this;
         var values = {};
         body.querySelectorAll('input[data-secret]').forEach(function (i) { if (i.value.trim()) values[i.getAttribute('data-secret')] = i.value.trim(); });
-        if (!Object.keys(values).length) { setMsg('igmSaveMsg', '저장할 값을 입력해 주세요.', false); return; }
+        var sbAgain = q('igmSbAgain');
+        var useSb = !supabaseOk || !!(sbAgain && sbAgain.checked); // 미등록이면 자동으로 함께 등록
+        if (!Object.keys(values).length && !useSb) { setMsg('igmSaveMsg', '저장할 값을 입력해 주세요.', false); return; }
         guarded(btn, '연결 확인 중…', async function () {
           try {
-            var d = await call({ action: 'saveConnection', values: values });
+            var d = await call({ action: 'saveConnection', values: values, useServerSupabase: useSb });
             var lines = ['저장됨: ' + d.saved.join(', ')];
             if (d.checks && d.checks.instagram) lines.push('인스타그램 연결 확인: @' + (d.checks.instagram.username || '?') + ' (게시물 ' + (d.checks.instagram.mediaCount == null ? '?' : d.checks.instagram.mediaCount) + '개)');
             if (d.checks && d.checks.anthropic) lines.push('Claude API 키 확인됨');
