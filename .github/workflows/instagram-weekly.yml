@@ -98,5 +98,12 @@ jobs:
           gh label create ig-draft --color FBCA04 --description "인스타 주간 초안" 2>/dev/null || true
           gh label create ig-approved --color 0E8A16 --description "승인 — 예약 시각에 게시" 2>/dev/null || true
           if [ -f "queue/${WEEK}.issue.md" ]; then
-            gh issue create --title "[인스타 초안] ${WEEK}" --body-file "queue/${WEEK}.issue.md" --label ig-draft
+            # 같은 주차의 열린 초안 Issue 가 있으면 새로 만들지 않고 본문만 갱신(수동 재실행 시 중복 방지)
+            EXIST=$(gh issue list --label ig-draft --state open --search "[인스타 초안] ${WEEK} in:title" --json number,title -q "[.[] | select(.title == \"[인스타 초안] ${WEEK}\")][0].number // empty")
+            if [ -n "$EXIST" ]; then
+              gh issue edit "$EXIST" --body-file "queue/${WEEK}.issue.md"
+              echo "기존 Issue #${EXIST} 본문 갱신"
+            else
+              gh issue create --title "[인스타 초안] ${WEEK}" --body-file "queue/${WEEK}.issue.md" --label ig-draft
+            fi
           fi
