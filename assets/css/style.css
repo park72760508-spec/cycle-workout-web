@@ -40378,3 +40378,66 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #workoutBuilderScreen .wbf-card .form-row { margin-bottom: 0; }
 #workoutBuilderScreen .segment-header h3 { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; }
 #workoutBuilderScreen .wbf-result { font-weight: 500; }
+
+/* 2026-11-27 워크아웃 작성: 헤더(화면 대표 이미지)·하단 취소/저장 바 — 세그먼트 블럭의 원형 아이콘 언어로 통일 */
+#workoutBuilderScreen .workout-builder-header {
+  position: relative; padding: max(14px, env(safe-area-inset-top, 0px)) 56px 16px; margin-bottom: 14px;
+  background: var(--bg-main); border-bottom: 0;
+}
+/* 하단 3px 구간 막대: 워밍업 → 인터벌 → 휴식 → 인터벌 → 쿨다운 (이 화면에서 만드는 것의 모양) */
+#workoutBuilderScreen .workout-builder-header::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px;
+  background: linear-gradient(90deg, #60a5fa 0 16%, #fbbf24 16% 34%, #f87171 34% 62%, #60a5fa 62% 72%, #f87171 72% 90%, #60a5fa 90% 100%);
+}
+#workoutBuilderScreen .workout-builder-back-btn {
+  left: 10px; width: 40px; height: 40px; min-width: 40px; min-height: 40px; padding: 0; border-radius: 50%;
+  color: #ffffff; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.22); transition: background 0.15s, box-shadow 0.15s, transform 0.12s;
+}
+#workoutBuilderScreen .workout-builder-back-btn:hover { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5); }
+#workoutBuilderScreen .workout-builder-back-btn:active { transform: scale(0.92); }
+#workoutBuilderScreen .workout-builder-back-btn svg { width: 22px; height: 22px; }
+#workoutBuilderScreen .workout-builder-header-content { flex: 0 1 auto; flex-direction: row; gap: 12px; text-align: left; }
+#workoutBuilderScreen .wbh-badge {
+  position: relative; flex: none; width: 48px; height: 48px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #262c35; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.16);
+}
+#workoutBuilderScreen .wbh-badge > svg { width: 44px; height: 44px; }
+#workoutBuilderScreen .wbh-badge__plus {
+  position: absolute; right: -3px; bottom: -3px; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #2e74e8; color: #ffffff;
+  box-shadow: 0 0 0 2px var(--bg-main);
+}
+#workoutBuilderScreen .wbh-badge__plus svg { width: 11px; height: 11px; }
+#workoutBuilderScreen .wbh-text { min-width: 0; }
+#workoutBuilderScreen .workout-builder-title { font-size: 21px; font-weight: 800; line-height: 1.2; color: #ffffff; letter-spacing: -0.2px; }
+#workoutBuilderScreen .workout-builder-subtitle { margin: 3px 0 0; font-size: 12px; line-height: 1.4; color: #94a3b8; }
+
+/* 하단 취소/저장: 취소=링 아웃라인(1), 저장=SEG 파랑 채움(2). 아이콘은 CSS 마스크 → JS 가 버튼 글자를 바꿔도 유지 */
+#workoutBuilderScreen .builder-actions {
+  margin-top: 12px; padding: 12px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: #ffffff; box-shadow: 0 -1px 0 #e2e8f0, 0 -8px 20px rgba(15, 23, 42, 0.06);
+}
+#workoutBuilderScreen .builder-actions .btn-row { display: flex; gap: 10px; justify-content: stretch; }
+#workoutBuilderScreen #btnCancelBuilder, #workoutBuilderScreen #btnSaveWorkout {
+  height: 48px; padding: 0 16px; border: 0; border-radius: 14px; font-size: 15px; font-weight: 800; line-height: 1;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;
+  transition: transform 0.12s, box-shadow 0.15s, background 0.15s;
+}
+#workoutBuilderScreen #btnCancelBuilder { flex: 1; background: #f8fafc; color: #475569; box-shadow: inset 0 0 0 1.5px #cbd5e1; }
+#workoutBuilderScreen #btnCancelBuilder:hover { background: #f1f5f9; box-shadow: inset 0 0 0 2px #94a3b8; }
+#workoutBuilderScreen #btnSaveWorkout { flex: 2; background: #2e74e8; color: #ffffff; }
+#workoutBuilderScreen #btnSaveWorkout:hover:not(:disabled) { background: #2563d4; box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.25); }
+#workoutBuilderScreen #btnCancelBuilder:active, #workoutBuilderScreen #btnSaveWorkout:active:not(:disabled) { transform: scale(0.97); }
+#workoutBuilderScreen #btnSaveWorkout:disabled { opacity: 0.7; cursor: default; }
+#workoutBuilderScreen #btnCancelBuilder:focus-visible, #workoutBuilderScreen #btnSaveWorkout:focus-visible { outline: 3px solid rgba(46, 116, 232, 0.45); outline-offset: 2px; }
+#workoutBuilderScreen #btnCancelBuilder::before, #workoutBuilderScreen #btnSaveWorkout::before {
+  content: ''; flex: none; width: 20px; height: 20px; background-color: currentColor;
+  -webkit-mask: var(--wbb-ico) center / contain no-repeat; mask: var(--wbb-ico) center / contain no-repeat;
+}
+#workoutBuilderScreen #btnCancelBuilder { --wbb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 6l12 12M18 6L6 18'/%3E%3C/svg%3E"); }
+#workoutBuilderScreen #btnSaveWorkout { --wbb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E"); }
+#workoutBuilderScreen #btnSaveWorkout.btn-saving::before, #workoutBuilderScreen #btnSaveWorkout.saving-state::before { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  #workoutBuilderScreen #btnCancelBuilder, #workoutBuilderScreen #btnSaveWorkout, #workoutBuilderScreen .workout-builder-back-btn { transition: none; }
+}

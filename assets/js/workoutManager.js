@@ -5474,7 +5474,7 @@ async function saveWorkoutInner() {
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.classList.remove('btn-saving', 'saving-state');
-        saveBtn.innerHTML = '💾 저장';
+        saveBtn.innerHTML = '저장';
       }
       return;
     }
@@ -5541,7 +5541,7 @@ async function saveWorkoutInner() {
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.classList.remove('btn-saving', 'saving-state');
-      saveBtn.innerHTML = '💾 저장';
+      saveBtn.innerHTML = '저장';
     }
   }
 }
@@ -5757,7 +5757,7 @@ async function saveClubWorkoutFromBuilder() {
     if (saveBtn) {
       saveBtn.disabled = false;
       saveBtn.classList.remove('btn-saving', 'saving-state');
-      saveBtn.innerHTML = '💾 저장';
+      saveBtn.innerHTML = '저장';
     }
   }
 }
