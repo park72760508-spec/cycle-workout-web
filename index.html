@@ -4111,7 +4111,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261127wbh4" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261127wbh5" />
   <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm18" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
@@ -7529,8 +7529,10 @@
         <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
       </button>
       <div class="workout-builder-header-content">
-        <!-- 화면 대표 이미지: 운동 프로필(구간 막대) + 새로 만들기(+) — 세그먼트 SEG 버튼과 같은 원형 규격 -->
-        <span class="wbh-badge" aria-hidden="true">
+        <!-- 화면 대표 이미지: 운동 프로필(구간 막대) + 새로 만들기(+) — 제목 오른쪽에 배치, 제목은 헤더 중앙 -->
+        <div class="wbh-text">
+          <h1 class="workout-builder-title">워크아웃 작성</h1>
+          <span class="wbh-badge" aria-hidden="true">
           <svg viewBox="0 0 44 44" width="44" height="44">
             <rect x="7" y="25" width="4.5" height="10" rx="2" fill="#60a5fa"/>
             <rect x="13.5" y="18" width="4.5" height="17" rx="2" fill="#fbbf24"/>
@@ -7540,9 +7542,6 @@
           </svg>
           <i class="wbh-badge__plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></i>
         </span>
-        <div class="wbh-text">
-          <h1 class="workout-builder-title">워크아웃 작성</h1>
-          <p class="workout-builder-subtitle">세그먼트를 추가/수정하고 저장하세요</p>
         </div>
       </div>
     </div>

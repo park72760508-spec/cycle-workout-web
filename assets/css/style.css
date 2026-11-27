@@ -40396,9 +40396,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 #workoutBuilderScreen .workout-builder-back-btn:hover { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.5); }
 #workoutBuilderScreen .workout-builder-back-btn:active { transform: scale(0.92); }
 #workoutBuilderScreen .workout-builder-back-btn svg { width: 22px; height: 22px; }
-#workoutBuilderScreen .workout-builder-header-content { flex: 0 1 auto; flex-direction: row; gap: 12px; text-align: left; }
+#workoutBuilderScreen .workout-builder-header-content { flex: 0 1 auto; justify-content: center; text-align: center; }
 #workoutBuilderScreen .wbh-badge {
-  position: relative; flex: none; width: 48px; height: 48px; border-radius: 50%;
+  position: absolute; left: calc(100% + 12px); top: 50%; transform: translateY(-50%); /* 제목 오른쪽, 제목은 헤더 중앙 유지 */
+  flex: none; width: 48px; height: 48px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: #262c35; box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.16);
 }
@@ -40409,12 +40410,12 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   box-shadow: 0 0 0 2px var(--bg-main);
 }
 #workoutBuilderScreen .wbh-badge__plus svg { width: 11px; height: 11px; }
-#workoutBuilderScreen .wbh-text { min-width: 0; text-align: left; }
-#workoutBuilderScreen .wbh-text .workout-builder-title, #workoutBuilderScreen .wbh-text .workout-builder-subtitle { text-align: left; }
+#workoutBuilderScreen .wbh-text { position: relative; min-width: 0; text-align: center; }
+#workoutBuilderScreen .wbh-text .workout-builder-title { text-align: center; }
 #workoutBuilderScreen .workout-builder-title { font-size: 21px; font-weight: 800; line-height: 1.2; color: #ffffff; letter-spacing: -0.2px; }
 #workoutBuilderScreen .workout-builder-subtitle { margin: 3px 0 0; font-size: 12px; line-height: 1.4; color: #94a3b8; }
 
-/* 하단 취소/저장: 취소=링 아웃라인(1), 저장=SEG 파랑 채움(2). 아이콘은 CSS 마스크 → JS 가 버튼 글자를 바꿔도 유지 */
+/* 하단 취소/저장: 같은 크기(1:1) — 취소=링 아웃라인, 저장=SEG 파랑 채움. 아이콘은 CSS 마스크 → JS 가 버튼 글자를 바꿔도 유지 */
 #workoutBuilderScreen .builder-actions {
   margin-top: 12px; padding: 12px 10px calc(14px + env(safe-area-inset-bottom, 0px));
   background: #ffffff; box-shadow: 0 -1px 0 #e2e8f0, 0 -8px 20px rgba(15, 23, 42, 0.06);
@@ -40427,7 +40428,7 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 }
 #workoutBuilderScreen #btnCancelBuilder { flex: 1; background: #f8fafc; color: #475569; box-shadow: inset 0 0 0 1.5px #cbd5e1; }
 #workoutBuilderScreen #btnCancelBuilder:hover { background: #f1f5f9; box-shadow: inset 0 0 0 2px #94a3b8; }
-#workoutBuilderScreen #btnSaveWorkout { flex: 2; background: #2e74e8; color: #ffffff; }
+#workoutBuilderScreen #btnSaveWorkout { flex: 1; background: #2e74e8; color: #ffffff; }
 #workoutBuilderScreen #btnSaveWorkout:hover:not(:disabled) { background: #2563d4; box-shadow: 0 0 0 3px rgba(46, 116, 232, 0.25); }
 #workoutBuilderScreen #btnCancelBuilder:active, #workoutBuilderScreen #btnSaveWorkout:active:not(:disabled) { transform: scale(0.97); }
 #workoutBuilderScreen #btnSaveWorkout:disabled { opacity: 0.7; cursor: default; }
