@@ -40375,3 +40375,6 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (prefers-reduced-motion: reduce) {
   #workoutBuilderScreen .form-group.wbf-field input, #workoutBuilderScreen .form-group.wbf-field select, #workoutBuilderScreen .form-group.wbf-field textarea { transition: none; }
 }
+#workoutBuilderScreen .wbf-card .form-row { margin-bottom: 0; }
+#workoutBuilderScreen .segment-header h3 { margin: 0; font-size: 16px; font-weight: 800; color: #0f172a; }
+#workoutBuilderScreen .wbf-result { font-weight: 500; }
