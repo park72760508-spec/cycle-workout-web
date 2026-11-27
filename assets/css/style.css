@@ -40442,3 +40442,4 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
 @media (prefers-reduced-motion: reduce) {
   #workoutBuilderScreen #btnCancelBuilder, #workoutBuilderScreen #btnSaveWorkout, #workoutBuilderScreen .workout-builder-back-btn { transition: none; }
 }
+#workoutBuilderScreen .wbh-text .workout-builder-title { display: block; margin: 0; }
