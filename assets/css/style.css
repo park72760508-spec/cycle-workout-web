@@ -40443,3 +40443,10 @@ html.coachm-phone #bluetoothTrainingCoachScreen {
   #workoutBuilderScreen #btnCancelBuilder, #workoutBuilderScreen #btnSaveWorkout, #workoutBuilderScreen .workout-builder-back-btn { transition: none; }
 }
 #workoutBuilderScreen .wbh-text .workout-builder-title { display: block; margin: 0; }
+/* 세그먼트 헤더 요약: 총 시간·개수를 틴트 알약으로 (SEG 파랑 계열) */
+#workoutBuilderScreen .segment-summary { display: flex; align-items: center; gap: 6px; }
+#workoutBuilderScreen .segment-summary > span {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px;
+  background: #eff6ff; box-shadow: inset 0 0 0 1.5px #bfdbfe; font-size: 12px; font-weight: 600; color: #475569; line-height: 1.2;
+}
+#workoutBuilderScreen .segment-summary strong { color: #2e74e8; font-weight: 800; }
