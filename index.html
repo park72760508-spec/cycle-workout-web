@@ -7581,6 +7581,16 @@
 
 <!-- 워크아웃 요약 표현 → 세그먼트 자동 생성 -->
 <div class="card wb-summary-card">
+  <div class="form-group" style="margin-bottom:14px;">
+    <label for="wbRawInput">워크아웃 데이터</label>
+    <textarea id="wbRawInput" rows="4" placeholder="워크아웃 스텝을 붙여 넣으세요. 예: 워밍업 80RPM FTP 70% 05:00 인터벌 FTP 120% 00:20 휴식 FTP 55% 00:40 반복 2회 01:00 쿨다운 FTP 50% 05:00" style="width:100%;resize:vertical;font-size:14px;"></textarea>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
+      <button type="button" class="btn btn-secondary btn-default-style" id="btnWbRawSummarize" onclick="stelvioSummarizeWorkoutData()">요약하기</button>
+      <small class="form-help" style="margin:0;">카테고리 분류와 요약 표현을 만들어 아래 입력창에 채웁니다</small>
+    </div>
+    <div id="wbRawError" role="alert" style="display:none;margin-top:8px;color:#d33;font-size:13px;"></div>
+    <pre id="wbRawResult" style="display:none;margin:10px 0 0;padding:10px 12px;white-space:pre-wrap;word-break:break-word;font:13px/1.55 inherit;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;color:#111827;"></pre>
+  </div>
   <div class="form-group" style="margin-bottom:0;">
     <label for="wbSummaryInput">워크아웃 요약 표현</label>
     <textarea id="wbSummaryInput" rows="3" placeholder="예: WU 5m@70% | 2 X (20s@120% + 40s@55%) | 3 X [10 X (30s@115% + 15s@50%) + 2m30s@50%] | CD 5m@50%" style="width:100%;resize:vertical;font-size:14px;"></textarea>
@@ -9652,6 +9662,7 @@
 <script src="assets/js/workoutFlowSummary.js?v=8"></script>
 <script src="assets/js/workoutStepsOverlay.js?v=9"></script>
 <script src="assets/js/workoutSummaryParser.js?v=20261127sum2"></script>
+<script src="assets/js/workoutDataSummarizer.js?v=20261127ds1"></script>
 <script src="assets/js/workoutManager.js?v=20261127sb"></script>
 <!-- 친구 초대 이벤트(추천인 코드·카카오 공유·가입 추천 기록) -->
 <script type="module" src="assets/js/referral/stelvioReferral.js?v=20261101goal"></script>
