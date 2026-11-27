@@ -4111,7 +4111,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
 
   <!-- 외부 스타일 -->
-  <link rel="stylesheet" href="assets/css/style.css?v=20261125don12" />
+  <link rel="stylesheet" href="assets/css/style.css?v=20261127wbf1" />
   <link rel="stylesheet" href="assets/css/rollerRaceMobile.css?v=20261115rrm18" />
   <link rel="stylesheet" href="assets/css/running-ranking-group-tab.css?v=20260809crewMemberLoadingSpinner1" />
   <link rel="stylesheet" href="assets/css/run-journal-screen.css" />
@@ -7533,18 +7533,19 @@
       </div>
     </div>
   
-    <div class="card">
-      <div class="form-group">
-        <label>제목 *</label>
+    <div class="card wbf-card">
+      <h3 class="mb-10">기본 정보</h3>
+      <div class="form-group wbf-field">
+        <label class="wbf-label" for="wbTitle"><span class="wbf-ico wb-tint--seg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2M12 5v14M9 19h6"/></svg></span>제목 *</label>
         <input type="text" id="wbTitle" placeholder="예: VO2max 5x3min" required />
       </div>
-      <div class="form-group">
-        <label>설명</label>
+      <div class="form-group wbf-field">
+        <label class="wbf-label" for="wbDesc"><span class="wbf-ico wb-tint--slate" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h12M4 18h8"/></svg></span>설명</label>
         <input type="text" id="wbDesc" placeholder="간단 설명" />
       </div>
       <div class="form-row">
-        <div class="form-group">
-          <label>카테고리</label>
+        <div class="form-group wbf-field">
+          <label class="wbf-label" for="wbAuthor"><span class="wbf-ico wb-tint--wu" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1"/></svg></span>카테고리</label>
           <select id="wbAuthor" required>
             <option value="">선택하세요</option>
             <option value="Active Recovery">Active Recovery - 회복 및 혈액순환</option>
@@ -7557,48 +7558,56 @@
             <option value="Neuromuscular">Neuromuscular - 스프린트 및 순발력</option>
           </select>
         </div>
-        <div class="form-group">
-          <label>목록 *</label>
+        <div class="form-group wbf-field">
+          <label class="wbf-label" for="wbStatus"><span class="wbf-ico wb-tint--rtn" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></span>목록 *</label>
           <select id="wbStatus" required>
             <option value="보이기">보이기 (공개)</option>
             <!-- TrainingSchedules title 목록이 여기에 동적으로 추가됩니다 -->
           </select>
         </div>
       </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>게시 날짜</label>
-            <input type="date" id="wbPublishDate" />
-            <small class="form-help">비워두면 상시 노출됩니다.</small>
-          </div>
-          <div class="form-group" id="wbPasswordGroup" style="display: none;">
-            <label>비밀번호 *</label>
-            <input type="password" id="wbPassword" placeholder="비밀번호를 입력하세요" />
-            <small class="form-help">비공개 워크아웃 접근 시 필요합니다.</small>
-          </div>
+      <div class="form-row">
+        <div class="form-group wbf-field">
+          <label class="wbf-label" for="wbPublishDate"><span class="wbf-ico wb-tint--rep" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>게시 날짜</label>
+          <input type="date" id="wbPublishDate" />
+          <small class="form-help wbf-hint">비워두면 상시 노출됩니다.</small>
         </div>
+        <div class="form-group wbf-field" id="wbPasswordGroup" style="display: none;">
+          <label class="wbf-label" for="wbPassword"><span class="wbf-ico wb-tint--int" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>비밀번호 *</label>
+          <input type="password" id="wbPassword" placeholder="비밀번호를 입력하세요" />
+          <small class="form-help wbf-hint">비공개 워크아웃 접근 시 필요합니다.</small>
+        </div>
+      </div>
     </div>
 
-<!-- 워크아웃 요약 표현 → 세그먼트 자동 생성 -->
-<div class="card wb-summary-card">
-  <div class="form-group" style="margin-bottom:14px;">
-    <label for="wbRawInput">워크아웃 데이터</label>
-    <textarea id="wbRawInput" rows="4" placeholder="워크아웃 스텝을 붙여 넣으세요. 예: 워밍업 80RPM FTP 70% 05:00 인터벌 FTP 120% 00:20 휴식 FTP 55% 00:40 반복 2회 01:00 쿨다운 FTP 50% 05:00" style="width:100%;resize:vertical;font-size:14px;"></textarea>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-      <button type="button" class="btn btn-secondary btn-default-style" id="btnWbRawSummarize" onclick="stelvioSummarizeWorkoutData()">요약하기</button>
-      <small class="form-help" style="margin:0;">카테고리 분류와 요약 표현을 만들어 아래 입력창에 채웁니다</small>
+<!-- 워크아웃 데이터 → 요약 표현 → 세그먼트 자동 생성 (원형 아이콘 버튼은 세그먼트 블럭의 wb-tool 과 동일 규격) -->
+<div class="card wb-summary-card wbf-card">
+  <h3 class="mb-10">워크아웃 변환</h3>
+  <div class="form-group wbf-field">
+    <label class="wbf-label" for="wbRawInput"><span class="wbf-ico wb-tint--rep" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>워크아웃 데이터</label>
+    <textarea id="wbRawInput" rows="4" placeholder="워크아웃 스텝을 붙여 넣으세요. 예: 워밍업 80RPM FTP 70% 05:00 인터벌 FTP 120% 00:20 휴식 FTP 55% 00:40 반복 2회 01:00 쿨다운 FTP 50% 05:00"></textarea>
+    <div class="wbf-action">
+      <button type="button" class="wb-tool wb-tool--sum" id="btnWbRawSummarize" onclick="stelvioSummarizeWorkoutData()" aria-label="요약하기" title="요약하기">
+        <span class="wb-tool__c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span>
+        <span class="wb-tool__t">요약하기</span>
+      </button>
+      <p class="wbf-hint">카테고리를 분류하고 요약 표현을 만들어 아래 입력창에 채웁니다.</p>
     </div>
-    <div id="wbRawError" role="alert" style="display:none;margin-top:8px;color:#d33;font-size:13px;"></div>
-    <pre id="wbRawResult" style="display:none;margin:10px 0 0;padding:10px 12px;white-space:pre-wrap;word-break:break-word;font:13px/1.55 inherit;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;color:#111827;"></pre>
+    <div id="wbRawError" role="alert" class="wbf-error" style="display:none;"></div>
+    <pre id="wbRawResult" class="wbf-result" style="display:none;"></pre>
   </div>
-  <div class="form-group" style="margin-bottom:0;">
-    <label for="wbSummaryInput">워크아웃 요약 표현</label>
-    <textarea id="wbSummaryInput" rows="3" placeholder="예: WU 5m@70% | 2 X (20s@120% + 40s@55%) | 3 X [10 X (30s@115% + 15s@50%) + 2m30s@50%] | CD 5m@50%" style="width:100%;resize:vertical;font-size:14px;"></textarea>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;">
-      <button type="button" class="btn btn-secondary btn-default-style" id="btnWbSummaryApply" onclick="applyWorkoutSummaryText()">세그먼트 생성</button>
-      <small class="form-help" style="margin:0;">" | "로 섹션 구분(개수 제한 없음, 앞=WU·뒤=CD), " + "로 연결, 반복은 N X ( … ) 또는 N X [ … ] (중첩 가능)</small>
+  <div class="wbf-link" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v14M6 13l6 6 6-6"/></svg></div>
+  <div class="form-group wbf-field" style="margin-bottom:0;">
+    <label class="wbf-label" for="wbSummaryInput"><span class="wbf-ico wb-tint--seg" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/><path d="M17 15l2 2 3-4" /></svg></span>워크아웃 요약 표현</label>
+    <textarea id="wbSummaryInput" rows="3" placeholder="예: WU 5m@70% | 2 X (20s@120% + 40s@55%) | 3 X [10 X (30s@115% + 15s@50%) + 2m30s@50%] | CD 5m@50%"></textarea>
+    <div class="wbf-action">
+      <button type="button" class="wb-tool wb-tool--gen" id="btnWbSummaryApply" onclick="applyWorkoutSummaryText()" aria-label="세그먼트 생성" title="세그먼트 생성">
+        <span class="wb-tool__c"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 20v-9M12 20V4M18 20v-6"/></svg></span>
+        <span class="wb-tool__t">세그먼트 생성</span>
+      </button>
+      <p class="wbf-hint">&quot; | &quot;로 섹션을 나누고(앞=WU, 뒤=CD) &quot; + &quot;로 잇습니다. 반복은 N X ( … ) 또는 N X [ … ]로 쓰고 중첩할 수 있습니다.</p>
     </div>
-    <div id="wbSummaryError" role="alert" style="display:none;margin-top:8px;color:#d33;font-size:13px;"></div>
+    <div id="wbSummaryError" role="alert" class="wbf-error" style="display:none;"></div>
   </div>
 </div>
 
