@@ -614,13 +614,39 @@
     });
     Array.prototype.forEach.call(content.querySelectorAll('[data-claude-list]'), function (el) { el.onclick = openSavedList; });
   }
-  function pick(wk) {
+  /* 2026-11-27: 일반 워크아웃 목록의 selectWorkout 과 동일한 경로 — 스피너 먼저, selectWorkoutForTrainingReady
+   * (currentWorkout·localStorage·Firebase users/{uid}/workout 저장 + 준비 화면 갱신) 후 훈련 준비 화면으로 이동.
+   * 예전 selectAIRecommendedWorkout 은 화면 전환 후 setTimeout 300ms 로 UI 를 채우고 저장도 하지 않아 반응이 늦었다. */
+  async function pick(wk) {
     if (!wk) return;
     w.__aiRecommendationInProgress = false;
-    if (typeof w.selectAIRecommendedWorkout !== 'function') { toast('워크아웃 준비 기능을 불러오지 못했습니다.', 'error'); return; }
+    if (typeof w.selectWorkoutForTrainingReady !== 'function') { toast('워크아웃 준비 기능을 불러오지 못했습니다.', 'error'); return; }
+    var segs = JSON.parse(JSON.stringify(wk.segments || []));
+    if (!segs.length) { toast('세그먼트 데이터가 유효하지 않습니다.', 'error'); return; }
     var sm = $('claudeRecoSavedModal'); if (sm) sm.style.display = 'none';
-    w.selectAIRecommendedWorkout(Number(wk.rank) || 1, wk.name, JSON.parse(JSON.stringify(wk.segments)));
-    try { if (w.currentWorkout) { w.currentWorkout.description = 'Claude AI가 생성한 워크아웃 · ' + wk.flow; w.currentWorkout.author = 'Claude AI'; w.currentWorkout.id = 'claude-ai-' + (wk.id || Date.now()); } } catch (e) {}
+    var rm = $('workoutRecommendationModal'); if (rm) rm.style.display = 'none'; // 추천 결과 창에서 선택한 경우
+    if (typeof w.stelvioShowSpinner === 'function') w.stelvioShowSpinner('워크아웃을 훈련 준비 화면에 올리는 중...', 15000);
+    await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); }); // 스피너 먼저 그리기
+    try {
+      var workout = {
+        id: 'claude-ai-' + (wk.id || Date.now()), title: wk.name,
+        description: 'Claude AI가 생성한 워크아웃 · ' + (wk.flow || ''), author: 'Claude AI', status: '보이기',
+        total_seconds: segs.reduce(function (n, g) { return n + (Number(g.duration_sec) || 0); }, 0), segments: segs
+      };
+      await w.selectWorkoutForTrainingReady(workout, { skipToast: true });
+      if (!w.screenHistory) w.screenHistory = [];
+      var cur = document.querySelector('.screen.active');
+      if (cur && cur.id && cur.id !== 'trainingReadyScreen' && w.screenHistory[w.screenHistory.length - 1] !== cur.id) {
+        w.screenHistory.push(cur.id); if (w.screenHistory.length > 10) w.screenHistory.shift();
+      }
+      w.showScreen('trainingReadyScreen', false);
+      toast('"' + wk.name + '" 워크아웃이 선택되었습니다.', 'success');
+    } catch (e) {
+      console.error('[ClaudeReco] 워크아웃 선택 실패', e);
+      toast('워크아웃 선택 중 오류가 발생했습니다.', 'error');
+    } finally {
+      if (typeof w.stelvioHideSpinner === 'function') w.stelvioHideSpinner(800);
+    }
   }
 
   /* ---------------- 나의 훈련 목록(저장된 Claude 워크아웃) ---------------- */
