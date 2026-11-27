@@ -15753,6 +15753,8 @@ function ensureStelvioAdminAccessStatsButton() {
     typeof window.isStelvioAdminGrade === 'function' && window.isStelvioAdminGrade(g);
   const stravaReconnectRow = document.getElementById('settingsStravaReconnectAdminRow');
   if (stravaReconnectRow) stravaReconnectRow.style.display = isAdmin ? 'flex' : 'none';
+  const instagramAgentBlock = document.getElementById('settingsInstagramAgentAdminBlock');
+  if (instagramAgentBlock) instagramAgentBlock.style.display = isAdmin ? '' : 'none';
   const existing = document.getElementById('stelvioDynamicAccessStatsBtn');
   if (!isAdmin) {
     host.style.display = 'none';

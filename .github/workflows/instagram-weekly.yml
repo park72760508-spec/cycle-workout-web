@@ -15,6 +15,10 @@ on:
         type: choice
         options: [plan, dry-run]
         default: plan
+      force:
+        description: '이미 이번 주 기획이 있어도 다시 만들기'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -60,7 +64,7 @@ jobs:
         run: node agent.mjs insights || echo "성과 수집 건너뜀"
 
       - name: 주간 기획
-        run: node agent.mjs plan ${{ env.DRY == 'true' && '--sample --force' || '' }}
+        run: node agent.mjs plan ${{ env.DRY == 'true' && '--sample --force' || (inputs.force && '--force' || '') }}
 
       - name: 영상 제작 (앱 화면 녹화 + 자막)
         run: node agent.mjs produce ${{ env.DRY == 'true' && '--dry' || '' }}

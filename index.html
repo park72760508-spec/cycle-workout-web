@@ -9577,6 +9577,21 @@
             </button>
           </div>
         </div>
+        <!-- 인스타그램 업로드 블럭 (관리자 전용 — ensureStelvioAdminAccessStatsButton 에서 표시) -->
+        <div class="card settings-block" id="settingsInstagramAgentAdminBlock" style="display: none;">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
+            <span style="font-size: 1.2em; line-height: 1;" aria-hidden="true">📸</span>
+            <span style="font-size: 0.9em; font-weight: bold; color: inherit;">인스타그램 업로드 (@stelvioai)</span>
+          </div>
+          <p style="font-size: 12px; color: #6b7280; margin: 0 0 12px 0; line-height: 1.5; text-align: left;">
+            연결 정보 입력, 주간 영상 만들기·게시, 게시 현황과 승인을 관리합니다.
+          </p>
+          <div style="display: flex; justify-content: center; align-items: center;">
+            <button type="button" id="btnInstagramAgentSettings" class="btn stelvio-purple-btn" onclick="if(typeof openInstagramAgentModal==='function')openInstagramAgentModal();" style="min-width: 200px; padding: 10px 16px; cursor: pointer; font-weight: 600; border: none; border-radius: 8px;">
+              인스타그램 설정·영상 게시하기
+            </button>
+          </div>
+        </div>
         <!-- 계정 및 데이터 삭제 (앱 스토어·개인정보보호법) -->
         <div class="card settings-block settings-block--account-deletion">
           <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 12px; text-align: left;">
@@ -9692,6 +9707,7 @@
   <script src="assets/js/supabaseUserProvision.js"></script>
   <script src="assets/js/accountDeletion.js"></script>
   <script src="assets/js/userManager.js?v=20261122ftp"></script>
+  <script src="assets/js/instagramAgentAdmin.js?v=20261127ig1"></script>
   <script src="assets/js/rankingDisplaySettings.js?v=ranking-display-settings-20260911a"></script>
   <script src="assets/js/profilePhotoUpload.js"></script>
 
@@ -35365,7 +35381,7 @@
   <script src="assets/js/deviceBridgeStorage.js?v=20261115ant"></script>
   <!-- 센서 연결(Device Settings) 화면: 스캔 모달, START_SCAN/CONNECT_DEVICE, deviceFound/deviceConnected UI 동기화 -->
   <script src="assets/js/deviceSettings.js?v=20261122web"></script>
-  <script src="assets/js/app.js?v=20261127sb"></script>
+  <script src="assets/js/app.js?v=20261127ig1"></script>
   <script src="assets/js/stelvioAnalytics.js?v=marketHomeScreenStat1"></script>
 
   

@@ -9,6 +9,15 @@
 화·금 19:00  instagram-publish  (3시간마다 확인) 승인 + 게시 시각 도래 → 릴스 게시 → queue/*.json 에 링크 기록
 ```
 
+## 앱에서 관리하기 (권장)
+STELVIO **관리자 로그인 → 환경설정 → 인스타그램 업로드 → "인스타그램 설정·영상 게시하기"** 에서 아래를 모두 할 수 있습니다.
+- **연결 정보 입력**: GitHub 토큰 + 비밀값 5개(Claude 키, 인스타 계정 ID·토큰, Supabase URL·서비스 키). 서버가 실제 연결을 확인한 뒤 GitHub 저장소 비밀값으로 암호화 등록합니다(저장 후 화면에 다시 표시되지 않음).
+- **영상 게시하기**: 이번 주 기획·영상 만들기 / 샘플 영상 시험 / 게시 시각 확인·게시
+- **게시 현황·승인**: 주차별 영상 미리보기·캡션·상태, **승인 버튼**(= Issue 에 `ig-approved` 라벨)
+- GitHub 토큰은 Fine-grained 토큰(저장소 cycle-workout-web · Actions·Secrets·Issues 읽기/쓰기, Contents·Metadata 읽기)이며 서버 전용 컬렉션 `adminSecrets` 에만 저장됩니다.
+
+아래는 같은 일을 수동으로 하는 방법입니다.
+
 ## 처음 한 번 설정
 
 ### 1. Meta(Instagram Graph API) — 페이지 연결 프로 계정 기준
