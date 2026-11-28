@@ -1050,6 +1050,48 @@ async function saveTrainingResult(extra = {}) {
     try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
   }
 
+  // ---- IndexedDB 저장소(용량이 큼) — localStorage 는 보조 ----
+  // 키: 'active'(진행 중) / 'old:<startTime>'(끊긴 세션 보관). API 키 등 다른 로컬 값은 절대 건드리지 않는다.
+  var CP_DB = 'stelvio_checkpoint_db', CP_STORE = 'cp';
+  var cpDbP = null;
+  function cpDb() {
+    if (!cpDbP) cpDbP = new Promise(function (res, rej) {
+      try {
+        var rq = indexedDB.open(CP_DB, 1);
+        rq.onupgradeneeded = function () { rq.result.createObjectStore(CP_STORE, { keyPath: 'k' }); };
+        rq.onsuccess = function () { res(rq.result); };
+        rq.onerror = function () { cpDbP = null; rej(rq.error); };
+      } catch (e) { cpDbP = null; rej(e); }
+    });
+    return cpDbP;
+  }
+  function cpTx(mode, fn) {
+    return cpDb().then(function (db) {
+      return new Promise(function (res, rej) {
+        var tx = db.transaction(CP_STORE, mode), r = fn(tx.objectStore(CP_STORE));
+        tx.oncomplete = function () { res(r && r.result); };
+        tx.onerror = tx.onabort = function () { rej(tx.error); };
+      });
+    });
+  }
+  function idbPut(k, v) { return cpTx('readwrite', function (st) { return st.put({ k: k, v: v, savedAt: (v && v.savedAt) || Date.now() }); }); }
+  function idbDel(k) { return cpTx('readwrite', function (st) { return st.delete(k); }).catch(function () {}); }
+  function idbAll() { return cpTx('readonly', function (st) { return st.getAll(); }).then(function (a) { return a || []; }).catch(function () { return []; }); }
+  // 공간 부족 시: 오늘(서울) 이전에 끊겨 보관된 임시 기록 중 오래된 것부터 제거 후 재시도. 현재 세션은 보존.
+  function cpMakeRoom() {
+    var kstDayStart = Math.floor((Date.now() + 9 * 3600000) / 86400000) * 86400000 - 9 * 3600000;
+    return idbAll().then(function (rows) {
+      var olds = rows.filter(function (r) { return r.k.indexOf('old:') === 0 && r.savedAt < kstDayStart; })
+        .sort(function (a, b) { return a.savedAt - b.savedAt; });
+      return Promise.all(olds.map(function (r) { return idbDel(r.k); }));
+    });
+  }
+  function idbPutSafe(k, v) {
+    return idbPut(k, v).catch(function () {
+      return cpMakeRoom().then(function () { return idbPut(k, v); });
+    });
+  }
+
   function writeCheckpoint() {
     var ss = state.currentTrainingSession;
     if (!ss || !ss.startTime || ss.endTime) return;
@@ -1070,6 +1112,13 @@ async function saveTrainingResult(extra = {}) {
       hr: cpPack(ss.hrData),
       cad: cpPack(ss.cadenceData)
     };
+    // 1순위 IndexedDB(대용량). 성공하면 localStorage 의 중복 사본은 지워 공간을 비운다.
+    idbPutSafe('active', cp).then(function () { try { localStorage.removeItem(CP_KEY); } catch (e) {} }).catch(function () {
+      writeCheckpointLS(cp); // IndexedDB 불가(사생활 보호 모드 등) → 기존 localStorage 방식
+    });
+  }
+
+  function writeCheckpointLS(cp) {
     if (!cpWrite(CP_KEY, cp)) {
       // 용량 초과 시 케이던스부터 덜어내고 재시도
       cp.cad = [];
@@ -1088,10 +1137,20 @@ async function saveTrainingResult(extra = {}) {
     var ss = state.currentTrainingSession;
     var cp = cpRead(CP_KEY);
     if (cp && ss && cp.startTime === ss.startTime) localStorage.removeItem(CP_KEY);
+    if (ss && ss.startTime) idbAll().then(function (rows) {
+      rows.forEach(function (r) { if (r.v && r.v.startTime === ss.startTime) idbDel(r.k); });
+    });
   }
 
   // 새 세션 시작 시, 이전에 끊긴 체크포인트가 있으면 보관함으로 이동(덮어써서 잃지 않도록)
   function archiveStaleCheckpoint() {
+    idbAll().then(function (rows) {
+      var act = rows.filter(function (r) { return r.k === 'active'; })[0];
+      if (!act || !act.v) return;
+      var ss = state.currentTrainingSession;
+      if (ss && ss.startTime === act.v.startTime) return; // 방금 시작한 세션 자신
+      return idbPutSafe('old:' + act.v.startTime, act.v).then(function () { return idbDel('active'); });
+    }).catch(function () {});
     var cp = cpRead(CP_KEY);
     if (!cp) return;
     var old = cpRead(CP_OLD_KEY) || [];
@@ -1113,6 +1172,15 @@ async function saveTrainingResult(extra = {}) {
     var list = (cpRead(CP_OLD_KEY) || []).slice();
     var cur = cpRead(CP_KEY);
     if (cur && Date.now() - cur.savedAt > CP_STALE_MS) list.push(cur);
+    var idbRows = await idbAll();
+    var idbPending = false;
+    idbRows.forEach(function (r) {
+      if (!r.v) return;
+      if (r.k === 'active' && Date.now() - r.v.savedAt <= CP_STALE_MS) { idbPending = true; return; }
+      if (!list.some(function (x) { return x.startTime === r.v.startTime; })) list.push(r.v);
+      else list = list.map(function (x) { return x.startTime === r.v.startTime && (r.v.power || []).length > (x.power || []).length ? r.v : x; });
+    });
+    if (idbPending && !list.length) return -1;
     if (!list.length) return (cur ? -1 : 0); // 방금 갱신된 체크포인트만 있으면 잠시 후 다시 확인
 
     var recovered = 0;
@@ -1162,6 +1230,7 @@ async function saveTrainingResult(extra = {}) {
         keepOld = keepOld.filter(function (o) { return o.startTime !== cp.startTime; });
         var curNow = cpRead(CP_KEY);
         if (curNow && curNow.startTime === cp.startTime) localStorage.removeItem(CP_KEY);
+        idbRows.forEach(function (r) { if (r.v && r.v.startTime === cp.startTime) idbDel(r.k); });
       }
     }
     cpWrite(CP_OLD_KEY, keepOld);
