@@ -121,7 +121,7 @@ function computeStepAchievement(segments, segmentAvgWatts, ftp, weightKg, fallba
   let intervals = powered.filter((s) => !EXCLUDED_TYPES.has(s.type));
   // 인터벌로 분류된 세그먼트가 없으면(전부 휴식형 등) 워밍업·쿨다운만 제외
   if (!intervals.length) intervals = powered.filter((s) => s.type !== "warmup" && s.type !== "cooldown");
-  if (!intervals.length) intervals = powered;
+  // 워밍업·쿨다운만 있으면 판정 불가(null) — WU/CD 는 점수에 절대 반영하지 않는다
   if (!intervals.length) return null;
 
   const totalDur = intervals.reduce((a, s) => a + s.dur, 0);

@@ -393,7 +393,25 @@ const STRAVA_RIDE_TYPES = new Set(["Ride", "VirtualRide", "EBikeRide", "GravelRi
 function isInsufficientLog(log) {
   const durSec = Number(log && log.duration_sec) || 0;
   const kj = Number(log && log.kilojoules);
+  const avgW = Number(log && log.avg_watts);
+  // 과거 로그의 kilojoules 는 2~10배 부풀려져 있어 avg_watts 도 함께 본다
+  if (durSec > 0 && log.avg_watts != null && isFinite(avgW) && avgW < MIN_AVG_POWER_W_FOR_MISSION) return true;
   return durSec > 0 && log.kilojoules != null && isFinite(kj) && (kj * 1000) / durSec < MIN_AVG_POWER_W_FOR_MISSION;
+}
+
+/** 구간별 평균으로 복원한 전체 평균이 로그 전체 평균(avg_watts)의 85% 미만이면 구간 데이터가 일부 유실된 것으로 본다 */
+const CONSISTENCY_MIN_RATIO = 0.85;
+function isInconsistentLog(log, segments) {
+  const sa = log && log.segment_avg_watts;
+  const avgW = Number(log && log.avg_watts);
+  if (!Array.isArray(sa) || !Array.isArray(segments) || !(avgW > 0)) return false;
+  let sum = 0, dur = 0;
+  segments.forEach((sg, i) => {
+    const d = Math.max(0, Number(sg && (sg.duration_sec != null ? sg.duration_sec : sg.duration)) || 0);
+    const w = Number(sa[i]);
+    if (d > 0 && isFinite(w) && w >= 0) { sum += d * w; dur += d; }
+  });
+  return dur > 0 && sum / dur < avgW * CONSISTENCY_MIN_RATIO;
 }
 
 /** 같은 날 Strava 활동 중 워크아웃 파워 패턴과 가장 잘 맞는 것의 구간별 평균 파워. 없으면 null. */
@@ -582,7 +600,7 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
   // 센서 데이터 부족 → 같은 날 Strava 파워 스트림으로 자동 판정, 못 찾으면 보류(미션 화면 열 때 재시도)
   let segAvg = log.segment_avg_watts;
   let stravaInfo = null;
-  if (isInsufficientLog(log)) {
+  if (isInsufficientLog(log) || isInconsistentLog(log, segments)) {
     try {
       stravaInfo = await stravaSegmentAvgForLog(admin, uid, log, segments, needSec, Number(log.ftp_at_time));
     } catch (e) {
@@ -595,13 +613,16 @@ async function handleCompleteClubMissionStep(admin, uid, body) {
     segAvg = stravaInfo.segmentAvgWatts;
     console.log("[ClubMission] Strava 로 판정", { uid, missionId, stepOrd, activityId: stravaInfo.activityId, corr: Math.round(stravaInfo.corr * 100) / 100, offsetSec: stravaInfo.offsetSec });
   }
-  const result = clubMissionScoring.computeStepAchievement(
-    segments,
-    segAvg,
-    Number(log.ftp_at_time),
-    Number(log.weight),
-    Number(log.avg_watts)
-  );
+  const score = (avg) => clubMissionScoring.computeStepAchievement(segments, avg, Number(log.ftp_at_time), Number(log.weight), Number(log.avg_watts));
+  let result = score(segAvg);
+  // 미달성 확정 전 Strava 로 재검증 — 센서 유실로 인한 오판 방지. 더 높게 통과하면 Strava 기준 채택, 아직 못 찾으면 보류(재시도)
+  if (result && !result.passed && !stravaInfo) {
+    let sv = null;
+    try { sv = await stravaSegmentAvgForLog(admin, uid, log, segments, needSec, Number(log.ftp_at_time)); } catch (e) { console.warn("[ClubMission] Strava 재검증 실패:", e && e.message ? e.message : e); }
+    const sr = sv ? score(sv.segmentAvgWatts) : null;
+    if (sr && Number(sr.score) > Number(result.score)) { stravaInfo = sv; result = sr; }
+    else if (!sv) await savePendingStrava(admin, uid, { groupId: gid, missionId, stepOrd, logId });
+  }
 
   const payload = {
     workout_id: String(step.workoutId),

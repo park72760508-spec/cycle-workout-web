@@ -115,6 +115,26 @@ const DEFAULT_MAX_HR = 190;
  * @param {number} durationSec - 훈련 기록 duration(초). 0이면 샘플 시계열 범위만큼만 생성
  * @returns {number[]}
  */
+/** 저장 진단: 샘플 수·측정된 초·최대 공백(초)·커버율 — 유실 원인 추적용 */
+function computePowerDiag(samples, durationSec) {
+  try {
+    if (!Array.isArray(samples) || !samples.length) return { n: 0, covered_sec: 0, max_gap_sec: null, coverage: 0 };
+    const secs = new Set();
+    let t0 = null;
+    for (const d of samples) {
+      const ms = d && d.t != null ? new Date(d.t).getTime() : NaN;
+      if (isNaN(ms)) continue;
+      if (t0 == null) t0 = ms;
+      secs.add(Math.floor((ms - t0) / 1000));
+    }
+    const sorted = Array.from(secs).filter((x) => x >= 0).sort((a, b) => a - b);
+    let maxGap = 0;
+    for (let i = 1; i < sorted.length; i++) maxGap = Math.max(maxGap, sorted[i] - sorted[i - 1] - 1);
+    const dur = Math.max(1, Math.floor(Number(durationSec) || 0));
+    return { n: samples.length, covered_sec: sorted.length, max_gap_sec: sorted.length ? maxGap : null, coverage: Math.round((sorted.length / dur) * 100) / 100 };
+  } catch (e) { return null; }
+}
+
 function streamSamplesToOneHzSeconds(samples, durationSec) {
   if (!samples || samples.length === 0) return [];
   const dur = Math.max(0, Math.floor(Number(durationSec) || 0));
@@ -906,7 +926,9 @@ export async function saveTrainingSession(userId, trainingData, firestoreInstanc
         max_watts: maxWattsResolved,
         tss: tss,
         if: Math.round(intensityFactor * 100) / 100, // Intensity Factor (소수점 2자리)
-        kilojoules: trainingData.kilojoules || null,
+        // 2026-11-28: 1Hz 정규화 배열 기준(훈련 화면 값은 샘플 수 합계라 2~10배 부풀려져 있었음)
+        kilojoules: (wattsArray && wattsArray.length ? Math.round(wattsArray.reduce((a, b) => a + (Number(b) || 0), 0) / 1000) : (trainingData.kilojoules || null)),
+        power_diag: computePowerDiag(trainingData.powerData, durationSec),
         
         // 심박 & 효율 (Heart Rate & Efficiency)
         avg_hr: trainingData.avg_hr || null,

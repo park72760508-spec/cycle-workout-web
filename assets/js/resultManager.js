@@ -496,8 +496,9 @@ async function saveTrainingResult(extra = {}) {
           // 일량 계산 (kJ) - powerData 기반
           let kilojoules = null;
           if (session?.powerData && session.powerData.length > 0) {
-            const totalJoules = session.powerData.reduce((sum, data) => sum + (data.v || 0), 0);
-            kilojoules = Math.round(totalJoules / 1000); // J → kJ
+            // 샘플 수 합계는 2~10배 부풀려지므로 평균×시간으로 근사(저장 시 trainingResultService 가 1Hz 기준으로 다시 계산)
+            const pv = session.powerData.map(d => d.v || 0);
+            kilojoules = Math.round((pv.reduce((a, b) => a + b, 0) / pv.length) * (totalSeconds || pv.length) / 1000);
           }
           
           // 워크아웃 정보
@@ -1072,7 +1073,14 @@ async function saveTrainingResult(extra = {}) {
     if (!cpWrite(CP_KEY, cp)) {
       // 용량 초과 시 케이던스부터 덜어내고 재시도
       cp.cad = [];
-      cpWrite(CP_KEY, cp);
+      if (!cpWrite(CP_KEY, cp)) {
+        // 그래도 실패하면 보관함(오래된 중단 기록)을 비우고 심박도 덜어내며 파워만이라도 보존
+        try { localStorage.removeItem(CP_OLD_KEY); } catch (e) {}
+        if (!cpWrite(CP_KEY, cp)) {
+          cp.hr = [];
+          if (!cpWrite(CP_KEY, cp)) console.warn('[checkpoint] 저장 공간 부족 — 중간 저장 실패');
+        }
+      }
     }
   }
 
@@ -1090,7 +1098,8 @@ async function saveTrainingResult(extra = {}) {
     old = old.filter(function (o) { return o.startTime !== cp.startTime; });
     old.push(cp);
     while (old.length > 3) old.shift();
-    cpWrite(CP_OLD_KEY, old);
+    // 공간 부족 시 가장 오래된 것부터 덜어내되, 방금 끊긴 기록(마지막)은 끝까지 보존
+    while (!cpWrite(CP_OLD_KEY, old) && old.length > 1) old.shift();
     localStorage.removeItem(CP_KEY);
   }
 

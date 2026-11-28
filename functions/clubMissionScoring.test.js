@@ -159,3 +159,11 @@ test('성장 보너스: FTP W/kg 향상 1%당 0.5점, 최대 5점, 합계 100점
   const full = rankMissionUsers(1, [{ userId: 'x', stepScores: [100], firstWkg: 2, lastWkg: 3 }]);
   assert.equal(full[0].total, 100);
 });
+
+test("워밍업·쿨다운만 있으면 판정 불가(null) — WU/CD 는 점수에 반영하지 않음", () => {
+  const segs = [
+    { segment_type: "warmup", duration_sec: 600, target_type: "ftp_pct", target_value: 60 },
+    { segment_type: "cooldown", duration_sec: 600, target_type: "ftp_pct", target_value: 60 },
+  ];
+  assert.equal(S.computeStepAchievement(segs, [200, 200], 250, 70), null);
+});
