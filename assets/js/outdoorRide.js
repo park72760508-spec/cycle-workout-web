@@ -1419,6 +1419,7 @@
   }
   /** 브라우저 위치 권한 창(영어·변경 불가)이 뜨기 전에 STELVIO 스타일 한글 안내를 먼저 보여준다(권한이 아직 묻기 전 상태일 때만) */
   function gpsPrimer(go) {
+    try { if (Number(localStorage.getItem('outdGpsPrimerHideUntil')) > Date.now()) { go(); return; } } catch (e) {}
     function show() {
       if (document.getElementById('outdGpsPrimer')) return;
       var root = document.createElement('div');
@@ -1428,12 +1429,17 @@
           '<div class="outd-primer__ico">📍</div>' +
           '<div class="outd-primer__title">위치 권한이 필요해요</div>' +
           '<div class="outd-primer__msg">내 위치를 지도에 표시하고, 주변 날씨·대중교통·라이딩 기록을 위해<br>현재 위치를 사용합니다.<br><small>다음에 나오는 브라우저 창에서 <b>허용</b>을 눌러 주세요.</small></div>' +
+          '<label class="outd-primer__skip"><input type="checkbox" id="outdGpsPrimerSkip"> 1주일 동안 보이지 않기</label>' +
           '<div class="outd-primer__btns"><button type="button" class="outd-primer__b outd-primer__b--ok">확인</button><button type="button" class="outd-primer__b outd-primer__b--no">나중에</button></div>' +
         '</div>';
       document.body.appendChild(root);
       var done = function (ok) {
+        var skip = root.querySelector('#outdGpsPrimerSkip');
         root.remove();
-        try { localStorage.setItem('outdGpsPrimerSeen', '1'); } catch (e) {}
+        try {
+          localStorage.setItem('outdGpsPrimerSeen', '1');
+          if (skip && skip.checked) localStorage.setItem('outdGpsPrimerHideUntil', String(Date.now() + 7 * 86400000));
+        } catch (e) {}
         if (ok) go(); else setText('outdGpsText', '위치 권한이 꺼져 있습니다');
       };
       root.querySelector('.outd-primer__b--ok').addEventListener('click', function () { done(true); });
