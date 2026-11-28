@@ -836,5 +836,7 @@
   w.openClaudeRecommendOptions = openOptionsModal;
   w.openClaudeSavedList = openSavedList;
   w.startClaudeRecommendFlow = startClaudeFlow;
-  w.__claudeReco = { loadToday: loadToday, saveDay: saveDay, blocksToSegments: blocksToSegments, calcTSS: calcTSS, calcIF: calcIF, summarizeLogs: summarizeLogs, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES };
+  w.__claudeReco = { loadToday: loadToday, saveDay: saveDay, blocksToSegments: blocksToSegments, calcTSS: calcTSS, calcIF: calcIF, summarizeLogs: summarizeLogs, validate: validate, gradeFor: gradeFor, buildPrompt: buildPrompt, GRADES: GRADES,
+    // 클럽 미션 AI 생성(clubMissionAi.js)이 재사용
+    getKey: getKey, keyReady: keyReady, callClaude: callClaude, fetchLogs30: fetchLogs30, MODEL: MODEL, TOOL: TOOL, totalSec: totalSec, ymd: ymd };
 })(window);

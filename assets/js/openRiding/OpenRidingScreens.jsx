@@ -6846,6 +6846,266 @@ function ClubMissionWorkoutPicker(props) {
   );
 }
 
+/**
+ * 클럽 미션 AI 추천 설정 패널 (2026-11-28) — 미션 생성 팝업의 "AI 추천" 모드에서 표시.
+ * 설정(챌린지 타겟·적용 대상·난이도 등)을 Claude 에 보내 미션 N개를 설계하고, 확정하면 클럽 전용 워크아웃으로 저장해
+ * 미션 단계로 채운다(onApply). 이후 달성·진행은 기존 미션과 동일. 로직: assets/js/clubMissionAi.js
+ */
+var CLUB_MISSION_AI_TARGETS = [
+  { id: 'event', label: '대회·이벤트 완주' },
+  { id: 'ftp', label: 'FTP 갱신' },
+  { id: 'fitness', label: '체력 향상' },
+  { id: 'endurance', label: '장거리 지구력' },
+  { id: 'climb', label: '업힐·클라임' },
+  { id: 'diet', label: '다이어트' },
+  { id: 'custom', label: '직접 입력' }
+];
+var CLUB_MISSION_AI_FOCUS = ['지구력(Z2)', '템포·스위트스팟', '역치', 'VO2max', '변속·서지'];
+var CLUB_MISSION_AI_THEMES = ['윈터챌린지 30', '겨울 FTP 빌드업', '그란폰도 D-30', '봄맞이 체력 다지기'];
+
+function ClubMissionAiPanel(props) {
+  var groupId = props.groupId || '';
+  var title = props.title || '';
+  var startDate = props.startDate || '';
+  var endDate = props.endDate || '';
+  var count = props.count || 1;
+  var onApply = props.onApply || function () {};
+  var ai = (typeof window !== 'undefined' && window.stelvioClubMissionAi) || null;
+  var prof = ai ? ai.myProfile() : { ftp: 0, weight: 0, wkg: 0, gradeName: '' };
+
+  var _target = useState('fitness');
+  var target = _target[0];
+  var setTarget = _target[1];
+  var _custom = useState('');
+  var customText = _custom[0];
+  var setCustomText = _custom[1];
+  var _evName = useState('');
+  var evName = _evName[0];
+  var setEvName = _evName[1];
+  var _evDate = useState('');
+  var evDate = _evDate[0];
+  var setEvDate = _evDate[1];
+  var _evPick = useState(false);
+  var evPick = _evPick[0];
+  var setEvPick = _evPick[1];
+  var _ftpPct = useState('10');
+  var ftpPct = _ftpPct[0];
+  var setFtpPct = _ftpPct[1];
+  var _scope = useState('group');
+  var scope = _scope[0];
+  var setScope = _scope[1];
+  var _wMin = useState(2.5);
+  var wkgMin = _wMin[0];
+  var setWkgMin = _wMin[1];
+  var _wMax = useState(3.5);
+  var wkgMax = _wMax[0];
+  var setWkgMax = _wMax[1];
+  var _diff = useState('보통');
+  var difficulty = _diff[0];
+  var setDifficulty = _diff[1];
+  var _maxMin = useState(90);
+  var maxMin = _maxMin[0];
+  var setMaxMin = _maxMin[1];
+  var _focus = useState([]);
+  var focus = _focus[0];
+  var setFocus = _focus[1];
+  var _note = useState('');
+  var note = _note[0];
+  var setNote = _note[1];
+  var _busy = useState('');
+  var busy = _busy[0];
+  var setBusy = _busy[1];
+  var _err = useState('');
+  var err = _err[0];
+  var setErr = _err[1];
+  var _draft = useState(null);
+  var draft = _draft[0];
+  var setDraft = _draft[1];
+
+  function chipCls(on) {
+    return 'px-3 py-1.5 rounded-full border text-xs font-semibold ' + (on ? 'border-violet-600 bg-violet-600 text-white' : 'border-slate-200 bg-white text-slate-600');
+  }
+  function toggleFocus(f) {
+    setFocus(function (prev) { return prev.indexOf(f) >= 0 ? prev.filter(function (x) { return x !== f; }) : prev.concat([f]); });
+  }
+  function targetText() {
+    var t = CLUB_MISSION_AI_TARGETS.filter(function (x) { return x.id === target; })[0];
+    if (target === 'event') return '대회·이벤트 완주' + (evName.trim() ? ' — ' + evName.trim() : '') + (evDate ? ' (이벤트 날짜 ' + evDate + ')' : '');
+    if (target === 'ftp') return 'FTP 약 ' + (Number(ftpPct) || 10) + '% 향상(현재 FTP 기준 단계적 과부하)';
+    if (target === 'custom') return customText.trim() || '체력 향상';
+    return t ? t.label : '체력 향상';
+  }
+  function validate() {
+    var p = [];
+    if (!title.trim()) p.push('위쪽 "테마(미션명)"을 입력해 주세요.');
+    if (!startDate || !endDate) p.push('미션 기간을 선택해 주세요.');
+    else if (endDate < startDate) p.push('종료일은 시작일 이후여야 합니다.');
+    if (target === 'custom' && !customText.trim()) p.push('챌린지 타겟을 직접 입력해 주세요.');
+    if (target === 'event' && !evDate) p.push('이벤트 날짜를 선택해 주세요.');
+    if (scope === 'personal' && !(prof.ftp > 0)) p.push('내 FTP 가 없습니다. 프로필에서 FTP 를 먼저 입력해 주세요.');
+    return p;
+  }
+  function run() {
+    var p = validate();
+    if (p.length) { setErr(p.join('\n')); return; }
+    setErr('');
+    setBusy('설계 준비 중…');
+    ai.generate({
+      theme: title.trim(), startDate: startDate, endDate: endDate, count: Math.min(count, ai.MAX_STEPS),
+      targetText: targetText(), difficulty: difficulty, maxMin: maxMin, focus: focus, note: note.trim(),
+      scope: scope, wkgMin: Math.min(wkgMin, wkgMax), wkgMax: Math.max(wkgMin, wkgMax)
+    }, function (m) { setBusy(m); })
+      .then(function (d) { setDraft(d); })
+      .catch(function (e) { setErr((e && e.message) || 'AI 미션 생성에 실패했습니다.'); })
+      .then(function () { setBusy(''); });
+  }
+  function apply() {
+    if (!draft) return;
+    setErr('');
+    setBusy('워크아웃 저장 중…');
+    ai.saveAsClubWorkouts(groupId, draft, title.trim(), function (i, n) { setBusy('워크아웃 저장 중 ' + i + '/' + n); })
+      .then(function (steps) {
+        onApply(steps);
+        setDraft(null);
+        if (typeof window !== 'undefined' && typeof window.showToast === 'function') window.showToast('AI 미션 ' + steps.length + '개를 채웠어요. 확인 후 저장해 주세요.', 'success');
+      })
+      .catch(function (e) { setErr((e && e.message) || '워크아웃 저장에 실패했습니다.'); })
+      .then(function () { setBusy(''); });
+  }
+
+  var overCap = ai && count > ai.MAX_STEPS;
+  var disabled = !!busy;
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/60 p-3 space-y-3">
+      <div>
+        <span className="block font-medium text-slate-700 mb-1.5">챌린지 타겟</span>
+        <div className="flex flex-wrap gap-1.5">
+          {CLUB_MISSION_AI_TARGETS.map(function (t) {
+            return <button key={t.id} type="button" className={chipCls(target === t.id)} disabled={disabled} onClick={function () { setTarget(t.id); }}>{t.label}</button>;
+          })}
+        </div>
+        {target === 'custom' ? (
+          <input type="text" className="mt-2 w-full border border-slate-300 rounded-lg px-3 py-2 bg-white" maxLength={80} value={customText} placeholder="예: 마라톤 대비 크로스 트레이닝" onChange={function (e) { setCustomText(e.target.value); }} />
+        ) : null}
+        {target === 'ftp' ? (
+          <label className="mt-2 flex items-center gap-2 text-slate-600">
+            <span>목표 향상률</span>
+            <input type="number" min="1" max="30" inputMode="numeric" className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 bg-white" value={ftpPct} onChange={function (e) { setFtpPct(e.target.value.replace(/[^0-9]/g, '').slice(0, 2)); }} />
+            <span>%</span>
+          </label>
+        ) : null}
+        {target === 'event' ? (
+          <div className="mt-2 flex items-center gap-2">
+            <input type="text" className="flex-1 min-w-0 border border-slate-300 rounded-lg px-3 py-2 bg-white" maxLength={40} value={evName} placeholder="이벤트명 (예: 설악 그란폰도)" onChange={function (e) { setEvName(e.target.value); }} />
+            <div className="w-32 shrink-0">
+              <StelvioDateFieldButton ymd={evDate} placeholder="이벤트 날짜" ariaLabel="이벤트 날짜" onClick={function () { setEvPick(true); }} />
+            </div>
+            {evPick ? (
+              <StelvioDateTimePickerModal title="이벤트 날짜" ymd={evDate || endDate} minYmd="" onPick={function (y) { setEvDate(y); }} onClose={function () { setEvPick(false); }} />
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <div>
+        <span className="block font-medium text-slate-700 mb-1.5">적용 대상</span>
+        <div className="flex gap-1.5">
+          <button type="button" className={'flex-1 ' + chipCls(scope === 'group')} disabled={disabled} onClick={function () { setScope('group'); }}>그룹</button>
+          <button type="button" className={'flex-1 ' + chipCls(scope === 'personal')} disabled={disabled} onClick={function () { setScope('personal'); }}>개인</button>
+        </div>
+        {scope === 'group' ? (
+          <div className="mt-2 rounded-lg bg-white border border-slate-200 p-2.5">
+            <div className="flex items-baseline justify-between text-slate-700">
+              <span className="text-xs">그룹 W/kg 범위</span>
+              <b className="text-sm">{Math.min(wkgMin, wkgMax).toFixed(1)} ~ {Math.max(wkgMin, wkgMax).toFixed(1)}</b>
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-[11px] text-slate-400 w-6">하한</span>
+              <input type="range" min="2" max="4" step="0.1" value={wkgMin} className="flex-1" aria-label="W/kg 하한" onChange={function (e) { setWkgMin(Number(e.target.value)); }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400 w-6">상한</span>
+              <input type="range" min="2" max="4" step="0.1" value={wkgMax} className="flex-1" aria-label="W/kg 상한" onChange={function (e) { setWkgMax(Number(e.target.value)); }} />
+            </div>
+            <p className="m-0 mt-1 text-[11px] text-slate-500">범위 안의 회원이 모두 완주할 수 있게 강도를 맞춥니다(하한 기준). 달성 판정은 각자의 FTP 로 계산돼요.</p>
+          </div>
+        ) : (
+          <div className="mt-2 rounded-lg bg-white border border-slate-200 p-2.5 text-slate-700">
+            {prof.ftp > 0 ? (
+              <p className="m-0 text-sm">
+                내 FTP <b>{prof.ftp}W</b>
+                {prof.weight > 0 ? <span> · {prof.weight}kg · <b>{prof.wkg.toFixed(2)} W/kg</b>{prof.gradeName ? ' (' + prof.gradeName + ')' : ''}</span> : null}
+              </p>
+            ) : (
+              <p className="m-0 text-sm text-red-600">FTP 가 설정되어 있지 않아요. 프로필에서 입력해 주세요.</p>
+            )}
+            <p className="m-0 mt-1 text-[11px] text-slate-500">생성할 때 최근 30일 라이딩 기록(부하·피로 추정)을 분석해 반영합니다.</p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <span className="block font-medium text-slate-700 mb-1.5">난이도</span>
+          <div className="flex gap-1">
+            {['쉬움', '보통', '도전'].map(function (d) {
+              return <button key={d} type="button" className={'flex-1 ' + chipCls(difficulty === d)} disabled={disabled} onClick={function () { setDifficulty(d); }}>{d}</button>;
+            })}
+          </div>
+        </div>
+        <div>
+          <span className="block font-medium text-slate-700 mb-1.5">1회 최대 시간</span>
+          <select className="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-white" value={maxMin} disabled={disabled} onChange={function (e) { setMaxMin(Number(e.target.value)); }}>
+            {[60, 90, 120, 150, 180].map(function (m) { return <option key={m} value={m}>{m}분 이내</option>; })}
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <span className="block font-medium text-slate-700 mb-1.5">중점 훈련 <span className="text-xs font-normal text-slate-400">(선택 · 비우면 AI가 판단)</span></span>
+        <div className="flex flex-wrap gap-1.5">
+          {CLUB_MISSION_AI_FOCUS.map(function (f) {
+            return <button key={f} type="button" className={chipCls(focus.indexOf(f) >= 0)} disabled={disabled} onClick={function () { toggleFocus(f); }}>{f}</button>;
+          })}
+        </div>
+        <textarea className="mt-2 w-full border border-slate-300 rounded-lg px-3 py-2 bg-white text-sm" rows={2} maxLength={200} value={note} placeholder="추가 요청 (예: 주말 회차는 길게, 마지막은 가볍게)" onChange={function (e) { setNote(e.target.value); }} />
+      </div>
+
+      {overCap ? <p className="m-0 text-xs text-amber-700">AI 추천은 한 번에 최대 {ai.MAX_STEPS}개까지 만들어요. 초과분은 직접 추가해 주세요.</p> : null}
+      {err ? <p className="m-0 text-sm text-red-600 whitespace-pre-line">{err}</p> : null}
+
+      {draft ? (
+        <div className="space-y-2">
+          <p className="m-0 text-sm text-slate-700 leading-relaxed">{draft.summary}</p>
+          <div className="max-h-64 overflow-y-auto space-y-1.5 pr-0.5">
+            {draft.workouts.map(function (wk, i) {
+              return (
+                <div key={i} className="rounded-lg bg-white border border-slate-200 p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="shrink-0 w-6 h-6 rounded-md bg-violet-100 text-violet-800 text-xs font-bold inline-flex items-center justify-center">{i + 1}</span>
+                    <span className="flex-1 min-w-0 truncate text-sm font-semibold text-slate-800">{wk.name}</span>
+                    <span className="shrink-0 text-xs text-slate-500">{Math.round(wk.seconds / 60)}분 · TSS {wk.tss}</span>
+                  </div>
+                  <div className="workout-card__graph mt-1" ref={function (el) { if (el && typeof window !== 'undefined' && typeof window.renderSegmentedWorkoutGraph === 'function') window.renderSegmentedWorkoutGraph(el, wk.segments, { maxHeight: 56 }); }} />
+                  <p className="m-0 mt-1 text-[11px] text-slate-500 break-words">{wk.flow}</p>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-2">
+            <button type="button" className="flex-1 px-3 py-2 rounded-xl border border-slate-300 bg-white text-slate-700 text-sm font-semibold" disabled={disabled} onClick={run}>다시 생성</button>
+            <button type="button" className="flex-1 px-3 py-2 rounded-xl bg-violet-600 text-white text-sm font-bold disabled:opacity-60" disabled={disabled} onClick={apply}>{busy && busy.indexOf('저장') >= 0 ? busy : '이 구성으로 적용'}</button>
+          </div>
+        </div>
+      ) : (
+        <button type="button" className="w-full px-3 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-bold disabled:opacity-60" disabled={disabled} onClick={run}>
+          {busy ? busy : '✦ AI로 미션 ' + Math.min(count, ai ? ai.MAX_STEPS : count) + '개 만들기'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** 미션 생성·수정 팝업 — 미션명, 기간(시작일·종료일), 미션 개수만큼 워크아웃 선택 */
 function ClubMissionFormModal(props) {
   var groupId = props.groupId || '';
@@ -6888,6 +7148,20 @@ function ClubMissionFormModal(props) {
   var _err = useState('');
   var err = _err[0];
   var setErr = _err[1];
+  /** 작성 방식: 'manual'(기존) | 'ai'(Claude 추천 — 환경설정에 Claude API 키가 있을 때만) */
+  var _mmode = useState('manual');
+  var missionMode = _mmode[0];
+  var setMissionMode = _mmode[1];
+  var _aiKey = useState(false);
+  var aiKeyOk = _aiKey[0];
+  var setAiKeyOk = _aiKey[1];
+  useEffect(function () {
+    var ai = typeof window !== 'undefined' && window.stelvioClubMissionAi;
+    if (!ai) return undefined;
+    var alive = true;
+    ai.ready().then(function () { if (alive) setAiKeyOk(ai.hasKey()); });
+    return function () { alive = false; };
+  }, []);
 
   useEffect(function () {
     var cancelled = false;
@@ -7006,8 +7280,22 @@ function ClubMissionFormModal(props) {
           <button type="button" className="text-2xl leading-none text-slate-400 px-2" onClick={onClose} disabled={busy} aria-label="닫기">&times;</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 text-sm">
+          {!initial ? (
+            <div>
+              <div className="flex rounded-xl bg-slate-100 p-1" role="tablist" aria-label="미션 작성 방식">
+                <button type="button" role="tab" aria-selected={missionMode === 'manual'} className={'flex-1 px-3 py-1.5 rounded-lg text-sm font-semibold ' + (missionMode === 'manual' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500')} onClick={function () { setMissionMode('manual'); }}>기존 방식</button>
+                <button type="button" role="tab" aria-selected={missionMode === 'ai'} disabled={!aiKeyOk} className={'flex-1 px-3 py-1.5 rounded-lg text-sm font-semibold ' + (missionMode === 'ai' ? 'bg-violet-600 text-white shadow-sm' : aiKeyOk ? 'text-violet-700' : 'text-slate-400 cursor-not-allowed')} onClick={function () { if (aiKeyOk) setMissionMode('ai'); }}>✦ AI 추천</button>
+              </div>
+              {!aiKeyOk ? (
+                <p className="m-0 mt-1.5 text-xs text-slate-500">
+                  AI 추천은 환경설정에 Claude API 키를 저장하면 켜져요.{' '}
+                  <button type="button" className="underline text-violet-700" onClick={function () { if (typeof window.openSettingsModal === 'function') { onClose(); window.openSettingsModal(); } }}>환경설정 열기</button>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <label className="block">
-            <span className="block font-medium text-slate-700 mb-1">미션명 *</span>
+            <span className="block font-medium text-slate-700 mb-1">{missionMode === 'ai' ? '테마(미션명) *' : '미션명 *'}</span>
             <input
               type="text"
               className="w-full border border-slate-300 rounded-lg px-3 py-2"
@@ -7016,6 +7304,13 @@ function ClubMissionFormModal(props) {
               placeholder="예: 겨울 FTP 빌드업 챌린지"
               onChange={function (e) { setTitle(e.target.value); }}
             />
+          {missionMode === 'ai' ? (
+              <div className="flex flex-wrap gap-1.5 mt-1.5">
+                {CLUB_MISSION_AI_THEMES.map(function (t) {
+                  return <button key={t} type="button" className="px-2.5 py-1 rounded-full border border-slate-200 bg-white text-xs text-slate-600" onClick={function () { setTitle(t); }}>{t}</button>;
+                })}
+              </div>
+            ) : null}
           </label>
           <div>
             <span className="block font-medium text-slate-700 mb-1">미션 기간 *</span>
@@ -7058,7 +7353,17 @@ function ClubMissionFormModal(props) {
               onBlur={function () { setCountDraft(null); }}
             />
           </label>
-          <div className="space-y-2">
+          {missionMode === 'ai' ? (
+            <ClubMissionAiPanel
+              groupId={groupId}
+              title={title}
+              startDate={startDate}
+              endDate={endDate}
+              count={steps.length}
+              onApply={function (newSteps) { setSteps(newSteps); setOpenIdx(-1); setCountDraft(null); }}
+            />
+          ) : null}
+          <div className="space-y-2" style={missionMode === 'ai' && !steps.some(function (x) { return !!x; }) ? { display: 'none' } : undefined}>
             {steps.map(function (s, i) {
               var open = openIdx === i;
               return (
